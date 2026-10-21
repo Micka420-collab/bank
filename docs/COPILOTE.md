@@ -279,11 +279,33 @@ Tests : `backend/tests/test_watch.py` (scénario A, réseau hostile, XML piégé
 
 | Manque | Pourquoi ce n'est pas fait | Prochaine étape |
 |---|---|---|
-| Notifications hors de l'application (ntfy, e-mail) | Nécessite un canal choisi par toi et un serveur de notification | Phase 7 : ntfy auto-hébergé, contenu minimal (« 1 démarche à relancer »), jamais de montant |
+| Notifications par e-mail | Les messageries et ntfy couvrent le besoin (§14) ; l'e-mail demande un serveur d'envoi et une délivrabilité à gérer | Si besoin : SMTP, contenu minimal |
 | File de tâches persistante | Les relèves et relances tournent dans une boucle horaire du processus web (idempotentes, sans perte grave) | Phase 7 |
 | Plus de démarches | Chaque modèle doit être vérifié sur sa source officielle avant d'exister | APL, déclaration trimestrielle Caf, changement de situation aux impôts, résiliation d'assurance emprunteur |
 | Plus de détecteurs | Même exigence de source | Énergie (consommation Linky vs offres), assurance emprunteur, frais réels |
-| Démarches et pistes dans l'assistant et pour HERMÈS | Lecture seule à concevoir (portées, anonymisation) | Outils MCP en lecture, propositions validées par toi |
+| Démarches et pistes dans l'assistant | HERMÈS les lit déjà (outils MCP `get_opportunities`, `get_procedures`) ; l'assistant les voit par `/missions` et `/demarches` dans les messageries | Outils en lecture pour l'assistant de l'application |
+| Photos et notes vocales dans les messageries | Un document passerait par les serveurs de la messagerie ; la photo dans Bank › Papiers n'en a pas besoin | Signal seulement (chiffré de bout en bout), transcription locale |
 | Lettre en PDF prête à signer | Le texte suffit pour un envoi en ligne ou un copier-coller | Génération PDF locale |
 | Connecteurs publics (CAF, impôts, ameli) | Pas d'API ouverte aux applications personnelles | Parcours guidés (fait) ; navigateur assisté à l'étude |
 | Foyer multi-utilisateur | Changement de modèle profond | Après la phase 7 |
+
+## 14. Messageries (livrées)
+
+Bank répond et prévient dans **Telegram, WhatsApp, Signal, Discord, Slack** et **ntfy** (guide :
+[CANAUX.md](CANAUX.md)). Conception reprise de la passerelle d'Hermes Agent, réduite à l'essentiel :
+
+- **Adaptateurs** (`app/channels/`) : Telegram en long polling, Discord par sa passerelle websocket (intention
+  « messages privés » seulement, battements de cœur, connexion zombie fermée), Slack en Socket Mode (chaque enveloppe
+  acquittée), WhatsApp par l'API officielle (webhook signé, vérifié avant lecture), Signal par le démon HTTP de
+  signal-cli (SSE + JSON-RPC), ntfy en notifications. Aucun SDK : httpx et websockets, testés face à de faux serveurs
+  fidèles aux protocoles.
+- **Passerelle** (`gateway.py`) : superviseur qui suit la base (accord, activation, jetons) toutes les 5 s, reprise
+  avec attente croissante, une file par messagerie (pas de réponses croisées), « écrit… » pendant que l'assistant
+  réfléchit, envoi découpé par plateforme (blocs de code refermés, unités UTF-16 pour Telegram) avec trois essais.
+- **Décision** (`services/channels.py`) : dédoublonnage des réessais, refus par défaut, appairage par code, secrets
+  refusés, commandes (`/budget`, `/missions`, `/demarches`, `/nouveau`, `/pause`, `/delier`), assistant avec la
+  confidentialité la plus stricte des deux et une conversation par compte.
+- **Alertes** (`services/channel_alerts.py`) : découvert, relance de démarche, gain à confirmer, veille pour toi,
+  point du dimanche ; heures calmes, un message par passage, une fois par événement, cible morte mise en pause.
+- **Aucune décision** depuis une messagerie : transmettre, confirmer, régler restent dans l'application.
+

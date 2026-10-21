@@ -752,3 +752,70 @@ class ConversationMessage(Base):
     feedback_note: Mapped[str | None] = mapped_column(EncryptedText("conversation.feedback"))
 
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
+
+
+# ---------------------------------------------------------------------------- canaux de messagerie
+class ChannelConfig(Base):
+    """Une messagerie (Telegram, Discord, Slack, WhatsApp, Signal, ntfy) : jetons chiffrés, jamais réaffichés
+    (seul un préfixe sert à les reconnaître), réglages non secrets, confidentialité et état de la connexion."""
+
+    __tablename__ = "channel_configs"
+
+    platform: Mapped[str] = mapped_column(String(16), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    secrets: Mapped[str] = mapped_column(EncryptedText("channel.secrets"))  # JSON
+    options: Mapped[str] = mapped_column(Text, default="{}")  # JSON non secret (identifiant de numéro, URL…)
+    hints: Mapped[str] = mapped_column(Text, default="{}")  # JSON : préfixes des secrets, pour les reconnaître
+    privacy: Mapped[str] = mapped_column(String(12), default="redacted")  # full | redacted | aggregates
+    status: Mapped[str] = mapped_column(String(12), default="off")  # off | connecting | online | error
+    bot_name: Mapped[str | None] = mapped_column(String(120))
+    cursor: Mapped[str | None] = mapped_column(String(64))  # Telegram : prochain update_id à lire
+    last_error: Mapped[str | None] = mapped_column(String(300))
+    last_ok_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    ignored: Mapped[int] = mapped_column(Integer, default=0)  # messages d'expéditeurs inconnus, ignorés
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+
+class ChannelLink(Base):
+    """Un compte de messagerie relié par code d'appairage : le seul qu'on écoute et à qui on écrit. L'identifiant
+    externe (un numéro de téléphone pour WhatsApp et Signal) est chiffré ; un index aveugle sert à le retrouver."""
+
+    __tablename__ = "channel_links"
+    __table_args__ = (UniqueConstraint("platform", "user_index", name="uq_channel_link_user"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    platform: Mapped[str] = mapped_column(String(16), index=True)
+    user_index: Mapped[str] = mapped_column(String(32))
+    user_ref: Mapped[str] = mapped_column(EncryptedText("channel.user"))
+    chat_ref: Mapped[str] = mapped_column(EncryptedText("channel.chat"))
+    label: Mapped[str] = mapped_column(EncryptedText("channel.label"))
+    notify: Mapped[bool] = mapped_column(Boolean, default=True)
+    conversation_id: Mapped[int | None] = mapped_column(ForeignKey("conversations.id", ondelete="SET NULL"))
+    linked_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    last_seen_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_notified_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    failures: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str | None] = mapped_column(String(300))
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+class ChannelSeen(Base):
+    """Messages entrants déjà traités : les plateformes réessaient, on ne répond qu'une fois."""
+
+    __tablename__ = "channel_seen"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    ts: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, index=True)
+
+
+class ChannelNotice(Base):
+    """Alerte déjà envoyée à un compte relié (clé stable par événement) : jamais deux fois la même."""
+
+    __tablename__ = "channel_notices"
+    __table_args__ = (UniqueConstraint("link_id", "key", name="uq_channel_notice"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    link_id: Mapped[int] = mapped_column(ForeignKey("channel_links.id", ondelete="CASCADE"), index=True)
+    key: Mapped[str] = mapped_column(String(120))
+    sent_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, index=True)

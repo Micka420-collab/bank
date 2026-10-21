@@ -15,6 +15,7 @@ const Aids = lazy(() => import("./pages/Aids").then((m) => ({ default: m.Aids })
 const Connecteurs = lazy(() => import("./pages/Connecteurs").then((m) => ({ default: m.Connecteurs })));
 const Documents = lazy(() => import("./pages/Documents").then((m) => ({ default: m.Documents })));
 const Memory = lazy(() => import("./pages/Memory").then((m) => ({ default: m.Memory })));
+const Messageries = lazy(() => import("./pages/Messageries").then((m) => ({ default: m.Messageries })));
 const Opportunities = lazy(() => import("./pages/Opportunities").then((m) => ({ default: m.Opportunities })));
 const Procedures = lazy(() => import("./pages/Procedures").then((m) => ({ default: m.Procedures })));
 const Situation = lazy(() => import("./pages/Situation").then((m) => ({ default: m.Situation })));
@@ -39,6 +40,7 @@ const NAV: { page: string; hub: string; label: string; icon: IconName }[] = [
 const NAV_MORE: { page: string; label: string; icon: IconName }[] = [
   { page: "situation", label: "Ma situation", icon: "situation" },
   { page: "veille", label: "Veille", icon: "news" },
+  { page: "messageries", label: "Messageries", icon: "chat" },
   { page: "connecteurs", label: "Connecteurs", icon: "connectors" },
   { page: "reglages", label: "Réglages", icon: "settings" },
 ];
@@ -50,7 +52,7 @@ const TABS: { page: string; hub: string; short: string; icon: IconName }[] = [
   { page: "documents", hub: "papiers", short: "Papiers", icon: "folder" },
   { page: "plus", hub: "plus", short: "Plus", icon: "more" },
 ];
-const MORE = new Set(["patrimoine", "veille", "situation", "connecteurs", "reglages", "memoire", "plus"]);
+const MORE = new Set(["patrimoine", "veille", "situation", "messageries", "connecteurs", "reglages", "memoire", "plus"]);
 type Badges = { procedures_due: number; procedures_ready: number; confirmations: number; watch_new_relevant: number };
 
 export function hubOf(page: string): string {
@@ -141,6 +143,7 @@ export function App() {
             : page === "opportunites" ? <Opportunities />
             : page === "demarches" ? <Procedures id={route.rest[0] && /^\d+$/.test(route.rest[0]) ? Number(route.rest[0]) : null} wantNew={route.params.get("nouvelle") === "1"} />
             : page === "veille" ? <Watch />
+            : page === "messageries" ? <Messageries />
             : <Today />}
           </Suspense>
         </main>
@@ -237,6 +240,7 @@ function More({ username, onLogout }: { username: string; onLogout: () => void }
         <li><a href="#/patrimoine"><b><Icon name="wealth" /> Épargne</b><span className="faint">Ton patrimoine, ton matelas, où placer</span></a></li>
         <li><a href="#/situation"><b><Icon name="situation" /> Ma situation</b><span className="faint">Ton profil, tes projets, ce que ton agent peut faire</span></a></li>
         <li><a href="#/veille"><b><Icon name="news" /> Veille</b><span className="faint">Ce qui change dans les sources officielles, pour toi</span></a></li>
+        <li><a href="#/messageries"><b><Icon name="chat" /> Messageries</b><span className="faint">Écris à Bank depuis WhatsApp, Telegram, Signal… et reçois ses alertes</span></a></li>
         <li><a href="#/connecteurs"><b><Icon name="connectors" /> Connecteurs</b><span className="faint">Banques, planning de travail, Linky, documents de l'État, agents IA</span></a></li>
         <li><a href="#/memoire"><b><Icon name="memory" /> Mémoire de l'assistant</b><span className="faint">Ce qu'il retient de toi, vos conversations</span></a></li>
         <li><a href="#/reglages"><b><Icon name="settings" /> Réglages</b><span className="faint">Comptes, budget, confidentialité, sécurité, journal</span></a></li>

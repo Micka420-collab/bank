@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from scripts.backup import backup
@@ -16,6 +17,7 @@ def test_backup_is_consistent_rotated_and_private(tmp_path: Path) -> None:
         (out / f"bank-2020010{i}-000000.db").parent.mkdir(exist_ok=True)
         sqlite3.connect(out / f"bank-2020010{i}-000000.db").close()
     target = backup(db, out, keep=2)
-    assert sqlite3.connect(target).execute("select count(*) from t").fetchone() == (100,)
+    with closing(sqlite3.connect(target)) as check:  # fermée : pas de connexion laissée au ramasse-miettes
+        assert check.execute("select count(*) from t").fetchone() == (100,)
     assert oct(target.stat().st_mode & 0o777) == "0o600"
     assert len(list(out.glob("bank-*.db"))) == 2 and target.exists()

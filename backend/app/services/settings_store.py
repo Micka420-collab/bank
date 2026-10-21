@@ -24,6 +24,11 @@ DEFAULTS: dict[str, Any] = {
     "time_value_cents_per_hour": 1_500,
     # Tes priorités (choisies à l'accueil ou dans Opportunités) : les catégories montrées d'abord.
     "opportunity_priorities": [],
+    # Messageries : code d'appairage en cours (empreinte salée seulement), heures calmes [début, fin[ et point de
+    # la semaine (dimanche soir) envoyé aux comptes reliés qui reçoivent les alertes.
+    "channel_pairing": {},
+    "channel_quiet_hours": [21, 8],
+    "channel_weekly": True,
 }
 
 

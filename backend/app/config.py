@@ -12,6 +12,7 @@ import binascii
 from functools import cached_property
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -65,6 +66,15 @@ class Settings(BaseSettings):
     agents_enabled: bool = True
     agent_calls_per_minute: int = Field(default=120, ge=10, le=1000)
 
+    # Messageries (Telegram, Discord, Slack, WhatsApp, Signal, ntfy) : désactivables d'un coup ; chaque
+    # messagerie reste éteinte tant que tu ne l'as pas configurée et que tu n'as pas donné ton accord.
+    channels_enabled: bool = True
+    # Adresse publique par laquelle Meta joint le webhook WhatsApp (si elle diffère de BANK_PUBLIC_URL, qui reste
+    # souvent un nom du réseau local) : ton reverse proxy n'y ouvre que /api/channels/whatsapp/webhook.
+    channels_public_url: str | None = None
+    # Fuseau des heures calmes et du point de la semaine (le conteneur, lui, vit en UTC).
+    timezone: str = "Europe/Paris"
+
     enablebanking_app_id: str | None = None
     enablebanking_key_file: Path | None = None
     enablebanking_base_url: str = "https://api.enablebanking.com"
@@ -86,6 +96,24 @@ class Settings(BaseSettings):
     @classmethod
     def _strip_slash(cls, v: str) -> str:
         return v.rstrip("/")
+
+    @field_validator("channels_public_url")
+    @classmethod
+    def _https_webhook(cls, v: str | None) -> str | None:
+        if v is None or not v.strip():
+            return None
+        if not v.startswith("https://"):
+            raise ValueError("BANK_CHANNELS_PUBLIC_URL doit être en https://")
+        return v.rstrip("/")
+
+    @field_validator("timezone")
+    @classmethod
+    def _known_zone(cls, v: str) -> str:
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError(f"Fuseau inconnu : {v} (ex. Europe/Paris)") from exc
+        return v
 
     @model_validator(mode="after")
     def _prod_requires_https(self) -> Settings:

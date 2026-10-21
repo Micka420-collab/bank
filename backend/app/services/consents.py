@@ -42,6 +42,17 @@ PURPOSES: dict[str, dict[str, Any]] = {
         "default": False,
         "version": 1,
     },
+    "channels": {
+        "title": "Bank dans tes messageries",
+        "text": (
+            "Tu peux parler à Bank depuis WhatsApp, Telegram, Discord, Slack ou Signal et y recevoir ses alertes. "
+            "Ce que Bank t'y écrit (montants, échéances, pistes) passe par les serveurs de la messagerie choisie — "
+            "sauf Signal, chiffré de bout en bout. Seuls les comptes que tu relies depuis Bank sont écoutés. Aucune "
+            "transmission, aucun paiement, aucune décision ne se fait depuis une messagerie : tu valides dans Bank."
+        ),
+        "default": False,
+        "version": 1,
+    },
     "watch": {
         "title": "Veille sur les sources officielles",
         "text": (

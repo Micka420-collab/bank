@@ -16,6 +16,8 @@ from app.models import (
     Account,
     AuditLog,
     Category,
+    ChannelConfig,
+    ChannelLink,
     Consent,
     Conversation,
     EnergyReading,
@@ -252,6 +254,21 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
         "watch_sources": [
             {"name": w.name, "url": w.url, "trust": w.trust, "enabled": w.enabled, "builtin": w.builtin}
             for w in db.scalars(select(WatchSource).order_by(WatchSource.id))
+        ],
+        # Messageries : réglages et comptes reliés, jamais un jeton ni l'identifiant d'un compte (n° de téléphone).
+        "channels": [
+            {
+                "platform": c.platform,
+                "enabled": c.enabled,
+                "privacy": c.privacy,
+                "links": [
+                    {"label": link.label, "linked_at": link.linked_at.isoformat(), "notify": link.notify}
+                    for link in db.scalars(
+                        select(ChannelLink).where(ChannelLink.platform == c.platform, ChannelLink.revoked_at.is_(None))
+                    )
+                ],
+            }
+            for c in db.scalars(select(ChannelConfig).order_by(ChannelConfig.platform))
         ],
     }
     audit.record(db, ctx.user.username, "export.done", transactions=len(payload["transactions"]))

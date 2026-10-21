@@ -25,6 +25,9 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
 - **Ma situation + agent IA** : ta fiche (ce que Bank sait, lu dans tes relevés ou déclaré), un questionnaire
   posé une question à la fois ; un serveur MCP gouverné pour qu'HERMÈS devienne ton gestionnaire d'argent — il
   lit, calcule avec la prévision de Bank et propose, tu valides. Voir [integrations/hermes](integrations/hermes/README.md).
+- **Bank dans tes messageries** : WhatsApp, Telegram, Signal, Discord, Slack ou ntfy — tu lui écris, il répond
+  et te prévient (relances, gains à confirmer, risque de découvert), sans jamais rien valider à ta place.
+  Voir [docs/CANAUX.md](docs/CANAUX.md).
 - **Simple et ludique** : cinq destinations (Aujourd'hui, Opérations, Gagner, Papiers, Épargne), des
   missions avec leur récompense, une tirelire qui se remplit avec ce que Bank t'a vraiment fait récupérer.
 - **Une interface de produit fini** : design system « Encre claire » (clair et sombre, choix dans Réglages),
@@ -262,6 +265,23 @@ change après ta simulation, une piste te propose de la relancer. Les taux, bar�
 affichent leur date de prochaine vérification et passent « à revérifier » quand elle est dépassée. La veille se
 coupe dans Réglages › Confidentialité.
 
+## Messageries : Bank dans WhatsApp, Telegram, Signal, Discord, Slack et ntfy
+
+Bank › **Messageries** : écris à Bank depuis ta messagerie (« je peux m'offrir un resto ce soir ? », `/budget`,
+`/missions`, `/demarches`) et reçois-y ses alertes — démarche à relancer, gain à confirmer, risque de découvert,
+nouveauté officielle pour toi, point du dimanche soir — regroupées, une seule fois chacune, hors de tes heures calmes.
+
+- **Telegram, Discord, Slack, Signal** se connectent vers l'extérieur (long polling, websocket, Socket Mode,
+  signal-cli) : rien à ouvrir sur internet. **WhatsApp** passe par l'API officielle de Meta : un seul chemin public,
+  signature vérifiée avant toute lecture. **ntfy** : juste des notifications sur ton téléphone.
+- Un inconnu n'obtient **aucune** réponse : tu relies tes comptes par un code à usage unique, généré après ton mot
+  de passe. Jetons chiffrés, jamais réaffichés ; identifiants de compte (numéro de téléphone) chiffrés.
+- Rien ne se valide depuis une messagerie, et Bank ne demande jamais un mot de passe : un secret collé par erreur
+  est refusé avant d'aller où que ce soit, et les identifiants (IBAN, carte, n° fiscal…) sont retirés de chaque
+  message sortant. Confidentialité réglable par messagerie (Signal : chiffré de bout en bout).
+
+Guide pas à pas par messagerie, exposition du webhook WhatsApp et service signal-cli : [docs/CANAUX.md](docs/CANAUX.md).
+
 ## Brancher HERMÈS (ton agent IA)
 
 1. Bank › **Ma situation** : confirme ce que Bank a lu dans tes relevés, réponds aux questions les plus utiles.
@@ -285,9 +305,10 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 662 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
-JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, intégration OpenFisca réelle), couverture
-93 %, 81 tests front (parcours de première ouverture, coffre, démarches, opportunités, veille, assistant,
+Qualité au moment de la livraison : 712 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
+aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, intégration OpenFisca
+réelle), couverture 92 %, 86 tests front (parcours de première ouverture, coffre, démarches, opportunités, veille, assistant,
 erreurs qui disent quoi faire), mypy strict sans erreur, ruff et bandit propres, `pip-audit` et `npm audit` sans
 vulnérabilité connue, aucune erreur de console ni débordement horizontal à 390 px (vérifié par Playwright), et un
 parcours complet dans Chromium à travers les conteneurs durcis, derrière la CSP de production et un frontal TLS :

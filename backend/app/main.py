@@ -21,6 +21,7 @@ from app.api import (
     assistant,
     auth,
     banks,
+    channels,
     consents,
     copilot,
     decisions,
@@ -39,6 +40,7 @@ from app.api import (
     vault,
     watch,
 )
+from app.channels.gateway import Gateway
 from app.config import Settings
 from app.db import Base, make_engine, make_sessionmaker, upgrade_schema, utcnow
 from app.fiscal.client import FiscalClient
@@ -173,9 +175,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             tasks.append(asyncio.create_task(_energy_loop(app)))
         tasks.append(asyncio.create_task(_planning_loop(app)))
         tasks.append(asyncio.create_task(_housekeeping_loop(app)))
+        # Messageries : rien ne tourne tant qu'aucune n'est configurée, activée et couverte par ton accord.
+        gateway: Gateway | None = None
+        if settings.channels_enabled:
+            gateway = Gateway(
+                factory,
+                settings,
+                llm_factory=lambda: app.state.llm_client_factory,
+                limiter=app.state.limiters["channel"],
+                **app.state.channels_options,
+            )
+            await gateway.start()
+        app.state.channels = gateway
         # Le serveur MCP a son propre cycle de vie (gestionnaire de sessions HTTP) : on l'imbrique.
         async with mcp_mount.running() if mcp_mount else contextlib.nullcontext():
             yield
+        if gateway is not None:
+            await gateway.stop()
         for task in tasks:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -201,6 +217,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "agent": SlidingWindowLimiter(settings.agent_calls_per_minute, 60),
         "assistant": SlidingWindowLimiter(30, 300),  # questions au modèle : 30 par 5 min, en plus des plafonds
         "watch": SlidingWindowLimiter(6, 600),  # relèves de veille à la demande
+        "channel": SlidingWindowLimiter(20, 300),  # messages par compte relié (messageries), avant « doucement »
     }
     app.state.enablebanking = _build_enablebanking(settings)
     app.state.fiscal_client = FiscalClient(settings.fiscal_engine_url, settings.fiscal_token_value)
@@ -209,6 +226,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.llm_client_factory = assistant_service.default_client
     app.state.watch_fetcher = watch_service.default_fetcher
     app.state.watch_resolver = None  # résolution DNS réelle (remplaçable en test)
+    app.state.channels = None
+    app.state.channels_options = {}  # surcharges de la passerelle (tests : fabrique d'adaptateurs, horloge…)
 
     routers = (
         auth,
@@ -231,6 +250,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         opportunities,
         watch,
         copilot,
+        channels,
         system,
     )
     for r in routers:

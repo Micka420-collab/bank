@@ -23,6 +23,7 @@ dependencies = [
   "python-dateutil>=2.9",
   "pillow>=11,<14",  # coffre-fort : photos vérifiées, redressées, réencodées sans métadonnées (processus confiné)
   "defusedxml>=0.7.1,<1",  # veille : flux RSS/Atom lus sans DTD ni entités
+  "websockets>=13,<18",  # messageries : passerelle Discord et Socket Mode Slack (API asyncio de la v13)
 ]
 
 [project.optional-dependencies]

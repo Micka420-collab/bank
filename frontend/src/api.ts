@@ -1008,3 +1008,52 @@ export type CopilotSummary = {
   procedures: { open: number; ready: number; waiting: number; due: { id: number; title: string; next_check: string | null; stage_label: string }[] };
   watch: { enabled: boolean; new_relevant: number; stale_references: number; engine_outdated: boolean };
 };
+
+// ------------------------------------------------------------------ messageries
+export type ChannelStatus = "off" | "connecting" | "online" | "error";
+export type ChannelField = {
+  key: string;
+  label: string;
+  secret: boolean;
+  required: boolean;
+  example: string;
+  set: boolean;
+  hint: string | null;
+  value: string | null;
+};
+export type ChannelLinkView = {
+  id: number;
+  label: string;
+  notify: boolean;
+  linked_at: string;
+  last_seen_at: string | null;
+  last_notified_at: string | null;
+  failures: number;
+  last_error: string | null;
+};
+export type ChannelPlatform = {
+  key: string;
+  label: string;
+  inbound: boolean;
+  e2e: boolean;
+  fields: ChannelField[];
+  configured: boolean;
+  enabled: boolean;
+  status: ChannelStatus;
+  bot_name: string | null;
+  privacy: PrivacyMode;
+  last_error: string | null;
+  last_ok_at: string | null;
+  ignored: number;
+  links: ChannelLinkView[];
+  extra: Record<string, string | null | undefined>;
+};
+export type ChannelsView = {
+  server_enabled: boolean;
+  consent: boolean;
+  pairing: { active: boolean; expires_at: string | null };
+  quiet_hours: [number, number];
+  weekly: boolean;
+  platforms: ChannelPlatform[];
+};
+export type PairingCode = { code: string; raw: string; expires_at: string };

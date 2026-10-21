@@ -34,6 +34,13 @@ export function Connecteurs({ bankResult }: { bankResult: string | null }) {
       <Etat />
       <AssistantSettings />
       <AgentTokens />
+      <section className="section" aria-labelledby="ch-link-title">
+        <div className="section-head"><h2 id="ch-link-title"><Icon name="chat" /> Messageries</h2></div>
+        <p className="section-note">
+          Écris à Bank depuis WhatsApp, Telegram, Signal, Discord ou Slack, et reçois ses alertes là où tu es déjà.{" "}
+          <a href="#/messageries">Ouvrir Messageries</a>
+        </p>
+      </section>
     </>
   );
 }

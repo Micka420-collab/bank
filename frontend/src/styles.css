@@ -5102,3 +5102,270 @@ input[aria-invalid="true"] {
     min-width: 0.25rem;
   }
 }
+
+/* ------------------------------------------------------------------ messageries
+   Une tuile par messagerie (pastille teintée, jamais le logo de la marque), un panneau de réglages, et le moment
+   fort : le code d'appairage, gros et espacé, avec un pouls « en attente de ton message ». */
+.ch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.75rem;
+}
+.ch-tile {
+  --ch-tint: var(--accent);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "mark name" "blurb blurb" "foot foot";
+  align-items: center;
+  gap: 0.5rem 0.7rem;
+  text-align: left;
+  padding: 1rem;
+  border-radius: var(--r-m);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color var(--d-fast),
+    background var(--d-fast),
+    transform var(--d-fast) var(--ease-out);
+}
+.ch-tile:hover {
+  border-color: var(--ch-tint);
+}
+.ch-tile:active {
+  transform: scale(0.99);
+}
+.ch-tile[aria-pressed="true"] {
+  border-color: var(--ch-tint);
+  box-shadow: 0 0 0 1px var(--ch-tint);
+  background: color-mix(in srgb, var(--ch-tint) 7%, var(--surface));
+}
+.ch-telegram { --ch-tint: #2a9bd8; }
+.ch-whatsapp { --ch-tint: #1f9d55; }
+.ch-signal { --ch-tint: #3a6fe0; }
+.ch-discord { --ch-tint: #5865d8; }
+.ch-slack { --ch-tint: #8a3f86; }
+.ch-ntfy { --ch-tint: #2f8f86; }
+.ch-mark {
+  grid-area: mark;
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ch-tint) 16%, var(--surface));
+  color: var(--ch-tint);
+  font-weight: 700;
+  font-size: var(--t-lg);
+}
+.ch-name {
+  grid-area: name;
+  font-weight: 650;
+  font-size: var(--t-lg);
+}
+.ch-blurb {
+  grid-area: blurb;
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+}
+.ch-foot {
+  grid-area: foot;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  align-items: center;
+}
+.ch-status,
+.ch-count,
+.ch-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+.ch-badge .icon {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+.ch-status.is-ok { background: var(--positive-soft); color: var(--positive); }
+.ch-status.is-bad { background: var(--negative-soft); color: var(--negative); }
+.ch-status.is-wait { background: var(--warning-soft); color: var(--warning); }
+.ch-grid > .ch-panel {
+  grid-column: 1 / -1;
+}
+.ch-panel > .notice {
+  margin-bottom: 0.9rem;
+}
+.ch-panel {
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-l);
+  background: var(--surface);
+}
+.ch-panel h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.35rem;
+  font-size: var(--t-md);
+}
+.ch-guide {
+  margin: 0 0 1rem;
+  max-width: 70ch;
+  color: var(--ink-2);
+}
+.ch-webhook {
+  display: block;
+  margin: 0 0 1rem;
+}
+.ch-webhook p {
+  margin: 0 0 0.5rem;
+}
+.ch-webhook code,
+.ch-commands code {
+  overflow-wrap: anywhere;
+}
+.ch-kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 0.75rem;
+  margin: 0;
+}
+.ch-kv dt {
+  font-weight: 600;
+}
+.ch-kv dd {
+  margin: 0;
+  min-width: 0;
+}
+.ch-pair {
+  margin-top: 1.25rem;
+  padding: 1rem 1.1rem;
+  border-radius: var(--r-m);
+  border: 1px dashed var(--line-strong);
+}
+.ch-pair-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.ch-pair-row input {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+.ch-pair.is-live {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.ch-code {
+  margin: 0.5rem 0;
+  font-size: clamp(2rem, 9vw, 3.2rem);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-ink);
+  user-select: all;
+}
+.ch-wait {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.75rem 0 0;
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+}
+.ch-pulse {
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: ch-pulse 1.6s var(--ease-out) infinite;
+}
+@keyframes ch-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+  100% { box-shadow: 0 0 0 0.7rem transparent; }
+}
+.ch-links {
+  margin-top: 1.25rem;
+}
+.ch-links ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.ch-links li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--r-s);
+  background: var(--surface-2);
+}
+.ch-links li > div:first-child {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.ch-link-error {
+  color: var(--negative);
+  font-size: var(--t-sm);
+}
+.ch-links .actions {
+  margin: 0;
+}
+.ch-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+}
+.ch-switch input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--accent);
+}
+.ch-commands,
+.ch-alert-list {
+  display: grid;
+  gap: 0.35rem;
+  padding-left: 1.2rem;
+  margin: 0 0 1rem;
+  max-width: 70ch;
+}
+.ch-commands {
+  list-style: none;
+  padding-left: 0;
+}
+.ch-commands code {
+  font-weight: 650;
+  margin-right: 0.35rem;
+}
+.ch-consent {
+  display: block;
+  margin-top: 1.25rem;
+}
+.ch-consent h2 {
+  font-size: var(--t-lg);
+  margin: 0 0 0.4rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ch-tile {
+    transition: none;
+  }
+  .ch-pulse {
+    animation: none;
+  }
+}

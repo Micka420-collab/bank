@@ -63,6 +63,14 @@ en cas d'alerte », le point du matin répond `[SILENT]` les jours calmes : HERM
 Les points partent là où `--deliver` les envoie (Telegram par défaut) : ils contiennent des montants. Si tu préfères
 qu'ils restent chez toi, utilise `--deliver local` ou une messagerie chiffrée de bout en bout.
 
+### Ou bien : Bank directement dans tes messageries
+
+Bank sait aussi répondre et prévenir **lui-même** sur Telegram, WhatsApp, Signal, Discord, Slack et ntfy, sans
+HERMÈS (Bank › Messageries, guide [docs/CANAUX.md](../../docs/CANAUX.md)) : même passerelle que celle d'HERMÈS dans
+l'esprit (appairage, refus des inconnus, dédoublonnage), réduite à la finance. Les deux cohabitent ; utilise
+simplement **un robot (un jeton) par application** : deux programmes qui écoutent le même robot Telegram se
+volent les messages.
+
 ## Les outils (`mcp_bank_*`)
 
 | Outil | Portée | Rôle |

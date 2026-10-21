@@ -199,6 +199,27 @@ def default_client(api_key: str) -> OpenRouterClient:
     return OpenRouterClient(api_key)
 
 
+_PRIVACY_RANK = {"full": 0, "redacted": 1, "aggregates": 2}
+
+
+def stricter(a: str, b: str | None) -> str:
+    """Le plus protecteur de deux modes de confidentialité (un mode inconnu compte comme « agrégats »)."""
+    if b is None:
+        return a
+    return a if _PRIVACY_RANK.get(a, 2) >= _PRIVACY_RANK.get(b, 2) else b
+
+
+def channel_prompt(platform_label: str) -> str:
+    """Consignes en plus quand la question arrive d'une messagerie (WhatsApp, Telegram…)."""
+    return (
+        f"Tu réponds dans {platform_label}, une messagerie : 3 à 8 lignes, sans titres ni tableaux, du gras et des "
+        "listes courtes seulement. Ce que tu écris passe par les serveurs de cette messagerie : jamais d'IBAN, de "
+        "numéro de carte, de numéro fiscal, d'allocataire ou de sécurité sociale. Ne demande jamais de mot de passe, "
+        "de code ni de numéro de carte. Transmettre une démarche, confirmer un gain, changer un réglage : tout se "
+        "valide dans l'application Bank, jamais depuis une messagerie — dis-le simplement si on te le demande."
+    )
+
+
 # ------------------------------------------------------------------ réglages
 def provider(db: Session) -> LlmProvider | None:
     return db.get(LlmProvider, 1)
@@ -561,7 +582,11 @@ def ask(
     conversation_id: int | None = None,
     history: list[dict[str, Any]] | None = None,
     make_client: ClientFactory = default_client,
+    privacy: str | None = None,
+    channel: str | None = None,
 ) -> dict[str, Any]:
+    """Une question à l'assistant. ``privacy`` ne peut que resserrer le mode choisi pour le modèle (une messagerie
+    réglée sur « agrégats » ne reçoit jamais plus) ; ``channel`` nomme la messagerie d'où vient la question."""
     row = provider(db)
     if row is None:
         raise AssistantError("Aucune clé OpenRouter enregistrée : ajoute-la dans Connecteurs", 409)
@@ -569,7 +594,8 @@ def ask(
     if len(q) < 2:
         raise AssistantError("Pose une question", 422)
     _check_caps(db, row, today)
-    memory_on = consents.granted(db, "ai_memory") and row.privacy != "aggregates"
+    effective = stricter(row.privacy, privacy)
+    memory_on = consents.granted(db, "ai_memory") and effective != "aggregates"
     conv = db.get(Conversation, conversation_id) if conversation_id else None
     created = conv is None or conv.closed
     if conv is None or conv.closed:
@@ -581,8 +607,10 @@ def ask(
     name = memory_service.assistant_name(db)
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": persona_prompt(name, memory_on)},
-        {"role": "system", "content": f"<dossier>\n{_dossier(db, today, row.privacy)}\n</dossier>"},
+        {"role": "system", "content": f"<dossier>\n{_dossier(db, today, effective)}\n</dossier>"},
     ]
+    if channel:
+        messages.append({"role": "system", "content": channel_prompt(channel)})
     if memory_on and conv.memory_snapshot:
         messages.append({"role": "system", "content": conv.memory_snapshot})
     messages += [*previous, {"role": "user", "content": q}]
@@ -609,7 +637,8 @@ def ask(
         "completion_tokens": turn.completion_tokens,
         "calls": turn.calls,
         "tools": turn.tools_used,
-        "privacy": row.privacy,
+        "privacy": effective,
+        "channel": channel,
         "memory": [{"action": n["action"], "store": n["store"], "id": n["id"]} for n in ctx.notices],
         "truncated": final.finish_reason == "length",
     }
@@ -634,7 +663,7 @@ def ask(
         "message_id": reply.id,
         "model": final.model,
         "name": name,
-        "privacy": row.privacy,
+        "privacy": effective,
         "memory_on": memory_on,
         "memory": ctx.notices,
         "tools": turn.tools_used,
