@@ -43,7 +43,8 @@ export function Today() {
   const cats = useApi<Category[]>("/api/categories");
   const agent = useApi<{ pending_proposals: number }>("/api/agents/summary");
   const [range, setRange] = useState<HistoryRange>("30d");
-  const history = useApi<History>(`/api/history?range=${range}`);
+  const [details, setDetails] = useState<boolean>(() => readDetails());
+  const history = useApi<History>(details ? `/api/history?range=${range}` : null);
   const toast = useToast();
   const catName = (slug: string) => cats.data?.find((c) => c.slug === slug)?.name ?? slug;
 
@@ -75,20 +76,37 @@ export function Today() {
         </p>
         <p className="muted">{allowanceSentence(f, settings.buffer_cents, settings.savings_goal_cents)}</p>
         <p className="verdict" data-status={f.status}>{verdict(f)}</p>
-        <div className="actions quick-actions">
-          <a className="btn quiet sm" href="#/connecteurs"><Icon name="bank" /> Connecter une banque</a>
-          <a className="btn quiet sm" href="#/operations?import=1"><Icon name="upload" /> Importer un relevé</a>
-          <a className="btn quiet sm" href="#/situation"><Icon name="situation" /> Ma situation</a>
-          {agent.data && agent.data.pending_proposals > 0 && (
+        {agent.data && agent.data.pending_proposals > 0 && (
+          <div className="actions quick-actions">
             <a className="btn sm" href="#/situation"><Icon name="robot" /> {plural(agent.data.pending_proposals, "proposition à valider", "propositions à valider")}</a>
-          )}
-        </div>
+          </div>
+        )}
       </section>
 
       <Initiatives onChanged={reload} />
 
       <Copilot />
 
+      <section className="card reveal" style={{ marginTop: "1rem", ["--i" as string]: 2 }} aria-labelledby="month-title">
+        <div className="card-head">
+          <h2 id="month-title">Ce mois-ci, jour par jour</h2>
+          <span className="faint">Projection jusqu'à la fin du mois</span>
+        </div>
+        <MonthChart history={f.history} projection={f.projection} events={f.upcoming} lowestCents={f.lowest_balance_cents}
+                    lowestDate={f.lowest_balance_date} daysInMonth={f.days_in_month} bare />
+      </section>
+
+      <section className="card reveal" style={{ marginTop: "1rem", ["--i" as string]: 3 }}>
+        <Decide />
+      </section>
+
+      <details className="today-more" open={details} onToggle={(e) => { const open = (e.currentTarget as HTMLDetailsElement).open; setDetails(open); saveDetails(open); }}>
+        <summary>
+          <span><b>Tout le détail</b> <span className="faint">solde, où part l'argent, échéances, enveloppes, dernières opérations</span></span>
+          <Icon name="arrow" />
+        </summary>
+        {details && (
+          <>
       {h && (
         <dl className="stats reveal" style={{ ["--i" as string]: 1 }}>
           <Stat label="Solde des comptes courants" value={money(h.current_balance_cents, { whole: true })} delta={h.balances.length > 1 ? h.current_balance_cents - h.balances[0]!.balance_cents : undefined} deltaLabel={`sur ${rangeLabel(range)}`} />
@@ -114,15 +132,6 @@ export function Today() {
             </p>
           </>
         )}
-      </section>
-
-      <section className="card reveal" style={{ marginTop: "1rem", ["--i" as string]: 3 }} aria-labelledby="month-title">
-        <div className="card-head">
-          <h2 id="month-title">Ce mois-ci, jour par jour</h2>
-          <span className="faint">Projection jusqu'à la fin du mois</span>
-        </div>
-        <MonthChart history={f.history} projection={f.projection} events={f.upcoming} lowestCents={f.lowest_balance_cents}
-                    lowestDate={f.lowest_balance_date} daysInMonth={f.days_in_month} bare />
       </section>
 
       {h && (
@@ -244,9 +253,9 @@ export function Today() {
         </section>
       )}
 
-      <section className="card reveal" style={{ marginTop: "1rem", ["--i" as string]: 7 }}>
-        <Decide />
-      </section>
+          </>
+        )}
+      </details>
 
       {aids.data && aids.data.summary.alerts.length > 0 && (
         <section className="section" aria-labelledby="aid-alerts">
@@ -260,6 +269,24 @@ export function Today() {
       )}
     </>
   );
+}
+
+const DETAILS_KEY = "bank:today-details";
+
+function readDetails(): boolean {
+  try {
+    return window.localStorage.getItem(DETAILS_KEY) === "open";
+  } catch {
+    return false;
+  }
+}
+
+function saveDetails(open: boolean): void {
+  try {
+    window.localStorage.setItem(DETAILS_KEY, open ? "open" : "closed");
+  } catch {
+    /* stockage indisponible : le détail se repliera à la prochaine visite */
+  }
 }
 
 function rangeLabel(range: HistoryRange): string {

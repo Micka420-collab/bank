@@ -21,29 +21,41 @@ const Situation = lazy(() => import("./pages/Situation").then((m) => ({ default:
 const Watch = lazy(() => import("./pages/Watch").then((m) => ({ default: m.Watch })));
 const Wealth = lazy(() => import("./pages/Wealth").then((m) => ({ default: m.Wealth })));
 
-const NAV: { page: string; label: string; icon: IconName }[] = [
-  { page: "aujourdhui", label: "Aujourd'hui", icon: "today" },
-  { page: "operations", label: "Opérations", icon: "operations" },
-  { page: "opportunites", label: "Opportunités", icon: "target" },
-  { page: "demarches", label: "Démarches", icon: "route" },
-  { page: "documents", label: "Documents", icon: "vault" },
-  { page: "aides", label: "Aides", icon: "aids" },
-  { page: "patrimoine", label: "Patrimoine", icon: "wealth" },
+// Cinq destinations, pas une de plus : le reste est rangé dans « Plus » (ou en bas du rail sur grand écran).
+// « Gagner » réunit missions et aides ; « Papiers » réunit documents et démarches.
+const HUBS: Record<string, string> = {
+  opportunites: "gagner",
+  aides: "gagner",
+  documents: "papiers",
+  demarches: "papiers",
+};
+const NAV: { page: string; hub: string; label: string; icon: IconName }[] = [
+  { page: "aujourdhui", hub: "aujourdhui", label: "Aujourd'hui", icon: "today" },
+  { page: "operations", hub: "operations", label: "Opérations", icon: "operations" },
+  { page: "opportunites", hub: "gagner", label: "Gagner", icon: "coin" },
+  { page: "documents", hub: "papiers", label: "Papiers", icon: "folder" },
+  { page: "patrimoine", hub: "patrimoine", label: "Épargne", icon: "wealth" },
+];
+const NAV_MORE: { page: string; label: string; icon: IconName }[] = [
   { page: "situation", label: "Ma situation", icon: "situation" },
   { page: "veille", label: "Veille", icon: "news" },
   { page: "connecteurs", label: "Connecteurs", icon: "connectors" },
   { page: "reglages", label: "Réglages", icon: "settings" },
 ];
-// Sur mobile, cinq onglets lisibles ; le reste derrière « Plus ».
-const TABS: { page: string; short: string; icon: IconName }[] = [
-  { page: "aujourdhui", short: "Jour", icon: "today" },
-  { page: "operations", short: "Opérations", icon: "operations" },
-  { page: "opportunites", short: "Pistes", icon: "target" },
-  { page: "patrimoine", short: "Patrimoine", icon: "wealth" },
-  { page: "plus", short: "Plus", icon: "more" },
+// Sur téléphone : le jour, l'argent qui passe, ce qu'on peut gagner, les papiers (l'appareil photo), et « Plus ».
+const TABS: { page: string; hub: string; short: string; icon: IconName }[] = [
+  { page: "aujourdhui", hub: "aujourdhui", short: "Jour", icon: "today" },
+  { page: "operations", hub: "operations", short: "Opérations", icon: "operations" },
+  { page: "opportunites", hub: "gagner", short: "Gagner", icon: "coin" },
+  { page: "documents", hub: "papiers", short: "Papiers", icon: "folder" },
+  { page: "plus", hub: "plus", short: "Plus", icon: "more" },
 ];
-const MORE = new Set(["aides", "documents", "demarches", "veille", "situation", "connecteurs", "reglages", "memoire", "plus"]);
+const MORE = new Set(["patrimoine", "veille", "situation", "connecteurs", "reglages", "memoire", "plus"]);
 type Badges = { procedures_due: number; procedures_ready: number; confirmations: number; watch_new_relevant: number };
+
+export function hubOf(page: string): string {
+  return HUBS[page] ?? page;
+}
 
 type Phase = "loading" | "setup" | "login" | "ready" | "offline";
 
@@ -108,6 +120,7 @@ export function App() {
       <div className="shell">
         <Rail page={page} username={me.username} onLogout={() => void logout()} onAsk={() => setAskOpen(true)} />
         <main className="sheet" id="contenu" tabIndex={-1} key={page}>
+          <HubTabs page={page} />
           <Suspense fallback={<Loading />}>
           {page === "operations" ? <Operations openImport={route.params.get("import") === "1"} />
             : page === "aides" ? <Aids />
@@ -130,7 +143,7 @@ export function App() {
       <nav className="tabbar" aria-label="Navigation">
         {TABS.map((n) => (
           <a key={n.page} href={`#/${n.page}`}
-             aria-current={page === n.page || (n.page === "plus" && MORE.has(page)) ? "page" : undefined}>
+             aria-current={hubOf(page) === n.hub || (n.page === "plus" && MORE.has(page)) ? "page" : undefined}>
             <Icon name={n.icon} />
             {n.short}
           </a>
@@ -144,26 +157,44 @@ function Rail({ page, username, onLogout, onAsk }: { page: string; username: str
   const summary = useApi<{ pending_proposals: number }>("/api/agents/summary");
   // Pastilles relues à chaque changement de page (appel léger : sans recalcul des pistes).
   const counts = useApi<Badges>(`/api/copilot/badges?p=${encodeURIComponent(page)}`);
+  const reloadCounts = counts.reload;
+  useEffect(() => {
+    let timer: number | undefined;
+    const onChange = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(reloadCounts, 400); // plusieurs écritures d'affilée : une seule relecture
+    };
+    window.addEventListener("bank:changed", onChange);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("bank:changed", onChange);
+    };
+  }, [reloadCounts]);
   const b = counts.data;
   const badges: Record<string, { n: number; label: string }> = {
+    gagner: { n: b?.confirmations ?? 0, label: "gain à confirmer" },
+    papiers: { n: (b?.procedures_due ?? 0) + (b?.procedures_ready ?? 0), label: "démarche à traiter" },
     situation: { n: summary.data?.pending_proposals ?? 0, label: "en attente" },
-    opportunites: { n: b?.confirmations ?? 0, label: "gain à confirmer" },
-    demarches: { n: (b?.procedures_due ?? 0) + (b?.procedures_ready ?? 0), label: "à traiter" },
     veille: { n: b?.watch_new_relevant ?? 0, label: "nouveautés pour toi" },
+  };
+  const hub = hubOf(page);
+  const link = (n: { page: string; label: string; icon: IconName }, key: string, current: boolean, small = false) => {
+    const badge = badges[key];
+    return (
+      <a key={n.page} className={`nav-link${small ? " is-small" : ""}`} href={`#/${n.page}`} aria-current={current ? "page" : undefined}>
+        <Icon name={n.icon} />
+        {n.label}
+        {badge && badge.n > 0 ? <span className="nav-badge" aria-label={`${badge.n} ${badge.label}`}>{badge.n}</span> : null}
+      </a>
+    );
   };
   return (
     <nav className="rail" aria-label="Navigation principale">
       <div className="brand"><img src="/icon.svg" alt="" />Bank</div>
-      {NAV.map((n) => {
-        const badge = badges[n.page];
-        return (
-          <a key={n.page} className="nav-link" href={`#/${n.page}`} aria-current={page === n.page ? "page" : undefined}>
-            <Icon name={n.icon} />
-            {n.label}
-            {badge && badge.n > 0 ? <span className="nav-badge" aria-label={`${badge.n} ${badge.label}`}>{badge.n}</span> : null}
-          </a>
-        );
-      })}
+      {NAV.map((n) => link(n, n.hub, hub === n.hub))}
+      <div className="rail-more" role="group" aria-label="Autres pages">
+        {NAV_MORE.map((n) => link(n, n.page, page === n.page, true))}
+      </div>
       <button type="button" className="btn quiet rail-ask" onClick={onAsk}><Icon name="spark" /> Demande à Bank</button>
       <div className="rail-foot">
         <p>{username}</p>
@@ -173,15 +204,31 @@ function Rail({ page, username, onLogout, onAsk }: { page: string; username: str
   );
 }
 
+/** Les deux pages d'un pôle, comme deux onglets : « Gagner » (missions, aides), « Papiers » (documents, démarches). */
+export function HubTabs({ page }: { page: string }) {
+  const tabs =
+    hubOf(page) === "gagner"
+      ? [{ page: "opportunites", label: "Missions" }, { page: "aides", label: "Aides" }]
+      : hubOf(page) === "papiers"
+        ? [{ page: "documents", label: "Documents" }, { page: "demarches", label: "Démarches" }]
+        : [];
+  if (tabs.length === 0) return null;
+  return (
+    <nav className="hub-tabs" aria-label={hubOf(page) === "gagner" ? "Gagner" : "Papiers"}>
+      {tabs.map((t) => (
+        <a key={t.page} href={`#/${t.page}`} aria-current={page === t.page ? "page" : undefined}>{t.label}</a>
+      ))}
+    </nav>
+  );
+}
+
 function More({ username, onLogout }: { username: string; onLogout: () => void }) {
   return (
     <>
       <div className="page-head"><h1>Plus</h1></div>
       <ul className="more">
-        <li><a href="#/demarches"><b><Icon name="route" /> Démarches</b><span className="faint">Aides à demander, frais à contester, abonnements à résilier : préparés, suivis</span></a></li>
-        <li><a href="#/documents"><b><Icon name="vault" /> Documents</b><span className="faint">Ton coffre-fort : bulletins, avis d'impôt, attestations, RIB</span></a></li>
+        <li><a href="#/patrimoine"><b><Icon name="wealth" /> Épargne</b><span className="faint">Ton patrimoine, ton matelas, où placer</span></a></li>
         <li><a href="#/situation"><b><Icon name="situation" /> Ma situation</b><span className="faint">Ton profil, tes projets, ce que ton agent peut faire</span></a></li>
-        <li><a href="#/aides"><b><Icon name="aids" /> Aides</b><span className="faint">CAF, France Travail, simulation de tes droits</span></a></li>
         <li><a href="#/veille"><b><Icon name="news" /> Veille</b><span className="faint">Ce qui change dans les sources officielles, pour toi</span></a></li>
         <li><a href="#/connecteurs"><b><Icon name="connectors" /> Connecteurs</b><span className="faint">Banques, planning de travail, Linky, documents de l'État, agents IA</span></a></li>
         <li><a href="#/memoire"><b><Icon name="memory" /> Mémoire de l'assistant</b><span className="faint">Ce qu'il retient de toi, vos conversations</span></a></li>

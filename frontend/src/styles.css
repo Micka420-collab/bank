@@ -24,6 +24,9 @@
   --negative-soft: #fde8ec;
   --warning: #b86e0d;
   --warning-soft: #fdf1dc;
+  --coin: #e9a400;
+  --coin-soft: #fff3d1;
+  --coin-ink: #7a4d00;
   --shadow-1: 0 1px 2px rgba(20, 26, 51, 0.06), 0 1px 1px rgba(20, 26, 51, 0.04);
   --shadow-2: 0 8px 24px -12px rgba(20, 26, 51, 0.25), 0 2px 6px -2px rgba(20, 26, 51, 0.08);
   --shadow-3: 0 24px 48px -24px rgba(20, 26, 51, 0.35);
@@ -92,6 +95,9 @@
     --negative-soft: #3f1a26;
     --warning: #f2b65b;
     --warning-soft: #3a2c14;
+    --coin: #f7c548;
+    --coin-soft: #3b2f10;
+    --coin-ink: #f9d77e;
     --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-2: 0 8px 24px -12px rgba(0, 0, 0, 0.6);
     --shadow-3: 0 24px 48px -24px rgba(0, 0, 0, 0.7);
@@ -118,6 +124,9 @@
   --negative-soft: #3f1a26;
   --warning: #f2b65b;
   --warning-soft: #3a2c14;
+  --coin: #f7c548;
+  --coin-soft: #3b2f10;
+  --coin-ink: #f9d77e;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 8px 24px -12px rgba(0, 0, 0, 0.6);
   --shadow-3: 0 24px 48px -24px rgba(0, 0, 0, 0.7);
@@ -4114,7 +4123,7 @@ input[aria-invalid="true"] {
   background: var(--line-strong);
   margin: 0 0.45rem;
 }
-.proc-phases li > span {
+.proc-phases li > span:not(.phase-label) {
   display: inline-grid;
   place-items: center;
   width: 1.5rem;
@@ -4127,7 +4136,7 @@ input[aria-invalid="true"] {
 .proc-phases li.is-done {
   color: var(--ink-2);
 }
-.proc-phases li.is-done > span {
+.proc-phases li.is-done > span:not(.phase-label) {
   background: var(--positive-soft);
   border-color: var(--positive-soft);
   color: var(--positive);
@@ -4135,7 +4144,7 @@ input[aria-invalid="true"] {
 .proc-phases li.is-active {
   color: var(--ink);
 }
-.proc-phases li.is-active > span {
+.proc-phases li.is-active > span:not(.phase-label) {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
@@ -4698,5 +4707,398 @@ input[aria-invalid="true"] {
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+  }
+}
+
+
+/* ==================================================================== simple et ludique
+   Cinq destinations, deux pôles à onglets, des missions avec leur récompense, une tirelire qui se remplit avec ce
+   qui est vraiment arrivé sur tes comptes. La couleur « pièce » ne sert qu'à ce qu'on peut gagner. */
+.rail-more {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 0.05rem;
+}
+.nav-link.is-small {
+  font-size: var(--t-sm);
+  padding: 0.45rem 0.75rem;
+}
+.nav-link.is-small .icon {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+.hub-tabs {
+  display: inline-flex;
+  gap: 0.15rem;
+  padding: 0.25rem;
+  margin-bottom: 1.25rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.hub-tabs a {
+  padding: 0.45rem 1.1rem;
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-weight: 650;
+  text-decoration: none;
+  transition:
+    background var(--d-fast),
+    color var(--d-fast);
+}
+.hub-tabs a:hover {
+  color: var(--ink);
+}
+.hub-tabs a[aria-current="page"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+}
+
+/* ------------------------------------------------------------------ tirelire */
+.piggy {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: center;
+  padding: 1.5rem 1.75rem;
+  border-radius: var(--r-l);
+}
+.jar {
+  width: 9rem;
+  height: auto;
+  overflow: visible;
+}
+.jar-glass {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+.jar-liquid {
+  fill: var(--coin);
+}
+.jar-bubble {
+  fill: #fff;
+  opacity: 0.55;
+}
+.jar-shine {
+  stroke: #fff;
+  stroke-width: 3;
+  stroke-linecap: round;
+  opacity: 0.6;
+}
+.jar-lid {
+  fill: var(--surface-2);
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+.jar-slot {
+  fill: var(--ink);
+}
+.jar-fill {
+  transform: translateY(var(--level));
+  animation: jar-rise 1100ms var(--ease-out) 150ms both;
+}
+@keyframes jar-rise {
+  from {
+    transform: translateY(124px);
+  }
+}
+.jar-coin {
+  opacity: 0;
+  fill: var(--coin);
+  stroke: var(--coin-ink);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.jar-coin path {
+  fill: none;
+}
+.jar-coin.is-dropping {
+  animation: coin-drop 750ms cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+@keyframes coin-drop {
+  0% {
+    opacity: 1;
+    transform: translateY(-26px);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+}
+.piggy-body {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.piggy-title {
+  font-size: var(--t-md);
+  color: var(--ink-2);
+  font-weight: 650;
+}
+.piggy-figure {
+  font-size: clamp(2.4rem, 6vw, 3.4rem);
+  font-weight: 760;
+  font-stretch: 92%;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  color: var(--positive);
+  max-width: none;
+}
+.piggy-next {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  margin-top: 0.4rem;
+}
+.piggy-bar {
+  flex: 0 1 14rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.piggy-bar > i {
+  display: block;
+  height: 100%;
+  min-width: 0.55rem;
+  border-radius: inherit;
+  background: var(--coin);
+}
+.piggy-badges {
+  list-style: none;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.piggy-badges li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--coin-soft);
+  color: var(--coin-ink);
+  font-size: var(--t-xs);
+  font-weight: 700;
+}
+.piggy-road {
+  margin-top: 0.35rem;
+  font-size: var(--t-sm);
+}
+.piggy-road-label {
+  display: inline-block;
+  padding: 0.05rem 0.55rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+  font-size: var(--t-xs);
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+/* ------------------------------------------------------------------ missions */
+.mission {
+  gap: 0.55rem;
+}
+.mission-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.mission-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: var(--t-sm);
+  font-weight: 700;
+  color: var(--tone);
+}
+.reward {
+  flex: none;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  background: var(--coin-soft);
+  color: var(--coin-ink);
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.reward.is-none {
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-weight: 650;
+}
+.mission-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1.1rem;
+  font-size: var(--t-sm);
+  color: var(--ink-2);
+}
+.mission-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.chance i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.chance i.is-on {
+  background: var(--coin);
+}
+.mission .actions {
+  margin-top: 0.35rem;
+}
+.mission .actions .btn {
+  border-radius: 999px;
+}
+.mission.is-featured {
+  border: 2px solid var(--coin);
+  border-left-width: 2px;
+  box-shadow: var(--shadow-2);
+  padding: 1.35rem 1.5rem;
+}
+.mission.is-featured h3 {
+  font-size: var(--t-xl);
+}
+.mission.is-started {
+  border-left-color: var(--accent);
+}
+.opp-how > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--accent-ink);
+  width: fit-content;
+}
+.opp-how[open] {
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* ------------------------------------------------------------------ Aujourd'hui : le détail se déplie */
+.today-more {
+  margin-top: 1rem;
+}
+.today-more > summary {
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  cursor: pointer;
+}
+.today-more > summary::-webkit-details-marker {
+  display: none;
+}
+.today-more > summary .icon {
+  flex: none;
+  color: var(--accent);
+  transition: transform var(--d-base) var(--ease-out);
+}
+.today-more[open] > summary .icon {
+  transform: rotate(90deg);
+}
+.today-more > summary span {
+  display: grid;
+  gap: 0.1rem;
+}
+
+@media (max-width: 760px) {
+  .piggy {
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    gap: 1rem;
+    padding: 1.1rem;
+  }
+  .jar {
+    width: 5.5rem;
+  }
+  .mission-top {
+    align-items: flex-start;
+  }
+  .hub-tabs {
+    display: flex;
+    width: 100%;
+  }
+  .hub-tabs a {
+    flex: 1;
+    text-align: center;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jar-fill,
+  .jar-coin.is-dropping {
+    animation: none;
+  }
+  .today-more > summary .icon {
+    transition: none;
+  }
+}
+
+.piggy-figure.is-zero {
+  color: var(--ink-2);
+}
+.piggy-body > .btn.link {
+  justify-self: start;
+}
+.copilot .card-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.copilot .card-head h2 .icon {
+  color: var(--coin);
+}
+.copilot-list .reward.copilot-amount {
+  color: var(--coin-ink);
+  font-size: var(--t-sm);
+  padding: 0.15rem 0.6rem;
+}
+.copilot-list li {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr) auto;
+  column-gap: 0.6rem;
+}
+@media (max-width: 760px) {
+  .copilot-list li {
+    grid-template-columns: 1.25rem minmax(0, 1fr);
+    row-gap: 0.3rem;
+  }
+  .copilot-list li > .faint,
+  .copilot-list li > .copilot-amount {
+    grid-column: 2;
+    justify-self: start;
+    margin-left: 0;
+  }
+}
+@media (max-width: 760px) {
+  .proc-phases li {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  .proc-phases li.is-active {
+    flex-shrink: 0;
+  }
+  .proc-phases li + li::before {
+    flex: 0 1 0.6rem;
+    min-width: 0.25rem;
   }
 }

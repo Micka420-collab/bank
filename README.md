@@ -25,6 +25,8 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
 - **Ma situation + agent IA** : ta fiche (ce que Bank sait, lu dans tes relevés ou déclaré), un questionnaire
   posé une question à la fois ; un serveur MCP gouverné pour qu'HERMÈS devienne ton gestionnaire d'argent — il
   lit, calcule avec la prévision de Bank et propose, tu valides. Voir [integrations/hermes](integrations/hermes/README.md).
+- **Simple et ludique** : cinq destinations (Aujourd'hui, Opérations, Gagner, Papiers, Épargne), des
+  missions avec leur récompense, une tirelire qui se remplit avec ce que Bank t'a vraiment fait récupérer.
 - **Une interface de produit fini** : design system « Encre claire » (clair et sombre, choix dans Réglages),
   première ouverture guidée (intro, accès, banque en un clic avec tuiles aux couleurs de chaque enseigne,
   synchronisation visible, confirmation des comptes — « je connecterai mes comptes plus tard » toujours

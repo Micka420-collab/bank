@@ -35,6 +35,11 @@ from app.domain.wealth import (
         ("VIR CAF DU LOIRET", -100, None),  # un débit n'est pas une aide
         ("CB CAFE DE LA GARE", 380, None),
         ("PRLV DGFIP IMPOT", -5000, None),
+        # « REMBOURSEMENT » contient « BOURSE » : un remboursement de frais n'est pas une bourse d'études
+        ("REMBOURSEMENT FRAIS COMMISSION", 1790, None),
+        ("VIR BOURSE DIRECT RETRAIT", 50000, None),
+        ("VIR CROUS PARIS BOURSE", 45000, "crous_bourse"),
+        ("VIR BOURSE SUR CRITERES SOCIAUX", 45000, "crous_bourse"),
     ],
 )
 def test_classify_aid(label: str, amount: int, kind: str | None) -> None:
@@ -171,3 +176,34 @@ def test_goal_helpers() -> None:
     assert months_to_goal(0, 100, 0, Decimal(0)) is None
     assert monthly_needed(0, 120_000, date(2027, 10, 1), date(2026, 10, 21)) == 10_000
     assert monthly_needed(0, 100, date(2026, 1, 1), date(2026, 10, 21)) == 100
+
+
+def test_refunds_once_taken_for_scholarships_are_repaired(app, world) -> None:  # type: ignore[no-untyped-def]
+    """Une ancienne règle prenait « REMBOURSEMENT » pour une bourse : au démarrage, ces opérations sont relues."""
+    from datetime import date as day
+
+    from sqlalchemy import select
+
+    from app.models import Account, Category, CategorySource, Transaction
+    from app.services.ingest import repair_aid_kinds
+
+    with app.state.sessionmaker() as db:
+        account = db.scalars(select(Account).where(Account.kind == "checking")).one()
+        aides = db.scalars(select(Category).where(Category.slug == "aides")).one()
+        wrong = Transaction(account_id=account.id, booking_date=day(2026, 10, 20), amount_cents=1_790,
+                            raw_label="REMBOURSEMENT FRAIS COMMISSION", merchant="REMBOURSEMENT FRAIS COMMISSION",
+                            fingerprint="x" * 64, aid_kind="crous_bourse", category_id=aides.id,
+                            category_source=CategorySource.BUILTIN)  # fmt: skip
+        mine = Transaction(account_id=account.id, booking_date=day(2026, 10, 20), amount_cents=2_000,
+                           raw_label="REMBOURSEMENT AMI", merchant="REMBOURSEMENT AMI", fingerprint="y" * 64,
+                           aid_kind="crous_bourse", category_id=aides.id, category_source=CategorySource.MANUAL)  # fmt: skip
+        real = Transaction(account_id=account.id, booking_date=day(2026, 10, 5), amount_cents=45_000,
+                           raw_label="VIR CROUS PARIS BOURSE", merchant="CROUS PARIS", fingerprint="z" * 64,
+                           aid_kind="crous_bourse", category_id=aides.id, category_source=CategorySource.BUILTIN)  # fmt: skip
+        db.add_all([wrong, mine, real])
+        db.flush()
+        assert repair_aid_kinds(db) == 2
+        assert wrong.aid_kind is None and wrong.category_id != aides.id
+        assert mine.aid_kind is None and mine.category_id == aides.id  # ton choix reste le tien
+        assert real.aid_kind == "crous_bourse"
+        assert repair_aid_kinds(db) == 0  # idempotent

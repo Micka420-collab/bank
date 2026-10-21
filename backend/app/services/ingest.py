@@ -215,3 +215,26 @@ def detect_transfers(db: Session, lo: date, hi: date) -> int:
                 t.category_id = transfer_cat
                 t.category_source = CategorySource.BUILTIN
     return len(pairs)
+
+
+def repair_aid_kinds(db: Session) -> int:
+    """Corrige au démarrage les « bourses » reconnues à tort par une ancienne règle (« BOURSE » trouvé dans
+    « REMBOURSEMENT ») : l'aide est relue avec les règles actuelles et la catégorie recalculée — jamais celle que
+    tu as choisie toi-même. Idempotent ; ne regarde que les opérations concernées."""
+    categorizer = load_categorizer(db)
+    ids = category_ids(db)
+    fixed = 0
+    for t in db.scalars(select(Transaction).where(Transaction.aid_kind == "crous_bourse")):
+        aid = classify_aid(t.raw_label, t.amount_cents)
+        if aid == t.aid_kind:
+            continue
+        t.aid_kind = aid
+        if t.category_source != CategorySource.MANUAL and not t.is_transfer:
+            d = categorizer.decide(t.raw_label, t.merchant, t.amount_cents)
+            category, source = d.category, d.source
+            if aid and source in ("builtin", "none", "bayes"):
+                category, source = income_category_for(aid), "builtin"
+            t.category_id, t.category_source = ids.get(category), CategorySource(source)
+        fixed += 1
+    db.flush()
+    return fixed

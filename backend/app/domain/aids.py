@@ -72,7 +72,18 @@ ORGANISMS: tuple[Organism, ...] = (
         9,
         "https://www.info-retraite.fr",
     ),
-    Organism("crous", "CROUS / bourse", (r"\bCROUS\b", r"BOURSE"), 5, "https://www.messervices.etudiant.gouv.fr"),
+    Organism(
+        "crous",
+        "CROUS / bourse",
+        # « BOURSE » seul piégeait « REMBOURSEMENT » (et le courtier « Bourse Direct ») : on exige une bourse d'études.
+        (
+            r"\bCROUS\b",
+            r"\bCNOUS\b",
+            r"\bBOURSES?\s+(?:D.?ETUDES?|SUR\s+CRITERES|SCOLAIRES?|DE\s+LYCEE|DE\s+COLLEGE|ENSEIGNEMENT\s+SUP\w*)\b",
+        ),
+        5,
+        "https://www.messervices.etudiant.gouv.fr",
+    ),
     Organism(
         "departement",
         "Département (APA, PCH…)",

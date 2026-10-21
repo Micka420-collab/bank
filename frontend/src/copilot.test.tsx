@@ -9,7 +9,7 @@ import type { CopilotSummary, Opportunity, OpportunityCenter, ProcedureListing, 
 import { Copilot } from "./components/Copilot";
 import { ToastProvider } from "./components/ui";
 import { perPeriod } from "./format";
-import { Opportunities } from "./pages/Opportunities";
+import { chanceLevel, nextMilestone, Opportunities } from "./pages/Opportunities";
 import { Procedures } from "./pages/Procedures";
 import { Watch } from "./pages/Watch";
 
@@ -106,16 +106,19 @@ describe("centre d'opportunités", () => {
     });
     await render(<Opportunities />);
     await settle();
-    const ledger = host.querySelector(".value-ledger")!;
-    expect(plain(ledger.querySelector(".is-confirmed .value-figure")?.textContent)).toBe("17,90 €");
-    expect(ledger.querySelector(".is-estimated .value-figure")?.textContent).toBe("—");
-    const titles = [...host.querySelectorAll(".opp h3")].map((h) => h.textContent);
+    const piggy = host.querySelector(".piggy")!;
+    expect(plain(piggy.querySelector(".piggy-figure")?.textContent)).toBe("17,90 €");
+    expect(piggy.querySelector(".jar")?.getAttribute("aria-label")).toBe("Tirelire remplie à 72 % du prochain palier");
+    expect(plain(piggy.querySelector(".piggy-next")?.textContent)).toContain("Prochain palier : 25 €");
+    expect(piggy.querySelector(".piggy-road")?.textContent).toContain("rien pour l'instant"); // l'estimé n'est jamais ajouté
+    const titles = [...host.querySelectorAll(".mission h3")].map((h) => h.textContent);
     expect(titles[0]).toContain("Netflix"); // l'ordre du serveur (gain net attendu) est respecté
-    const netflix = host.querySelector(".opp")!;
-    expect(plain(netflix.querySelector(".opp-figures")?.textContent)).toContain("13,49 € par mois");
+    const netflix = host.querySelector(".mission.is-featured")!;
+    expect(plain(netflix.querySelector(".reward")?.textContent)).toBe("+13,49 € par mois");
+    expect(netflix.querySelector(".chance")?.getAttribute("aria-label")).toBe("Chance faible (25 %)");
     expect(netflix.querySelector(".opp-evidence.is-hypothesis")?.textContent).toContain("toi seul le sais");
-    expect(host.textContent).toContain("Pas de montant"); // la piste sans argent en jeu ne fait pas semblant
-    expect(host.textContent).toContain("1 piste écartée");
+    expect(host.querySelector(".reward.is-none")?.textContent).toBe("À vérifier"); // pas d'argent en jeu : pas de faux montant
+    expect(host.textContent).toContain("1 mission écartée");
     expect(host.textContent).toContain("conseiller financier agréé");
     await click("Préparer la démarche");
     await settle();
@@ -141,12 +144,13 @@ describe("centre d'opportunités", () => {
     await render(<Opportunities />);
     await settle();
     await click("Tes priorités");
-    expect([...host.querySelectorAll(".opp h3")].map((h) => h.textContent)).toEqual([opp().title]);
-    expect(host.textContent).toContain("Bank a vu passer un gain");
+    expect([...host.querySelectorAll(".mission h3")].map((h) => h.textContent)).toEqual([opp().title]);
+    expect(host.textContent).toContain("De l'argent est arrivé");
     await click("Confirmer ce gain");
     await settle();
     expect(body(sent("/api/opportunities/confirm", "POST")[0]!)).toMatchObject({ key: "fees:2026-10", amount_cents: 1_790, period: "once", procedure_id: 7 });
-    expect(host.textContent).not.toContain("Bank a vu passer un gain");
+    expect(host.textContent).not.toContain("De l'argent est arrivé");
+    expect(host.querySelector(".jar-coin.is-dropping")).not.toBeNull(); // la pièce tombe dans la tirelire
     await click("Modifier");
     await typeInto(host.querySelector<HTMLInputElement>("#tv")!, "20");
     await act(async () => { host.querySelector<HTMLInputElement>("#tv")!.dispatchEvent(new Event("blur", { bubbles: true })); host.querySelector<HTMLInputElement>("#tv")!.blur(); });
@@ -155,7 +159,13 @@ describe("centre d'opportunités", () => {
     expect(sent("/api/opportunities/settings", "PUT")).toHaveLength(1);
   });
 
-  it("formats amounts by period", () => {
+  it("formats amounts by period and grades chances and milestones", () => {
+    expect(chanceLevel(0.8).dots).toBe(3);
+    expect(chanceLevel(0.5).label).toBe("Chance moyenne");
+    expect(chanceLevel(0.1).dots).toBe(1);
+    expect(nextMilestone(0)).toBe(2_500);
+    expect(nextMilestone(2_500)).toBe(5_000); // un palier atteint ouvre le suivant
+    expect(nextMilestone(1_200_000)).toBe(2_000_000);
     expect(plain(perPeriod(1_349, "month"))).toBe("13,49 € par mois");
     expect(plain(perPeriod(25_800, "year"))).toBe("258 € par an");
     expect(plain(perPeriod(1_790, "once"))).toBe("17,90 €");
@@ -363,11 +373,27 @@ describe("carte « Pour ton argent »", () => {
     await render(<Copilot />);
     await settle();
     const card = host.querySelector(".copilot")!;
-    expect(plain(card.querySelector(".copilot-value")?.textContent)).toContain("Obtenu 18 € / an");
+    expect(plain(card.querySelector(".copilot-value")?.textContent)).toContain("Tirelire 18 € / an");
     expect(card.querySelector('a[href="#/demarches/4"]')?.textContent).toBe("Réclamation de frais");
     expect(card.textContent).toContain("1 démarche prête à valider");
     expect(card.textContent).toContain("2 nouveautés officielles te concernent");
     expect(card.textContent).toContain("Nouvelle version du moteur");
-    expect(plain(card.querySelector(".copilot-amount")?.textContent)).toBe("17,90 €");
+    expect(plain(card.querySelector(".copilot-amount")?.textContent)).toBe("+17,90 €");
+  });
+});
+
+// ============================================================================ navigation simple
+describe("navigation en cinq destinations", () => {
+  it("groups missions with aids and documents with procedures, as tabs", async () => {
+    const { HubTabs, hubOf } = await import("./App");
+    expect(hubOf("aides")).toBe("gagner");
+    expect(hubOf("demarches")).toBe("papiers");
+    expect(hubOf("operations")).toBe("operations");
+    await render(<HubTabs page="aides" />);
+    const links = [...host.querySelectorAll<HTMLAnchorElement>(".hub-tabs a")];
+    expect(links.map((a) => a.textContent)).toEqual(["Missions", "Aides"]);
+    expect(links[1]!.getAttribute("aria-current")).toBe("page");
+    await render(<HubTabs page="operations" />);
+    expect(host.querySelector(".hub-tabs")).toBeNull(); // pas d'onglets hors des pôles
   });
 });

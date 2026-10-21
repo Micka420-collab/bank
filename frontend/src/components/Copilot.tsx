@@ -17,11 +17,11 @@ export function Copilot() {
   return (
     <section className="card copilot reveal" style={{ marginTop: "1rem", ["--i" as string]: 1 }} aria-labelledby="copilot-title">
       <div className="card-head">
-        <h2 id="copilot-title">Pour ton argent</h2>
+        <h2 id="copilot-title"><Icon name="coin" /> Tes missions</h2>
         {(value.confirmed_yearly_cents > 0 || value.estimated_yearly_cents > 0) && (
           <a className="copilot-value" href="#/opportunites">
-            {value.confirmed_yearly_cents > 0 && <span className="is-confirmed">Obtenu {money(value.confirmed_yearly_cents, { whole: true })} / an</span>}
-            {value.estimated_yearly_cents > 0 && <span className="faint">En cours ≈ {money(value.estimated_yearly_cents, { whole: true })}</span>}
+            {value.confirmed_yearly_cents > 0 && <span className="is-confirmed">Tirelire {money(value.confirmed_yearly_cents, { whole: true })} / an</span>}
+            {value.estimated_yearly_cents > 0 && <span className="faint">En route ≈ {money(value.estimated_yearly_cents, { whole: true })}</span>}
           </a>
         )}
       </div>
@@ -39,7 +39,7 @@ export function Copilot() {
           <li key={o.key}>
             <Icon name={o.deadline ? "clock" : "target"} />
             <a href="#/opportunites">{o.title}</a>
-            {o.amount_cents > 0 && <span className="copilot-amount">{perPeriod(o.amount_cents, o.period)}</span>}
+            {o.amount_cents > 0 && <span className="reward copilot-amount">+{perPeriod(o.amount_cents, o.period)}</span>}
           </li>
         ))}
         {watch.new_relevant > 0 && (
@@ -53,7 +53,7 @@ export function Copilot() {
         )}
       </ul>
       <div className="actions" style={{ marginTop: "0.75rem" }}>
-        <a className="btn quiet sm" href="#/opportunites"><Icon name="target" /> Toutes les pistes</a>
+        <a className="btn quiet sm" href="#/opportunites"><Icon name="coin" /> Toutes les missions</a>
         {procs.open + procs.waiting > 0 && <a className="btn ghost sm" href="#/demarches">Mes démarches ({procs.open + procs.waiting})</a>}
       </div>
     </section>

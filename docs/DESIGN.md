@@ -47,6 +47,27 @@ qui se compte sous tes yeux et la courbe qui se trace, une fois, à l'ouverture.
 - **Écriture** : voix active, phrase courte, le bouton dit ce qu'il fait (« Relier l'agenda » → « Agenda
   relié »), les vides invitent à agir, les erreurs disent quoi faire.
 
+### 2 bis. Simple et ludique (octobre 2026)
+
+Demande de Micka : « une app simple et ludique, facilement utilisable, avec un beau design ».
+
+- **Cinq destinations, pas une de plus** : Aujourd'hui, Opérations, **Gagner** (missions + aides),
+  **Papiers** (documents + démarches), Épargne ; le reste (Ma situation, Veille, Connecteurs, Réglages) en plus
+  petit sous un filet, ou dans « Plus » sur téléphone. Les deux pôles s'ouvrent sur des **onglets** en pastille.
+  Sur téléphone : Jour · Opérations · Gagner · Papiers · Plus (les papiers, c'est l'appareil photo).
+- **Missions** : chaque piste devient une carte à **récompense** (pastille « pièce » `+13,49 € par mois`), avec
+  le temps qu'elle prend, sa chance en trois points, un seul bouton principal, et « Pourquoi ? » replié. La
+  première est mise en avant (« La mission du moment »).
+- **La tirelire** : un bocal dessiné au trait des icônes, qui se remplit vers le prochain palier (25 €, 50 €,
+  100 €…) **uniquement** avec les gains constatés et confirmés ; l'estimé reste « en route », en pointillé, jamais
+  ajouté. Paliers atteints en badges. Une pièce tombe dans le bocal quand tu confirmes un gain : c'est le seul
+  mouvement de la page, coupé avec `prefers-reduced-motion`.
+- **Couleur « pièce »** : `--coin` `#E9A400` (lavis `#FFF3D1`, encre `#7A4D00` ; sombre `#F7C548`, `#3B2F10`,
+  `#F9D77E`), réservée à ce qu'on peut gagner. Le vert reste celui de l'argent réellement arrivé.
+- **Aujourd'hui allégé** : le chiffre du jour, ce que Bank te demande, tes missions, le mois jour par jour et
+  « Je peux m'acheter… ? » ; tout le reste (solde, répartition, échéances, enveloppes, dernières opérations) se
+  déplie d'un geste (« Tout le détail », état retenu dans le navigateur).
+
 ## 3. Architecture des composants
 
 ```

@@ -56,6 +56,8 @@ export async function api<T>(path: string, { method = "GET", body, form, signal 
     }
     throw new ApiError(res.status, errorMessage(detail, `Erreur ${res.status}`));
   }
+  // Une écriture a réussi : ce qui en dépend ailleurs (pastilles de navigation) peut se relire.
+  if (method !== "GET") window.dispatchEvent(new Event("bank:changed"));
   if (res.status === 204) return undefined as T;
   if ((res.headers.get("content-type") ?? "").includes("application/json")) return (await res.json()) as T;
   return (await res.blob()) as T;

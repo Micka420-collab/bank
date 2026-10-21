@@ -54,6 +54,7 @@ from app.services import vault as vault_service
 from app.services import watch as watch_service
 from app.services.bank_sync import sync_all
 from app.services.categories import seed_categories
+from app.services.ingest import repair_aid_kinds
 
 log = logging.getLogger("bank")
 
@@ -161,6 +162,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         upgrade_schema(engine, Base.metadata)  # colonnes et index apparus depuis la création de la base
         with factory() as db:
             seed_categories(db)
+            repaired = repair_aid_kinds(db)  # remboursements pris pour des bourses par une ancienne règle
+            if repaired:
+                log.info("aides relues : %s opérations corrigées", repaired)
             db.commit()
         tasks = []
         if app.state.enablebanking is not None and settings.sync_interval_hours > 0:
