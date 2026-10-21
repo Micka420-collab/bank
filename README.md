@@ -192,6 +192,28 @@ qui apprend — tu peux même lui donner un prénom :
 - **Jamais** d'IBAN, de numéro de carte, de sécurité sociale, de téléphone, d'e-mail, de code ni de consigne cachée :
   filtrés à l'écriture **et** à la relecture. En mode « chiffres seuls », pas de mémoire du tout.
 
+## Coffre-fort de documents
+
+Bank › **Documents** : prends en photo un bulletin de paie, une attestation, un RIB — ou dépose des PDF, jusqu'à 10
+d'un coup. Chaque fichier est chiffré dès réception puis lu **chez toi** : texte des PDF, et pour les photos et les
+scans, reconnaissance de texte (Tesseract, en français), le tout dans des processus confinés.
+
+- **13 types reconnus** : bulletin de paie, avis d'impôt, attestations CAF et France Travail, facture, quittance de
+  loyer, bail ou état des lieux, relevé de compte, RIB, assurance, pension de retraite, pièce d'identité et document
+  de santé (ces deux derniers sont « sensibles » : gardés seulement avec ton accord, jamais envoyés à un modèle).
+- **Chaque valeur avec sa preuve** : la ligne exacte où elle a été lue s'affiche à côté. Ce qui manque reste
+  « non trouvé » — rien n'est deviné. Tu corriges d'un clic (la valeur lue reste visible), puis « C'est bon ».
+  Un bulletin dont le net payé ne colle pas avec le net avant impôt moins le prélèvement est signalé.
+- **Utiliser ces chiffres dans Bank** : un avis d'impôt, une attestation CAF ou France Travail alimentent ta
+  tranche d'impôt, tes aides et la simulation de tes droits.
+- **Lecture assistée** (facultative) : quand la lecture locale ne trouve pas tout, ton modèle OpenRouter peut
+  compléter — avec ton accord, document par document, identifiants masqués, et chaque valeur doit citer mot pour
+  mot le passage du document, sinon elle est écartée.
+- **Combien de temps garder quoi** : la durée conseillée par Service-Public.fr s'affiche pour chaque document ;
+  les dates d'expiration (pièce d'identité, assurance, fin de droits France Travail) sont surveillées.
+- **Photos sans traces** : position GPS, appareil et date de prise de vue sont retirés ; l'original n'est pas gardé.
+- **Portabilité** : export de tout le coffre en .zip (fichiers + valeurs + preuves), protégé par ton mot de passe.
+
 ## Brancher HERMÈS (ton agent IA)
 
 1. Bank › **Ma situation** : confirme ce que Bank a lu dans tes relevés, réponds aux questions les plus utiles.

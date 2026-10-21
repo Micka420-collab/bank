@@ -351,6 +351,33 @@ def _fail(db: Session, row: LlmProvider, actor: str, feature: str, exc: OpenRout
     return AssistantError(str(exc), 502 if not exc.permanent else 409)
 
 
+def complete(
+    db: Session,
+    *,
+    actor: str,
+    today: date,
+    feature: str,
+    messages: list[dict[str, Any]],
+    max_tokens: int = 600,
+    temperature: float = 0.0,
+    make_client: ClientFactory = default_client,
+) -> ChatResult:
+    """Un appel au modèle pour une autre partie de Bank (lecture assistée d'un document…) : même clé, mêmes
+    plafonds vérifiés avant l'appel, même compteur de coût, même journal (sans contenu)."""
+    row = provider(db)
+    if row is None:
+        raise AssistantError("Aucune clé OpenRouter enregistrée : ajoute-la dans Connecteurs", 409)
+    if row.privacy == "aggregates":
+        raise AssistantError("Confidentialité « chiffres seuls » : aucun texte ne sort de Bank", 409)
+    _check_caps(db, row, today)
+    try:
+        result = make_client(row.api_key).chat(row.model, messages, max_tokens=max_tokens, temperature=temperature)
+    except OpenRouterError as exc:
+        raise _fail(db, row, actor, feature, exc) from exc
+    _record(db, row, feature, result)
+    return result
+
+
 def _memory_status(db: Session, row: LlmProvider | None) -> dict[str, Any]:
     return {
         "consent": consents.granted(db, "ai_memory"),

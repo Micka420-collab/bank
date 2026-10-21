@@ -736,3 +736,63 @@ export type ConsentView = {
   default: boolean;
 };
 export type AssistantHints = { suggested: number; merchants: number; hints: Record<string, string> };
+
+// ------------------------------------------------------------------ coffre-fort de documents
+export type VaultStatus = "processing" | "to_review" | "verified" | "failed" | "refused";
+export type VaultFieldType = "amount" | "date" | "month" | "percent" | "number" | "text";
+export type VaultKind = { key: string; label: string; sensitive: boolean };
+export type VaultSummary = {
+  id: number;
+  has_thumb: boolean;
+  kind: string;
+  kind_label: string;
+  title: string;
+  status: VaultStatus;
+  error: string | null;
+  sensitive: boolean;
+  mime: string;
+  size: number;
+  pages: number;
+  source: "upload" | "camera";
+  issuer: string | null;
+  document_date: string | null;
+  expires_on: string | null;
+  retention_until: string | null;
+  created_at: string;
+  verified_at: string | null;
+  fields_count: number;
+  missing_count: number;
+  warnings_count: number;
+};
+export type VaultField = {
+  key: string;
+  label: string;
+  type: VaultFieldType;
+  value: number | string;
+  original: number | string | null;
+  evidence: string | null;
+  confidence: number;
+  source: "extraction" | "assist" | "user";
+};
+export type VaultDetail = VaultSummary & {
+  filename: string;
+  method: "pdf_text" | "ocr" | "none";
+  confidence: number;
+  fields: VaultField[];
+  missing: { key: string; label: string; type: VaultFieldType }[];
+  warnings: string[];
+  retention: { label: string; title: string; url: string; verified_on: string };
+  official: boolean;
+  kinds: VaultKind[];
+  text_available: boolean;
+  assist?: { added: string[]; rejected: number; cost_usd: number };
+};
+export type VaultListing = {
+  documents: VaultSummary[];
+  counts: Record<string, number>;
+  kinds: VaultKind[];
+  processing: boolean;
+  ocr_available: boolean;
+  total_bytes: number;
+};
+export type VaultUpload = { documents: VaultSummary[]; skipped: { filename: string; reason: string; document_id?: number }[] };

@@ -6,6 +6,7 @@ import { Onboarding, onboardingWanted } from "./components/Onboarding";
 import { ErrorNote, Loading, ToastProvider } from "./components/ui";
 import { Aids } from "./pages/Aids";
 import { Connecteurs } from "./pages/Connecteurs";
+import { Documents } from "./pages/Documents";
 import { Login } from "./pages/Auth";
 import { Memory } from "./pages/Memory";
 import { Operations } from "./pages/Operations";
@@ -21,6 +22,7 @@ const NAV: { page: string; label: string; icon: IconName }[] = [
   { page: "aides", label: "Aides", icon: "aids" },
   { page: "patrimoine", label: "Patrimoine", icon: "wealth" },
   { page: "situation", label: "Ma situation", icon: "situation" },
+  { page: "documents", label: "Documents", icon: "vault" },
   { page: "connecteurs", label: "Connecteurs", icon: "connectors" },
   { page: "reglages", label: "Réglages", icon: "settings" },
 ];
@@ -32,7 +34,7 @@ const TABS: { page: string; short: string; icon: IconName }[] = [
   { page: "patrimoine", short: "Patrimoine", icon: "wealth" },
   { page: "plus", short: "Plus", icon: "more" },
 ];
-const MORE = new Set(["aides", "connecteurs", "reglages", "memoire", "plus"]);
+const MORE = new Set(["aides", "documents", "connecteurs", "reglages", "memoire", "plus"]);
 
 type Phase = "loading" | "setup" | "login" | "ready" | "offline";
 
@@ -105,6 +107,7 @@ export function App() {
             : page === "plus" ? <More username={me.username} onLogout={() => void logout()} />
             : page === "reglages" ? <Settings me={me} onMeChange={() => void refresh()} />
             : page === "memoire" ? <Memory />
+            : page === "documents" ? <Documents docId={route.rest[0] && /^\d+$/.test(route.rest[0]) ? Number(route.rest[0]) : null} />
             : <Today />}
         </main>
       </div>
@@ -151,6 +154,7 @@ function More({ username, onLogout }: { username: string; onLogout: () => void }
       <div className="page-head"><h1>Plus</h1></div>
       <ul className="more">
         <li><a href="#/aides"><b><Icon name="aids" /> Aides</b><span className="faint">CAF, France Travail, simulation de tes droits</span></a></li>
+        <li><a href="#/documents"><b><Icon name="vault" /> Documents</b><span className="faint">Ton coffre-fort : bulletins, avis d'impôt, attestations, RIB</span></a></li>
         <li><a href="#/connecteurs"><b><Icon name="connectors" /> Connecteurs</b><span className="faint">Banques, planning de travail, Linky, documents de l'État, agents IA</span></a></li>
         <li><a href="#/memoire"><b><Icon name="memory" /> Mémoire de l'assistant</b><span className="faint">Ce qu'il retient de toi, vos conversations</span></a></li>
         <li><a href="#/reglages"><b><Icon name="settings" /> Réglages</b><span className="faint">Comptes, budget, confidentialité, sécurité, journal</span></a></li>

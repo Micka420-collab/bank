@@ -27,6 +27,7 @@ from app.models import (
     OfficialFact,
     SavingsGoal,
     Transaction,
+    VaultDocument,
     WorkPlan,
     WorkShift,
 )
@@ -195,6 +196,21 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
         "consents": [
             {"purpose": c.purpose, "granted": c.granted, "version": c.wording_version, "at": c.updated_at.isoformat()}
             for c in db.scalars(select(Consent))
+        ],
+        # Coffre : les métadonnées et les valeurs lues ou corrigées ; les fichiers eux-mêmes sont dans l'export
+        # du coffre (archive zip, Documents › Exporter).
+        "vault_documents": [
+            {
+                "kind": d.kind,
+                "title": d.title,
+                "status": d.status,
+                "sensitive": d.sensitive,
+                "document_date": d.document_date.isoformat() if d.document_date else None,
+                "expires_on": d.expires_on.isoformat() if d.expires_on else None,
+                "created_at": d.created_at.isoformat(),
+                "fields": {f.key: json.loads(f.value) for f in d.fields},
+            }
+            for d in db.scalars(select(VaultDocument).order_by(VaultDocument.id))
         ],
     }
     audit.record(db, ctx.user.username, "export.done", transactions=len(payload["transactions"]))

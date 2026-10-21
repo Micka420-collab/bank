@@ -135,7 +135,7 @@ tâches persistante, et tous les appels à un modèle passent par une **passerel
 | Phase | Objectif mesurable | État |
 |---|---|---|
 | 1. Fondations | Consentements par finalité révocables ; passerelle IA unique avec plafonds ; design system | ✅ registre versionné, retrait immédiat, plafonds vérifiés avant chaque appel |
-| 2. Documents | Une photo ou un PDF devient un document chiffré, typé, daté, avec des champs liés à leur source et corrigeables ; bulletin de paie lu | 🚧 ce passage |
+| 2. Documents | Une photo ou un PDF devient un document chiffré, typé, daté, avec des champs liés à leur source et corrigeables ; bulletin de paie lu | ✅ voir § 9 |
 | 3. Finances | Opportunités classées par gain net attendu (montant × probabilité − coût − effort), avec sources et confiance ; frais bancaires comparés aux plafonds légaux ; valeur obtenue mesurée | 🚧 ce passage |
 | 4. Veille | Sources officielles suivies avec date de vérification et empreinte ; changement détecté → carte pour toi ; données de référence périmées signalées | 🚧 ce passage |
 | 5. Démarches | Modèles sourcés, pièces liées au coffre, préparation bloquée en cas d'incohérence, revue obligatoire liée à l'empreinte, envoi marqué une seule fois, suivi des échéances | 🚧 ce passage |
@@ -149,7 +149,7 @@ tâches persistante, et tous les appels à un modèle passent par une **passerel
 | Scénario | Couvert par | État |
 |---|---|---|
 | A — Une information officielle change | Veille → empreinte → correspondance avec ton profil → carte « à vérifier » + relance de la simulation | 🚧 |
-| B — Photo d'un bulletin de paie | Coffre → type reconnu → champs extraits liés au document → vérification → rangement | 🚧 |
+| B — Photo d'un bulletin de paie | Coffre → type reconnu → champs extraits liés au document → vérification → rangement | ✅ `test_photo_of_a_payslip_end_to_end` |
 | C — Demander une aide | Démarche depuis un modèle sourcé → pièces → champs préremplis → revue complète avant transmission | 🚧 |
 | D — Plateforme non connectée | Démarche → connecteur disponible ? connexion officielle : parcours guidé sur le site officiel | 🚧 |
 | E — Dépense évitable | Opportunité frais bancaires / abonnement → alternatives avec coûts et conditions → démarche | 🚧 |
@@ -192,3 +192,25 @@ ce qu'il ne sait pas et ne se présente pas comme conseiller agréé. Son préno
 Tests : `backend/tests/test_memory.py` (45 cas dont propriétés Hypothesis sur le filtre et les lots),
 `frontend/src/assistant.test.tsx` (accord, avis « Retenu » + annulation, 👎 avec note, reprise de conversation,
 page mémoire, confidentialité).
+
+## 9. Coffre-fort de documents (livré)
+
+| Étape | Ce qui se passe | Où |
+|---|---|---|
+| Dépôt | 1 à 10 fichiers (12 Mo chacun, 40 Mo l'envoi), appareil photo du téléphone ; format reconnu aux premiers octets ; doublon reconnu par empreinte à clé ; fichier chiffré aussitôt | `services/vault.ingest` |
+| Lecture (tâche de fond) | Photo : redressée, réencodée sans métadonnées, vignette, OCR (Tesseract fra+eng, texte et confiance par mot) ; PDF : texte, ou images des pages scannées puis OCR ; tout en processus confinés ; reprise automatique après un redémarrage | `domain/reading`, `image_child`, `pdf_text`, `ocr_child` |
+| Compréhension | 13 types (signaux pondérés), valeurs par règles déclaratives avec leur ligne de preuve ; analyseurs éprouvés pour l'avis d'impôt, la CAF et France Travail ; contrôle de cohérence du bulletin ; dates du document, d'expiration et de conservation | `domain/vault` |
+| Revue | Valeurs, preuves, « non trouvé », corrections (l'originale reste), type modifiable (relecture), « C'est bon » | page Documents |
+| Usage | Chiffres officiels repris dans Bank ; documents liés aux démarches (phase 5) ; échéances surveillées | `apply_official`, `expiring` |
+| Garde | Durées minimales Service-Public.fr (F19134, vérifiée le 13/10/2026) ; export zip ; suppression ; journal des accès | — |
+
+Lecture assistée par modèle : seulement avec l'accord « Lecture de documents par un modèle externe », jamais pour une
+pièce sensible (ni pour un texte qui en a les signes), texte masqué, et chaque valeur proposée doit être une
+citation exacte du document qui la contient — sinon écartée et comptée.
+
+Mise à niveau du schéma : `db.upgrade_schema` ajoute au démarrage les colonnes et index apparus depuis la création de
+la base (colonnes facultatives ou à valeur par défaut fixe) et refuse de démarrer sur un changement qui demanderait
+une migration écrite.
+
+Tests : `backend/tests/test_vault.py` (45 cas, dont l'OCR réel d'une photo inclinée et d'un PDF scanné),
+`frontend/src/documents.test.tsx`.

@@ -51,11 +51,14 @@ services:
     group_add: ["10010"]  # groupe « bank-secrets » : lecture des fichiers de ./secrets (mode 640)
     volumes:
       - bank-data:/data
+    # /tmp plus grand : un dépôt de plusieurs documents au coffre transite par là (40 Mo au plus).
+    tmpfs: ["/tmp:size=64m,mode=1777"]
     networks: [app, fiscal, egress]
     depends_on:
       fiscal: { condition: service_healthy }
     deploy:
-      resources: { limits: { memory: 384m, pids: 128 } }
+      # La lecture des photos (OCR) tourne dans des processus enfants bornés : de la marge au-delà de l'API.
+      resources: { limits: { memory: 1g, pids: 128 } }
 
   fiscal:
     <<: *hardening

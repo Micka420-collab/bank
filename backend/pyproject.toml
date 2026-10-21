@@ -21,6 +21,7 @@ dependencies = [
   "pypdf>=6.21,<7",  # lecture des documents officiels (texte seulement) ; 6.21 : plafonds configurables (apply_configuration)
   "icalendar>=6,<7",  # planning de travail (agenda iCal), développement des répétitions via python-dateutil
   "python-dateutil>=2.9",
+  "pillow>=11,<14",  # coffre-fort : photos vérifiées, redressées, réencodées sans métadonnées (processus confiné)
 ]
 
 [project.optional-dependencies]

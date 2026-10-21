@@ -33,9 +33,10 @@ from app.api import (
     planning,
     system,
     transactions,
+    vault,
 )
 from app.config import Settings
-from app.db import Base, make_engine, make_sessionmaker
+from app.db import Base, make_engine, make_sessionmaker, upgrade_schema
 from app.fiscal.client import FiscalClient
 from app.mcp_server import AgentGate, McpDispatch, McpMount, build_mcp, mcp_asgi, silence_sdk_logs
 from app.providers.enablebanking import EnableBankingClient
@@ -45,6 +46,7 @@ from app.security.middleware import AccessLogMiddleware, BodyLimitMiddleware, Se
 from app.services import assistant as assistant_service
 from app.services import energy as energy_service
 from app.services import planning as planning_service
+from app.services import vault as vault_service
 from app.services.bank_sync import sync_all
 from app.services.categories import seed_categories
 
@@ -105,7 +107,10 @@ def _housekeeping_once(app: FastAPI, today: date) -> dict[str, int]:
     with app.state.sessionmaker() as db:
         report = assistant_service.housekeeping(db, today=today, make_client=app.state.llm_client_factory)
         db.commit()
-        return report
+    with app.state.sessionmaker() as db:
+        report.update(vault_service.housekeeping(db))
+        db.commit()
+    return report
 
 
 async def _housekeeping_loop(app: FastAPI) -> None:
@@ -145,6 +150,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         Base.metadata.create_all(engine)
+        upgrade_schema(engine, Base.metadata)  # colonnes et index apparus depuis la création de la base
         with factory() as db:
             seed_categories(db)
             db.commit()
@@ -205,6 +211,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         documents,
         planning,
         initiatives,
+        vault,
         system,
     )
     for r in routers:
@@ -246,6 +253,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         default_limit=256_000,
         upload_limit=settings.max_upload_bytes + 64_000,
         upload_prefixes=("/api/imports", "/api/documents/preview", "/api/planning/file"),
+        special_limits={"/api/vault/upload": settings.vault_upload_bytes + 256_000},
     )
     app.add_middleware(
         SecurityHeadersMiddleware,

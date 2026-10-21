@@ -514,7 +514,10 @@ class VaultDocument(Base):
     size: Mapped[int] = mapped_column(Integer)
     sha256: Mapped[str] = mapped_column(String(64), unique=True)  # même fichier déposé deux fois : un seul document
     pages: Mapped[int] = mapped_column(Integer, default=1)
-    status: Mapped[str] = mapped_column(String(12), default="to_review")  # to_review | verified
+    status: Mapped[str] = mapped_column(
+        String(12), default="processing"
+    )  # processing | to_review | verified | failed | refused
+    error: Mapped[str | None] = mapped_column(String(200))  # pourquoi la lecture a échoué ou a été refusée
     sensitive: Mapped[bool] = mapped_column(Boolean, default=False)
     source: Mapped[str] = mapped_column(String(12), default="upload")  # upload | camera
     method: Mapped[str] = mapped_column(String(12), default="none")  # pdf_text | ocr | none
@@ -553,7 +556,7 @@ class VaultField(Base):
     original: Mapped[str | None] = mapped_column(EncryptedText("vault.field_original"))  # JSON, avant correction
     evidence: Mapped[str | None] = mapped_column(EncryptedText("vault.field_evidence"))  # extrait du texte
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
-    source: Mapped[str] = mapped_column(String(12), default="extraction")  # extraction | user
+    source: Mapped[str] = mapped_column(String(12), default="extraction")  # extraction | assist | user
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
 
     document: Mapped[VaultDocument] = relationship(back_populates="fields")

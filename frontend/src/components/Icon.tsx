@@ -37,6 +37,10 @@ const PATHS: Record<string, string> = {
   trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
   edit: "M4 20h4L19 9l-4-4L4 16zM14 6l4 4",
   newChat: "M12 8v6M9 11h6M4 5h16v11H9l-5 4z",
+  camera: "M4 8h3l2-3h6l2 3h3v11H4zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z",
+  lock: "M6 11h12v10H6zM8.5 11V7.5a3.5 3.5 0 0 1 7 0V11",
+  download: "M12 4v11M7 10l5 5 5-5M4 20h16",
+  vault: "M4 5h16v14H4zM14 12a2 2 0 1 0-4 0 2 2 0 0 0 4 0ZM12 10V8M7 19v2M17 19v2",
   logout: "M10 17l5-5-5-5M15 12H3M12 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6",
 };
 

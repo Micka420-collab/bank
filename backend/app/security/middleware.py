@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import secrets
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -59,17 +59,32 @@ class _BodyTooLargeError(Exception):
 class BodyLimitMiddleware:
     """Coupe toute requête dont le corps dépasse la limite — même sans Content-Length (chunked)."""
 
-    def __init__(self, app: ASGIApp, *, default_limit: int, upload_limit: int, upload_prefixes: Iterable[str]) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        default_limit: int,
+        upload_limit: int,
+        upload_prefixes: Iterable[str],
+        special_limits: Mapping[str, int] | None = None,
+    ) -> None:
         self.app = app
         self.default_limit = default_limit
         self.upload_limit = upload_limit
         self.upload_prefixes = tuple(upload_prefixes)
+        # Chemins exacts avec leur propre plafond (dépôt de plusieurs documents au coffre, par exemple).
+        self.special_limits = dict(special_limits or {})
+
+    def _limit(self, path: str) -> int:
+        if path in self.special_limits:
+            return self.special_limits[path]
+        return self.upload_limit if path.startswith(self.upload_prefixes) else self.default_limit
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        limit = self.upload_limit if scope["path"].startswith(self.upload_prefixes) else self.default_limit
+        limit = self._limit(scope["path"])
         for key, value in scope.get("headers", []):
             if key == b"content-length":
                 try:

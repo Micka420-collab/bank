@@ -3,12 +3,13 @@
 
 import { useEffect, useState } from "react";
 
-export type Route = { page: string; params: URLSearchParams };
+export type Route = { page: string; params: URLSearchParams; rest: string[] };
 
 export function parseHash(hash: string): Route {
   const raw = hash.replace(/^#\/?/, "");
   const [path = "", query = ""] = raw.split("?", 2);
-  return { page: path.split("/")[0] || "aujourdhui", params: new URLSearchParams(query) };
+  const [page = "", ...rest] = path.split("/");
+  return { page: page || "aujourdhui", params: new URLSearchParams(query), rest: rest.filter(Boolean) };
 }
 
 export function useRoute(): Route {

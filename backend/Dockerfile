@@ -15,6 +15,11 @@ RUN --mount=type=secret,id=extra_ca,required=false \
 FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/venv/bin:$PATH" \
     BANK_DATABASE_URL=sqlite:////data/bank.db
+# Tesseract (reconnaissance de texte des photos du coffre, en français et en anglais), lancé dans un processus
+# confiné par l'application ; rien d'autre n'est installé.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-fra tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/*
 RUN groupadd --system --gid 10001 bank && useradd --system --uid 10001 --gid bank --home /nonexistent bank \
     && mkdir -p /data && chown bank:bank /data && chmod 700 /data
 COPY --from=build /venv /venv

@@ -53,6 +53,11 @@ class Settings(BaseSettings):
 
     max_upload_bytes: int = Field(default=5_000_000, ge=10_000, le=50_000_000)
 
+    # Coffre-fort de documents : taille d'un fichier, d'un envoi (plusieurs fichiers), et du coffre entier.
+    vault_file_bytes: int = Field(default=12_000_000, ge=100_000, le=50_000_000)
+    vault_upload_bytes: int = Field(default=40_000_000, ge=1_000_000, le=200_000_000)
+    vault_total_bytes: int = Field(default=2_000_000_000, ge=10_000_000, le=50_000_000_000)
+
     # Énergie (Linky via Conso API) : synchronisation quotidienne en tâche de fond.
     energy_enabled: bool = True
 
