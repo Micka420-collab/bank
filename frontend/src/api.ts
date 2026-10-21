@@ -601,3 +601,20 @@ export type PlanningStatus = {
   upcoming: { day: string; title: string; hours: number; all_day: boolean }[];
   imported?: number;
 };
+
+// ------------------------------------------------------------------ historique (tableau de bord)
+export type HistoryRange = "7d" | "30d" | "3m" | "1y" | "all";
+export type HistoryTotals = { income_cents: number; spent_cents: number; net_cents: number };
+export type History = {
+  range: HistoryRange;
+  start: string;
+  end: string;
+  current_balance_cents: number;
+  balances: { date: string; balance_cents: number }[];
+  now: HistoryTotals;
+  previous: HistoryTotals;
+  categories: { slug: string; name: string; color: string; cents: number; share: number }[];
+  periods: { key: string; start: string; label: string; income_cents: number; spent_cents: number }[];
+  anomalies: { slug: string; name: string; cents: number; previous_cents: number; ratio: number }[];
+  latest: { id: number; date: string; merchant: string; label: string; amount_cents: number; category: string | null; category_name: string | null; is_transfer: boolean }[];
+};

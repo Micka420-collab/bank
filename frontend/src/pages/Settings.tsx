@@ -1,7 +1,13 @@
+// Réglages : comptes, budget, apparence, sécurité, journal. Chaque bloc est une carte ; les formulaires d'ajout
+// sont repliés tant qu'on n'en a pas besoin.
+
 import { useEffect, useState, type FormEvent } from "react";
 import { api, useApi, type Account, type AccountKind, type BudgetResponse, type Me } from "../api";
+import { Icon } from "../components/Icon";
+import { Segmented } from "../components/Segmented";
 import { EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
+import { applyTheme, readTheme, type ThemePref } from "../theme";
 
 export const KIND_LABELS: Record<AccountKind, string> = {
   checking: "Compte courant",
@@ -23,11 +29,14 @@ export function Settings({ me, onMeChange }: { me: Me; onMeChange: () => void })
   return (
     <>
       <div className="page-head">
-        <h1>Réglages</h1>
-        <p className="muted">Banques, compteur Linky, documents de l'État et agents IA : voir <a href="#/connecteurs">Connecteurs</a>.</p>
+        <div>
+          <h1>Réglages</h1>
+          <p className="muted">Banques, compteur Linky, documents de l'État et agents IA : voir <a href="#/connecteurs">Connecteurs</a>.</p>
+        </div>
       </div>
       <Accounts />
       <BudgetSettings />
+      <Appearance />
       <Security me={me} onChange={onMeChange} />
       <Audit />
     </>
@@ -37,18 +46,21 @@ export function Settings({ me, onMeChange }: { me: Me; onMeChange: () => void })
 // ------------------------------------------------------------------ comptes
 function Accounts() {
   const accounts = useApi<Account[]>("/api/accounts");
+  const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<AccountKind>("checking");
   const [iban, setIban] = useState("");
   const [balance, setBalance] = useState<number | null>(0);
   const [busy, error, run] = useAsyncAction();
   const toast = useToast();
+  const showForm = adding || accounts.data?.length === 0;
 
   const create = (e: FormEvent) => {
     e.preventDefault();
     void run(async () => {
       await api("/api/accounts", { method: "POST", body: { name, kind, iban: iban.trim() || null, balance_cents: balance ?? 0 } });
       setName(""); setIban(""); setBalance(0);
+      setAdding(false);
       toast("Compte ajouté.");
       accounts.reload();
     });
@@ -61,41 +73,48 @@ function Accounts() {
     });
 
   return (
-    <section className="section" aria-labelledby="acc-title">
-      <h2 id="acc-title">Comptes</h2>
+    <section className="card section" aria-labelledby="acc-title">
+      <div className="card-head">
+        <h2 id="acc-title">Comptes</h2>
+        {accounts.data && accounts.data.length > 0 && (
+          <button type="button" className="btn quiet sm" aria-expanded={showForm} onClick={() => setAdding((v) => !v)}>
+            <Icon name={showForm ? "close" : "plus"} /> {showForm ? "Fermer" : "Ajouter un compte"}
+          </button>
+        )}
+      </div>
       {!accounts.data && <Loading />}
       {accounts.data && accounts.data.length > 0 && (
-        <table className="plain">
-          <thead>
-            <tr><th>Compte</th><th>Type</th><th className="num">Solde</th><th>Dans le budget</th><th /></tr>
-          </thead>
-          <tbody>
-            {accounts.data.map((a) => (
-              <tr key={a.id} style={a.archived ? { opacity: 0.55 } : undefined}>
-                <td><b>{a.name}</b><div className="faint">{a.iban_masked ?? a.institution ?? ""}</div></td>
-                <td>{KIND_LABELS[a.kind]}</td>
-                <td className="num">
-                  {a.provider === "enablebanking" ? money(a.balance_cents) : (
-                    <EuroInput allowNegative value={a.balance_cents}
-                               onChange={(c) => c !== null && c !== a.balance_cents && patch(a.id, { balance_cents: c })} />
-                  )}
-                  {a.balance_at && <div className="faint">au {shortDate(a.balance_at)}</div>}
-                </td>
-                <td>
-                  <input type="checkbox" checked={a.include_in_budget} aria-label={`Inclure ${a.name} dans le budget`}
-                         onChange={(e) => patch(a.id, { include_in_budget: e.target.checked })} />
-                </td>
-                <td className="num">
-                  <button className="btn link" onClick={() => patch(a.id, { archived: !a.archived })}>
-                    {a.archived ? "Réactiver" : "Archiver"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ul className="account-list" aria-label="Comptes">
+          {accounts.data.map((a) => (
+            <li key={a.id} className={a.archived ? "is-archived" : undefined}>
+              <div className="account-id">
+                <b>{a.name}</b>
+                <span className="faint">{KIND_LABELS[a.kind]}{a.iban_masked || a.institution ? ` · ${a.iban_masked ?? a.institution}` : ""}</span>
+              </div>
+              <div className="account-balance">
+                {a.provider === "enablebanking" ? (
+                  <b>{money(a.balance_cents)}</b>
+                ) : (
+                  <EuroInput allowNegative value={a.balance_cents} aria-label={`Solde de ${a.name}`}
+                             onChange={(c) => c !== null && c !== a.balance_cents && patch(a.id, { balance_cents: c })} />
+                )}
+                {a.balance_at && <span className="faint">au {shortDate(a.balance_at)}</span>}
+              </div>
+              <label className="check account-budget">
+                <input type="checkbox" checked={a.include_in_budget}
+                       onChange={(e) => patch(a.id, { include_in_budget: e.target.checked })} />
+                Dans le budget
+              </label>
+              <button className="btn link" onClick={() => patch(a.id, { archived: !a.archived })}>
+                {a.archived ? "Réactiver" : "Archiver"}
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
-      <form className="panel" style={{ marginTop: "1.5rem" }} onSubmit={create} aria-label="Nouveau compte">
+      {accounts.data?.length === 0 && <p className="muted">Aucun compte pour l'instant. Un compte courant avec son solde suffit pour commencer.</p>}
+      {showForm && (
+      <form className="panel card-quiet" style={{ marginTop: "1.25rem" }} onSubmit={create} aria-label="Nouveau compte">
         <div className="form-grid">
           <Field label="Nom"><input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Compte joint" /></Field>
           <Field label="Type">
@@ -109,8 +128,31 @@ function Accounts() {
           <Field label="Solde actuel"><EuroInput allowNegative value={balance} onChange={setBalance} /></Field>
         </div>
         {error && <p className="error" role="alert" style={{ marginTop: "0.75rem" }}>{error}</p>}
-        <div className="actions"><button className="btn" disabled={busy}>Ajouter le compte</button></div>
+        <div className="actions"><button className={`btn${busy ? " is-loading" : ""}`} disabled={busy}>Ajouter le compte</button></div>
       </form>
+      )}
+    </section>
+  );
+}
+
+// ------------------------------------------------------------------ apparence
+const THEMES: { value: ThemePref; label: string }[] = [
+  { value: "auto", label: "Comme l'appareil" },
+  { value: "light", label: "Clair" },
+  { value: "dark", label: "Sombre" },
+];
+
+function Appearance() {
+  const [theme, setTheme] = useState<ThemePref>(readTheme);
+  const choose = (t: ThemePref) => {
+    setTheme(t);
+    applyTheme(t);
+  };
+  return (
+    <section className="card section" aria-labelledby="look-title">
+      <div className="card-head"><h2 id="look-title">Apparence</h2></div>
+      <p className="muted" style={{ marginBottom: "0.75rem" }}>Le thème vaut pour cet appareil. Les animations suivent le réglage « réduire les animations » de ton système.</p>
+      <Segmented value={theme} options={THEMES} onChange={choose} label="Thème" />
     </section>
   );
 }
@@ -138,8 +180,8 @@ function BudgetSettings() {
   };
 
   return (
-    <section className="section" aria-labelledby="bud-title">
-      <h2 id="bud-title">Budget</h2>
+    <section className="card section" aria-labelledby="bud-title">
+      <div className="card-head"><h2 id="bud-title">Budget</h2></div>
       <form className="form-grid" onSubmit={save} style={{ maxWidth: "44rem" }}>
         <Field label="Toujours garder de côté" hint="Retiré du « reste à dépenser » chaque jour.">
           <EuroInput value={buffer} onChange={setBuffer} />
@@ -147,7 +189,7 @@ function BudgetSettings() {
         <Field label="Épargne visée chaque mois" hint="Réservée avant le calcul du reste à dépenser.">
           <EuroInput value={goal} onChange={setGoal} />
         </Field>
-        <button className="btn" disabled={busy}>Enregistrer</button>
+        <button className={`btn${busy ? " is-loading" : ""}`} disabled={busy}>Enregistrer</button>
       </form>
       {error && <p className="error" role="alert">{error}</p>}
     </section>
@@ -200,14 +242,14 @@ function Security({ me, onChange }: { me: Me; onChange: () => void }) {
   const qrSrc = setup ? `data:image/svg+xml;base64,${toBase64(setup.qr_svg)}` : "";
 
   return (
-    <section className="section" aria-labelledby="sec-title">
-      <h2 id="sec-title">Sécurité</h2>
+    <section className="card section" aria-labelledby="sec-title">
+      <div className="card-head"><h2 id="sec-title">Sécurité</h2>{me.totp_enabled && <span className="tag ok">double authentification active</span>}</div>
       <div className="split">
         <div className="stack">
           <h3>Double authentification</h3>
           {me.totp_enabled ? (
             <p>
-              Active. {me.recovery_codes_left} codes de secours restants.
+              <Icon name="shield" /> Active. {me.recovery_codes_left} codes de secours restants.
             </p>
           ) : setup ? (
             <form className="stack" onSubmit={enable}>
@@ -222,7 +264,7 @@ function Security({ me, onChange }: { me: Me; onChange: () => void }) {
           ) : (
             <>
               <p className="muted">Un code de ton téléphone en plus du mot de passe : indispensable pour des données bancaires.</p>
-              <button className="btn" onClick={start} disabled={busy}>Configurer</button>
+              <button className={`btn${busy ? " is-loading" : ""}`} onClick={start} disabled={busy}><Icon name="shield" /> Configurer</button>
             </>
           )}
           {codes && (
@@ -315,14 +357,17 @@ function Audit() {
   if (!log.data) return null;
   const { chain, entries } = log.data;
   return (
-    <section className="section" aria-labelledby="audit-title">
-      <h2 id="audit-title">Journal d'activité</h2>
+    <section className="card section" aria-labelledby="audit-title">
+      <div className="card-head"><h2 id="audit-title">Journal d'activité</h2><span className="faint">30 derniers événements</span></div>
       <div className={`notice ${chain.ok ? "ok" : "danger"}`}>
-        {chain.ok
-          ? `Intègre : ${chain.entries} événements, chaînés et signés. Aucune modification détectée.`
-          : `Altération détectée à l'entrée ${chain.broken_at} (${chain.reason}). Quelqu'un a modifié la base hors de l'application.`}
+        <Icon name={chain.ok ? "shield" : "alert"} />
+        <span>
+          {chain.ok
+            ? `Intègre : ${chain.entries} événements, chaînés et signés. Aucune modification détectée.`
+            : `Altération détectée à l'entrée ${chain.broken_at} (${chain.reason}). Quelqu'un a modifié la base hors de l'application.`}
+        </span>
       </div>
-      <table className="plain" style={{ marginTop: "1rem" }}>
+      <div className="table-scroll" style={{ marginTop: "1rem" }}><table className="plain">
         <tbody>
           {entries.map((e) => (
             <tr key={e.id}>
@@ -332,7 +377,7 @@ function Audit() {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </section>
   );
 }

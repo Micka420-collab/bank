@@ -1,7 +1,7 @@
 // Connecteurs : tout ce qui alimente Bank en quelques clics — banques (DSP2), compteur Linky, documents
 // de l'État (impôts, CAF, France Travail), et les agents IA.
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   api,
   useApi,
@@ -11,7 +11,8 @@ import {
   type ParsedDocument,
   type Portal,
 } from "../api";
-import { BANK_BRANDS, brandOf, initials, matchBrand, searchAspsps, type BankBrand } from "../banks";
+import { BankConnect, BankMark } from "../components/BankConnect";
+import { Icon } from "../components/Icon";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
 import { AgentTokens } from "./Agents";
@@ -21,8 +22,10 @@ export function Connecteurs({ bankResult }: { bankResult: string | null }) {
   return (
     <>
       <div className="page-head">
-        <h1>Connecteurs</h1>
-        <p className="muted">Branche tes sources en quelques clics : plus Bank en sait, plus ses conseils sont justes.</p>
+        <div>
+          <h1>Connecteurs</h1>
+          <p className="muted">Branche tes sources en quelques clics : plus Bank en sait, plus ses conseils sont justes.</p>
+        </div>
       </div>
       <Banks result={bankResult} />
       <Planning />
@@ -34,12 +37,16 @@ export function Connecteurs({ bankResult }: { bankResult: string | null }) {
 }
 
 // ------------------------------------------------------------------ banques (DSP2) en un clic
+const CONNECTION_LABELS: Record<string, string> = { active: "active", expired: "à renouveler", revoked: "coupée", error: "erreur", pending: "en attente" };
+
 export function Banks({ result }: { result: string | null }) {
   const status = useApi<{ enabled: boolean; connections: Connection[] }>("/api/banks");
   const [aspsps, setAspsps] = useState<string[] | null>(null);
-  const [picked, setPicked] = useState<BankBrand | null>(null);
-  const [query, setQuery] = useState("");
+  const [connecting, setConnecting] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
   const [busy, error, run] = useAsyncAction();
+  const [listError, setListError] = useState<string | null>(null);
   const toast = useToast();
 
   useEffect(() => {
@@ -48,22 +55,31 @@ export function Banks({ result }: { result: string | null }) {
     if (result === "error") toast("La connexion a échoué ou a expiré : recommence.");
   }, [result, toast]);
 
+  const connections = status.data?.connections ?? [];
+  const enabled = status.data?.enabled ?? false;
+  const wantList = enabled && (showAdd || connections.length === 0);
   useEffect(() => {
-    if (status.data?.enabled && aspsps === null) {
-      void run(async () => {
-        const list = await api<{ name: string }[]>("/api/banks/aspsps?country=FR");
-        setAspsps(list.map((a) => a.name));
-      });
+    if (wantList && aspsps === null) {
+      api<{ name: string }[]>("/api/banks/aspsps?country=FR")
+        .then((list) => setAspsps(list.map((a) => a.name)))
+        .catch((e: Error) => setListError(e.message));
     }
-  }, [status.data, aspsps, run]);
+  }, [wantList, aspsps]);
 
-  const connect = (name: string) =>
-    void run(async () => {
+  const connect = async (name: string) => {
+    setConnecting(name);
+    setFailed(null);
+    try {
       const r = await api<{ redirect_url: string }>("/api/banks/connect", { method: "POST", body: { aspsp_name: name, country: "FR" } });
       const url = new URL(r.redirect_url);
       if (url.protocol !== "https:") throw new Error("Adresse de redirection refusée");
       window.location.assign(url.toString());
-    });
+    } catch (e) {
+      setFailed(name);
+      setConnecting(null);
+      toast((e as Error).message);
+    }
+  };
   const sync = (id: number) =>
     void run(async () => {
       const r = await api<{ inserted: number; reconciled: number; errors: string[] }>(`/api/banks/${id}/sync`, { method: "POST" });
@@ -77,110 +93,70 @@ export function Banks({ result }: { result: string | null }) {
       status.reload();
     });
 
-  const names = aspsps ?? [];
-  const brands = useMemo(
-    () => BANK_BRANDS.map((b) => ({ brand: b, names: matchBrand(b, names) })).filter((x) => x.names.length > 0),
-    [names],
-  );
-  const results = useMemo(() => searchAspsps(query, names), [query, names]);
-  const choices = picked ? matchBrand(picked, names) : [];
-
   return (
     <section className="section" aria-labelledby="banks-title" id="banques">
-      <h2 id="banks-title">Banques</h2>
+      <div className="section-head">
+        <h2 id="banks-title"><Icon name="bank" /> Banques</h2>
+        {enabled && connections.length > 0 && (
+          <button type="button" className="btn quiet sm" aria-expanded={showAdd} onClick={() => setShowAdd((v) => !v)}>
+            <Icon name={showAdd ? "close" : "plus"} /> {showAdd ? "Fermer" : "Ajouter une banque"}
+          </button>
+        )}
+      </div>
       <p className="section-note">
         Lecture seule par DSP2, via Enable Banking (établissement agréé). Tu t'authentifies chez ta banque, Bank ne voit
         jamais tes identifiants. Accès valable 90 jours, renouvelable.{" "}
-        <a href="#/operations">Sans connexion, l'import de relevés fonctionne pour toutes les banques.</a>
+        <a href="#/operations?import=1">Sans connexion, l'import de relevés fonctionne pour toutes les banques.</a>
       </p>
       {status.error && <ErrorNote message={status.error} onRetry={status.reload} />}
-      {status.data && !status.data.enabled && (
+      {!status.data && !status.error && <Loading what="Connexions" />}
+      {status.data && !enabled && (
         <div className="notice">
-          La synchronisation n'est pas configurée sur le serveur (BANK_ENABLEBANKING_APP_ID et clé privée) : voir le README.
-          En attendant, importe tes relevés CSV / OFX depuis Opérations.
+          <Icon name="alert" />
+          <span>
+            La synchronisation n'est pas configurée sur le serveur (BANK_ENABLEBANKING_APP_ID et clé privée) : voir le README.
+            En attendant, importe tes relevés CSV / OFX depuis Opérations.
+          </span>
         </div>
       )}
-      {status.data && status.data.connections.length > 0 && (
-        <ul className="connected">
-          {status.data.connections.map((c) => (
+      {connections.length > 0 && (
+        <ul className="connected" aria-label="Banques connectées">
+          {connections.map((c) => (
             <li key={c.id}>
-              <span className="logo" aria-hidden="true">{initials(c.aspsp_name)}</span>
+              <BankMark name={c.aspsp_name} />
               <div>
                 <b>{c.aspsp_name}</b>
                 <div className="faint">
                   {c.accounts.join(", ") || "comptes à venir"} ·{" "}
                   <span className={`tag ${c.status === "active" ? "ok" : c.status === "expired" ? "warn" : ""}`}>
-                    {{ active: "active", expired: "à renouveler", revoked: "coupée", error: "erreur", pending: "en attente" }[c.status] ?? c.status}
+                    {CONNECTION_LABELS[c.status] ?? c.status}
                   </span>
                   {c.valid_until && c.status === "active" && ` jusqu'au ${shortDate(c.valid_until)}`}
                   {c.last_sync_at ? ` · synchro ${shortDate(c.last_sync_at)}` : " · jamais synchronisée"}
                 </div>
                 {c.last_error && <div className="error">{c.last_error}</div>}
               </div>
-              {c.status === "active" && (
+              {c.status === "active" ? (
                 <span className="actions" style={{ marginTop: 0 }}>
-                  <button className="btn quiet" disabled={busy} onClick={() => sync(c.id)}>Synchroniser</button>
-                  <button className="btn danger" disabled={busy} onClick={() => revoke(c.id)}>Couper</button>
+                  <button className={`btn quiet sm${busy ? " is-loading" : ""}`} disabled={busy} onClick={() => sync(c.id)}>Synchroniser</button>
+                  <button className="btn ghost sm" disabled={busy} onClick={() => revoke(c.id)}>Couper</button>
                 </span>
-              )}
+              ) : c.status === "expired" ? (
+                <button className="btn sm" disabled={connecting !== null} onClick={() => void connect(c.aspsp_name)}>Renouveler</button>
+              ) : null}
             </li>
           ))}
         </ul>
       )}
-      {status.data?.enabled && (
-        <>
-          <h3 style={{ marginTop: "1.5rem" }}>Connecter une banque</h3>
-          {aspsps === null ? (
-            <Loading what="Liste des banques" />
+      {wantList && (
+        <div className="stack" style={{ marginTop: connections.length ? "1.25rem" : "0.5rem" }}>
+          {connections.length === 0 && <h3>Connecter une banque</h3>}
+          {listError ? (
+            <ErrorNote message={listError} onRetry={() => { setListError(null); setAspsps(null); }} />
           ) : (
-            <>
-              <div className="tiles" role="list" aria-label="Banques courantes">
-                {brands.map(({ brand, names: n }) => (
-                  <button
-                    key={brand.id}
-                    type="button"
-                    role="listitem"
-                    className="tile"
-                    aria-pressed={picked?.id === brand.id}
-                    disabled={busy}
-                    onClick={() => (n.length === 1 ? connect(n[0]!) : setPicked(picked?.id === brand.id ? null : brand))}
-                  >
-                    <span className="logo" aria-hidden="true">{initials(brand.name)}</span>
-                    <span>{brand.name}</span>
-                    {n.length > 1 && <small className="faint">{n.length} caisses</small>}
-                  </button>
-                ))}
-              </div>
-              {picked && choices.length > 1 && (
-                <div className="panel" style={{ marginTop: "1rem" }}>
-                  <p><b>{picked.name}</b> : laquelle ?</p>
-                  <div className="pills">
-                    {choices.map((n) => (
-                      <button key={n} type="button" className="pill" disabled={busy} onClick={() => connect(n)}>
-                        {n.replace(new RegExp(picked.name, "i"), "").trim() || n}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <Field label="Une autre banque ?" hint={`${names.length} établissements disponibles`}>
-                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tape le nom de ta banque" />
-              </Field>
-              {results.length > 0 && (
-                <ul className="results">
-                  {results.map((n) => (
-                    <li key={n}>
-                      <button type="button" className="btn link" disabled={busy} onClick={() => connect(n)}>
-                        <span className="logo small" aria-hidden="true">{initials(brandOf(n)?.name ?? n)}</span>
-                        {n}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
+            <BankConnect aspsps={aspsps} connections={connections} busy={connecting} failed={failed} onConnect={(n) => void connect(n)} />
           )}
-        </>
+        </div>
       )}
       {error && <p className="error" role="alert" style={{ marginTop: "0.75rem" }}>{error}</p>}
     </section>
@@ -219,7 +195,7 @@ function Linky() {
 
   return (
     <section className="section" aria-labelledby="linky-title" id="energie">
-      <h2 id="linky-title">Électricité (Linky)</h2>
+      <div className="section-head"><h2 id="linky-title"><Icon name="bolt" /> Électricité (Linky)</h2></div>
       <p className="section-note">
         Ta consommation réelle, jour par jour, via Conso API (passerelle gratuite et open source vers Enedis). Bank en
         déduit ta facture annuelle probable et te prévient avant une régularisation. Tu peux révoquer l'accès à tout
@@ -341,7 +317,7 @@ function EnergyPanel({ status, busy, onSync, onDisconnect, onChanged }: {
       )}
 
       {ins.months.length > 1 && (
-        <table className="plain">
+        <div className="table-scroll"><table className="plain">
           <thead><tr><th>Mois</th><th className="num">kWh</th><th className="num">Coût estimé</th></tr></thead>
           <tbody>
             {ins.months.slice(-6).reverse().map((m) => (
@@ -352,7 +328,7 @@ function EnergyPanel({ status, busy, onSync, onDisconnect, onChanged }: {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
 
       <div>
@@ -450,7 +426,7 @@ function Etat() {
 
   return (
     <section className="section" aria-labelledby="etat-title" id="etat">
-      <h2 id="etat-title">Comptes de l'État</h2>
+      <div className="section-head"><h2 id="etat-title"><Icon name="doc" /> Comptes de l'État</h2></div>
       <p className="section-note">
         Impôts, CAF et France Travail n'offrent pas de connexion directe à une application personnelle (FranceConnect
         est réservé aux services agréés). Le plus proche : tu télécharges tes documents depuis chaque espace, Bank en lit

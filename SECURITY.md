@@ -42,6 +42,7 @@ Clés dérivées par HKDF, une par usage (chiffrement, index aveugle, jetons sig
 | Données en cache | `Cache-Control: no-store` sur l'API ; le service worker ne met jamais `/api` en cache |
 | Export de toutes les données | Re-saisie du mot de passe, rate-limit, journalisé |
 | Fuite d'erreurs internes | Gestionnaire global : message générique, détails seulement dans les logs ; erreurs de validation sans les valeurs reçues (`test_validation_errors_never_echo_input`) |
+| Données laissées dans le navigateur | Le stockage local ne contient que des préférences d'affichage (`bank:theme`), l'identifiant retenu pour la connexion rapide (`bank:username`, jamais le mot de passe) et l'état de l'onboarding (`bank:onboarding`) ; aucune donnée financière, aucun jeton |
 
 ## Agents IA (serveur MCP `/mcp`)
 

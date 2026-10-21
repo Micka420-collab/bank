@@ -25,6 +25,12 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
 - **Ma situation + agent IA** : ta fiche (ce que Bank sait, lu dans tes relevés ou déclaré), un questionnaire
   posé une question à la fois ; un serveur MCP gouverné pour qu'HERMÈS devienne ton gestionnaire d'argent — il
   lit, calcule avec la prévision de Bank et propose, tu valides. Voir [integrations/hermes](integrations/hermes/README.md).
+- **Une interface de produit fini** : design system « Encre claire » (clair et sombre, choix dans Réglages),
+  première ouverture guidée (intro, accès, banque en un clic avec tuiles aux couleurs de chaque enseigne,
+  synchronisation visible, confirmation des comptes — « je connecterai mes comptes plus tard » toujours
+  possible), tableau de bord avec courbe interactive (7 j / 30 j / 3 mois / 1 an / tout), répartition, reçu vs
+  dépensé, anomalies et dernières opérations ; tout fonctionne au téléphone, au clavier et sans animation si tu
+  l'as demandé au système. Voir [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Architecture
 
@@ -90,7 +96,8 @@ GoCardless Bank Account Data n'accepte plus de nouveaux comptes depuis juillet 2
 3. Télécharge la clé privée générée et place-la dans `secrets/enablebanking.pem` (`chmod 640`, groupe 10010).
 4. Clique « Activate by linking accounts » et lie tes comptes : l'application passe en mode restreint actif.
 5. Dans `.env` : `BANK_ENABLEBANKING_APP_ID=<id>` et décommente `BANK_ENABLEBANKING_KEY_FILE`.
-6. `docker compose up -d` puis Réglages → Connecter une banque.
+6. `docker compose up -d` puis, à la première ouverture, l'étape « Connecte ta banque » (ou plus tard :
+   Connecteurs → Banques → Ajouter une banque).
 
 Synchronisation automatique toutes les 8 h (la DSP2 limite à 4 accès non sollicités par jour). Le consentement
 dure 90 jours ; Bank t'indique quand le renouveler. Un compte déjà importé en CSV est retrouvé par son IBAN
@@ -171,9 +178,11 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 486 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
-JSON-RPC MCP de bout en bout, intégration OpenFisca réelle), couverture 95 %, 31 tests front, mypy strict sans
-erreur, ruff, bandit, shellcheck et pip-audit propres, `npm audit` sans vulnérabilité, aucune violation CSP.
+Qualité au moment de la livraison : 488 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+JSON-RPC MCP de bout en bout, intégration OpenFisca réelle), couverture 95 %, 45 tests front (dont le parcours de
+première ouverture, la connexion bancaire, les graphiques et la connexion rapide), mypy strict sans erreur, ruff,
+bandit, shellcheck et pip-audit propres, `npm audit` sans vulnérabilité, aucune violation CSP, aucun débordement
+horizontal à 390 px (vérifié par Playwright sur chaque page).
 
 ## Sauvegarde
 

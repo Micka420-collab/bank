@@ -52,3 +52,28 @@ export function percent(value: number, digits = 1): string {
 export function plural(n: number, one: string, many: string): string {
   return `${n.toLocaleString("fr-FR")} ${Math.abs(n) >= 2 ? many : one}`;
 }
+
+const PARTICLES = new Set(["de", "du", "des", "la", "le", "les", "et", "au", "aux", "en", "sur", "pour", "par", "a", "à", "d", "l", "da", "di", "del", "von", "van", "of", "the"]);
+const ACRONYMS = new Set([
+  "edf", "gdf", "caf", "cpam", "msa", "sncf", "ratp", "dgfip", "urssaf", "apl", "rsa", "ppa", "aah", "are", "ass", "bnp", "lcl", "cic",
+  "sg", "sfr", "tgv", "ter", "brgm", "tva", "pel", "cel", "lep", "hlm", "rte", "smic", "cnav", "agirc", "arrco", "edf", "eni", "ovh",
+  "ikea", "fnac", "cb", "sepa", "iban", "ald", "bpce", "cnp", "axa", "maif", "macif", "gmf", "mgen", "cdc",
+]);
+
+/** « CARREFOUR MARKET ORLEANS » → « Carrefour Market Orleans » ; sigles et particules respectés.
+ * Un libellé déjà en casse mixte est laissé tel quel : la banque savait ce qu'elle faisait. */
+export function merchantCase(name: string): string {
+  if (!name || name !== name.toUpperCase()) return name;
+  return name
+    .split(/(\s+)/)
+    .map((word, i) => {
+      if (!word.trim()) return word;
+      const low = word.toLowerCase();
+      if (/\d/.test(word)) return word;
+      if (ACRONYMS.has(low)) return word;
+      if (i > 0 && PARTICLES.has(low)) return low;
+      if (low.length <= 3 && !PARTICLES.has(low)) return word;
+      return low.replace(/^(\p{L})/u, (c) => c.toUpperCase()).replace(/([-'’])(\p{L})/gu, (_m, sep: string, c: string) => sep + c.toUpperCase());
+    })
+    .join("");
+}

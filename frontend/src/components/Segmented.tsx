@@ -1,0 +1,16 @@
+// Contrôle segmenté : une option à la fois, lisible au clavier (groupe de boutons pressés).
+
+export function Segmented<T extends string>({ value, options, onChange, label }: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+  label: string;
+}) {
+  return (
+    <div className="segmented" role="group" aria-label={label}>
+      {options.map((o) => (
+        <button key={o.value} type="button" aria-pressed={value === o.value} onClick={() => onChange(o.value)}>{o.label}</button>
+      ))}
+    </div>
+  );
+}

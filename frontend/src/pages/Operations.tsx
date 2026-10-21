@@ -1,7 +1,14 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { api, useApi, type Account, type Category, type ImportResult, type Transaction } from "../api";
+import { Icon } from "../components/Icon";
 import { Amount, ErrorNote, Field, Loading, useAsyncAction, useToast } from "../components/ui";
-import { dayNumber, money, monthLabel, plural, shortDate } from "../format";
+import { dayNumber, merchantCase, money, monthLabel, plural, shortDate } from "../format";
+
+const MONTHS_LONG = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+function monthTitle(key: string): string {
+  const [y, m] = key.split("-").map(Number);
+  return `${MONTHS_LONG[(m ?? 1) - 1]} ${y}`;
+}
 
 type Page = { items: Transaction[]; total: number };
 const PAGE = 100;
@@ -30,12 +37,20 @@ export function Operations({ openImport = false }: { openImport?: boolean }) {
 
   const activeAccounts = (accounts.data ?? []).filter((a) => !a.archived);
 
+  const items = list.data?.items ?? [];
+  const sumIn = items.filter((t) => t.amount_cents > 0 && !t.is_transfer).reduce((a, t) => a + t.amount_cents, 0);
+  const sumOut = items.filter((t) => t.amount_cents < 0 && !t.is_transfer).reduce((a, t) => a + t.amount_cents, 0);
+  const filtered = Boolean(query || category || account);
+
   return (
     <>
       <div className="page-head">
-        <h1>Opérations</h1>
+        <div>
+          <h1>Opérations</h1>
+          <p className="muted">Tout ce qui entre et sort, classé. Corrige une catégorie : Bank apprend pour les suivantes.</p>
+        </div>
         <button className="btn" onClick={() => setShowImport((v) => !v)} aria-expanded={showImport}>
-          {showImport ? "Fermer l'import" : "Importer un relevé"}
+          <Icon name={showImport ? "close" : "upload"} /> {showImport ? "Fermer l'import" : "Importer un relevé"}
         </button>
       </div>
 
@@ -43,54 +58,56 @@ export function Operations({ openImport = false }: { openImport?: boolean }) {
         <ImportPanel accounts={activeAccounts} onImported={() => { list.reload(); accounts.reload(); }} />
       )}
 
-      <form className="form-grid" onSubmit={submitSearch} role="search" style={{ marginTop: "1.5rem" }}>
-        <Field label="Rechercher">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="libellé, marchand, note" />
-        </Field>
-        <Field label="Catégorie">
-          <select value={category} onChange={(e) => { setCategory(e.target.value); setLimit(PAGE); }}>
-            <option value="">Toutes</option>
-            {(categories.data ?? []).map((c) => (
-              <option key={c.slug} value={c.slug}>{c.name}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Compte">
-          <select value={account} onChange={(e) => { setAccount(e.target.value); setLimit(PAGE); }}>
-            <option value="">Tous</option>
-            {activeAccounts.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
-        </Field>
+      <form className="card filters" onSubmit={submitSearch} role="search" aria-label="Filtrer les opérations">
+        <label className="search">
+          <Icon name="search" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Libellé, marchand, note…" aria-label="Rechercher" />
+        </label>
+        <select className="inline" value={category} aria-label="Catégorie" onChange={(e) => { setCategory(e.target.value); setLimit(PAGE); }}>
+          <option value="">Toutes les catégories</option>
+          {(categories.data ?? []).map((c) => (
+            <option key={c.slug} value={c.slug}>{c.name}</option>
+          ))}
+        </select>
+        <select className="inline" value={account} aria-label="Compte" onChange={(e) => { setAccount(e.target.value); setLimit(PAGE); }}>
+          <option value="">Tous les comptes</option>
+          {activeAccounts.map((a) => (
+            <option key={a.id} value={a.id}>{a.name}</option>
+          ))}
+        </select>
+        {filtered && (
+          <button type="button" className="btn ghost sm" onClick={() => { setQ(""); setQuery(""); setCategory(""); setAccount(""); setLimit(PAGE); }}>
+            <Icon name="close" /> Effacer
+          </button>
+        )}
       </form>
 
-      <section className="section" aria-live="polite">
+      <section className="card" style={{ marginTop: "1rem" }} aria-live="polite">
         {list.error && <ErrorNote message={list.error} onRetry={list.reload} />}
         {!list.data && !list.error && <Loading />}
         {list.data && list.data.total === 0 && (
-          query || category || account ? (
+          filtered ? (
             <p className="muted">Aucune opération ne correspond.</p>
           ) : (
             <div className="empty-inline">
               <p className="muted">Aucune opération pour l'instant.</p>
               <div className="actions" style={{ marginTop: "0.5rem" }}>
-                <button className="btn" onClick={() => setShowImport(true)}>Importer un relevé</button>
-                <a className="btn quiet" href="#/connecteurs">Connecter ma banque</a>
+                <button className="btn" onClick={() => setShowImport(true)}><Icon name="upload" /> Importer un relevé</button>
+                <a className="btn quiet" href="#/connecteurs"><Icon name="bank" /> Connecter ma banque</a>
               </div>
             </div>
           )
         )}
         {list.data && list.data.total > 0 && (
           <>
-            <p className="faint" style={{ marginBottom: "1rem" }}>
-              {plural(list.data.total, "opération", "opérations")}
-            </p>
-            <TransactionLedger items={list.data.items} categories={categories.data ?? []} onChanged={list.reload} />
-            {list.data.items.length < list.data.total && (
-              <div className="actions">
-                <button className="btn quiet" onClick={() => setLimit((l) => Math.min(500, l + PAGE))}
-                        disabled={limit >= 500}>
+            <div className="ledger-summary">
+              <span><b>{plural(list.data.total, "opération", "opérations")}</b>{filtered ? " trouvées" : ""}</span>
+              <span className="faint">sur les {items.length} affichées : <b className="amount in">+{money(sumIn, { whole: true })}</b> · <b>{money(sumOut, { whole: true })}</b></span>
+            </div>
+            <TransactionLedger items={items} categories={categories.data ?? []} onChanged={list.reload} />
+            {items.length < list.data.total && (
+              <div className="actions" style={{ justifyContent: "center" }}>
+                <button className="btn quiet" onClick={() => setLimit((l) => Math.min(500, l + PAGE))} disabled={limit >= 500}>
                   Afficher plus
                 </button>
               </div>
@@ -126,39 +143,50 @@ function TransactionLedger({ items, categories, onChanged }: { items: Transactio
     }
   };
 
+  let lastMonth = "";
   return (
     <ul className="ledger">
-      {days.map(([date, txns]) => (
-        <li className="ledger-day" key={date}>
-          <div className="ledger-date" aria-hidden="true">
-            <strong>{dayNumber(date)}</strong>
-            <span>{monthLabel(date.slice(0, 7))}</span>
-          </div>
-          {txns.map((t) => (
-            <div className="ledger-row txn" key={t.id}>
-              <div className="ledger-label">
-                <span className="sr-only">{shortDate(date)} : </span>
-                <b>{t.merchant || t.label}</b>{" "}
-                {t.aid_kind && <span className="tag ok">aide</span>}{" "}
-                {t.is_transfer && <span className="tag">virement interne</span>}
-                <span className="raw" title={t.label}>{t.label}</span>
-              </div>
-              <select
-                  className="inline"
-                  aria-label={`Catégorie de ${t.merchant || t.label}`}
-                  value={t.category ?? "a_categoriser"}
-                  onChange={(e) => void recategorize(t, e.target.value)}
-                  disabled={t.is_transfer}
-                >
-                  {categories.map((c) => (
-                    <option key={c.slug} value={c.slug}>{c.name}</option>
-                  ))}
-                </select>
-              <Amount cents={t.amount_cents} />
+      {days.map(([date, txns]) => {
+        const month = date.slice(0, 7);
+        const showMonth = month !== lastMonth;
+        lastMonth = month;
+        const dayTotal = txns.filter((t) => !t.is_transfer).reduce((a, t) => a + t.amount_cents, 0);
+        return (
+          <li className="ledger-day" key={date}>
+            {showMonth && <h3 className="ledger-month">{monthTitle(month)}</h3>}
+            <div className="ledger-date" aria-hidden="true">
+              <strong>{dayNumber(date)}</strong>
+              <span>{monthLabel(date.slice(0, 7))}</span>
             </div>
-          ))}
-        </li>
-      ))}
+            <div className="ledger-rows">
+              {txns.map((t) => (
+                <div className="ledger-row txn" key={t.id}>
+                  <div className="ledger-label">
+                    <span className="sr-only">{shortDate(date)} : </span>
+                    <b>{merchantCase(t.merchant || t.label)}</b>{" "}
+                    {t.aid_kind && <span className="tag ok">aide</span>}{" "}
+                    {t.is_transfer && <span className="tag">virement interne</span>}
+                    <span className="raw" title={t.label}>{t.label}</span>
+                  </div>
+                  <select
+                      className="inline"
+                      aria-label={`Catégorie de ${t.merchant || t.label}`}
+                      value={t.category ?? "a_categoriser"}
+                      onChange={(e) => void recategorize(t, e.target.value)}
+                      disabled={t.is_transfer}
+                    >
+                      {categories.map((c) => (
+                        <option key={c.slug} value={c.slug}>{c.name}</option>
+                      ))}
+                    </select>
+                  <Amount cents={t.amount_cents} />
+                </div>
+              ))}
+              {txns.length > 1 && <div className="day-total">{money(dayTotal, { signed: true })} sur la journée</div>}
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -252,7 +280,7 @@ function ImportPanel({ accounts, onImported }: { accounts: Account[]; onImported
             {preview.detected.encoding && `, encodage ${preview.detected.encoding}`}
             {preview.skipped.length > 0 && `, ${plural(preview.skipped.length, "ligne ignorée", "lignes ignorées")}`}.
           </p>
-          <table className="plain">
+          <div className="table-scroll"><table className="plain">
             <thead>
               <tr><th>Date</th><th>Libellé</th><th className="num">Montant</th></tr>
             </thead>
@@ -265,7 +293,7 @@ function ImportPanel({ accounts, onImported }: { accounts: Account[]; onImported
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
           {preview.skipped.length > 0 && (
             <p className="faint">
               Lignes ignorées : {preview.skipped.slice(0, 6).map((s) => `ligne ${s.line} (${s.reason})`).join(", ")}

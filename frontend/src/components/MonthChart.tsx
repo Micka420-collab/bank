@@ -12,6 +12,7 @@ type Props = {
   lowestDate: string;
   lowestCents: number;
   daysInMonth: number;
+  bare?: boolean; // sans cadre : la carte qui l'héberge fournit le sien
 };
 
 const PAD = { l: 8, r: 8, t: 22, b: 26 };
@@ -32,7 +33,7 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
   return [ref, width];
 }
 
-export function MonthChart({ history, projection, events, lowestDate, lowestCents, daysInMonth }: Props) {
+export function MonthChart({ history, projection, events, lowestDate, lowestCents, daysInMonth, bare = false }: Props) {
   const [wrapRef, W] = useWidth<HTMLElement>();
   const H = Math.round(Math.min(280, Math.max(200, W * 0.34)));
   const geo = useMemo(() => {
@@ -67,7 +68,7 @@ export function MonthChart({ history, projection, events, lowestDate, lowestCent
   const ticks = W < 480 ? [1, 15, daysInMonth] : [1, 10, 20, daysInMonth];
 
   return (
-    <figure className="chart-wrap" aria-label="Évolution du solde ce mois-ci" ref={wrapRef}>
+    <figure className={bare ? "chart-bare" : "chart-wrap"} aria-label="Évolution du solde ce mois-ci" ref={wrapRef}>
       <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-labelledby="chart-desc">
         <desc id="chart-desc">
           Solde le plus bas prévu : {money(lowestCents)} le {shortDate(lowestDate)}. Solde aujourd'hui :{" "}
@@ -78,12 +79,16 @@ export function MonthChart({ history, projection, events, lowestDate, lowestCent
             <rect x="0" y={geo.zeroY} width={W} height={H} />
           </clipPath>
         </defs>
-        {rows.map((r) => (
-          <line key={`h${r}`} x1="0" x2={W} y1={r} y2={r} className={r % 32 === 0 ? "seyes-major" : "seyes-fine"} />
+        {rows.filter((r) => r % (bare ? 64 : 32) === 0).map((r) => (
+          <line key={`h${r}`} x1="0" x2={W} y1={r} y2={r} className="grid-line" />
         ))}
-        {cols.map((c) => (
-          <line key={`v${c}`} x1={c} x2={c} y1="0" y2={H} className="seyes-fine" />
+        {!bare && cols.filter((c) => c % 64 === 0).map((c) => (
+          <line key={`v${c}`} x1={c} x2={c} y1="0" y2={H} className="grid-line" />
         ))}
+        {bare && ticks.map((d) => {
+          const iso = `${today.date.slice(0, 7)}-${String(d).padStart(2, "0")}`;
+          return <line key={`t${d}`} x1={geo.x(iso)} x2={geo.x(iso)} y1={PAD.t} y2={H - PAD.b} className="grid-line" />;
+        })}
         <path d={area} className="below" clipPath="url(#below-zero)" />
         <line x1="0" x2={W} y1={geo.zeroY} y2={geo.zeroY} className="zero" />
         <text x={W - 2} y={geo.zeroY - 5} textAnchor="end">0 €</text>

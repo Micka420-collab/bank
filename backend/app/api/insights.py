@@ -8,7 +8,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -26,7 +26,7 @@ from app.fiscal.client import FiscalClient, FiscalEngineError
 from app.fiscal.situation import HouseholdProfileIn, build_situation
 from app.models import Account, FiscalSimulation, HouseholdProfile, SavingsGoal
 from app.security import audit
-from app.services import analytics, documents
+from app.services import analytics, documents, history
 from app.services.settings_store import get_setting, set_setting
 
 router = APIRouter(prefix="/api", tags=["insights"])
@@ -36,6 +36,17 @@ router = APIRouter(prefix="/api", tags=["insights"])
 class BudgetSettingsIn(BaseModel):
     buffer_cents: int = Field(ge=0, le=10_000_000)
     savings_goal_cents: int = Field(ge=0, le=10_000_000)
+
+
+@router.get("/history")
+def history_view(
+    _: AuthDep,
+    db: DbDep,
+    today: TodayDep,
+    range_: str = Query(default="30d", alias="range", pattern="^(7d|30d|3m|1y|all)$"),
+) -> dict[str, Any]:
+    """Soldes jour par jour, revenus / dépenses par période, répartition, comparaison et dernières opérations."""
+    return history.history(db, today, range_)
 
 
 @router.get("/budget")
@@ -166,7 +177,7 @@ def wealth(_: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
     return {
         "net_worth": asdict(nw),
         "accounts": [asdict(b) for b in balances],
-        "history": [{"day": d, "net_cents": v} for d, v in analytics.wealth_history(db, today)],
+        "history": [{"day": d, "net_cents": v} for d, v in history.net_worth_history(db, today)],
         "emergency_fund": asdict(emergency_fund(balances, analytics.monthly_essentials(db, today))),
         "regulated": [asdict(s) for s in regulated_status(balances, products)],
         "rates_as_of": products[0].as_of if products else None,

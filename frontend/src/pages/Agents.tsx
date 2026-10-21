@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { api, useApi, type AgentCatalog, type AgentToken, type AgentTokenCreated, type PrivacyMode } from "../api";
+import { Icon } from "../components/Icon";
 import { ErrorNote, Field, useAsyncAction, useToast } from "../components/ui";
 import { shortDate } from "../format";
 
@@ -74,7 +75,7 @@ export function AgentTokens() {
 
   return (
     <section className="section" aria-labelledby="agents-title" id="agents">
-      <h2 id="agents-title">Agents IA</h2>
+      <div className="section-head"><h2 id="agents-title"><Icon name="robot" /> Agents IA</h2></div>
       <p className="section-note">
         Connecte HERMÈS (ou tout agent compatible MCP) pour qu'il devienne ton gestionnaire d'argent. Il lit, calcule
         et propose ; il ne peut ni déplacer d'argent, ni changer son propre mandat, ni appliquer un réglage sans toi.
@@ -149,43 +150,33 @@ export function AgentTokens() {
 
       {tokens.error && <ErrorNote message={tokens.error} onRetry={tokens.reload} />}
       {tokens.data && tokens.data.length > 0 && (
-        <table className="plain" style={{ marginTop: "1.5rem" }}>
-          <thead>
-            <tr><th>Agent</th><th>Rôle</th><th>État</th><th>Dernier appel</th><th /></tr>
-          </thead>
-          <tbody>
-            {tokens.data.map((t) => {
-              const p = catalog.data ? presetOf(t.scopes, catalog.data.presets) : null;
-              return (
-                <tr key={t.id}>
-                  <td>
-                    <b>{t.name}</b>
-                    <div className="faint"><code>{t.prefix}…</code> · {PRIVACY_TEXT[t.privacy]}</div>
-                    {t.allowed_ips.length > 0 && (
-                      <div className="faint">depuis {t.allowed_ips.map((ip) => ip.replace(/\/(32|128)$/, "")).join(", ")}</div>
-                    )}
-                  </td>
-                  <td>{p ? PRESET_TEXT[p]?.title : t.scopes.join(", ")}</td>
-                  <td>
-                    <span className={`tag ${t.state === "actif" ? "ok" : "warn"}`}>
-                      {{ actif: "actif", expire: "expiré", revoque: "révoqué" }[t.state]}
-                    </span>
-                    {t.state === "actif" && <div className="faint">jusqu'au {shortDate(t.expires_at)}</div>}
-                  </td>
-                  <td>
-                    {t.last_used_at ? shortDate(t.last_used_at) : "jamais"}
-                    <div className="faint">{t.calls} appel{t.calls > 1 ? "s" : ""}</div>
-                  </td>
-                  <td className="num">
-                    {t.state === "actif" && (
-                      <button className="btn danger" disabled={busy} onClick={() => revoke(t)}>Révoquer</button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <ul className="connected" style={{ marginTop: "1.5rem" }} aria-label="Jetons d'agents">
+          {tokens.data.map((t) => {
+            const p = catalog.data ? presetOf(t.scopes, catalog.data.presets) : null;
+            return (
+              <li key={t.id}>
+                <span className="bank-mark" aria-hidden="true"><Icon name="robot" /></span>
+                <div style={{ flex: "1 1 14rem", minWidth: 0 }}>
+                  <b>{t.name}</b>{" "}
+                  <span className={`tag ${t.state === "actif" ? "ok" : "warn"}`}>
+                    {{ actif: "actif", expire: "expiré", revoque: "révoqué" }[t.state]}
+                  </span>
+                  <div className="faint">
+                    {p ? PRESET_TEXT[p]?.title : t.scopes.join(", ")} · <code>{t.prefix}…</code> · {PRIVACY_TEXT[t.privacy]}
+                  </div>
+                  <div className="faint">
+                    {t.last_used_at ? `dernier appel le ${shortDate(t.last_used_at)}` : "jamais appelé"} · {t.calls} appel{t.calls > 1 ? "s" : ""}
+                    {t.state === "actif" && ` · valable jusqu'au ${shortDate(t.expires_at)}`}
+                    {t.allowed_ips.length > 0 && ` · depuis ${t.allowed_ips.map((ip) => ip.replace(/\/(32|128)$/, "")).join(", ")}`}
+                  </div>
+                </div>
+                {t.state === "actif" && (
+                  <button className="btn ghost sm" disabled={busy} onClick={() => revoke(t)}>Révoquer</button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       )}
     </section>
   );

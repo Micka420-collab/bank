@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 from collections.abc import Iterator
 from datetime import date, timedelta
+from itertools import pairwise
 from typing import Any
 
 import httpx
@@ -343,3 +344,73 @@ def test_export_includes_planning_shifts_not_the_url(app, world: TestClient) -> 
     body: dict[str, Any] = r.json()
     assert len(body["work_shifts"]) == 2 and body["work_plan"]["source"] == "file" and "url" not in body["work_plan"]
     assert body["initiative_states"] == []
+
+
+# ------------------------------------------------------------------ historique du tableau de bord
+def test_history_rebuilds_balances_and_compares_periods(world: TestClient) -> None:
+    r = world.get("/api/history?range=30d")
+    assert r.status_code == 200
+    h = r.json()
+    assert (
+        h["range"] == "30d" and h["start"] == (TODAY - timedelta(days=29)).isoformat() and h["end"] == TODAY.isoformat()
+    )
+    assert len(h["balances"]) == 30 and h["balances"][-1]["balance_cents"] == h["current_balance_cents"] == 64_000
+    # Le solde de la veille = solde actuel moins les opérations d'aujourd'hui (aucune aujourd'hui dans le scénario).
+    assert h["balances"][-2]["balance_cents"] == 64_000
+    # Chaque jour, le solde bouge exactement du total des opérations de ce jour (reconstruction à rebours).
+    txns = world.get("/api/transactions?limit=500").json()["items"]
+    per_day: dict[str, int] = {}
+    for t in txns:
+        per_day[t["booking_date"]] = per_day.get(t["booking_date"], 0) + t["amount_cents"]
+    for prev, cur in pairwise(h["balances"]):
+        assert cur["balance_cents"] - prev["balance_cents"] == per_day.get(cur["date"], 0), cur["date"]
+    assert h["now"]["income_cents"] > 0 and h["now"]["spent_cents"] > 0 and h["previous"]["income_cents"] > 0
+    assert sum(c["share"] for c in h["categories"]) == pytest.approx(1.0, abs=0.02)
+    assert any(c["slug"] == "logement" for c in h["categories"]) and all("color" in c for c in h["categories"])
+    assert h["periods"] and all(p["label"].startswith("sem. du") for p in h["periods"])
+    assert len(h["latest"]) == 6 and h["latest"][0]["date"] >= h["latest"][-1]["date"]
+    for rng, n in (("7d", 7), ("1y", 365), ("all", None)):
+        r = world.get(f"/api/history?range={rng}").json()
+        if n:
+            assert len(r["balances"]) == n and r["range"] == rng
+        assert r["start"] <= r["end"]
+    assert world.get("/api/history?range=2w").status_code == 422
+    seven = world.get("/api/history?range=7d").json()
+    assert all(len(p["key"]) == 10 for p in seven["periods"])
+
+
+def test_net_worth_history_is_rebuilt_from_all_accounts_and_ignores_transfers(app, world: TestClient) -> None:  # type: ignore[no-untyped-def]
+    from app.models import Account, Transaction
+
+    # Un virement interne de 300 € vers le livret, il y a dix jours : il ne change pas la valeur nette.
+    with app.state.sessionmaker() as db:
+        courant = db.scalar(select(Account).where(Account.name == "Compte courant"))
+        assert courant is not None
+        db.add(
+            Transaction(
+                account_id=courant.id,
+                booking_date=TODAY - timedelta(days=10),
+                amount_cents=-30_000,
+                raw_label="VIR LIVRET A",
+                fingerprint="transfer-test",
+                is_transfer=True,
+            )
+        )
+        courant.balance_cents -= 30_000
+        db.commit()
+    w = world.get("/api/wealth").json()
+    hist = w["history"]
+    assert hist[-1]["day"] == TODAY.isoformat() and hist[-1]["net_cents"] == w["net_worth"]["net_cents"]
+    assert len(hist) > 60, "la courbe couvre tout l'historique des opérations, pas seulement les visites de la page"
+    # D'un jour à l'autre, la valeur nette bouge du total des opérations du jour, virements internes exclus.
+    txns = world.get("/api/transactions?limit=500").json()["items"]
+    per_day: dict[str, int] = {}
+    for t in txns:
+        if not t["is_transfer"]:
+            per_day[t["booking_date"]] = per_day.get(t["booking_date"], 0) + t["amount_cents"]
+    for prev, cur in pairwise(hist):
+        assert cur["net_cents"] - prev["net_cents"] == per_day.get(cur["day"], 0), cur["day"]
+    day = (TODAY - timedelta(days=10)).isoformat()
+    before = next(h for h in hist if h["day"] == day)
+    eve = next(h for h in hist if h["day"] == (TODAY - timedelta(days=11)).isoformat())
+    assert before["net_cents"] - eve["net_cents"] == per_day.get(day, 0)

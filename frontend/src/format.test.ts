@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { errorMessage, readCookie } from "./api";
-import { amountOnly, dayNumber, money, parseEuros, plural, shortDate } from "./format";
+import { amountOnly, dayNumber, merchantCase, money, parseEuros, plural, shortDate } from "./format";
 import { parseHash } from "./router";
 
 const clean = (s: string) => s.replace(/[  ]/g, " ");
@@ -11,6 +11,18 @@ describe("format", () => {
     expect(clean(money(-500, { whole: true }))).toBe("-5 €");
     expect(clean(money(2500, { signed: true }))).toBe("+25,00 €");
     expect(clean(amountOnly(3849))).toBe("38");
+  });
+
+  it("writes merchant names the way people read them", () => {
+    expect(merchantCase("CARREFOUR MARKET ORLEANS")).toBe("Carrefour Market Orleans");
+    expect(merchantCase("EDF CLIENTS PARTICULIERS")).toBe("EDF Clients Particuliers");
+    expect(merchantCase("CAF DU LOIRET APL")).toBe("CAF du Loiret APL");
+    expect(merchantCase("PAYLIB DE MARIE MARTIN")).toBe("Paylib de Marie Martin");
+    expect(merchantCase("PIZZERIA DA MARIO")).toBe("Pizzeria da Mario");
+    expect(merchantCase("JEAN-PIERRE L'EPICIER")).toBe("Jean-Pierre L'Epicier");
+    expect(merchantCase("Netflix.com")).toBe("Netflix.com");
+    expect(merchantCase("SNCF CONNECT 2026")).toBe("SNCF Connect 2026");
+    expect(merchantCase("")).toBe("");
   });
 
   it("parses user input into cents", () => {

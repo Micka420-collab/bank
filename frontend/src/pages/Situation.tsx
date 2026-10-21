@@ -82,10 +82,13 @@ export function Situation() {
   return (
     <>
       <div className="page-head">
-        <h1>Ma situation</h1>
+        <div>
+          <h1>Ma situation</h1>
+          <p className="muted">Ce que Bank sait de toi, ce qu'il a lu dans tes relevés, ce que ton agent propose.</p>
+        </div>
       </div>
 
-      <section className="knowledge" aria-labelledby="gauge-title">
+      <section className="card card-hero knowledge reveal" style={{ ["--i" as string]: 0 }} aria-labelledby="gauge-title">
         <p className="today-lead" id="gauge-title">Ce que Bank sait de toi</p>
         <div className="gauge" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={data.percent}
              aria-label="Complétude de ta situation">
@@ -179,8 +182,8 @@ function Knowledge({ data, onEdit }: { data: OnboardingResponse; onEdit: (sectio
   });
   const jump = (id: string) => window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   return (
-    <section className="section fiche" aria-labelledby="fiche-title">
-      <h2 id="fiche-title">Ta fiche</h2>
+    <section className="card section fiche" aria-labelledby="fiche-title">
+      <div className="card-head"><h2 id="fiche-title">Ta fiche</h2><span className="faint">Chaque ligne se corrige en un clic</span></div>
       <dl className="fiche-lines">
         {(employer || detected.length > 0) && (
           <div className="is-observed">

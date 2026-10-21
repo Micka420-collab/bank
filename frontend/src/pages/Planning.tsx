@@ -3,6 +3,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { api, useApi, type PayModel, type PayRule, type PlanningStatus } from "../api";
+import { Icon } from "../components/Icon";
 import { ErrorNote, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { money, parseEuros, shortDate } from "../format";
 
@@ -28,7 +29,7 @@ export function Planning() {
 
   return (
     <section className="section" aria-labelledby="planning-title" id="planning">
-      <h2 id="planning-title">Planning de travail</h2>
+      <div className="section-head"><h2 id="planning-title"><Icon name="calendar" /> Planning de travail</h2></div>
       {status.error && <ErrorNote message={status.error} onRetry={status.reload} />}
       {!status.data && !status.error && <Loading what="Planning" />}
       {status.data && (

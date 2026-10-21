@@ -1,67 +1,44 @@
-import { useState, type FormEvent } from "react";
+// Connexion rapide : une carte, l'identifiant retenu sur cet appareil (jamais le mot de passe), le code à six chiffres
+// validé dès qu'il est complet. La création du premier accès se fait dans l'onboarding.
+
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../api";
+import { Icon } from "../components/Icon";
 import { Field, useAsyncAction } from "../components/ui";
 
-export function Setup({ onDone }: { onDone: () => void }) {
-  const [token, setToken] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [busy, error, run] = useAsyncAction();
-  const mismatch = confirm.length > 0 && confirm !== password;
+const REMEMBER_KEY = "bank:username";
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    if (mismatch) return;
-    void run(async () => {
-      await api("/api/setup", { method: "POST", body: { setup_token: token.trim(), username, password } });
-      onDone();
-    });
-  };
+function rememberedUsername(): string {
+  try {
+    return window.localStorage.getItem(REMEMBER_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
 
-  return (
-    <main className="auth">
-      <form className="auth-card" onSubmit={submit}>
-        <h1>Créer ton accès</h1>
-        <p className="muted">
-          Le jeton d'installation est dans la configuration du serveur (BANK_SETUP_TOKEN). Il empêche quiconque
-          sur ton réseau de prendre la main avant toi.
-        </p>
-        <Field label="Jeton d'installation">
-          <input value={token} onChange={(e) => setToken(e.target.value)} required autoComplete="off" />
-        </Field>
-        <Field label="Identifiant">
-          <input value={username} onChange={(e) => setUsername(e.target.value)} required minLength={3}
-                 pattern="[A-Za-z0-9._\-]+" autoComplete="username" />
-        </Field>
-        <Field label="Mot de passe" hint="12 caractères minimum ; une phrase de passe est idéale.">
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
-                 minLength={12} autoComplete="new-password" />
-        </Field>
-        <Field label="Confirmation">
-          <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required
-                 autoComplete="new-password" aria-invalid={mismatch} />
-        </Field>
-        {mismatch && <p className="error">Les deux mots de passe diffèrent.</p>}
-        {error && <p className="error" role="alert">{error}</p>}
-        <button className="btn" disabled={busy}>Créer mon accès</button>
-      </form>
-    </main>
-  );
+function remember(username: string): void {
+  try {
+    window.localStorage.setItem(REMEMBER_KEY, username);
+  } catch {
+    /* stockage indisponible : on n'insiste pas */
+  }
 }
 
 export function Login({ onDone }: { onDone: () => void }) {
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState(rememberedUsername);
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [busy, error, run] = useAsyncAction();
+  const formRef = useRef<HTMLFormElement>(null);
+  const remembered = username.length > 0 && rememberedUsername() === username;
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
+  const submit = (e?: FormEvent) => {
+    e?.preventDefault();
     void run(async () => {
       if (mfaToken) {
-        await api("/api/auth/mfa", { method: "POST", body: { mfa_token: mfaToken, code } });
+        await api("/api/auth/mfa", { method: "POST", body: { mfa_token: mfaToken, code: code.replace(/\s+/g, "") } });
         onDone();
         return;
       }
@@ -69,36 +46,64 @@ export function Login({ onDone }: { onDone: () => void }) {
         method: "POST",
         body: { username, password },
       });
+      remember(username);
       if (r.mfa_required && r.mfa_token) setMfaToken(r.mfa_token);
       else onDone();
     });
   };
 
+  // Le code TOTP fait six chiffres : on valide dès qu'il est complet, sans bouton à chercher — une seule fois par
+  // code saisi, pour qu'un code refusé ne reparte pas en boucle.
+  const autoSent = useRef("");
+  useEffect(() => {
+    const digits = code.replace(/\s+/g, "");
+    if (mfaToken && /^\d{6}$/.test(digits) && !busy && autoSent.current !== digits) {
+      autoSent.current = digits;
+      formRef.current?.requestSubmit();
+    }
+  }, [code, mfaToken, busy]);
+
   return (
     <main className="auth">
-      <form className="auth-card" onSubmit={submit}>
-        <h1>{mfaToken ? "Code de vérification" : "Connexion"}</h1>
+      <form className="auth-card" onSubmit={submit} ref={formRef} aria-labelledby="login-title">
+        <div className="auth-brand"><img src="/icon.svg" alt="" width={36} height={36} /><span>Bank</span></div>
+        <h1 id="login-title">{mfaToken ? "Code de vérification" : remembered ? `Bonjour ${username}` : "Connexion"}</h1>
         {mfaToken ? (
           <>
-            <p className="muted">Saisis le code à 6 chiffres de ton application d'authentification, ou un code de secours.</p>
+            <p className="muted">Le code à six chiffres de ton application d'authentification, ou un code de secours.</p>
             <Field label="Code">
               <input value={code} onChange={(e) => setCode(e.target.value)} required autoFocus
-                     autoComplete="one-time-code" inputMode="numeric" />
+                     autoComplete="one-time-code" inputMode="numeric" className="code-input" aria-describedby="code-help" />
             </Field>
+            <p className="faint" id="code-help">Validé automatiquement dès six chiffres.</p>
           </>
         ) : (
           <>
-            <Field label="Identifiant">
-              <input value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="username" />
-            </Field>
+            {remembered ? (
+              <p className="muted">Pas toi ? <button type="button" className="btn link" onClick={() => setUsername("")}>Changer d'identifiant</button></p>
+            ) : (
+              <Field label="Identifiant">
+                <input value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="username" autoFocus />
+              </Field>
+            )}
             <Field label="Mot de passe">
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
-                     autoComplete="current-password" />
+              <span className="input-with-action">
+                <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required
+                       autoComplete="current-password" autoFocus={remembered} />
+                <button type="button" className="btn ghost sm" aria-pressed={showPassword} onClick={() => setShowPassword((v) => !v)}
+                        aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}>
+                  {showPassword ? "Masquer" : "Afficher"}
+                </button>
+              </span>
             </Field>
           </>
         )}
         {error && <p className="error" role="alert">{error}</p>}
-        <button className="btn" disabled={busy}>{mfaToken ? "Valider le code" : "Se connecter"}</button>
+        <button className={`btn lg${busy ? " is-loading" : ""}`} disabled={busy}>{mfaToken ? "Valider le code" : "Se connecter"}</button>
+        {mfaToken && (
+          <button type="button" className="btn link" onClick={() => { setMfaToken(null); setCode(""); }}>Revenir à la connexion</button>
+        )}
+        <p className="faint auth-foot"><Icon name="shield" /> Chez toi, sur ton serveur. Rien ne sort de ta maison.</p>
       </form>
     </main>
   );
