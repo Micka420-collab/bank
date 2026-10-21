@@ -28,8 +28,9 @@ logs: ## Journaux (dont l'ancrage de la chaîne d'audit)
 backup: ## Sauvegarde à chaud cohérente dans le volume (/data/backups)
 	docker compose exec api python -m scripts.backup
 
-lint: ## Ruff, mypy strict, bandit
+lint: ## Ruff, mypy strict, bandit, shellcheck
 	cd backend && .venv/bin/ruff check app tests && .venv/bin/ruff format --check app tests && .venv/bin/mypy app && .venv/bin/bandit -q -r app -c pyproject.toml
+	@if command -v shellcheck >/dev/null; then shellcheck scripts/*.sh integrations/hermes/install.sh; else echo "shellcheck absent : scripts non vérifiés"; fi
 
 test: ## Tests backend + couverture
 	cd backend && .venv/bin/pytest --cov=app

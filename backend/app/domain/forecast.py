@@ -171,7 +171,9 @@ def build_forecast(
     categories: Mapping[str, CategoryInfo],
     savings_goal_cents: int = 0,
     buffer_cents: int = 0,
+    extra_events: Sequence[UpcomingEvent] = (),
 ) -> MonthForecast:
+    """`extra_events` : dépenses planifiées (onboarding) ou hypothétiques (« et si j'achète ça ? »)."""
     start, end = month_bounds(today)
     days_in_month = end.day
     days_left = (end - today).days + 1
@@ -214,6 +216,7 @@ def build_forecast(
                     late=late,
                 )
             )
+    events.extend(e for e in extra_events if today <= e.date <= end)
     events.sort(key=lambda e: (e.date, -e.amount_cents))
     expected_income = sum(e.amount_cents for e in events if e.amount_cents > 0)
     expected_fixed = sum(e.amount_cents for e in events if e.amount_cents < 0)

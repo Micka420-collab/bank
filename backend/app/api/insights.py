@@ -18,8 +18,6 @@ from app.domain.aids import compute_gaps
 from app.domain.wealth import (
     emergency_fund,
     load_regulated_products,
-    monthly_needed,
-    months_to_goal,
     net_worth,
     project_savings,
     regulated_status,
@@ -164,27 +162,7 @@ def wealth(_: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
     nw = net_worth(balances)
     analytics.snapshot_wealth(db, today, nw.assets_cents, nw.liabilities_cents)
     products = load_regulated_products()
-    goals = []
-    for g in db.scalars(select(SavingsGoal).order_by(SavingsGoal.id)):
-        acc = db.get(Account, g.account_id) if g.account_id else None
-        current = max(0, acc.balance_cents) if acc else 0
-        # Objectif adossé à un livret : on projette avec son taux réglementé.
-        rate = next((p.rate_percent for p in products if acc is not None and p.kind == acc.kind), Decimal(0))
-        goals.append(
-            {
-                "id": g.id,
-                "name": g.name,
-                "target_cents": g.target_cents,
-                "current_cents": current,
-                "target_date": g.target_date,
-                "monthly_contribution_cents": g.monthly_contribution_cents,
-                "progress": round(min(1.0, current / g.target_cents), 3),
-                "months_to_goal": months_to_goal(current, g.target_cents, g.monthly_contribution_cents, rate),
-                "monthly_needed_cents": monthly_needed(current, g.target_cents, g.target_date, today)
-                if g.target_date
-                else None,
-            }
-        )
+    goals = analytics.savings_goals_status(db, today, products)
     return {
         "net_worth": asdict(nw),
         "accounts": [asdict(b) for b in balances],

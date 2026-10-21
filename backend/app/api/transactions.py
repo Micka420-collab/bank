@@ -10,10 +10,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 
 from app.api.deps import AuthDep, DbDep
-from app.domain.categorize import Categorizer
-from app.models import Category, CategoryRule, CategorySource, Transaction
+from app.models import Category, CategoryRule, Transaction
 from app.security import audit
-from app.services.categories import category_ids, load_categorizer, recategorize
+from app.services.categories import category_ids, load_categorizer, reapply_rules, recategorize
 
 router = APIRouter(prefix="/api", tags=["transactions"])
 
@@ -198,22 +197,3 @@ def create_rule(body: RuleIn, ctx: AuthDep, db: DbDep) -> dict[str, int]:
     updated = reapply_rules(db, load_categorizer(db), ids) if body.apply_to_history else 0
     audit.record(db, ctx.user.username, "rule.create", pattern=pattern, category=body.category, updated=updated)
     return {"updated": updated}
-
-
-def reapply_rules(db: DbDep, categorizer: Categorizer, ids: dict[str, int]) -> int:
-    """Rejoue la catégorisation sur l'historique — sans jamais toucher un choix manuel ni un virement interne."""
-    changed = 0
-    rows = db.scalars(
-        select(Transaction)
-        .where(Transaction.category_source != CategorySource.MANUAL, Transaction.is_transfer.is_(False))
-        .limit(50_000)
-    )
-    for t in rows:
-        d = categorizer.decide(t.raw_label, t.merchant, t.amount_cents)
-        if t.aid_kind and d.source in ("builtin", "none", "bayes"):
-            continue  # la reconnaissance des aides prime sur le dictionnaire
-        new_id = ids.get(d.category)
-        if new_id != t.category_id:
-            t.category_id, t.category_source = new_id, CategorySource(d.source)
-            changed += 1
-    return changed

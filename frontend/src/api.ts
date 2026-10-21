@@ -326,3 +326,101 @@ export type Connection = {
   last_error: string | null;
   accounts: string[];
 };
+
+// ------------------------------------------------------------------ agent IA (HERMÈS) et « Ma situation »
+export type QuestionKind = "choice" | "multi" | "money" | "int" | "text" | "list";
+
+export type ItemField = {
+  name: string;
+  label: string;
+  kind: "money" | "choice" | "decimal" | "date" | "int" | "text";
+  options: string[];
+  required: boolean;
+};
+
+export type Question = {
+  id: string;
+  section: string;
+  question: string;
+  why: string;
+  kind: QuestionKind;
+  weight: number;
+  options: { value: string; label: string }[];
+  max_items: number;
+  minimum: number | null;
+  maximum: number | null;
+  item_fields: ItemField[] | null;
+};
+
+export type StoredAnswer = { value: unknown; source: string; at: string };
+
+export type Suggestion = { question_id: string; value: unknown; evidence: string };
+
+export type RiskProfile = {
+  label: "prudent" | "equilibre" | "dynamique" | "inconnu";
+  score: number | null;
+  capacity_limited: boolean;
+  reason: string;
+};
+
+export type OnboardingResponse = {
+  percent: number;
+  answered: number;
+  total: number;
+  sections: { id: string; title: string }[];
+  questions: Question[];
+  answers: Record<string, StoredAnswer>;
+  suggestions: Suggestion[];
+  missing: string[];
+  risk_profile: RiskProfile;
+};
+
+export type Proposal = {
+  id: number;
+  agent: string;
+  kind: string;
+  title: string;
+  params: Record<string, unknown>;
+  rationale: string;
+  status: "pending" | "applied" | "rejected" | "failed" | "expired";
+  result: string | null;
+  question?: string; // set_answer : intitulé de la question visée
+  impact?: number; // create_rule : opérations qui seraient reclassées
+  created_at: string;
+  expires_at: string;
+  decided_at: string | null;
+};
+
+export type PrivacyMode = "redacted" | "aggregates" | "full";
+
+export type AgentToken = {
+  id: number;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  privacy: PrivacyMode;
+  allowed_ips: string[];
+  created_at: string;
+  expires_at: string;
+  last_used_at: string | null;
+  calls: number;
+  state: "actif" | "expire" | "revoque";
+};
+
+export type AgentTokenCreated = AgentToken & {
+  token: string;
+  mcp_url: string;
+  hermes_config: string;
+  hermes_env: string;
+};
+
+export type AgentCatalog = {
+  scopes: Record<string, string>;
+  presets: Record<string, string[]>;
+  privacy: Record<PrivacyMode, string>;
+  max_ttl_days: number;
+};
+
+export type AgentActivity = { at: string; agent: string; action: string; details: Record<string, unknown> };
+
+export type Alert = { severity: "critique" | "attention" | "opportunite" | "info"; code: string; title: string; suggested_action: string };

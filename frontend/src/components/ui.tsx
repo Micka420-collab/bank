@@ -70,6 +70,7 @@ export function EuroInput({
   id?: string;
   required?: boolean;
   placeholder?: string;
+  "aria-label"?: string;
 }) {
   const [text, setText] = useState(value === null ? "" : (value / 100).toString().replace(".", ","));
   useEffect(() => {

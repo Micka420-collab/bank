@@ -59,6 +59,7 @@ class CategorySource(StrEnum):
     LEARNED = "learned"  # appris d'une correction précédente sur le même marchand
     BAYES = "bayes"  # classifieur probabiliste entraîné sur ton historique
     BUILTIN = "builtin"  # dictionnaire intégré (marchands FR)
+    AGENT = "agent"  # classé par un agent IA (mandat « gestionnaire ») : jamais appris, jamais prioritaire
     NONE = "none"
 
 
@@ -285,3 +286,63 @@ class WealthSnapshot(Base):
     assets_cents: Mapped[int] = mapped_column(BigInteger)
     liabilities_cents: Mapped[int] = mapped_column(BigInteger)
     net_cents: Mapped[int] = mapped_column(BigInteger)
+
+
+# ---------------------------------------------------------------------------- agents IA (HERMÈS…)
+class AgentToken(Base):
+    """Identité machine d'un agent : jeton porteur à forte entropie dont seule l'empreinte est stockée,
+    limité par portées (scopes), mode de confidentialité, adresses IP et date d'expiration."""
+
+    __tablename__ = "agent_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(64))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    prefix: Mapped[str] = mapped_column(String(16))
+    scopes: Mapped[str] = mapped_column(Text, default="[]")  # JSON
+    privacy: Mapped[str] = mapped_column(String(12), default="redacted")  # full | redacted | aggregates
+    allowed_ips: Mapped[str] = mapped_column(Text, default="[]")  # JSON, vide = toutes
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    calls: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class AgentProposal(Base):
+    """Changement proposé par un agent, appliqué seulement après ta validation dans Bank."""
+
+    __tablename__ = "agent_proposals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    agent_name: Mapped[str] = mapped_column(String(64))
+    kind: Mapped[str] = mapped_column(String(32))
+    payload: Mapped[str] = mapped_column(EncryptedText("agent_proposal.payload"))
+    rationale: Mapped[str] = mapped_column(EncryptedText("agent_proposal.rationale"))
+    status: Mapped[str] = mapped_column(String(12), default="pending", index=True)
+    result: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+class FinancialProfile(Base):
+    """Réponses à l'onboarding (ta situation, tes objectifs, ton mandat pour l'agent) — chiffrées."""
+
+    __tablename__ = "financial_profile"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    data: Mapped[str] = mapped_column(EncryptedText("financial.profile"))
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class ProfileRevision(Base):
+    """Historique de chaque réponse : qui l'a donnée (toi ou un agent), quand — et retour arrière possible."""
+
+    __tablename__ = "profile_revisions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    question_id: Mapped[str] = mapped_column(String(64), index=True)
+    value: Mapped[str] = mapped_column(EncryptedText("financial.revision"))
+    source: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)

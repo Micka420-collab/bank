@@ -4,16 +4,36 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date, timedelta
+from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.aids import AidPayment, AidsSummary, summarize_aids
-from app.domain.forecast import MonthForecast, build_forecast, month_bounds, suggest_budgets
+from app.domain.forecast import (
+    CategoryInfo,
+    MonthForecast,
+    UpcomingEvent,
+    build_forecast,
+    month_bounds,
+    suggest_budgets,
+)
 from app.domain.recurring import RecurringSeries, Txn, add_months, detect_recurring
-from app.domain.wealth import AccountBalance
-from app.models import Account, AccountKind, Category, HouseholdProfile, Transaction, WealthSnapshot
+from app.domain.wealth import AccountBalance, RegulatedProduct, monthly_needed, months_to_goal
+from app.models import (
+    Account,
+    AccountKind,
+    Category,
+    FinancialProfile,
+    HouseholdProfile,
+    SavingsGoal,
+    Transaction,
+    WealthSnapshot,
+)
 from app.services.categories import category_infos
 from app.services.settings_store import get_setting
 
@@ -61,22 +81,67 @@ def recurring_for_budget(db: Session, today: date) -> list[RecurringSeries]:
     return detect_recurring(load_txns(db, [a.id for a in accounts], today - timedelta(days=HISTORY_DAYS)), today)
 
 
-def month_forecast(db: Session, today: date) -> tuple[MonthForecast, dict[str, int]]:
+@dataclass(frozen=True)
+class ForecastInputs:
+    today: date
+    txns: list[Txn]
+    balance_cents: int
+    series: list[RecurringSeries]
+    categories: dict[str, CategoryInfo]
+    savings_goal_cents: int
+    buffer_cents: int
+    planned: list[UpcomingEvent]
+
+    def run(self, extra: Sequence[UpcomingEvent] = (), savings_goal_cents: int | None = None) -> MonthForecast:
+        return build_forecast(
+            today=self.today,
+            txns=self.txns,
+            current_balance_cents=self.balance_cents,
+            series=self.series,
+            categories=self.categories,
+            savings_goal_cents=self.savings_goal_cents if savings_goal_cents is None else savings_goal_cents,
+            buffer_cents=self.buffer_cents,
+            extra_events=[*self.planned, *extra],
+        )
+
+
+def planned_expense_events(db: Session, today: date) -> list[UpcomingEvent]:
+    """Les grosses dépenses déclarées à l'onboarding entrent dans la prévision du mois concerné."""
+    profile = load_financial_profile(db)
+    items = (profile.get("planned_expenses") or {}).get("value") or []
+    _, end = month_bounds(today)
+    out = []
+    for item in items:
+        d = date.fromisoformat(item["date"])
+        if today <= d <= end:
+            out.append(UpcomingEvent(d, item["label"], -int(item["amount_cents"]), "divers", "fixed", 1.0, late=False))
+    return out
+
+
+def forecast_inputs(db: Session, today: date) -> ForecastInputs:
     accounts = budget_accounts(db)
-    ids = [a.id for a in accounts]
-    txns = load_txns(db, ids, today - timedelta(days=HISTORY_DAYS))
-    infos = category_infos(db)
-    series = detect_recurring(txns, today)
-    forecast = build_forecast(
+    txns = load_txns(db, [a.id for a in accounts], today - timedelta(days=HISTORY_DAYS))
+    return ForecastInputs(
         today=today,
         txns=txns,
-        current_balance_cents=sum(a.balance_cents for a in accounts),
-        series=series,
-        categories=infos,
+        balance_cents=sum(a.balance_cents for a in accounts),
+        series=detect_recurring(txns, today),
+        categories=category_infos(db),
         savings_goal_cents=int(get_setting(db, "savings_goal_cents")),
         buffer_cents=int(get_setting(db, "buffer_cents")),
+        planned=planned_expense_events(db, today),
     )
-    return forecast, suggest_budgets(txns, today, infos)
+
+
+def month_forecast(db: Session, today: date) -> tuple[MonthForecast, dict[str, int]]:
+    inputs = forecast_inputs(db, today)
+    return inputs.run(), suggest_budgets(inputs.txns, today, inputs.categories)
+
+
+def load_financial_profile(db: Session) -> dict[str, Any]:
+    row = db.get(FinancialProfile, 1)
+    data: dict[str, Any] = json.loads(row.data) if row else {}
+    return data
 
 
 def aid_payments(db: Session, since: date) -> list[AidPayment]:
@@ -182,10 +247,35 @@ def wealth_history(db: Session, today: date, days: int = 730) -> list[tuple[date
     )
 
 
-def load_profile(db: Session) -> dict[str, object] | None:
+def load_profile(db: Session) -> dict[str, Any] | None:
     row = db.get(HouseholdProfile, 1)
     return json.loads(row.data) if row else None
 
 
 def current_month_bounds(today: date) -> tuple[date, date]:
     return month_bounds(today)
+
+
+def savings_goals_status(db: Session, today: date, products: Sequence[RegulatedProduct]) -> list[dict[str, Any]]:
+    goals: list[dict[str, Any]] = []
+    for g in db.scalars(select(SavingsGoal).order_by(SavingsGoal.id)):
+        acc = db.get(Account, g.account_id) if g.account_id else None
+        current = max(0, acc.balance_cents) if acc else 0
+        # Objectif adossé à un livret : on projette avec son taux réglementé.
+        rate = next((p.rate_percent for p in products if acc is not None and p.kind == acc.kind), Decimal(0))
+        goals.append(
+            {
+                "id": g.id,
+                "name": g.name,
+                "target_cents": g.target_cents,
+                "current_cents": current,
+                "target_date": g.target_date,
+                "monthly_contribution_cents": g.monthly_contribution_cents,
+                "progress": round(min(1.0, current / g.target_cents), 3),
+                "months_to_goal": months_to_goal(current, g.target_cents, g.monthly_contribution_cents, rate),
+                "monthly_needed_cents": monthly_needed(current, g.target_cents, g.target_date, today)
+                if g.target_date
+                else None,
+            }
+        )
+    return goals

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, useApi, type Account, type AccountKind, type BudgetResponse, type Connection, type Me } from "../api";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
+import { AgentTokens } from "./Agents";
 
 export const KIND_LABELS: Record<AccountKind, string> = {
   checking: "Compte courant",
@@ -26,6 +27,7 @@ export function Settings({ me, bankResult, onMeChange }: { me: Me; bankResult: s
         <h1>Réglages</h1>
       </div>
       <Banks result={bankResult} />
+      <AgentTokens />
       <Accounts />
       <BudgetSettings />
       <Security me={me} onChange={onMeChange} />
@@ -392,6 +394,17 @@ const ACTIONS: Record<string, string> = {
   "bank.revoke": "Accès bancaire coupé",
   "export.done": "Données exportées",
   "export.denied": "Export refusé (mot de passe)",
+  "agent.token.create": "Jeton d'agent IA créé",
+  "agent.token.revoke": "Jeton d'agent IA révoqué",
+  "onboarding.answer": "Réponse « Ma situation » enregistrée",
+  "onboarding.clear": "Réponse « Ma situation » effacée",
+  "proposal.create": "Proposition de l'agent reçue",
+  "proposal.approve": "Proposition de l'agent appliquée",
+  "proposal.reject": "Proposition de l'agent refusée",
+  "mcp.denied": "Accès refusé à un agent (portée)",
+  "mcp.refused": "Action refusée à un agent",
+  "mcp.auth_failed": "Jeton d'agent refusé",
+  "agent.token.denied": "Création de jeton refusée (mot de passe)",
 };
 
 function Audit() {
@@ -412,7 +425,7 @@ function Audit() {
           {entries.map((e) => (
             <tr key={e.id}>
               <td style={{ whiteSpace: "nowrap" }}>{new Date(e.ts).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</td>
-              <td>{ACTIONS[e.action] ?? e.action}</td>
+              <td>{ACTIONS[e.action] ?? (e.action.startsWith("mcp.") ? `Agent : ${e.action.slice(4).replaceAll("_", " ")}` : e.action)}</td>
               <td className="muted">{e.actor}</td>
             </tr>
           ))}

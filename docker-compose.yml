@@ -69,7 +69,10 @@ services:
       resources: { limits: { memory: 768m, pids: 64 } }
 
 networks:
-  edge: {}
+  # Sous-réseau fixe : nginx ne croit X-Forwarded-For que depuis sa passerelle 172.31.250.1 (frontend/nginx.conf).
+  edge:
+    ipam:
+      config: [{ subnet: 172.31.250.0/29, gateway: 172.31.250.1 }]
   app: { internal: true }
   fiscal: { internal: true }
   egress: {}

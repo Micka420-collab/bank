@@ -42,12 +42,19 @@ def load_categorizer(db: Session) -> Categorizer:
     return Categorizer(rules, TokenBayes().fit(samples))
 
 
-def recategorize(db: Session, txn: Transaction, category: Category, *, learn: bool = True) -> int:
+def recategorize(
+    db: Session,
+    txn: Transaction,
+    category: Category,
+    *,
+    learn: bool = True,
+    source: CategorySource = CategorySource.MANUAL,
+) -> int:
     """Catégorise une transaction à la main. Si ``learn`` : mémorise « ce marchand -> cette catégorie »
     et l'applique aux autres opérations du même marchand qui n'ont pas été choisies à la main.
     Retourne le nombre d'autres transactions mises à jour."""
     txn.category_id = category.id
-    txn.category_source = CategorySource.MANUAL
+    txn.category_source = source
     if not learn or not txn.merchant:
         return 0
     direction = "in" if txn.amount_cents > 0 else "out"
@@ -80,9 +87,34 @@ def recategorize(db: Session, txn: Transaction, category: Category, *, learn: bo
             sign_filter,
             Transaction.is_transfer.is_(False),
             Transaction.category_source.in_(
-                [CategorySource.NONE, CategorySource.BUILTIN, CategorySource.BAYES, CategorySource.LEARNED]
+                [
+                    CategorySource.NONE,
+                    CategorySource.BUILTIN,
+                    CategorySource.BAYES,
+                    CategorySource.LEARNED,
+                    CategorySource.AGENT,
+                ]
             ),
         )
         .values(category_id=category.id, category_source=CategorySource.LEARNED)
     )
     return int(getattr(res, "rowcount", 0) or 0)
+
+
+def reapply_rules(db: Session, categorizer: Categorizer, ids: dict[str, int]) -> int:
+    """Rejoue la catégorisation sur l'historique — sans jamais toucher un choix manuel ni un virement interne."""
+    changed = 0
+    rows = db.scalars(
+        select(Transaction)
+        .where(Transaction.category_source != CategorySource.MANUAL, Transaction.is_transfer.is_(False))
+        .limit(50_000)
+    )
+    for t in rows:
+        d = categorizer.decide(t.raw_label, t.merchant, t.amount_cents)
+        if t.aid_kind and d.source in ("builtin", "none", "bayes"):
+            continue  # la reconnaissance des aides prime sur le dictionnaire
+        new_id = ids.get(d.category)
+        if new_id != t.category_id:
+            t.category_id, t.category_source = new_id, CategorySource(d.source)
+            changed += 1
+    return changed

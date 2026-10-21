@@ -19,3 +19,4 @@ htmlcov/
 .hypothesis/
 frontend/node_modules/
 frontend/dist/
+*.egg-info/

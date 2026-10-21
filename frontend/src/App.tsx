@@ -5,6 +5,7 @@ import { Aids } from "./pages/Aids";
 import { Login, Setup } from "./pages/Auth";
 import { Operations } from "./pages/Operations";
 import { Settings } from "./pages/Settings";
+import { Situation } from "./pages/Situation";
 import { Today } from "./pages/Today";
 import { Wealth } from "./pages/Wealth";
 import { useRoute } from "./router";
@@ -14,6 +15,7 @@ const NAV: { page: string; label: string; short: string }[] = [
   { page: "operations", label: "Opérations", short: "Opérations" },
   { page: "aides", label: "Aides", short: "Aides" },
   { page: "patrimoine", label: "Patrimoine", short: "Patrimoine" },
+  { page: "situation", label: "Ma situation", short: "Situation" },
   { page: "reglages", label: "Réglages", short: "Réglages" },
 ];
 
@@ -83,6 +85,7 @@ export function App() {
           {page === "operations" ? <Operations />
             : page === "aides" ? <Aids />
             : page === "patrimoine" ? <Wealth />
+            : page === "situation" ? <Situation />
             : page === "reglages" ? (
               <Settings me={me} bankResult={route.page === "banques" ? route.params.get("result") : null}
                         onMeChange={() => void refresh()} />

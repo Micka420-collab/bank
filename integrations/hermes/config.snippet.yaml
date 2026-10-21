@@ -1,0 +1,12 @@
+# À fusionner dans ~/.hermes/config.yaml (install.sh le fait pour toi).
+# Le jeton n'est jamais écrit ici : il vit dans ~/.hermes/.env (BANK_MCP_TOKEN=bnk_…), lu au démarrage.
+mcp_servers:
+  bank:
+    url: "https://bank.nimbus.lan/mcp"
+    headers:
+      Authorization: "Bearer ${BANK_MCP_TOKEN}"
+    timeout: 60          # une simulation des aides prend quelques secondes
+    connect_timeout: 10
+    # Bank n'a pas besoin de faire appel au modèle de HERMÈS (sampling) : coupé par principe.
+    sampling:
+      enabled: false

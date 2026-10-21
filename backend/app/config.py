@@ -53,6 +53,10 @@ class Settings(BaseSettings):
 
     max_upload_bytes: int = Field(default=5_000_000, ge=10_000, le=50_000_000)
 
+    # Agents IA (serveur MCP sur /mcp) : désactivable d'un coup, débit borné par jeton.
+    agents_enabled: bool = True
+    agent_calls_per_minute: int = Field(default=120, ge=10, le=1000)
+
     enablebanking_app_id: str | None = None
     enablebanking_key_file: Path | None = None
     enablebanking_base_url: str = "https://api.enablebanking.com"

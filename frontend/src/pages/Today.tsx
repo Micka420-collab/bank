@@ -22,6 +22,7 @@ export function Today({ totpEnabled }: { totpEnabled: boolean }) {
   const budget = useApi<BudgetResponse>("/api/budget");
   const aids = useApi<AidsResponse>("/api/aids");
   const cats = useApi<Category[]>("/api/categories");
+  const agent = useApi<{ pending_proposals: number; onboarding_percent: number; active_agents: number }>("/api/agents/summary");
   const toast = useToast();
   const catName = (slug: string) => cats.data?.find((c) => c.slug === slug)?.name ?? slug;
 
@@ -61,6 +62,19 @@ export function Today({ totpEnabled }: { totpEnabled: boolean }) {
         <div className="notice warn" style={{ marginBottom: "1.5rem" }}>
           Ton accès n'est protégé que par un mot de passe.{" "}
           <a href="#/reglages">Active la double authentification</a>.
+        </div>
+      )}
+
+      {agent.data && agent.data.pending_proposals > 0 && (
+        <div className="notice" style={{ marginBottom: "1.5rem" }}>
+          Ton agent a {plural(agent.data.pending_proposals, "proposition", "propositions")} pour toi.{" "}
+          <a href="#/situation">Les examiner</a>
+        </div>
+      )}
+      {agent.data && agent.data.pending_proposals === 0 && agent.data.onboarding_percent < 60 && (
+        <div className="notice" style={{ marginBottom: "1.5rem" }}>
+          Ton agent ne connaît que {agent.data.onboarding_percent} % de ta situation : ses conseils seront meilleurs
+          avec quelques réponses de plus. <a href="#/situation">Compléter « Ma situation »</a>
         </div>
       )}
 

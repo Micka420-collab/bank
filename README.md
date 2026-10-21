@@ -7,12 +7,15 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
 - **Budget** : reste à dépenser par jour contraint par la trésorerie (pas de « 216 €/j » qui suppose le salaire déjà arrivé), courbe du mois avec point bas et date de découvert, enveloppes, suggestions.
 - **Aides de l'État** : reconnaissance des versements CAF, France Travail, CPAM, MSA, impôts ; alertes de retard ou de changement ; simulation de tes droits par OpenFisca (le moteur officiel) et détection du non-recours.
 - **Patrimoine** : valeur nette, matelas de sécurité, livrets réglementés (taux au 1er août 2026), objectifs, projection.
+- **Ma situation + agent IA** : un onboarding qui pré-remplit ce que tes relevés révèlent (salaire, loyer, crédits,
+  capacité d'épargne) et te demande le reste ; un serveur MCP gouverné pour qu'HERMÈS devienne ton gestionnaire
+  d'argent — il lit, calcule avec la prévision de Bank et propose, tu valides. Voir [integrations/hermes](integrations/hermes/README.md).
 
 ## Architecture
 
 ```
 navigateur ──HTTPS──> ton reverse proxy (nimbus) ──> web : nginx, CSP stricte, rate-limit
-                                                        │ réseau « app » (interne)
+HERMÈS ─────HTTPS + jeton bnk_… ──┘ (/mcp)              │ réseau « app » (interne)
                                                         ▼
                                                  api : FastAPI + SQLite (volume chiffré par champ)
                                                    │ réseau « fiscal » (interne)   │ réseau « egress »
@@ -28,6 +31,10 @@ navigateur ──HTTPS──> ton reverse proxy (nimbus) ──> web : nginx, CS
 | `backend/app/security` | Chiffrement AES-256-GCM par champ, index aveugles, Argon2id, TOTP, sessions, audit chaîné HMAC, middlewares |
 | `backend/app/providers` | Client Enable Banking (JWT RS256) |
 | `backend/app/fiscal` | Construction de la situation OpenFisca à partir de tes vrais relevés |
+| `backend/app/mcp_server.py` | Serveur MCP des agents IA : jeton par appel, portées, mandat, audit, débit borné |
+| `backend/app/services/advisor.py` | Dossier de l'agent (provenance de chaque fait), alertes, onboarding |
+| `backend/app/domain/{onboarding,decisions,redact}.py` | Questionnaire, verdicts d'achat / d'épargne, anonymisation des libellés |
+| `integrations/hermes/` | Compétence HERMÈS, configuration MCP, routines, script d'installation |
 | `fiscal-engine/` | Micro-service OpenFisca fermé (liste blanche de variables, jeton) |
 | `frontend/` | React 19 + TypeScript, PWA, zéro dépendance d'UI, police auto-hébergée |
 
@@ -86,6 +93,16 @@ tes droits.
 
 OpenFisca France est sous licence AGPL-3.0 : rien à faire tant que le service reste à ton seul usage.
 
+## Brancher HERMÈS (ton agent IA)
+
+1. Bank › **Ma situation** : confirme ce que Bank a lu dans tes relevés, réponds aux questions les plus utiles.
+2. Bank › Réglages › **Agents IA** : crée un jeton (rôle *Conseiller*, confidentialité *Anonymisé*, IP d'HERMÈS).
+3. Sur la machine d'HERMÈS : `integrations/hermes/install.sh --routines`, puis `/reload-mcp`.
+4. Demande-lui « fais mon onboarding financier », puis règle son **mandat** dans Bank (lui ne peut pas).
+
+Il ne peut ni déplacer d'argent, ni changer son mandat, ni appliquer un réglage sans ton clic. Détails, outils et
+dépannage : [integrations/hermes/README.md](integrations/hermes/README.md).
+
 ## Développement
 
 ```bash
@@ -99,9 +116,9 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 220 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
-intégration OpenFisca réelle), couverture 94 %, mypy strict sans erreur, ruff, bandit et pip-audit propres,
-`npm audit` sans vulnérabilité, aucune violation CSP sur toutes les pages.
+Qualité au moment de la livraison : 357 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+JSON-RPC MCP de bout en bout, intégration OpenFisca réelle), couverture 96 %, 18 tests front, mypy strict sans
+erreur, ruff, bandit, shellcheck et pip-audit propres, `npm audit` sans vulnérabilité, aucune violation CSP.
 
 ## Sauvegarde
 

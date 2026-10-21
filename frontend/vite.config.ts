@@ -13,12 +13,12 @@ export default defineConfig({
   server: {
     port: 5173,
     // En dev, le backend tourne sur :8000 ; les cookies restent same-origin grâce au proxy.
-    proxy: { "/api": "http://127.0.0.1:8000" },
+    proxy: { "/api": "http://127.0.0.1:8000", "/mcp": "http://127.0.0.1:8000" },
   },
   preview: {
     port: 4173,
     headers: { "Content-Security-Policy": CSP },
-    proxy: { "/api": "http://127.0.0.1:8000" },
+    proxy: { "/api": "http://127.0.0.1:8000", "/mcp": "http://127.0.0.1:8000" },
   },
   build: {
     sourcemap: false, // pas de code source exposé en production

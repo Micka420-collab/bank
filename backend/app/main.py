@@ -15,10 +15,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api import accounts, auth, banks, imports, insights, system, transactions
+from app.api import accounts, agents, auth, banks, deps, imports, insights, system, transactions
 from app.config import Settings
 from app.db import Base, make_engine, make_sessionmaker
 from app.fiscal.client import FiscalClient
+from app.mcp_server import AgentGate, McpDispatch, McpMount, build_mcp, mcp_asgi, silence_sdk_logs
 from app.providers.enablebanking import EnableBankingClient
 from app.security.auth import SlidingWindowLimiter
 from app.security.crypto import Keyring, install_keyring
@@ -64,7 +65,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         task = None
         if app.state.enablebanking is not None and settings.sync_interval_hours > 0:
             task = asyncio.create_task(_sync_loop(app))
-        yield
+        # Le serveur MCP a son propre cycle de vie (gestionnaire de sessions HTTP) : on l'imbrique.
+        async with mcp_mount.running() if mcp_mount else contextlib.nullcontext():
+            yield
         if task:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -87,12 +90,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "login": SlidingWindowLimiter(10, 300),
         "mfa": SlidingWindowLimiter(10, 300),
         "callback": SlidingWindowLimiter(20, 300),
+        "agent": SlidingWindowLimiter(settings.agent_calls_per_minute, 60),
     }
     app.state.enablebanking = _build_enablebanking(settings)
     app.state.fiscal_client = FiscalClient(settings.fiscal_engine_url, settings.fiscal_token_value)
 
-    for r in (auth, accounts, transactions, imports, insights, banks, system):
+    for r in (auth, accounts, transactions, imports, insights, banks, agents, system):
         app.include_router(r.router)
+
+    # Serveur MCP pour les agents IA (HERMÈS). Même horloge que l'API (surchargeable en test).
+    silence_sdk_logs()
+    mcp = build_mcp(
+        factory,
+        fiscal=lambda: app.state.fiscal_client,
+        today=lambda: app.dependency_overrides.get(deps.today, deps.today)(),
+    )
+    mcp_mount = (
+        McpMount(
+            make=lambda: mcp_asgi(mcp, settings),
+            wrap=lambda inner: AgentGate(inner, factory, app.state.limiters["agent"]),
+        )
+        if settings.agents_enabled
+        else None
+    )
+    app.state.mcp = mcp
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError) -> JSONResponse:
@@ -105,7 +126,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         log.exception("erreur non gérée", exc_info=exc)
         return JSONResponse({"detail": "Erreur interne"}, status_code=500)
 
-    # Ordre d'exécution : le dernier ajouté est le plus externe.
+    # Ordre d'exécution : le dernier ajouté est le plus externe. /mcp est aiguillé au plus profond, donc
+    # derrière TrustedHost, la limite de taille, les en-têtes de sécurité et le journal d'accès.
+    app.add_middleware(McpDispatch, mount=mcp_mount)
     app.add_middleware(
         BodyLimitMiddleware,
         default_limit=256_000,
