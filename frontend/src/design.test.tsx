@@ -3,6 +3,8 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { api, ApiError, statusMessage } from "./api";
+import { App } from "./App";
 import { caisseLabel, BANK_BRANDS } from "./banks";
 import { BankConnect, tileState } from "./components/BankConnect";
 import { Bars } from "./components/charts/Bars";
@@ -179,6 +181,31 @@ describe("première ouverture", () => {
     expect(window.localStorage.getItem("bank:onboarding")).toBe("done");
   });
 
+  it("leaves the welcome for the dashboard even when the address already is #/aujourdhui", async () => {
+    // Accueil repris depuis un favori ou l'historique : le hash ne change pas à la fin, l'app doit quand même suivre.
+    setOnboarding("pending");
+    window.location.hash = "#/aujourdhui";
+    mockApi({
+      "/api/setup/status": () => ({ needs_setup: false }),
+      "/api/auth/me": () => ({ username: "micka", totp_enabled: false, recovery_codes_left: 0, session_expires_at: "2026-10-22T10:00:00Z" }),
+      "/api/banks": () => ({ enabled: false, connections: [] }),
+      "/api/consents": () => [],
+      "/api/opportunities/top": () => ({ opportunities: [], value: {} }),
+      "/api/opportunities/settings": () => new Response(null, { status: 204 }),
+    });
+    await render(<App />);
+    await settle();
+    expect(host.querySelector(".onboarding")).not.toBeNull();
+    await click("Je connecterai mes comptes plus tard");
+    await settle();
+    await click("Voir mon tableau de bord");
+    await settle();
+    expect(window.localStorage.getItem("bank:onboarding")).toBe("done");
+    expect(host.querySelector(".onboarding")).toBeNull();
+    expect(host.querySelector(".shell")).not.toBeNull();
+    window.location.hash = "";
+  });
+
   it("explains when the server has no bank sync and still lets you continue", async () => {
     mockApi({ "/api/banks": () => ({ enabled: false, connections: [] }) });
     await render(<ToastProvider><Onboarding stage="bank" onDone={() => undefined} /></ToastProvider>);
@@ -312,5 +339,61 @@ describe("thème", () => {
     expect(window.localStorage.getItem("bank:theme")).toBeNull();
     window.localStorage.setItem("bank:theme", "nope");
     expect(readTheme()).toBe("auto");
+  });
+});
+
+// Une limite de débit (nginx renvoie du HTML, pas du JSON) ne doit jamais se lire « serveur en panne » ni « Erreur 429 ».
+describe("erreurs qui disent quoi faire", () => {
+  const nginx429 = () => new Response("<html><body><h1>429 Too Many Requests</h1></body></html>", { status: 429, headers: { "content-type": "text/html" } });
+
+  it("turns bare HTTP statuses into plain advice, and keeps the server's own words when it gives some", async () => {
+    expect(statusMessage(429)).toMatch(/patiente une minute/);
+    expect(statusMessage(413)).toBe("Fichier trop lourd pour être envoyé.");
+    expect(statusMessage(502)).toMatch(/ne répond pas pour l'instant/);
+    expect(statusMessage(500)).toBe("Erreur 500");
+    mockApi({ "/api/transactions": () => nginx429() });
+    const err = await api("/api/transactions").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(429);
+    expect((err as ApiError).message).toBe(statusMessage(429));
+    mockApi({ "/api/auth/login": () => jsonResponse({ detail: "Trop de tentatives, réessaie dans quelques minutes" }, 429) });
+    const own = await api("/api/auth/login", { method: "POST", body: {} }).catch((e: unknown) => e);
+    expect((own as ApiError).message).toBe("Trop de tentatives, réessaie dans quelques minutes");
+  });
+
+  it("opens on « patiente » rather than « serveur en panne » when the server throttles, then retries into the login", async () => {
+    let throttled = true;
+    mockApi({
+      "/api/setup/status": () => (throttled ? nginx429() : { needs_setup: false }),
+      "/api/auth/me": () => jsonResponse({ detail: "Non connecté" }, 401),
+    });
+    await render(<App />);
+    await settle();
+    const alert = host.querySelector("[role=alert]");
+    expect(alert?.textContent).toMatch(/patiente une minute/);
+    expect(alert?.textContent).not.toMatch(/ne répond pas/);
+    throttled = false;
+    await click("Réessayer");
+    await settle();
+    expect(host.querySelector("h1")?.textContent).toBe("Connexion");
+  });
+
+  it("still says the server is down when nothing answers at all", async () => {
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    await render(<App />);
+    await settle();
+    expect(host.querySelector("[role=alert]")?.textContent).toMatch(/ne répond pas\. Vérifie qu'il est démarré/);
+  });
+
+  it("shows the advice on the login form instead of a status code", async () => {
+    mockApi({ "/api/auth/login": () => nginx429() });
+    await render(<Login onDone={() => undefined} />);
+    await type(host.querySelector<HTMLInputElement>("input[autocomplete=username]")!, "micka");
+    await type(host.querySelector<HTMLInputElement>("input[autocomplete=current-password]")!, "mot de passe");
+    await act(async () => host.querySelector("form")!.requestSubmit());
+    await settle();
+    const text = host.textContent ?? "";
+    expect(text).toMatch(/patiente une minute/);
+    expect(text).not.toMatch(/Erreur 429/);
   });
 });

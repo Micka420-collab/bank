@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useReducer, useState } from "react";
 import { api, ApiError, useApi, type Me } from "./api";
 import { Assistant } from "./components/Assistant";
 import { Icon, type IconName } from "./components/Icon";
@@ -58,11 +58,15 @@ export function hubOf(page: string): string {
 }
 
 type Phase = "loading" | "setup" | "login" | "ready" | "offline";
+const OFFLINE = "Le serveur Bank ne répond pas. Vérifie qu'il est démarré, puis réessaie.";
 
 export function App() {
   const [phase, setPhase] = useState<Phase>("loading");
+  const [offline, setOffline] = useState(OFFLINE);
   const [me, setMe] = useState<Me | null>(null);
   const [askOpen, setAskOpen] = useState(false);
+  // Fin de l'accueil déjà sur #/aujourdhui : le hash ne change pas, aucun « hashchange » — on redessine nous-mêmes.
+  const [, redraw] = useReducer((n: number) => n + 1, 0);
   const route = useRoute();
 
   const refresh = useCallback(async () => {
@@ -72,7 +76,10 @@ export function App() {
       setMe(await api<Me>("/api/auth/me"));
       setPhase("ready");
     } catch (e) {
-      setPhase(e instanceof ApiError && e.status === 401 ? "login" : "offline");
+      if (e instanceof ApiError && e.status === 401) return setPhase("login");
+      // Le serveur a répondu « trop de demandes » : il tourne, il faut juste patienter — ne pas le dire en panne.
+      setOffline(e instanceof ApiError && e.status === 429 ? e.message : OFFLINE);
+      setPhase("offline");
     }
   }, []);
 
@@ -90,7 +97,7 @@ export function App() {
   if (phase === "offline") {
     return (
       <main className="auth">
-        <ErrorNote message="Le serveur Bank ne répond pas. Vérifie qu'il est démarré, puis réessaie." onRetry={() => void refresh()} />
+        <ErrorNote message={offline} onRetry={() => void refresh()} />
       </main>
     );
   }
@@ -102,7 +109,7 @@ export function App() {
     return (
       <ToastProvider>
         <Onboarding stage="bank" bankResult={route.page === "banques" ? route.params.get("result") : null}
-                    onDone={() => { window.location.hash = "#/aujourdhui"; }} />
+                    onDone={() => { window.location.hash = "#/aujourdhui"; redraw(); }} />
       </ToastProvider>
     );
   }

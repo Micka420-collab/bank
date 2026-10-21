@@ -287,9 +287,11 @@ make fiscal-test # contre le vrai OpenFisca
 
 Qualité au moment de la livraison : 662 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, intégration OpenFisca réelle), couverture
-93 %, 75 tests front (parcours de première ouverture, coffre, démarches, opportunités, veille, assistant),
-mypy strict sans erreur, ruff et bandit propres, `pip-audit` et `npm audit` sans vulnérabilité connue, aucune
-erreur de console ni débordement horizontal à 390 px (vérifié par Playwright).
+93 %, 81 tests front (parcours de première ouverture, coffre, démarches, opportunités, veille, assistant,
+erreurs qui disent quoi faire), mypy strict sans erreur, ruff et bandit propres, `pip-audit` et `npm audit` sans
+vulnérabilité connue, aucune erreur de console ni débordement horizontal à 390 px (vérifié par Playwright), et un
+parcours complet dans Chromium à travers les conteneurs durcis, derrière la CSP de production et un frontal TLS :
+accueil, quatorze écrans, démarche ouverte, thème sombre — aucune violation CSP, cookies `Secure`/`HttpOnly`/`Strict`.
 
 ## Sauvegarde
 

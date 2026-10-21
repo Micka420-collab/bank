@@ -32,6 +32,14 @@ export function errorMessage(detail: unknown, fallback: string): string {
   return fallback;
 }
 
+// Réponse sans détail JSON (nginx, passerelle coupée) : dire quoi faire plutôt qu'afficher « Erreur 429 ».
+export function statusMessage(status: number): string {
+  if (status === 429) return "Trop de demandes en peu de temps : patiente une minute, puis réessaie.";
+  if (status === 413) return "Fichier trop lourd pour être envoyé.";
+  if (status === 502 || status === 503 || status === 504) return "Le serveur Bank ne répond pas pour l'instant : réessaie dans un instant.";
+  return `Erreur ${status}`;
+}
+
 type Options = { method?: string; body?: unknown; form?: FormData; signal?: AbortSignal };
 
 export async function api<T>(path: string, { method = "GET", body, form, signal }: Options = {}): Promise<T> {
@@ -54,7 +62,7 @@ export async function api<T>(path: string, { method = "GET", body, form, signal 
     } catch {
       /* corps non JSON */
     }
-    throw new ApiError(res.status, errorMessage(detail, `Erreur ${res.status}`));
+    throw new ApiError(res.status, errorMessage(detail, statusMessage(res.status)));
   }
   // Une écriture a réussi : ce qui en dépend ailleurs (pastilles de navigation) peut se relire.
   if (method !== "GET") window.dispatchEvent(new Event("bank:changed"));

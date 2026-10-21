@@ -25,7 +25,7 @@ Clés dérivées par HKDF, une par usage (chiffrement, index aveugle, jetons sig
 | Menace | Défense |
 |---|---|
 | Quelqu'un sur le LAN « réclame » l'instance avant toi | Création du compte exige `BANK_SETUP_TOKEN` (`test_setup_requires_token_and_strong_password`) |
-| Force brute / bourrage d'identifiants | Rate-limit nginx + backend, verrouillage exponentiel jusqu'à 24 h persisté même en cas d'échec (`test_generic_errors_and_lockout`, `test_rate_limit`) |
+| Force brute / bourrage d'identifiants | Rate-limit nginx + backend, verrouillage exponentiel jusqu'à 24 h persisté même en cas d'échec (`test_generic_errors_and_lockout`, `test_rate_limit`). La limite stricte de nginx (10/min) ne vise que ce qui porte un secret (connexion, code, installation, mot de passe, export) ; les lectures de session faites à chaque ouverture et la déconnexion suivent la limite générale, pour qu'un rechargement ne ressemble jamais à une panne — et une 429 s'affiche « patiente une minute », jamais « serveur en panne » |
 | Énumération d'identifiants | Message identique, coût Argon2 payé même pour un utilisateur inconnu |
 | Vol du mot de passe | TOTP avec anti-rejeu par pas temporel, 10 codes de secours à usage unique (`test_full_mfa_flow_with_replay_protection_and_recovery`) |
 | CSRF | Cookies `SameSite=Strict`, jeton double-submit comparé à une empreinte, vérification de l'en-tête Origin (`test_csrf_and_origin_enforced`) |
