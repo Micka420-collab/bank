@@ -130,9 +130,20 @@ def test_uncategorized_merchants_get_a_category_picker() -> None:
     assert card.input == {
         "kind": "category",
         "options": [{"value": "courses", "label": "Courses"}, {"value": "loisirs", "label": "Loisirs"}],
+        "default": None,
     }
     assert card.actions[0].effect == {"type": "rule", "merchant": "LECLERC ORLEANS", "from_input": True}
     assert "merchant:RARE" not in keys(cards)
+    # Une enveloppe proposée par l'assistant est préselectionnée et annoncée, jamais appliquée d'office.
+    hinted = [MerchantGroup("LECLERC ORLEANS", 12, -31_200, date(2026, 10, 1), "courses", "Courses")]
+    card = next(
+        c
+        for c in build_cards(ctx(uncategorized=hinted, categories=[("courses", "Courses")]))
+        if c.key.startswith("merchant:")
+    )
+    assert (
+        card.input is not None and card.input["default"] == "courses" and "L'assistant propose « Courses »" in card.body
+    )
 
 
 def test_salary_change_is_noticed_only_when_meaningful() -> None:

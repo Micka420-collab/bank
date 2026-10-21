@@ -28,7 +28,16 @@ from app.domain.initiatives import (
 from app.domain.onboarding import QUESTIONS, recommended_emergency_months, suggestions
 from app.domain.recurring import add_months
 from app.domain.wealth import emergency_fund
-from app.models import BankConnection, Category, ConnectionStatus, EnergyReading, InitiativeState, Transaction, User
+from app.models import (
+    BankConnection,
+    Category,
+    ConnectionStatus,
+    EnergyReading,
+    InitiativeState,
+    MerchantHint,
+    Transaction,
+    User,
+)
 from app.security import audit
 from app.services import advisor, analytics, documents, planning
 from app.services import energy as energy_service
@@ -67,7 +76,24 @@ def _uncategorized(db: Session, today: date) -> list[MerchantGroup]:
         .order_by(func.count(Transaction.id).desc())
         .limit(12)
     )
-    return [MerchantGroup(m, int(n), int(total or 0), last) for m, n, total, last in rows]
+    groups = [MerchantGroup(m, int(n), int(total or 0), last) for m, n, total, last in rows]
+    if not groups:
+        return groups
+    names = {c.slug: c.name for c in db.scalars(select(Category))}
+    proposed = {h.merchant: h.category_slug for h in db.scalars(select(MerchantHint))}
+    return [
+        MerchantGroup(
+            g.merchant,
+            g.count,
+            g.total_cents,
+            g.last_date,
+            proposed.get(g.merchant),
+            names.get(proposed.get(g.merchant, "")),
+        )
+        if g.merchant in proposed and proposed[g.merchant] in names
+        else g
+        for g in groups
+    ]
 
 
 def _salary(db: Session, today: date, series: list[Any]) -> SalaryInfo | None:
@@ -277,6 +303,9 @@ def act(db: Session, *, key: str, action_id: str, value: Any, actor: str, today:
         if txn is None:
             raise InitiativeError("Plus rien à classer pour ce marchand")
         changed = 1 + recategorize(db, txn, category, learn=True)
+        hint = db.get(MerchantHint, merchant)
+        if hint is not None:
+            db.delete(hint)  # la proposition a servi (ou a été corrigée) : la règle apprise prend le relais
         _set_state(db, key, "done")
         result = f"Classé en {category.name} : {changed} opération(s), et les suivantes suivront."
     else:

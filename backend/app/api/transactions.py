@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 
 from app.api.deps import AuthDep, DbDep
-from app.models import Category, CategoryRule, Transaction
+from app.models import Category, CategoryRule, MerchantHint, Transaction
 from app.security import audit
 from app.services.categories import category_ids, load_categorizer, reapply_rules, recategorize
 
@@ -135,6 +135,11 @@ def update_transaction(txn_id: int, body: TransactionPatch, ctx: AuthDep, db: Db
         if cat is None:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Catégorie inconnue")
         propagated = recategorize(db, txn, cat, learn=body.learn)
+        if body.learn and txn.merchant:
+            # La proposition de l'assistant pour ce marchand a servi (ou a été corrigée) : la règle prend le relais.
+            hint = db.get(MerchantHint, txn.merchant)
+            if hint is not None:
+                db.delete(hint)
     if "note" in body.model_fields_set:
         txn.note = body.note
     audit.record(db, ctx.user.username, "transaction.update", txn=txn.id, propagated=propagated)

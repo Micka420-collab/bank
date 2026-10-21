@@ -1,0 +1,255 @@
+"""Client OpenRouter (https://openrouter.ai) : un seul point d'entrée vers des centaines de modèles de langage,
+avec ta propre clé et tes propres crédits.
+
+Ce que Bank lui envoie est décidé ailleurs (services/assistant.py : dossier anonymisé, plafonds). Ici, seulement
+du transport, traité avec la même méfiance que n'importe quel service extérieur : adresse fixe en HTTPS, aucune
+redirection suivie, délai total borné, corps borné (même décompressé), erreurs traduites en français, et la clé
+n'apparaît jamais dans une exception ni dans un log.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import time
+from dataclasses import dataclass
+from typing import Any
+
+import httpx
+
+BASE_URL = "https://openrouter.ai/api/v1"
+USER_AGENT = "Bank/0.4 (self-hosted personal finance)"  # ASCII only
+MAX_BODY_BYTES = 4_000_000  # la liste des modèles pèse ~2 Mo ; une réponse de chat, quelques Ko
+MAX_SECONDS_PER_CALL = 90.0  # délai total d'une réponse, lecture comprise
+KEY_RE = re.compile(r"^sk-or-[A-Za-z0-9_\-]{16,}$")  # format publié par OpenRouter (sk-or-v1-…)
+MODEL_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._\-]{0,60}/[a-z0-9][a-z0-9._:\-]{0,80}$")
+
+
+class OpenRouterError(Exception):
+    def __init__(self, message: str, status: int | None = None, *, permanent: bool = False) -> None:
+        super().__init__(message)
+        self.status = status
+        self.permanent = permanent  # clé refusée, modèle inconnu : inutile de réessayer tel quel
+
+
+def looks_like_key(key: str) -> bool:
+    return bool(KEY_RE.match(key.strip()))
+
+
+def valid_model_id(model: str) -> bool:
+    return bool(MODEL_ID_RE.match(model))
+
+
+@dataclass(frozen=True)
+class ChatResult:
+    text: str
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+    cost_usd: float  # tel que facturé par OpenRouter (usage.cost), 0 pour un modèle gratuit
+    finish_reason: str
+
+
+@dataclass(frozen=True)
+class ModelInfo:
+    id: str
+    name: str
+    context_length: int
+    prompt_usd_per_million: float
+    completion_usd_per_million: float
+    free: bool
+
+
+class OpenRouterClient:
+    def __init__(self, api_key: str | None, http: httpx.Client | None = None, base_url: str = BASE_URL) -> None:
+        self._key = (api_key or "").strip()
+        self._http = http or httpx.Client(timeout=httpx.Timeout(60.0, connect=10.0), follow_redirects=False)
+        self._base = base_url.rstrip("/")
+
+    # ------------------------------------------------------------------ transport
+    def _headers(self, *, auth: bool) -> dict[str, str]:
+        h = {
+            "User-Agent": USER_AGENT,
+            "Accept": "application/json",
+            "Accept-Encoding": "identity",  # pas de « bombe » gzip ; la lecture bornée compte les octets réels
+        }
+        if auth:
+            h["Authorization"] = f"Bearer {self._key}"
+            # Attribution facultative, affichée dans le tableau de bord OpenRouter ; rien d'identifiant.
+            h["X-Title"] = "Bank (self-hosted)"  # ASCII only : un en-tête HTTP
+        return h
+
+    def _read_bounded(self, resp: httpx.Response, started: float) -> bytes:
+        chunks: list[bytes] = []
+        size = 0
+        for chunk in resp.iter_bytes():
+            size += len(chunk)
+            if size > MAX_BODY_BYTES:
+                raise OpenRouterError("Réponse trop volumineuse", resp.status_code, permanent=True)
+            if time.monotonic() - started > MAX_SECONDS_PER_CALL:
+                raise OpenRouterError("OpenRouter trop lent (délai dépassé)", resp.status_code)
+            chunks.append(chunk)
+        return b"".join(chunks)
+
+    def _request(self, method: str, path: str, *, auth: bool, body: dict[str, Any] | None = None) -> Any:
+        started = time.monotonic()
+        try:
+            with self._http.stream(
+                method,
+                f"{self._base}{path}",
+                headers=self._headers(auth=auth),
+                content=json.dumps(body).encode("utf-8") if body is not None else None,
+            ) as resp:
+                if resp.status_code in (301, 302, 303, 307, 308):
+                    raise OpenRouterError("Redirection refusée", resp.status_code, permanent=True)
+                if resp.status_code == 401:
+                    raise OpenRouterError(
+                        "Clé OpenRouter refusée (401) : vérifie-la ou crée-en une nouvelle", 401, permanent=True
+                    )
+                if resp.status_code == 402:
+                    raise OpenRouterError(
+                        "Crédits OpenRouter insuffisants (402) : recharge ton compte", 402, permanent=True
+                    )
+                if resp.status_code == 403:
+                    raise OpenRouterError(
+                        "Accès refusé par OpenRouter (403) : modèle ou clé non autorisés", 403, permanent=True
+                    )
+                if resp.status_code == 404:
+                    raise OpenRouterError(
+                        "Modèle inconnu chez OpenRouter (404) : choisis-en un autre", 404, permanent=True
+                    )
+                if resp.status_code == 429:
+                    raise OpenRouterError("Trop de requêtes vers OpenRouter (429) : réessaie dans une minute", 429)
+                if resp.status_code >= 500:
+                    raise OpenRouterError(f"OpenRouter indisponible ({resp.status_code})", resp.status_code)
+                if resp.status_code != 200:
+                    raise OpenRouterError(f"Réponse inattendue ({resp.status_code})", resp.status_code)
+                raw = self._read_bounded(resp, started)
+        except httpx.HTTPError as exc:
+            # Le message d'httpx peut contenir l'URL : jamais la clé (elle voyage dans un en-tête).
+            raise OpenRouterError("OpenRouter injoignable (réseau)") from exc
+        try:
+            return json.loads(raw)
+        except (ValueError, RecursionError) as exc:
+            raise OpenRouterError("Réponse non JSON", 200, permanent=True) from exc
+
+    # ------------------------------------------------------------------ modèles
+    def list_models(self) -> list[ModelInfo]:
+        """Modèles texte → texte, avec leur prix (USD par million de jetons). Pas besoin de clé."""
+        payload = self._request("GET", "/models", auth=False)
+        rows = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(rows, list):
+            raise OpenRouterError("Liste des modèles illisible", 200, permanent=True)
+        out: list[ModelInfo] = []
+        for row in rows:
+            info = _model_info(row)
+            if info is not None:
+                out.append(info)
+        out.sort(key=lambda m: (not m.free, m.prompt_usd_per_million + m.completion_usd_per_million, m.id))
+        return out
+
+    # ------------------------------------------------------------------ chat
+    def chat(
+        self,
+        model: str,
+        messages: list[dict[str, str]],
+        *,
+        max_tokens: int = 700,
+        temperature: float = 0.3,
+    ) -> ChatResult:
+        if not self._key:
+            raise OpenRouterError("Aucune clé OpenRouter enregistrée", permanent=True)
+        if not valid_model_id(model):
+            raise OpenRouterError("Identifiant de modèle invalide", permanent=True)
+        body = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "usage": {"include": True},  # coût réel renvoyé avec la réponse
+        }
+        payload = self._request("POST", "/chat/completions", auth=True, body=body)
+        return _parse_chat(payload, model)
+
+
+# ---------------------------------------------------------------------------- lecture tolérante
+def _price_per_million(value: Any) -> float | None:
+    try:
+        per_token = float(value)
+    except (TypeError, ValueError):
+        return None
+    if per_token < 0 or per_token != per_token:  # NaN
+        return None
+    return round(per_token * 1_000_000, 4)
+
+
+def _dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _model_info(row: Any) -> ModelInfo | None:
+    if not isinstance(row, dict):
+        return None
+    mid = row.get("id")
+    if not isinstance(mid, str) or not valid_model_id(mid):
+        return None
+    arch = _dict(row.get("architecture"))
+    inputs = arch.get("input_modalities") or []
+    outputs = arch.get("output_modalities") or []
+    if "text" not in inputs or "text" not in outputs:
+        return None
+    pricing = _dict(row.get("pricing"))
+    prompt = _price_per_million(pricing.get("prompt"))
+    completion = _price_per_million(pricing.get("completion"))
+    if prompt is None or completion is None:
+        return None
+    raw_name = row.get("name")
+    name: str = raw_name if isinstance(raw_name, str) else mid
+    ctx = row.get("context_length")
+    return ModelInfo(
+        id=mid,
+        name=name[:120],
+        context_length=int(ctx) if isinstance(ctx, int | float) and ctx > 0 else 0,
+        prompt_usd_per_million=prompt,
+        completion_usd_per_million=completion,
+        free=prompt == 0 and completion == 0,
+    )
+
+
+def _parse_chat(payload: Any, model: str) -> ChatResult:
+    if not isinstance(payload, dict):
+        raise OpenRouterError("Réponse illisible", 200, permanent=True)
+    err = payload.get("error")
+    if isinstance(err, dict):
+        msg = str(err.get("message") or "erreur OpenRouter")[:200]
+        raise OpenRouterError(f"OpenRouter : {msg}", 200)
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+        raise OpenRouterError("Réponse sans contenu", 200)
+    message = _dict(choices[0].get("message"))
+    content = message.get("content")
+    if isinstance(content, list):  # certains modèles renvoient des « parts »
+        content = "".join(str(p.get("text", "")) for p in content if isinstance(p, dict))
+    if not isinstance(content, str):
+        content = ""
+    usage = _dict(payload.get("usage"))
+
+    def as_int(v: Any) -> int:
+        return int(v) if isinstance(v, int | float) and v >= 0 else 0
+
+    cost = usage.get("cost")
+    try:
+        cost_usd = max(0.0, float(cost)) if cost is not None else 0.0
+    except (TypeError, ValueError):
+        cost_usd = 0.0
+    raw_model = payload.get("model")
+    used: str = raw_model if isinstance(raw_model, str) else model
+    finish = choices[0].get("finish_reason")
+    return ChatResult(
+        text=content.strip(),
+        model=used[:120],
+        prompt_tokens=as_int(usage.get("prompt_tokens")),
+        completion_tokens=as_int(usage.get("completion_tokens")),
+        cost_usd=cost_usd,
+        finish_reason=str(finish or "")[:20],
+    )

@@ -122,6 +122,8 @@ class MerchantGroup:
     count: int
     total_cents: int
     last_date: date
+    hint: str | None = None  # enveloppe proposée par l'assistant (slug), à confirmer
+    hint_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -426,13 +428,19 @@ def gen_uncategorized(ctx: Context) -> list[Card]:
     for g in ctx.uncategorized:
         if g.count < 3:
             continue
+        body = (
+            f"L'assistant propose « {g.hint_name} » : confirme, ou choisis une autre enveloppe — je classe "
+            "celles-ci et toutes les suivantes."
+            if g.hint and g.hint_name
+            else "Dis-moi l'enveloppe : je classe celles-ci et toutes les suivantes."
+        )
         out.append(
             Card(
                 f"merchant:{g.merchant}",
                 "question",
                 25,
                 f"{g.merchant} : {g.count} opérations non classées ({eur(g.total_cents)})",
-                "Dis-moi l'enveloppe : je classe celles-ci et toutes les suivantes.",
+                body,
                 (
                     Action(
                         "classify", "Classer", "primary", {"type": "rule", "merchant": g.merchant, "from_input": True}
@@ -440,7 +448,7 @@ def gen_uncategorized(ctx: Context) -> list[Card]:
                     dismiss("Ignorer ce marchand"),
                 ),
                 why="Des opérations classées = un budget juste et des prévisions fiables.",
-                input={"kind": "category", "options": options},
+                input={"kind": "category", "options": options, "default": g.hint},
                 topic="operations",
             )
         )

@@ -548,7 +548,7 @@ export type CardInput =
   | { kind: "int"; minimum: number | null; maximum: number | null }
   | { kind: "choice"; options: { value: string; label: string }[] }
   | { kind: "multi"; options: { value: string; label: string }[]; max_items: number }
-  | { kind: "category"; options: { value: string; label: string }[] };
+  | { kind: "category"; options: { value: string; label: string }[]; default?: string | null };
 export type Card = {
   key: string;
   kind: "question" | "notice" | "celebrate" | "tip";
@@ -618,3 +618,43 @@ export type History = {
   anomalies: { slug: string; name: string; cents: number; previous_cents: number; ratio: number }[];
   latest: { id: number; date: string; merchant: string; label: string; amount_cents: number; category: string | null; category_name: string | null; is_transfer: boolean }[];
 };
+
+// ------------------------------------------------------------------ assistant (OpenRouter)
+export type AssistantPrivacy = "full" | "redacted" | "aggregates";
+export type AssistantStatus = {
+  configured: boolean;
+  privacy_modes: Record<AssistantPrivacy, string>;
+  provider?: string;
+  key_prefix?: string;
+  model?: string;
+  privacy?: AssistantPrivacy;
+  monthly_cap_usd_cents?: number;
+  daily_calls_cap?: number;
+  month_cost_usd_cents?: number;
+  month_cost_microusd?: number;
+  calls_today?: number;
+  calls_month?: number;
+  last_used_at?: string | null;
+  last_error?: string | null;
+  created_at?: string;
+};
+export type AssistantModel = {
+  id: string;
+  name: string;
+  context_length: number;
+  prompt_usd_per_million: number;
+  completion_usd_per_million: number;
+  free: boolean;
+};
+export type AssistantAnswer = {
+  answer: string;
+  model: string;
+  privacy: AssistantPrivacy;
+  cost_usd: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  truncated: boolean;
+  calls_today: number;
+  month_cost_usd_cents: number;
+};
+export type AssistantHints = { suggested: number; merchants: number; hints: Record<string, string> };

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, useApi, type Me } from "./api";
+import { Assistant } from "./components/Assistant";
 import { Icon, type IconName } from "./components/Icon";
 import { Onboarding, onboardingWanted } from "./components/Onboarding";
 import { ErrorNote, Loading, ToastProvider } from "./components/ui";
@@ -37,6 +38,7 @@ type Phase = "loading" | "setup" | "login" | "ready" | "offline";
 export function App() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [me, setMe] = useState<Me | null>(null);
+  const [askOpen, setAskOpen] = useState(false);
   const route = useRoute();
 
   const refresh = useCallback(async () => {
@@ -92,7 +94,7 @@ export function App() {
     <ToastProvider>
       <a className="sr-only" href="#contenu">Aller au contenu</a>
       <div className="shell">
-        <Rail page={page} username={me.username} onLogout={() => void logout()} />
+        <Rail page={page} username={me.username} onLogout={() => void logout()} onAsk={() => setAskOpen(true)} />
         <main className="sheet" id="contenu" tabIndex={-1} key={page}>
           {page === "operations" ? <Operations openImport={route.params.get("import") === "1"} />
             : page === "aides" ? <Aids />
@@ -104,6 +106,8 @@ export function App() {
             : <Today />}
         </main>
       </div>
+      <button type="button" className="fab" onClick={() => setAskOpen(true)} aria-label="Demande à Bank"><Icon name="spark" /></button>
+      <Assistant open={askOpen} onClose={() => setAskOpen(false)} />
       <nav className="tabbar" aria-label="Navigation">
         {TABS.map((n) => (
           <a key={n.page} href={`#/${n.page}`}
@@ -117,7 +121,7 @@ export function App() {
   );
 }
 
-function Rail({ page, username, onLogout }: { page: string; username: string; onLogout: () => void }) {
+function Rail({ page, username, onLogout, onAsk }: { page: string; username: string; onLogout: () => void; onAsk: () => void }) {
   const summary = useApi<{ pending_proposals: number }>("/api/agents/summary");
   const badges: Record<string, number> = { situation: summary.data?.pending_proposals ?? 0 };
   return (
@@ -130,6 +134,7 @@ function Rail({ page, username, onLogout }: { page: string; username: string; on
           {badges[n.page] ? <span className="nav-badge" aria-label={`${badges[n.page]} en attente`}>{badges[n.page]}</span> : null}
         </a>
       ))}
+      <button type="button" className="btn quiet rail-ask" onClick={onAsk}><Icon name="spark" /> Demande à Bank</button>
       <div className="rail-foot">
         <p>{username}</p>
         <button className="btn link" onClick={onLogout}>Se déconnecter</button>

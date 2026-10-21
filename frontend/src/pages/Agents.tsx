@@ -155,7 +155,7 @@ export function AgentTokens() {
             const p = catalog.data ? presetOf(t.scopes, catalog.data.presets) : null;
             return (
               <li key={t.id}>
-                <span className="bank-mark" aria-hidden="true"><Icon name="robot" /></span>
+                <span className="bank-mark is-app" aria-hidden="true"><Icon name="robot" /></span>
                 <div style={{ flex: "1 1 14rem", minWidth: 0 }}>
                   <b>{t.name}</b>{" "}
                   <span className={`tag ${t.state === "actif" ? "ok" : "warn"}`}>

@@ -16,6 +16,7 @@ import { Icon } from "../components/Icon";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
 import { AgentTokens } from "./Agents";
+import { AssistantSettings } from "./AssistantSettings";
 import { Planning } from "./Planning";
 
 export function Connecteurs({ bankResult }: { bankResult: string | null }) {
@@ -31,6 +32,7 @@ export function Connecteurs({ bankResult }: { bankResult: string | null }) {
       <Planning />
       <Linky />
       <Etat />
+      <AssistantSettings />
       <AgentTokens />
     </>
   );

@@ -42,6 +42,10 @@ Clés dérivées par HKDF, une par usage (chiffrement, index aveugle, jetons sig
 | Données en cache | `Cache-Control: no-store` sur l'API ; le service worker ne met jamais `/api` en cache |
 | Export de toutes les données | Re-saisie du mot de passe, rate-limit, journalisé |
 | Fuite d'erreurs internes | Gestionnaire global : message générique, détails seulement dans les logs ; erreurs de validation sans les valeurs reçues (`test_validation_errors_never_echo_input`) |
+| Fuite de la clé OpenRouter | Chiffrée en base (AES-256-GCM), ajout protégé par ton mot de passe, jamais renvoyée par l'API (seul le préfixe `sk-or-v1-ab12…`), absente des exports, du journal et des messages d'erreur ; transmise uniquement dans l'en-tête `Authorization` vers `openrouter.ai`, sans redirection suivie (`test_configure_stores_the_key_encrypted_and_never_returns_it`) |
+| Données envoyées au modèle de langage | Dossier anonymisé par défaut (aucun nom de particulier, IBAN, téléphone ni long numéro), mode « chiffres seuls » sans aucun libellé ; questions et réponses jamais stockées ni journalisées, seuls modèle, jetons et coût le sont (`test_ask_grounds_the_model_on_an_anonymised_dossier_and_logs_no_content`) |
+| Coût incontrôlé d'un modèle | Plafond de crédits par mois et d'appels par jour vérifiés avant chaque appel, limiteur de débit, réponse bornée en taille et en temps (`test_caps_stop_the_spending`) |
+| Injection via un libellé d'opération | Le dossier est balisé comme donnée et le modèle n'a aucun outil : il explique et propose, seul ton clic classe ou modifie ; les propositions d'enveloppes sont filtrées sur la liste des enveloppes existantes (`test_hints_are_proposed_once_validated_and_feed_the_cards`) |
 | Données laissées dans le navigateur | Le stockage local ne contient que des préférences d'affichage (`bank:theme`), l'identifiant retenu pour la connexion rapide (`bank:username`, jamais le mot de passe) et l'état de l'onboarding (`bank:onboarding`) ; aucune donnée financière, aucun jeton |
 
 ## Agents IA (serveur MCP `/mcp`)

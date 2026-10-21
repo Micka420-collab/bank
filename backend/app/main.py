@@ -18,6 +18,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.api import (
     accounts,
     agents,
+    assistant,
     auth,
     banks,
     decisions,
@@ -39,6 +40,7 @@ from app.providers.enablebanking import EnableBankingClient
 from app.security.auth import SlidingWindowLimiter
 from app.security.crypto import Keyring, install_keyring
 from app.security.middleware import AccessLogMiddleware, BodyLimitMiddleware, SecurityHeadersMiddleware
+from app.services import assistant as assistant_service
 from app.services import energy as energy_service
 from app.services import planning as planning_service
 from app.services.bank_sync import sync_all
@@ -154,15 +156,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "mfa": SlidingWindowLimiter(10, 300),
         "callback": SlidingWindowLimiter(20, 300),
         "agent": SlidingWindowLimiter(settings.agent_calls_per_minute, 60),
+        "assistant": SlidingWindowLimiter(30, 300),  # questions au modèle : 30 par 5 min, en plus des plafonds
     }
     app.state.enablebanking = _build_enablebanking(settings)
     app.state.fiscal_client = FiscalClient(settings.fiscal_engine_url, settings.fiscal_token_value)
     app.state.energy_client_factory = energy_service.default_client
     app.state.ics_fetcher = planning_service.fetch_ics
+    app.state.llm_client_factory = assistant_service.default_client
 
     routers = (
         auth,
         accounts,
+        assistant,
         transactions,
         imports,
         insights,

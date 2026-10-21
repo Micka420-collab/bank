@@ -63,7 +63,9 @@ function AskCard({ card, leaving, limit, onActed }: { card: Card; leaving: boole
   const [error, setError] = useState<string | null>(null);
   const [showWhy, setShowWhy] = useState(false);
   const [inputOpen, setInputOpen] = useState(() => card.actions.length > 0 && card.actions[0]!.effect.from_input === true);
-  const [value, setValue] = useState<unknown>(card.input?.kind === "multi" ? [] : null);
+  const [value, setValue] = useState<unknown>(
+    card.input?.kind === "multi" ? [] : card.input?.kind === "category" && card.input.default ? card.input.default : null,
+  );
 
   const act = async (action: CardAction, v: unknown = null) => {
     if (action.effect.type === "navigate") {

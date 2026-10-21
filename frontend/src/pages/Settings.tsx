@@ -349,6 +349,14 @@ const ACTIONS: Record<string, string> = {
   "planning.model": "Règles de paie modifiées",
   "planning.sync_manual": "Relecture de l'agenda demandée",
   "planning.sync_failed": "Relecture de l'agenda en échec",
+  "assistant.configure": "Clé OpenRouter enregistrée",
+  "assistant.update": "Réglages de l'assistant modifiés",
+  "assistant.remove": "Clé OpenRouter retirée",
+  "assistant.denied": "Clé OpenRouter refusée (mot de passe)",
+  "assistant.test": "Test de l'assistant",
+  "assistant.ask": "Question à l'assistant",
+  "assistant.hints": "Catégories proposées par l'assistant",
+  "assistant.failed": "Appel à OpenRouter en échec",
 };
 
 function Audit() {

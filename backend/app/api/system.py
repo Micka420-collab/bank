@@ -18,6 +18,8 @@ from app.models import (
     Category,
     EnergyReading,
     InitiativeState,
+    LlmUsage,
+    MerchantHint,
     OfficialFact,
     SavingsGoal,
     Transaction,
@@ -127,6 +129,21 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
         "initiative_states": [
             {"key": i.key, "status": i.status, "until": i.until.isoformat() if i.until else None, "note": i.note}
             for i in db.scalars(select(InitiativeState))
+        ],
+        # Assistant : les catégories proposées et la consommation ; jamais la clé OpenRouter.
+        "merchant_hints": [
+            {"merchant": h.merchant, "category": h.category_slug} for h in db.scalars(select(MerchantHint))
+        ],
+        "llm_usage": [
+            {
+                "ts": u.ts.isoformat(),
+                "feature": u.feature,
+                "model": u.model,
+                "prompt_tokens": u.prompt_tokens,
+                "completion_tokens": u.completion_tokens,
+                "cost_microusd": u.cost_microusd,
+            }
+            for u in db.scalars(select(LlmUsage).order_by(LlmUsage.id))
         ],
     }
     audit.record(db, ctx.user.username, "export.done", transactions=len(payload["transactions"]))

@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { api, useApi, type Account, type Category, type ImportResult, type Transaction } from "../api";
+import { api, useApi, type Account, type AssistantHints, type AssistantStatus, type Category, type ImportResult, type Transaction } from "../api";
 import { Icon } from "../components/Icon";
 import { Amount, ErrorNote, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { dayNumber, merchantCase, money, monthLabel, plural, shortDate } from "../format";
@@ -28,6 +28,8 @@ export function Operations({ openImport = false }: { openImport?: boolean }) {
   if (category) params.set("category", category);
   if (account) params.set("account_id", account);
   const list = useApi<Page>(`/api/transactions?${params.toString()}`);
+  const assistant = useApi<AssistantStatus>("/api/assistant");
+  const hints = useApi<Record<string, string>>("/api/assistant/hints");
 
   const submitSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -82,6 +84,9 @@ export function Operations({ openImport = false }: { openImport?: boolean }) {
         )}
       </form>
 
+      <HintsBanner items={items} configured={assistant.data?.configured === true} hints={hints.data ?? {}}
+                   onSuggested={() => { hints.reload(); }} />
+
       <section className="card" style={{ marginTop: "1rem" }} aria-live="polite">
         {list.error && <ErrorNote message={list.error} onRetry={list.reload} />}
         {!list.data && !list.error && <Loading />}
@@ -104,7 +109,8 @@ export function Operations({ openImport = false }: { openImport?: boolean }) {
               <span><b>{plural(list.data.total, "opération", "opérations")}</b>{filtered ? " trouvées" : ""}</span>
               <span className="faint">sur les {items.length} affichées : <b className="amount in">+{money(sumIn, { whole: true })}</b> · <b>{money(sumOut, { whole: true })}</b></span>
             </div>
-            <TransactionLedger items={items} categories={categories.data ?? []} onChanged={list.reload} />
+            <TransactionLedger items={items} categories={categories.data ?? []} hints={hints.data ?? {}}
+                               onChanged={() => { list.reload(); hints.reload(); }} />
             {items.length < list.data.total && (
               <div className="actions" style={{ justifyContent: "center" }}>
                 <button className="btn quiet" onClick={() => setLimit((l) => Math.min(500, l + PAGE))} disabled={limit >= 500}>
@@ -119,7 +125,42 @@ export function Operations({ openImport = false }: { openImport?: boolean }) {
   );
 }
 
-function TransactionLedger({ items, categories, onChanged }: { items: Transaction[]; categories: Category[]; onChanged: () => void }) {
+/** Marchands encore « à classer » dans la page affichée : l'assistant peut proposer des enveloppes, tu confirmes. */
+function HintsBanner({ items, configured, hints, onSuggested }: { items: Transaction[]; configured: boolean; hints: Record<string, string>; onSuggested: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  const pending = new Set(items.filter((t) => (t.category ?? "a_categoriser") === "a_categoriser" && !t.is_transfer && t.merchant).map((t) => t.merchant));
+  const withoutHint = [...pending].filter((m) => !(m in hints));
+  if (!configured || pending.size === 0) return null;
+  const run = async () => {
+    setBusy(true);
+    try {
+      const r = await api<AssistantHints>("/api/assistant/hints", { method: "POST" });
+      toast(r.suggested > 0
+        ? `${plural(r.suggested, "proposition", "propositions")} : vérifie-les ci-dessous, rien n'est classé sans toi.`
+        : r.merchants === 0 ? "Rien à proposer : il faut au moins 3 opérations d'un même marchand." : "L'assistant n'a pas trouvé d'enveloppe sûre pour ces marchands.");
+      onSuggested();
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="notice hints-banner" style={{ marginTop: "1rem" }}>
+      <Icon name="spark" />
+      <span>
+        <b>{plural(pending.size, "marchand à classer", "marchands à classer")}</b> sur cette page.
+        {withoutHint.length > 0 ? " L'assistant peut proposer une enveloppe pour chacun ; tu confirmes d'un clic." : " Les propositions de l'assistant sont affichées sur les lignes concernées."}
+      </span>
+      {withoutHint.length > 0 && (
+        <button type="button" className={`btn quiet sm${busy ? " is-loading" : ""}`} disabled={busy} onClick={() => void run()}>Proposer des enveloppes</button>
+      )}
+    </div>
+  );
+}
+
+function TransactionLedger({ items, categories, hints, onChanged }: { items: Transaction[]; categories: Category[]; hints: Record<string, string>; onChanged: () => void }) {
   const toast = useToast();
   const days = useMemo(() => {
     const map = new Map<string, Transaction[]>();
@@ -167,6 +208,12 @@ function TransactionLedger({ items, categories, onChanged }: { items: Transactio
                     {t.aid_kind && <span className="tag ok">aide</span>}{" "}
                     {t.is_transfer && <span className="tag">virement interne</span>}
                     <span className="raw" title={t.label}>{t.label}</span>
+                    {(t.category ?? "a_categoriser") === "a_categoriser" && t.merchant && hints[t.merchant] && (
+                      <button type="button" className="btn link hint-apply" onClick={() => void recategorize(t, hints[t.merchant]!)}
+                              title="Proposé par l'assistant : clique pour classer ce marchand (et les suivants)">
+                        <Icon name="spark" /> Classer en {categories.find((c) => c.slug === hints[t.merchant])?.name ?? hints[t.merchant]} ?
+                      </button>
+                    )}
                   </div>
                   <select
                       className="inline"

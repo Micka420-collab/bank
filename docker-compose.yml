@@ -1,7 +1,8 @@
 # Bank sur nimbus — 3 conteneurs, 4 réseaux, zéro port exposé hors du frontal.
 #
 #   ton reverse proxy TLS ──> web (nginx :8080) ──app──> api (FastAPI) ──fiscal──> fiscal (OpenFisca)
-#                                                          └──egress──> api.enablebanking.com
+#                                                          └──egress──> api.enablebanking.com, conso.boris.sh,
+#                                                                      openrouter.ai (assistant, si une clé est enregistrée)
 #
 # * « fiscal » est sur un réseau interne : aucun accès Internet, ta situation fiscale ne sort jamais.
 # * « app » est interne : seul nginx parle à l'API.

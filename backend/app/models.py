@@ -439,3 +439,48 @@ class InitiativeState(Base):
     until: Mapped[date | None] = mapped_column(Date)
     note: Mapped[str | None] = mapped_column(String(40))  # réponse courte (« voulu », « inconnu », « terminé »)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+# ---------------------------------------------------------------------------- assistant (OpenRouter)
+class LlmProvider(Base):
+    """Ta clé OpenRouter (chiffrée, jamais réaffichée), le modèle choisi et les garde-fous. Une seule ligne (id = 1)."""
+
+    __tablename__ = "llm_providers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    provider: Mapped[str] = mapped_column(String(20), default="openrouter")
+    api_key: Mapped[str] = mapped_column(EncryptedText("llm.api_key"))
+    key_prefix: Mapped[str] = mapped_column(String(16))  # « sk-or-v1-ab12… » : pour reconnaître la clé, pas l'utiliser
+    model: Mapped[str] = mapped_column(String(120))
+    privacy: Mapped[str] = mapped_column(String(12), default="redacted")  # full | redacted | aggregates
+    monthly_cap_usd_cents: Mapped[int] = mapped_column(Integer, default=500)  # 5 $ de crédits par mois
+    daily_calls_cap: Mapped[int] = mapped_column(Integer, default=60)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_error: Mapped[str | None] = mapped_column(String(300))
+
+
+class LlmUsage(Base):
+    """Un appel au modèle : quoi, combien de jetons, combien de crédits — jamais le contenu."""
+
+    __tablename__ = "llm_usage"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ts: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, index=True)
+    feature: Mapped[str] = mapped_column(String(16))  # ask | hints | test
+    model: Mapped[str] = mapped_column(String(120))
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cost_microusd: Mapped[int] = mapped_column(BigInteger, default=0)
+
+
+class MerchantHint(Base):
+    """Catégorie proposée par le modèle pour un marchand non classé ; appliquée seulement quand tu confirmes."""
+
+    __tablename__ = "merchant_hints"
+
+    merchant: Mapped[str] = mapped_column(String(120), primary_key=True)
+    category_slug: Mapped[str] = mapped_column(String(40))
+    model: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)

@@ -43,6 +43,7 @@ HERMÈS ─────HTTPS + jeton bnk_… ──┘ (/mcp)              │ r
                                                    ▼                               ▼
                                          fiscal : OpenFisca France        api.enablebanking.com (banques)
                                          (aucun accès Internet)           conso.boris.sh (Linky / Enedis)
+                                                                          openrouter.ai (assistant, si activé)
                                                                           ton agenda iCal (https, hôte public)
 ```
 
@@ -154,6 +155,23 @@ Chaque réponse est journalisée ; l'état (faite, remise à plus tard, écarté
 
 Première ouverture : trois chemins — connecter sa banque, importer un relevé (le compte se crée sur place), ou
 « juste trois chiffres » (solde, revenu, loyer) pour un premier budget en trente secondes.
+
+## Assistant « Demande à Bank » (OpenRouter)
+
+Un modèle de langage, choisi parmi ceux d'[OpenRouter](https://openrouter.ai) et payé avec **tes** crédits, répond
+à tes questions à partir de ton dossier (bouton « Demande à Bank » dans la barre latérale, bouton flottant sur
+mobile) et propose des enveloppes pour les marchands non classés (Opérations, ou directement dans les cartes du jour).
+
+1. Crée une clé sur openrouter.ai › Keys et ajoute quelques dollars de crédits.
+2. Bank › Connecteurs › **Assistant** : colle la clé (on te redemande ton mot de passe), choisis le modèle, ce qu'il
+   voit et tes plafonds.
+3. « Tester » vérifie que la clé répond (un appel de 5 jetons).
+
+Ce que le modèle voit : par défaut le dossier **anonymisé** (marchands et montants, jamais un nom de particulier,
+un IBAN ou un numéro), ou **chiffres seuls** (aucun libellé), ou complet si tu le choisis. Ce que Bank garde : la
+clé chiffrée (jamais réaffichée, seul son début « sk-or-v1-ab12… » sert à la reconnaître), et pour chaque appel le
+modèle, les jetons et le coût — jamais le contenu de la question ni de la réponse. Deux plafonds (crédits par mois,
+appels par jour) l'arrêtent avant ta limite. Il explique et propose ; il ne classe ni ne modifie rien sans ton clic.
 
 ## Brancher HERMÈS (ton agent IA)
 
