@@ -22,6 +22,7 @@ dependencies = [
   "icalendar>=6,<7",  # planning de travail (agenda iCal), développement des répétitions via python-dateutil
   "python-dateutil>=2.9",
   "pillow>=11,<14",  # coffre-fort : photos vérifiées, redressées, réencodées sans métadonnées (processus confiné)
+  "defusedxml>=0.7.1,<1",  # veille : flux RSS/Atom lus sans DTD ni entités
 ]
 
 [project.optional-dependencies]
@@ -34,6 +35,7 @@ dev = [
   "bandit>=1.7",
   "pip-audit>=2.7",
   "types-python-dateutil",
+  "types-defusedxml",
 ]
 
 [build-system]

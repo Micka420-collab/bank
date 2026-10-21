@@ -36,9 +36,10 @@ from app.api import (
     system,
     transactions,
     vault,
+    watch,
 )
 from app.config import Settings
-from app.db import Base, make_engine, make_sessionmaker, upgrade_schema
+from app.db import Base, make_engine, make_sessionmaker, upgrade_schema, utcnow
 from app.fiscal.client import FiscalClient
 from app.mcp_server import AgentGate, McpDispatch, McpMount, build_mcp, mcp_asgi, silence_sdk_logs
 from app.providers.enablebanking import EnableBankingClient
@@ -49,6 +50,7 @@ from app.services import assistant as assistant_service
 from app.services import energy as energy_service
 from app.services import planning as planning_service
 from app.services import vault as vault_service
+from app.services import watch as watch_service
 from app.services.bank_sync import sync_all
 from app.services.categories import seed_categories
 
@@ -111,6 +113,9 @@ def _housekeeping_once(app: FastAPI, today: date) -> dict[str, int]:
         db.commit()
     with app.state.sessionmaker() as db:
         report.update(vault_service.housekeeping(db))
+        db.commit()
+    with app.state.sessionmaker() as db:  # veille : sources dues seulement, chacune bornée en taille et en durée
+        report.update(watch_service.housekeeping(db, now=utcnow(), fetcher=app.state.watch_fetcher))
         db.commit()
     return report
 
@@ -190,12 +195,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "callback": SlidingWindowLimiter(20, 300),
         "agent": SlidingWindowLimiter(settings.agent_calls_per_minute, 60),
         "assistant": SlidingWindowLimiter(30, 300),  # questions au modèle : 30 par 5 min, en plus des plafonds
+        "watch": SlidingWindowLimiter(6, 600),  # relèves de veille à la demande
     }
     app.state.enablebanking = _build_enablebanking(settings)
     app.state.fiscal_client = FiscalClient(settings.fiscal_engine_url, settings.fiscal_token_value)
     app.state.energy_client_factory = energy_service.default_client
     app.state.ics_fetcher = planning_service.fetch_ics
     app.state.llm_client_factory = assistant_service.default_client
+    app.state.watch_fetcher = watch_service.default_fetcher
+    app.state.watch_resolver = None  # résolution DNS réelle (remplaçable en test)
 
     routers = (
         auth,
@@ -216,6 +224,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         vault,
         procedures,
         opportunities,
+        watch,
         system,
     )
     for r in routers:
