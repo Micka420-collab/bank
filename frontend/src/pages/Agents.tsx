@@ -161,7 +161,9 @@ export function AgentTokens() {
                   <td>
                     <b>{t.name}</b>
                     <div className="faint"><code>{t.prefix}…</code> · {PRIVACY_TEXT[t.privacy]}</div>
-                    {t.allowed_ips.length > 0 && <div className="faint">depuis {t.allowed_ips.join(", ")}</div>}
+                    {t.allowed_ips.length > 0 && (
+                      <div className="faint">depuis {t.allowed_ips.map((ip) => ip.replace(/\/(32|128)$/, "")).join(", ")}</div>
+                    )}
                   </td>
                   <td>{p ? PRESET_TEXT[p]?.title : t.scopes.join(", ")}</td>
                   <td>
