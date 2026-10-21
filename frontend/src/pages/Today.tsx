@@ -1,4 +1,5 @@
 import { api, useApi, type AidsResponse, type BudgetResponse, type Category, type MonthForecast } from "../api";
+import { Decide } from "../components/Decide";
 import { MonthChart } from "../components/MonthChart";
 import { Amount, ErrorNote, Loading, useToast } from "../components/ui";
 import { amountOnly, dayNumber, longDate, money, monthLabel, plural, shortDate } from "../format";
@@ -47,7 +48,7 @@ export function Today({ totpEnabled }: { totpEnabled: boolean }) {
         </p>
         <div className="actions">
           <button className="btn" onClick={() => navigate("operations")}>Importer un relevé</button>
-          <button className="btn quiet" onClick={() => navigate("banques")}>Connecter ma banque</button>
+          <button className="btn quiet" onClick={() => navigate("connecteurs")}>Connecter ma banque</button>
         </div>
       </div>
     );
@@ -97,6 +98,8 @@ export function Today({ totpEnabled }: { totpEnabled: boolean }) {
         lowestDate={f.lowest_balance_date}
         daysInMonth={f.days_in_month}
       />
+
+      <Decide />
 
       <dl className="figures">
         <div className="figure-item">

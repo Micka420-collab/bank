@@ -23,5 +23,77 @@
       "ceiling_cents": 1000000,
       "note": "Réservé sous condition de revenu fiscal de référence : l'éligibilité est vérifiée par la simulation OpenFisca."
     }
-  ]
+  ],
+  "income_tax": {
+    "year": 2026,
+    "incomes_year": 2025,
+    "source": "Loi de finances pour 2026 n° 2026-103 du 19 février 2026, art. 4 (barème appliqué aux revenus 2025)",
+    "brackets": [
+      {
+        "up_to_cents": 1160000,
+        "rate_percent": 0
+      },
+      {
+        "up_to_cents": 2957900,
+        "rate_percent": 11
+      },
+      {
+        "up_to_cents": 8457700,
+        "rate_percent": 30
+      },
+      {
+        "up_to_cents": 18191700,
+        "rate_percent": 41
+      },
+      {
+        "up_to_cents": null,
+        "rate_percent": 45
+      }
+    ]
+  },
+  "electricity_trv": {
+    "as_of": "2026-08-01",
+    "source": "Tarif Bleu EDF (tarif réglementé), délibération CRE du 15 juillet 2026, grille au 1er août 2026 (TTC) — à vérifier sur ta facture",
+    "options": [
+      {
+        "id": "base_6",
+        "label": "Base 6 kVA",
+        "cents_per_100kwh": 2001,
+        "yearly_subscription_cents": 19035
+      },
+      {
+        "id": "base_9",
+        "label": "Base 9 kVA",
+        "cents_per_100kwh": 1985,
+        "yearly_subscription_cents": 23860
+      },
+      {
+        "id": "hphc_6",
+        "label": "Heures pleines / creuses 6 kVA (moyenne 65 % HP)",
+        "cents_per_100kwh": 1948,
+        "yearly_subscription_cents": 19035
+      },
+      {
+        "id": "hphc_9",
+        "label": "Heures pleines / creuses 9 kVA (moyenne 65 % HP)",
+        "cents_per_100kwh": 1948,
+        "yearly_subscription_cents": 23860
+      }
+    ]
+  },
+  "investing": {
+    "source": "Repères réglementaires et fiscaux au 1er août 2026 — vérifie avant d'agir",
+    "pea_ceiling_cents": 15000000,
+    "pea_tax_free_after_years": 5,
+    "av_abattement_after_years": 8,
+    "av_abattement_single_cents": 460000,
+    "social_levies_percent": "17.2",
+    "per_deduction_cap_percent_of_income": 10,
+    "expensive_debt_rate_percent": "5",
+    "equity_share_by_profile": {
+      "prudent": 20,
+      "equilibre": 50,
+      "dynamique": 75
+    }
+  }
 }

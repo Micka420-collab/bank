@@ -228,3 +228,156 @@ def what_if_savings(
         impacts,
         text,
     )
+
+
+# ------------------------------------------------------------------ « oui, non, ou dans combien de temps ? »
+@dataclass(frozen=True)
+class SavingPath:
+    label: str
+    months: int | None  # None : hors de portée à ce rythme
+    affordable_on: date | None
+    monthly_cents: int
+    note: str
+
+
+@dataclass(frozen=True)
+class PurchasePlan:
+    answer: str  # oui | oui_mais | attendre | plus_tard | hors_de_portee
+    headline: str
+    amount_cents: int
+    this_month: PurchaseVerdict
+    from_savings_cents: int  # part qu'on peut prendre sur l'épargne au-delà du matelas, sans y toucher
+    paths: list[SavingPath]
+    explanation: str
+
+
+def plan_purchase(
+    run: RunForecast,
+    *,
+    today: date,
+    amount_cents: int,
+    label: str,
+    buffer_cents: int,
+    monthly_capacity_cents: int,
+    committed_monthly_cents: int = 0,
+    liquid_savings_cents: int = 0,
+    emergency_target_cents: int = 0,
+    category: str | None = None,
+    horizon_months: int = 36,
+) -> PurchasePlan:
+    """Peut-on se l'offrir ? Ce mois-ci (prévision jour par jour), sinon en combien de mois d'épargne.
+
+    Deux chemins honnêtes quand il faut attendre : « matelas d'abord » (on finit le matelas de sécurité, puis on
+    épargne pour l'achat) et « au plus vite » (on suspend le matelas). L'épargne au-delà du matelas compte comme
+    disponible ; le matelas, jamais.
+    """
+    now = evaluate_purchase(
+        run,
+        today=today,
+        amount_cents=amount_cents,
+        on=None,
+        label=label,
+        buffer_cents=buffer_cents,
+        category=category,
+        monthly_savings_cents=monthly_capacity_cents if monthly_capacity_cents > 0 else None,
+    )
+    spare_savings = max(0, liquid_savings_cents - emergency_target_cents)
+    emergency_gap = max(0, emergency_target_cents - liquid_savings_cents)
+    free_monthly = max(0, monthly_capacity_cents - committed_monthly_cents)
+    if now.verdict == "ok":
+        return PurchasePlan("oui", "Oui, tu peux l'acheter maintenant.", amount_cents, now, 0, [], now.explanation)
+    if now.verdict == "serre":
+        return PurchasePlan(
+            "oui_mais",
+            "Oui, mais ça entame ton coussin de sécurité ce mois-ci"
+            + (f" : attendre le {now.best_date:%d/%m} serait plus confortable." if now.best_date else "."),
+            amount_cents,
+            now,
+            0,
+            [],
+            now.explanation,
+        )
+    if now.verdict == "attendre" and now.best_date is not None:
+        return PurchasePlan(
+            "attendre",
+            f"Oui, à partir du {now.best_date:%d/%m} : avant, ton compte passerait dans le rouge.",
+            amount_cents,
+            now,
+            0,
+            [],
+            now.explanation,
+        )
+
+    # Pas ce mois-ci. L'épargne au-delà du matelas peut-elle couvrir l'achat ?
+    if spare_savings >= amount_cents:
+        return PurchasePlan(
+            "oui_mais",
+            f"Oui, en prenant {format_eur(amount_cents)} sur ton épargne disponible : "
+            "ton matelas de sécurité reste intact.",
+            amount_cents,
+            now,
+            amount_cents,
+            [],
+            now.explanation + " Ton épargne au-delà du matelas couvre l'achat.",
+        )
+    need = amount_cents - spare_savings
+
+    def path(label_: str, total: int, monthly: int, note: str) -> SavingPath:
+        if monthly <= 0:
+            return SavingPath(label_, None, None, 0, "Aucune capacité d'épargne libre aujourd'hui.")
+        months = -(-total // monthly)
+        if months > horizon_months:
+            return SavingPath(label_, None, None, monthly, f"Plus de {horizon_months // 12} ans à ce rythme.")
+        return SavingPath(label_, months, _month_start(today, months), monthly, note)
+
+    paths = [
+        path(
+            "Matelas d'abord (conseillé)" if emergency_gap else "En épargnant chaque mois",
+            emergency_gap + need,
+            free_monthly,
+            f"Tu complètes d'abord ton matelas ({format_eur(emergency_gap)}), puis tu mets de côté pour l'achat."
+            if emergency_gap
+            else "Tu mets de côté ta capacité d'épargne libre chaque mois.",
+        )
+    ]
+    if emergency_gap:
+        paths.append(path("Au plus vite", need, free_monthly, "Tu suspends le matelas le temps de l'achat."))
+    best = next((p for p in paths if p.months is not None), None)
+    if best is None:
+        headline = "Pas raisonnable aujourd'hui : il faut d'abord dégager de la marge chaque mois."
+        answer = "hors_de_portee"
+    else:
+        headline = (
+            f"Pas maintenant. Achetable vers {_month_name(best.affordable_on)} "
+            f"({best.months} mois) en mettant {format_eur(best.monthly_cents)} de côté par mois."
+        )
+        answer = "plus_tard"
+    detail = now.explanation
+    if spare_savings:
+        detail += f" {format_eur(spare_savings)} d'épargne disponible au-delà du matelas comptent déjà."
+    return PurchasePlan(answer, headline, amount_cents, now, spare_savings, paths, detail)
+
+
+_MONTHS_FR = [
+    "janvier",
+    "février",
+    "mars",
+    "avril",
+    "mai",
+    "juin",
+    "juillet",
+    "août",
+    "septembre",
+    "octobre",
+    "novembre",
+    "décembre",
+]
+
+
+def _month_start(today: date, months: int) -> date:
+    y, m = divmod(today.month - 1 + months, 12)
+    return date(today.year + y, m + 1, 1)
+
+
+def _month_name(d: date | None) -> str:
+    return f"{_MONTHS_FR[d.month - 1]} {d.year}" if d else "?"

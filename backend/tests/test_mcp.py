@@ -127,6 +127,7 @@ def test_initialize_and_catalogue(app, world: TestClient) -> None:  # type: igno
         "get_dossier", "get_alerts", "get_month", "spending_summary", "list_transactions", "get_aids",
         "simulate_aids", "get_wealth", "evaluate_purchase", "what_if_savings", "onboarding_status",
         "record_answer", "categorize_transaction", "propose_action", "list_proposals",
+        "can_i_buy", "investment_plan", "get_energy",
     }  # fmt: skip
     assert tools["get_dossier"]["annotations"]["readOnlyHint"] is True
     # Aucun outil ne peut déplacer de l'argent : il n'en existe tout simplement pas.

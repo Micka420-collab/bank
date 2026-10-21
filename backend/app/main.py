@@ -15,7 +15,20 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api import accounts, agents, auth, banks, deps, imports, insights, system, transactions
+from app.api import (
+    accounts,
+    agents,
+    auth,
+    banks,
+    decisions,
+    deps,
+    documents,
+    energy,
+    imports,
+    insights,
+    system,
+    transactions,
+)
 from app.config import Settings
 from app.db import Base, make_engine, make_sessionmaker
 from app.fiscal.client import FiscalClient
@@ -24,6 +37,7 @@ from app.providers.enablebanking import EnableBankingClient
 from app.security.auth import SlidingWindowLimiter
 from app.security.crypto import Keyring, install_keyring
 from app.security.middleware import AccessLogMiddleware, BodyLimitMiddleware, SecurityHeadersMiddleware
+from app.services import energy as energy_service
 from app.services.bank_sync import sync_all
 from app.services.categories import seed_categories
 
@@ -35,6 +49,28 @@ def _build_enablebanking(settings: Settings) -> EnableBankingClient | None:
         return None
     key = settings.enablebanking_key_file.read_bytes()
     return EnableBankingClient(settings.enablebanking_app_id or "", key, settings.enablebanking_base_url)
+
+
+def _energy_sync_once(app: FastAPI, today: date) -> int:
+    with app.state.sessionmaker() as db:
+        n = energy_service.sync(db, today, make_client=app.state.energy_client_factory)
+        db.commit()
+        return int(n)
+
+
+async def _energy_loop(app: FastAPI) -> None:
+    """Les données Linky d'un jour arrivent le lendemain matin : une synchronisation par jour suffit.
+    Première passe peu après le démarrage (rattrapage après un arrêt), puis toutes les 24 h, décalée au hasard."""
+    delay = 90.0
+    while True:
+        await asyncio.sleep(delay)
+        delay = 24 * 3600 + random.uniform(0, 1800)  # noqa: S311  # nosec B311
+        try:
+            changed = await asyncio.to_thread(_energy_sync_once, app, date.today())  # noqa: DTZ011
+            if changed:
+                log.info("énergie : %s relevés mis à jour", changed)
+        except Exception:
+            log.exception("synchronisation énergie en échec")
 
 
 async def _sync_loop(app: FastAPI) -> None:
@@ -62,13 +98,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         with factory() as db:
             seed_categories(db)
             db.commit()
-        task = None
+        tasks = []
         if app.state.enablebanking is not None and settings.sync_interval_hours > 0:
-            task = asyncio.create_task(_sync_loop(app))
+            tasks.append(asyncio.create_task(_sync_loop(app)))
+        if settings.energy_enabled:
+            tasks.append(asyncio.create_task(_energy_loop(app)))
         # Le serveur MCP a son propre cycle de vie (gestionnaire de sessions HTTP) : on l'imbrique.
         async with mcp_mount.running() if mcp_mount else contextlib.nullcontext():
             yield
-        if task:
+        for task in tasks:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
@@ -94,8 +132,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     }
     app.state.enablebanking = _build_enablebanking(settings)
     app.state.fiscal_client = FiscalClient(settings.fiscal_engine_url, settings.fiscal_token_value)
+    app.state.energy_client_factory = energy_service.default_client
 
-    for r in (auth, accounts, transactions, imports, insights, banks, agents, system):
+    for r in (auth, accounts, transactions, imports, insights, banks, agents, decisions, energy, documents, system):
         app.include_router(r.router)
 
     # Serveur MCP pour les agents IA (HERMÈS). Même horloge que l'API (surchargeable en test).
@@ -133,7 +172,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         BodyLimitMiddleware,
         default_limit=256_000,
         upload_limit=settings.max_upload_bytes + 64_000,
-        upload_prefixes=("/api/imports",),
+        upload_prefixes=("/api/imports", "/api/documents/preview"),
     )
     app.add_middleware(
         SecurityHeadersMiddleware,

@@ -424,3 +424,114 @@ export type AgentCatalog = {
 export type AgentActivity = { at: string; agent: string; action: string; details: Record<string, unknown> };
 
 export type Alert = { severity: "critique" | "attention" | "opportunite" | "info"; code: string; title: string; suggested_action: string };
+
+// ------------------------------------------------------------------ décisions : achat et placements
+export type PurchaseSnapshot = {
+  per_day_cents: number;
+  lowest_cents: number;
+  lowest_date: string;
+  overdraft_date: string | null;
+  end_balance_cents: number;
+};
+
+export type PurchaseVerdict = {
+  verdict: "ok" | "serre" | "attendre" | "deconseille";
+  amount_cents: number;
+  on: string;
+  before: PurchaseSnapshot;
+  after: PurchaseSnapshot;
+  best_date: string | null;
+  envelope: { slug: string; budget_cents: number; spent_cents: number; spent_after_cents: number; over_after: boolean } | null;
+  savings_months_equivalent: number | null;
+  explanation: string;
+};
+
+export type SavingPath = { label: string; months: number | null; affordable_on: string | null; monthly_cents: number; note: string };
+
+export type PurchasePlan = {
+  answer: "oui" | "oui_mais" | "attendre" | "plus_tard" | "hors_de_portee";
+  headline: string;
+  amount_cents: number;
+  this_month: PurchaseVerdict;
+  from_savings_cents: number;
+  paths: SavingPath[];
+  explanation: string;
+};
+
+export type PlanStep = {
+  order: number;
+  kind: "urgence" | "matelas" | "dette" | "projet" | "long_terme" | "attente";
+  title: string;
+  monthly_cents: number;
+  where: string;
+  why: string;
+  months: number | null;
+  target_cents: number | null;
+};
+
+export type Allocation = { vehicle: string; label: string; share_percent: number; monthly_cents: number; note: string };
+
+export type InvestmentPlan = {
+  monthly_capacity_cents: number;
+  allocated_cents: number;
+  steps: PlanStep[];
+  long_term: Allocation[];
+  long_term_monthly_cents: number;
+  equity_share_percent: number;
+  horizon_years: number | null;
+  tax: { marginal_rate_percent: number; source: "declared" | "document" | "estimated" | "unknown"; taxable_income_cents: number | null; parts: string | null; detail: string };
+  excluded: string[];
+  cautions: string[];
+  summary: string;
+  references: string;
+};
+
+// ------------------------------------------------------------------ énergie (Linky)
+export type EnergyMonth = { month: string; wh: number; days: number; cost_cents: number };
+
+export type EnergyInsights = {
+  data_from: string | null;
+  data_through: string | null;
+  days_of_data: number;
+  stale: boolean;
+  last_30_days_wh: number;
+  last_30_days_cost_cents: number;
+  this_month_wh: number;
+  this_month_cost_cents: number;
+  months: EnergyMonth[];
+  same_month_last_year_wh: number | null;
+  change_vs_last_year_percent: number | null;
+  yearly_estimate_cents: number;
+  yearly_estimate_wh: number;
+  yearly_is_extrapolated: boolean;
+  recommended_monthly_cents: number;
+  monthly_payment_cents: number | null;
+  regularisation_cents: number | null;
+  spike_ratio: number | null;
+  spike: boolean;
+  daily_average_wh: number;
+};
+
+export type TariffOption = { id: string; label: string; cents_per_100kwh: number; yearly_subscription_cents: number; as_of: string; source: string };
+
+export type EnergyStatus = {
+  connected: boolean;
+  tariff: { cents_per_100kwh: number; yearly_subscription_cents: number; label: string; options: TariffOption[] };
+  connection: { id: number; label: string; prm_masked: string; status: string; last_sync_at: string | null; last_error: string | null; created_at: string } | null;
+  insights: EnergyInsights | null;
+  daily?: { day: string; wh: number }[];
+  imported?: number;
+};
+
+// ------------------------------------------------------------------ documents officiels
+export type Portal = { id: string; name: string; what: string; url: string; how: string };
+
+export type ParsedDocument = {
+  kind: "avis_impot" | "caf" | "france_travail" | "inconnu";
+  title: string;
+  fields: Record<string, unknown>;
+  warnings: string[];
+  discarded: string[];
+};
+
+export type OfficialFact = { id: number; kind: string; period: string; title: string; fields: Record<string, unknown>; imported_at: string };

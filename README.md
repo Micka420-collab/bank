@@ -7,6 +7,13 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
 - **Budget** : reste à dépenser par jour contraint par la trésorerie (pas de « 216 €/j » qui suppose le salaire déjà arrivé), courbe du mois avec point bas et date de découvert, enveloppes, suggestions.
 - **Aides de l'État** : reconnaissance des versements CAF, France Travail, CPAM, MSA, impôts ; alertes de retard ou de changement ; simulation de tes droits par OpenFisca (le moteur officiel) et détection du non-recours.
 - **Patrimoine** : valeur nette, matelas de sécurité, livrets réglementés (taux au 1er août 2026), objectifs, projection.
+- **Décider** : « je peux m'acheter ça ? » répond oui, oui mais, à partir de telle date, ou dans N mois d'épargne
+  (matelas d'abord ou au plus vite) ; « où placer mon argent ? » donne un plan par priorité (mois d'avance, dette
+  chère, matelas sur LEP / livrets, projets datés, long terme PEA / assurance vie / PER selon ta tranche d'impôt,
+  ton profil de risque, ton horizon et tes lignes rouges).
+- **Connecteurs** : banques en un clic (DSP2), compteur **Linky** (consommation réelle, facture annuelle estimée,
+  rattrapage probable, pics), documents de l'**État** (avis d'impôt, attestations CAF et France Travail lus pour
+  leurs chiffres — identifiants jetés), et les agents IA.
 - **Ma situation + agent IA** : un onboarding qui pré-remplit ce que tes relevés révèlent (salaire, loyer, crédits,
   capacité d'épargne) et te demande le reste ; un serveur MCP gouverné pour qu'HERMÈS devienne ton gestionnaire
   d'argent — il lit, calcule avec la prévision de Bank et propose, tu valides. Voir [integrations/hermes](integrations/hermes/README.md).
@@ -20,8 +27,8 @@ HERMÈS ─────HTTPS + jeton bnk_… ──┘ (/mcp)              │ r
                                                  api : FastAPI + SQLite (volume chiffré par champ)
                                                    │ réseau « fiscal » (interne)   │ réseau « egress »
                                                    ▼                               ▼
-                                         fiscal : OpenFisca France        api.enablebanking.com
-                                         (aucun accès Internet)
+                                         fiscal : OpenFisca France        api.enablebanking.com (banques)
+                                         (aucun accès Internet)           conso.boris.sh (Linky / Enedis)
 ```
 
 | Dossier | Contenu |
@@ -31,6 +38,8 @@ HERMÈS ─────HTTPS + jeton bnk_… ──┘ (/mcp)              │ r
 | `backend/app/security` | Chiffrement AES-256-GCM par champ, index aveugles, Argon2id, TOTP, sessions, audit chaîné HMAC, middlewares |
 | `backend/app/providers` | Client Enable Banking (JWT RS256) |
 | `backend/app/fiscal` | Construction de la situation OpenFisca à partir de tes vrais relevés |
+| `backend/app/domain/{invest,energy,documents}.py` | Plan de placement (barème 2026, priorités, lignes rouges), analyse Linky (formats Enedis tolérés, coût, régularisation), lecture des documents officiels |
+| `backend/app/providers/conso_api.py` | Client Conso API (Linky), fenêtres bornées, erreurs explicites |
 | `backend/app/mcp_server.py` | Serveur MCP des agents IA : jeton par appel, portées, mandat, audit, débit borné |
 | `backend/app/services/advisor.py` | Dossier de l'agent (provenance de chaque fait), alertes, onboarding |
 | `backend/app/domain/{onboarding,decisions,redact}.py` | Questionnaire, verdicts d'achat / d'épargne, anonymisation des libellés |
@@ -93,6 +102,23 @@ tes droits.
 
 OpenFisca France est sous licence AGPL-3.0 : rien à faire tant que le service reste à ton seul usage.
 
+## Connecteurs
+
+- **Banques** : Connecteurs › Banques, tuiles des enseignes courantes (une caisse à choisir pour Crédit Agricole,
+  Caisse d'Épargne, Banque Populaire, Crédit Mutuel), ou recherche parmi tous les établissements.
+- **Linky** : donne ton consentement chez Enedis via [conso.boris.sh](https://conso.boris.sh) (passerelle gratuite et
+  open source), colle le jeton reçu et ton PRM (14 chiffres, sur la facture). Bank récupère 400 jours, puis se met à
+  jour chaque nuit ; le jeton et le PRM sont chiffrés en base ; révocable ici ou chez Enedis. Enedis a changé son
+  API fin 2026 : Bank lit l'ancien format et toute structure (date, valeur, unité) du nouveau ; en cas de format
+  inconnu il le dit au lieu d'inventer.
+- **État** : pas d'API ouverte aux particuliers (FranceConnect est réservé aux services agréés). Télécharge l'avis
+  d'impôt (impots.gouv), l'attestation CAF ou France Travail, dépose le PDF : Bank montre les chiffres lus (revenu
+  fiscal de référence, parts, taux de prélèvement ; droits CAF ; allocation et fin de droits), tu corriges, tu
+  valides. Numéro fiscal, NIR, numéro d'allocataire, adresse : vus et jetés, jamais enregistrés. La tranche d'impôt
+  et le revenu N-2 de la simulation des aides en découlent ; une fin de droits proche déclenche une alerte. Le PDF
+  est lu dans un processus séparé et confiné (CPU, mémoire, délai, sans secret ni réseau) : un fichier piégé ne
+  peut rien atteindre.
+
 ## Brancher HERMÈS (ton agent IA)
 
 1. Bank › **Ma situation** : confirme ce que Bank a lu dans tes relevés, réponds aux questions les plus utiles.
@@ -116,8 +142,8 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 357 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
-JSON-RPC MCP de bout en bout, intégration OpenFisca réelle), couverture 96 %, 18 tests front, mypy strict sans
+Qualité au moment de la livraison : 453 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+JSON-RPC MCP de bout en bout, intégration OpenFisca réelle), couverture 95 %, 24 tests front, mypy strict sans
 erreur, ruff, bandit, shellcheck et pip-audit propres, `npm audit` sans vulnérabilité, aucune violation CSP.
 
 ## Sauvegarde

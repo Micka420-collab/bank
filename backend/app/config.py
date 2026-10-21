@@ -53,6 +53,9 @@ class Settings(BaseSettings):
 
     max_upload_bytes: int = Field(default=5_000_000, ge=10_000, le=50_000_000)
 
+    # Énergie (Linky via Conso API) : synchronisation quotidienne en tâche de fond.
+    energy_enabled: bool = True
+
     # Agents IA (serveur MCP sur /mcp) : désactivable d'un coup, débit borné par jeton.
     agents_enabled: bool = True
     agent_calls_per_minute: int = Field(default=120, ge=10, le=1000)

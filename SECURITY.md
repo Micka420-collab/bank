@@ -11,6 +11,8 @@ a au moins une défense testée (référence du test entre parenthèses).
 | Mots de passe | SQLite | Argon2id 64 MiB, t=3, p=2, re-hash automatique (`test_hash_and_verify`) |
 | Jetons de session | SQLite | Seule l'empreinte SHA-256 est stockée (`test_session_token_stored_hashed_and_idle_expiry`) |
 | Jetons d'agent IA (`bnk_…`) | SQLite | Empreinte SHA-256 seule, affichés une fois, expiration ≤ 365 j (`test_token_is_stored_hashed_and_authenticates`) |
+| Jeton Conso API et PRM (Linky) | SQLite | AES-256-GCM par champ ; jamais dans l'audit, l'export ni le dossier de l'agent (`test_linky_connect_backfill_sync_and_insights`, `test_export_includes_energy_and_documents`) ; journaux httpx/httpcore ramenés au niveau avertissement pour que l'URL sortante (PRM, uid de compte DSP2) n'y figure pas (`test_prm_never_reaches_the_logs`) |
+| Faits des documents officiels (RFR, parts, droits CAF, fin de droits) | SQLite | AES-256-GCM ; identifiants (numéro fiscal, NIR, allocataire, adresse, IBAN) détectés et jetés avant tout stockage (`test_avis_impot_keeps_figures_and_discards_identifiers`) |
 | Dossier « Ma situation », propositions de l'agent | SQLite | AES-256-GCM par champ, historique des réponses chiffré |
 | Libellés et montants | SQLite | En clair (recherche, catégorisation) : volume local + sauvegardes chiffrées avec `age` |
 | Clé maîtresse | `./secrets` (640, groupe 10010) | Jamais en base, jamais dans l'environnement du process en prod (`*_FILE`) |
@@ -31,7 +33,7 @@ Clés dérivées par HKDF, une par usage (chiffrement, index aveugle, jetons sig
 | DNS rebinding | Liste blanche d'hôtes (`test_untrusted_host_rejected`) |
 | Fichier d'import malveillant | Taille bornée (nginx + middleware + lecture), aucun parseur XML (pas de XXE, `test_ofx_v2_xml_is_not_vulnerable_to_xxe`), caractères de contrôle supprimés |
 | Injection SQL | ORM paramétré partout, échappement des jokers LIKE (`test_search_filters_and_like_escaping`) |
-| Fuite d'un code d'autorisation bancaire dans les logs | Journal d'accès maison sans query string, uvicorn sans access log |
+| Fuite d'un code d'autorisation bancaire ou d'un identifiant dans les logs | Journal d'accès maison sans query string, uvicorn sans access log, httpx silencieux sous le niveau avertissement (`test_prm_never_reaches_the_logs`) |
 | Rejeu du retour bancaire | `state` aléatoire à usage unique, durée de vie 15 min, stocké sous forme d'empreinte (`test_connect_callback_sync_reconcile_revoke`, `test_expired_state_rejected`) |
 | Falsification de l'historique d'activité | Chaîne HMAC (clé hors base) : modification, suppression, insertion ou recalcul détectés (`test_audit_chain_*`) ; tête de chaîne ancrée dans les logs du conteneur contre la troncature |
 | Fuite de la situation fiscale | Moteur OpenFisca sur un réseau Docker sans Internet, jeton partagé, liste blanche de variables |
@@ -62,6 +64,17 @@ d'opération qui lui donne des « consignes »). Bank ne lui fait donc confiance
 | Agent qui agit sans trace | Chaque appel d'outil, chaque refus (`mcp.refused`) et les jetons refusés (`mcp.auth_failed`, un par minute et par IP) sont inscrits dans la chaîne d'audit HMAC, visible dans Ma situation (`test_every_tool_call_is_audited_and_chain_holds`, `test_duplicate_authorization_headers_and_failed_auth_are_handled`) |
 
 `BANK_AGENTS_ENABLED=false` coupe le serveur MCP d'un coup (`test_mcp_can_be_disabled`).
+
+## Connecteurs
+
+| Menace | Défense |
+|---|---|
+| PDF malveillant ou énorme | 5 Mo au plus, en-tête `%PDF` exigé, texte seulement (pas de JavaScript, pas d'image rendue). Lecture dans un **processus enfant confiné** : mode isolé (`-I`), environnement vide (aucun secret hérité), 10 s de CPU, 200 Mo d'espace d'adressage, aucun sous-processus ni fichier écrit, tué après 20 s ; plafonds pypdf resserrés (flux décompressés 8 Mo, 200 entrées d'arbre de pages, budget d'analyse borné) ; 20 pages et 200 000 caractères lus au plus ; 2 lectures simultanées au plus ; la boucle d'événements reste libre pendant la lecture. Seul le nom de l'exception remonte dans les journaux, jamais le contenu (`test_zlib_bomb_is_refused_quickly`, `test_page_tree_bomb_is_bounded`, `test_wall_clock_timeout_kills_the_reader`, `test_memory_and_cpu_limits_apply_inside_the_child`, `test_child_process_runs_isolated_without_environment`, `test_encrypted_pdfs`) |
+| Champs « validés » forgés depuis le navigateur | Liste blanche par type de document, bornes par champ, décimaux finis (`NaN`, `Infinity`, 0 part refusés), codes de prestation et d'allocation dans une table fixe, libellés dérivés du code et jamais du texte libre : l'agent ne lit que des chiffres et des libellés connus (`test_apply_rejects_hostile_or_absurd_fields`, `test_apply_derives_labels_from_the_known_table_and_respects_privacy`) |
+| Réponse Enedis / Conso API piégée ou inattendue | Corps lu par morceaux et borné à 2 Mo **après décompression** (bombe gzip), `Accept-Encoding: identity`, délai total de 60 s par appel, JSON trop profond refusé proprement ; parcours de la réponse en largeur, borné (8 niveaux, 50 000 nœuds) ; lecture tolérante mais fermée (couples date-valeur, unité d'énergie connue), valeurs non finies, négatives ou > 2 MWh/jour écartées, jours hors de la fenêtre demandée (futur compris) ignorés, un relevé par jour ; erreur explicite plutôt qu'une donnée inventée (`test_oversized_body_is_cut_even_when_compressed`, `test_slow_drip_response_hits_the_overall_deadline`, `test_deeply_nested_response_is_rejected_in_bounded_time`, `test_huge_response_is_cut_by_node_budget`, `test_values_must_be_finite_and_plausible`, `test_readings_outside_the_requested_window_are_dropped_and_days_deduplicated`, `test_sync_ignores_rows_outside_the_window_even_from_a_broken_client`) |
+| Blocage de l'IP par Enedis (abus) | Fenêtres de 180 jours au plus, une synchronisation par jour, test de connexion limité comme une authentification (`test_request_shape_and_chunking`) |
+| Jeton Linky en clair | Chiffré en base, saisi en champ mot de passe, jamais renvoyé par l'API (seuls les 4 derniers chiffres du PRM) |
+| Décision ou plan « inventé » par l'agent | Les outils `can_i_buy` et `investment_plan` renvoient les calculs de Bank ; l'agent ne fait que les expliquer (`test_purchase_decision_api_and_mcp`, `test_investment_plan_api_and_mcp`) |
 
 ## Hors périmètre (assumé)
 

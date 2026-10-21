@@ -1,8 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, useApi, type Account, type AccountKind, type BudgetResponse, type Connection, type Me } from "../api";
-import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
+import { api, useApi, type Account, type AccountKind, type BudgetResponse, type Me } from "../api";
+import { EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
-import { AgentTokens } from "./Agents";
 
 export const KIND_LABELS: Record<AccountKind, string> = {
   checking: "Compte courant",
@@ -20,130 +19,18 @@ export const KIND_LABELS: Record<AccountKind, string> = {
   other: "Autre",
 };
 
-export function Settings({ me, bankResult, onMeChange }: { me: Me; bankResult: string | null; onMeChange: () => void }) {
+export function Settings({ me, onMeChange }: { me: Me; onMeChange: () => void }) {
   return (
     <>
       <div className="page-head">
         <h1>Réglages</h1>
+        <p className="muted">Banques, compteur Linky, documents de l'État et agents IA : voir <a href="#/connecteurs">Connecteurs</a>.</p>
       </div>
-      <Banks result={bankResult} />
-      <AgentTokens />
       <Accounts />
       <BudgetSettings />
       <Security me={me} onChange={onMeChange} />
       <Audit />
     </>
-  );
-}
-
-// ------------------------------------------------------------------ banques (DSP2)
-function Banks({ result }: { result: string | null }) {
-  const status = useApi<{ enabled: boolean; connections: Connection[] }>("/api/banks");
-  const [aspsps, setAspsps] = useState<{ name: string }[] | null>(null);
-  const [choice, setChoice] = useState("");
-  const [busy, error, run] = useAsyncAction();
-  const toast = useToast();
-
-  useEffect(() => {
-    if (result === "connected") toast("Banque connectée. Lance une synchronisation pour récupérer tes opérations.");
-    if (result === "refused") toast("Connexion annulée côté banque.");
-    if (result === "error") toast("La connexion a échoué ou a expiré : recommence.");
-  }, [result, toast]);
-
-  const loadBanks = () =>
-    void run(async () => {
-      const list = await api<{ name: string }[]>("/api/banks/aspsps?country=FR");
-      setAspsps(list.sort((a, b) => a.name.localeCompare(b.name, "fr")));
-    });
-
-  const connect = (e: FormEvent) => {
-    e.preventDefault();
-    void run(async () => {
-      const r = await api<{ redirect_url: string }>("/api/banks/connect", { method: "POST", body: { aspsp_name: choice, country: "FR" } });
-      const url = new URL(r.redirect_url);
-      if (url.protocol !== "https:") throw new Error("Adresse de redirection refusée");
-      window.location.assign(url.toString());
-    });
-  };
-
-  const sync = (id: number) =>
-    void run(async () => {
-      const r = await api<{ inserted: number; reconciled: number; errors: string[] }>(`/api/banks/${id}/sync`, { method: "POST" });
-      toast(r.errors.length ? r.errors.join(" ") : `${r.inserted} nouvelles opérations, ${r.reconciled} rapprochées.`);
-      status.reload();
-    });
-
-  const revoke = (id: number) =>
-    void run(async () => {
-      if (!window.confirm("Couper l'accès de Bank à cette banque ? L'historique déjà importé est conservé.")) return;
-      await api(`/api/banks/${id}`, { method: "DELETE" });
-      status.reload();
-    });
-
-  return (
-    <section className="section" aria-labelledby="banks-title" id="banques">
-      <h2 id="banks-title">Banques connectées</h2>
-      <p className="section-note">
-        Connexion en lecture seule par DSP2, via Enable Banking (établissement agréé). Bank ne voit jamais tes
-        identifiants bancaires : tu t'authentifies chez ta banque. Accès valable 90 jours, renouvelable.
-      </p>
-      {status.error && <ErrorNote message={status.error} onRetry={status.reload} />}
-      {status.data && !status.data.enabled && (
-        <div className="notice">
-          La synchronisation n'est pas configurée sur le serveur (BANK_ENABLEBANKING_APP_ID et clé privée). Le guide
-          est dans le README ; en attendant, l'import de relevés fonctionne pour toutes les banques.
-        </div>
-      )}
-      {status.data?.enabled && (
-        <>
-          {status.data.connections.length > 0 && (
-            <table className="plain" style={{ marginBottom: "1.5rem" }}>
-              <thead>
-                <tr><th>Banque</th><th>État</th><th>Dernière synchro</th><th /></tr>
-              </thead>
-              <tbody>
-                {status.data.connections.map((c) => (
-                  <tr key={c.id}>
-                    <td><b>{c.aspsp_name}</b><div className="faint">{c.accounts.join(", ")}</div></td>
-                    <td>
-                      <span className={`tag ${c.status === "active" ? "ok" : c.status === "expired" ? "warn" : ""}`}>
-                        {{ active: "active", expired: "à renouveler", revoked: "coupée", error: "erreur", pending: "en attente" }[c.status] ?? c.status}
-                      </span>
-                      {c.valid_until && c.status === "active" && <div className="faint">jusqu'au {shortDate(c.valid_until)}</div>}
-                      {c.last_error && <div className="faint">{c.last_error}</div>}
-                    </td>
-                    <td>{c.last_sync_at ? shortDate(c.last_sync_at) : "jamais"}</td>
-                    <td className="num">
-                      {c.status === "active" && (
-                        <span className="actions" style={{ marginTop: 0, justifyContent: "flex-end" }}>
-                          <button className="btn quiet" disabled={busy} onClick={() => sync(c.id)}>Synchroniser</button>
-                          <button className="btn danger" disabled={busy} onClick={() => revoke(c.id)}>Couper</button>
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {aspsps === null ? (
-            <button className="btn" onClick={loadBanks} disabled={busy}>Connecter une banque</button>
-          ) : (
-            <form className="form-grid" onSubmit={connect}>
-              <Field label="Ta banque">
-                <input list="aspsps" value={choice} onChange={(e) => setChoice(e.target.value)} required
-                       placeholder="Crédit Agricole, Boursorama…" />
-                <datalist id="aspsps">
-                  {aspsps.map((a) => <option key={a.name} value={a.name} />)}
-                </datalist>
-              </Field>
-              <button className="btn" disabled={busy || !aspsps.some((a) => a.name === choice)}>Continuer chez ma banque</button>
-            </form>
-          )}
-        </>
-      )}
-      {error && <p className="error" role="alert" style={{ marginTop: "0.75rem" }}>{error}</p>}
-    </section>
   );
 }
 
@@ -402,6 +289,15 @@ const ACTIONS: Record<string, string> = {
   "proposal.approve": "Proposition de l'agent appliquée",
   "proposal.reject": "Proposition de l'agent refusée",
   "mcp.denied": "Accès refusé à un agent (portée)",
+  "energy.connect": "Compteur Linky connecté",
+  "energy.disconnect": "Compteur Linky déconnecté",
+  "energy.sync": "Synchronisation Linky",
+  "energy.sync_manual": "Synchronisation Linky demandée",
+  "energy.sync_failed": "Synchronisation Linky en échec",
+  "energy.tariff": "Tarif électricité modifié",
+  "document.apply": "Document officiel enregistré",
+  "document.delete": "Document officiel supprimé",
+  "decision.purchase": "Question « je peux l'acheter ? »",
   "mcp.refused": "Action refusée à un agent",
   "mcp.auth_failed": "Jeton d'agent refusé",
   "agent.token.denied": "Création de jeton refusée (mot de passe)",

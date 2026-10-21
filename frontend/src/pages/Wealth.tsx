@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, useApi, type ProjectionYear, type WealthResponse } from "../api";
+import { InvestPlan } from "../components/InvestPlan";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { money, percent, plural, shortDate } from "../format";
 
@@ -95,6 +96,7 @@ export function Wealth() {
 
       <Goals goals={w.data.goals} accounts={w.data.accounts} onChange={w.reload} />
       <Projection initial={Math.max(0, (nw.by_bucket.epargne_disponible ?? 0) + (nw.by_bucket.epargne_long_terme ?? 0))} />
+      <InvestPlan />
       <p className="faint section">{w.data.disclaimer}</p>
     </>
   );

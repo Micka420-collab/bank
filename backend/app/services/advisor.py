@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.db import utcnow
 from app.domain.aids import compute_gaps
+from app.domain.documents import CAF_LABELS
 from app.domain.forecast import is_planned_outflow
 from app.domain.onboarding import (
     BY_ID,
@@ -49,7 +50,8 @@ from app.models import (
     Transaction,
 )
 from app.security import audit
-from app.services import analytics
+from app.services import analytics, documents
+from app.services import energy as energy_service
 
 EXPENSIVE_DEBT_RATE = Decimal(5)  # au-delà, rembourser rapporte plus qu'un livret ou un placement prudent
 
@@ -390,6 +392,59 @@ def alerts(db: Session, today: date, forecast: Any | None = None) -> list[dict[s
                 "Les classer améliore le budget et les prévisions.",
             )
         )
+    energy = energy_service.summary_for_agent(db, today)
+    if energy:
+        reg = energy.get("regularisation_cents")
+        if isinstance(reg, int) and reg >= 6_000:
+            out.append(
+                _alert(
+                    "attention",
+                    "energie:regularisation",
+                    f"Électricité : rattrapage probable d'environ {reg / 100:.0f} € à la régularisation annuelle",
+                    f"Passer la mensualité à {energy['recommended_monthly_cents'] / 100:.0f} € ou mettre "
+                    "l'écart de côté chaque mois.",
+                )
+            )
+        elif isinstance(reg, int) and reg <= -6_000:
+            out.append(
+                _alert(
+                    "opportunite",
+                    "energie:trop_percu",
+                    f"Électricité : tu paies environ {-reg / 100:.0f} € de trop par an par rapport à ta consommation",
+                    "Demander une baisse de mensualité au fournisseur (ou attendre le remboursement annuel).",
+                )
+            )
+        if energy.get("spike"):
+            out.append(
+                _alert(
+                    "attention",
+                    "energie:pic",
+                    "Électricité : consommation des 7 derniers jours nettement au-dessus de l'habitude",
+                    "Chauffage, chauffe-eau, appareil resté allumé ? Vérifier avant que la facture ne suive.",
+                )
+            )
+        if energy.get("stale"):
+            out.append(
+                _alert(
+                    "info",
+                    "energie:sync",
+                    "Linky : aucune donnée récente",
+                    "Relancer la synchronisation dans Connecteurs ; vérifier le consentement chez Enedis.",
+                )
+            )
+    ft = documents.latest(db, "france_travail")
+    if ft and ft.get("end_of_rights"):
+        end = date.fromisoformat(str(ft["end_of_rights"]))
+        left = (end - today).days
+        if 0 <= left <= 90:
+            out.append(
+                _alert(
+                    "critique" if left <= 30 else "attention",
+                    "droits:fin",
+                    f"Fin de droits France Travail dans {left} jours ({end:%d/%m/%Y})",
+                    "Anticiper : demande de renouvellement, RSA / ASS, et budget calé sur le revenu suivant.",
+                )
+            )
     last = _last_data_date(db)
     if last is None or (today - last).days > 10:
         out.append(
@@ -408,7 +463,7 @@ def _last_data_date(db: Session) -> date | None:
 
 
 # ------------------------------------------------------------------ dossier
-def _age(birth: str | None, today: date) -> int | None:
+def age_from(birth: str | None, today: date) -> int | None:
     if not birth:
         return None
     b = date.fromisoformat(birth)
@@ -509,7 +564,7 @@ def build_dossier(db: Session, today: date, privacy: str = "redacted") -> dict[s
             "missing": [{"id": q.id, "question": q.label, "why": q.why} for q in comp.missing[:8]],
         },
         "person": {
-            "age": _age(household.get("birth_date"), today),
+            "age": age_from(household.get("birth_date"), today),
             "departement": (household.get("postal_insee_code") or "")[:2] or None,
             "source": "declared",
         },
@@ -612,8 +667,52 @@ def build_dossier(db: Session, today: date, privacy: str = "redacted") -> dict[s
         "risk_profile": {**asdict(risk), "source": "computed"},
         "mandate": {k: values.get(k) for k in ("autonomy", "report_frequency", "alert_threshold", "red_lines", "tone")},
         "values": {"priorities": values.get("priorities"), "money_stress": values.get("money_stress")},
+        "energy": energy_service.summary_for_agent(db, today),
+        "official_documents": _official_documents(db, privacy),
         "alerts": alerts(db, today, f),
     }
+
+
+def _official_documents(db: Session, privacy: str) -> dict[str, Any]:
+    """Faits tirés des documents officiels importés : chiffres validés par l'utilisateur, libellés issus d'une
+    table fixe (jamais de texte libre du PDF). En mode agrégats, les prestations CAF ne sortent qu'en total."""
+    tax = documents.latest(db, "avis_impot")
+    caf = documents.latest(db, "caf")
+    ft = documents.latest(db, "france_travail")
+    out: dict[str, Any] = {"source": "declared"}
+    if tax:
+        out["tax"] = {
+            "incomes_year": tax.get("incomes_year"),
+            "rfr_cents": tax.get("rfr_cents"),
+            "parts": tax.get("parts"),
+            "income_tax_cents": tax.get("income_tax_cents"),
+            "withholding_rate_percent": tax.get("withholding_rate_percent"),
+        }
+    if caf:
+        prestations = [
+            {
+                "code": p.get("code"),
+                "label": CAF_LABELS.get(str(p.get("code")), "Prestation"),
+                "monthly_cents": p.get("monthly_cents"),
+            }
+            for p in caf.get("prestations", [])
+            if isinstance(p, dict)
+        ]
+        out["caf_rights"] = {"month": caf.get("month")}
+        if privacy == "aggregates":
+            out["caf_rights"]["monthly_total_cents"] = sum(int(p["monthly_cents"] or 0) for p in prestations)
+            out["caf_rights"]["count"] = len(prestations)
+        else:
+            out["caf_rights"]["prestations"] = prestations
+    if ft:
+        out["france_travail"] = {
+            "allowance": ft.get("allowance"),
+            "daily_allowance_cents": ft.get("daily_allowance_cents"),
+            "monthly_estimate_cents": ft.get("monthly_estimate_cents"),
+            "end_of_rights": ft.get("end_of_rights"),
+            "days_left": ft.get("days_left"),
+        }
+    return out
 
 
 # ------------------------------------------------------------------ rendu markdown (ressource MCP)

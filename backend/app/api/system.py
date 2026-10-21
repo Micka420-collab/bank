@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 from app.api.deps import AuthDep, DbDep, client_ip
 from app.db import utcnow
-from app.models import Account, AuditLog, Category, SavingsGoal, Transaction
+from app.models import Account, AuditLog, Category, EnergyReading, OfficialFact, SavingsGoal, Transaction
 from app.security import audit
 from app.security.auth import verify_password
 
@@ -94,6 +94,13 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
             for t in db.scalars(select(Transaction).order_by(Transaction.booking_date))
         ],
         "goals": [{"name": g.name, "target_cents": g.target_cents} for g in db.scalars(select(SavingsGoal))],
+        "energy_readings": [
+            {"day": r.day.isoformat(), "wh": r.wh}
+            for r in db.scalars(select(EnergyReading).order_by(EnergyReading.day))
+        ],
+        "official_facts": [
+            {"kind": f.kind, "period": f.period, "fields": json.loads(f.data)} for f in db.scalars(select(OfficialFact))
+        ],
     }
     audit.record(db, ctx.user.username, "export.done", transactions=len(payload["transactions"]))
     return Response(

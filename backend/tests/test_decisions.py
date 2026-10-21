@@ -7,7 +7,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from app.domain.decisions import evaluate_purchase, what_if_savings
+from app.domain.decisions import evaluate_purchase, plan_purchase, what_if_savings
 from app.domain.forecast import MonthForecast, UpcomingEvent, build_forecast
 from app.domain.recurring import detect_recurring
 from tests.test_recurring_forecast import CATS, scenario
@@ -129,3 +129,53 @@ def test_what_if_savings() -> None:
     )
     assert not too_much.feasible_this_month and "découvert" in too_much.explanation
     assert too_much.emergency_reached_in_months == 0 and "déjà constitué" in too_much.explanation
+
+
+# ------------------------------------------------------------------ oui / non / dans combien de temps
+def plan(amount: int, **kw):  # type: ignore[no-untyped-def]
+    args = {
+        "today": TODAY,
+        "amount_cents": amount,
+        "label": "Achat",
+        "buffer_cents": 10_000,
+        "monthly_capacity_cents": 50_000,
+    }
+    return plan_purchase(runner(), **{**args, **kw})
+
+
+def test_plan_answers_now_when_cash_allows() -> None:
+    assert plan(10_000).answer == "oui"
+    tight = plan(30_000)
+    assert tight.answer == "oui_mais" and "28/10" in tight.headline
+    wait = plan(50_000)
+    assert wait.answer == "attendre" and "28/10" in wait.headline and not wait.paths
+
+
+def test_plan_uses_savings_beyond_the_emergency_fund_only() -> None:
+    p = plan(500_000, liquid_savings_cents=900_000, emergency_target_cents=300_000)
+    assert p.answer == "oui_mais" and p.from_savings_cents == 500_000 and "matelas" in p.headline
+    # Le matelas lui-même n'est jamais compté comme disponible.
+    q = plan(500_000, liquid_savings_cents=300_000, emergency_target_cents=300_000)
+    assert q.answer == "plus_tard" and q.from_savings_cents == 0
+
+
+def test_plan_gives_two_honest_paths_when_the_emergency_fund_is_incomplete() -> None:
+    p = plan(
+        500_000,
+        monthly_capacity_cents=50_000,
+        committed_monthly_cents=10_000,
+        liquid_savings_cents=100_000,
+        emergency_target_cents=300_000,
+    )
+    assert p.answer == "plus_tard"
+    first, fast = p.paths
+    assert first.label.startswith("Matelas d'abord") and first.months == 18  # (2 000 + 5 000) / 400 €
+    assert fast.months == 13 and fast.affordable_on is not None
+    assert first.affordable_on == date(2028, 4, 1)
+    assert "avril 2028" in p.headline and "400,00" in p.headline
+
+
+def test_plan_is_honest_when_out_of_reach() -> None:
+    assert plan(5_000_000, monthly_capacity_cents=0).answer == "hors_de_portee"
+    far = plan(10_000_000, monthly_capacity_cents=20_000)
+    assert far.answer == "hors_de_portee" and far.paths[0].months is None

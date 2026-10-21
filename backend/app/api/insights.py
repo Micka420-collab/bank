@@ -26,7 +26,7 @@ from app.fiscal.client import FiscalClient, FiscalEngineError
 from app.fiscal.situation import HouseholdProfileIn, build_situation
 from app.models import Account, FiscalSimulation, HouseholdProfile, SavingsGoal
 from app.security import audit
-from app.services import analytics
+from app.services import analytics, documents
 from app.services.settings_store import get_setting, set_setting
 
 router = APIRouter(prefix="/api", tags=["insights"])
@@ -115,7 +115,7 @@ def simulate(request: Request, ctx: AuthDep, db: DbDep, today: TodayDep) -> dict
     raw = analytics.load_profile(db)
     if raw is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Renseigne d'abord ton profil de foyer")
-    profile = HouseholdProfileIn.model_validate(raw)
+    profile = documents.with_taxable_income(db, HouseholdProfileIn.model_validate(raw), today)
     incomes = analytics.monthly_income_series(db, today)
     situation = build_situation(
         profile,

@@ -12,6 +12,10 @@ from app.models import AppSetting
 DEFAULTS: dict[str, Any] = {
     "buffer_cents": 10_000,  # coussin de sécurité : le « reste à dépenser » garde 100 € de côté
     "savings_goal_cents": 0,  # épargne mensuelle visée, réservée avant le reste à dépenser
+    # Électricité : tarif réglementé Base 6 kVA au 1er août 2026 (modifiable), en centimes pour 100 kWh.
+    "elec_cents_per_100kwh": 2001,
+    "elec_subscription_cents_per_year": 19035,
+    "elec_tariff_label": "Base 6 kVA (tarif réglementé)",
 }
 
 

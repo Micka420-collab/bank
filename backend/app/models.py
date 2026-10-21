@@ -346,3 +346,49 @@ class ProfileRevision(Base):
     value: Mapped[str] = mapped_column(EncryptedText("financial.revision"))
     source: Mapped[str] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+# ---------------------------------------------------------------------------- énergie (Linky)
+class EnergyConnection(Base):
+    """Accès Linky par Conso API : le PRM et le jeton sont chiffrés ; révocable d'un clic ici ou chez Enedis."""
+
+    __tablename__ = "energy_connections"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    provider: Mapped[str] = mapped_column(String(16), default="linky")
+    label: Mapped[str] = mapped_column(String(80), default="Linky")
+    prm: Mapped[str] = mapped_column(EncryptedText("energy.prm"))
+    token: Mapped[str] = mapped_column(EncryptedText("energy.token"))
+    status: Mapped[str] = mapped_column(String(16), default="active")  # active | error | revoked
+    last_sync_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_error: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class EnergyReading(Base):
+    """Consommation électrique d'un jour, en Wh (entier), une ligne par jour et par connexion."""
+
+    __tablename__ = "energy_readings"
+    __table_args__ = (UniqueConstraint("connection_id", "day", name="uq_energy_day"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    connection_id: Mapped[int] = mapped_column(ForeignKey("energy_connections.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column(Date, index=True)
+    wh: Mapped[int] = mapped_column(BigInteger)
+    source: Mapped[str] = mapped_column(String(10), default="api")  # api | manual
+
+
+# ---------------------------------------------------------------------------- documents officiels
+class OfficialFact(Base):
+    """Faits tirés d'un document officiel (avis d'impôt, attestation CAF ou France Travail) : chiffres seulement,
+    jamais d'identifiant. Un seul fait par (type, année/période)."""
+
+    __tablename__ = "official_facts"
+    __table_args__ = (UniqueConstraint("kind", "period", name="uq_official_fact"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(24))  # avis_impot | caf | france_travail
+    period: Mapped[str] = mapped_column(String(10))  # 2025 | 2026-09 | …
+    title: Mapped[str] = mapped_column(String(120))
+    data: Mapped[str] = mapped_column(EncryptedText("official.fact"))
+    imported_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)

@@ -16,7 +16,8 @@ HERMÈS (192.168.1.112) ──HTTPS + jeton bnk_…──> reverse proxy ──>
 
 | Il peut | Il ne peut pas |
 |---|---|
-| Lire ton dossier (situation, mois en cours, aides, patrimoine, alertes) | Déplacer, virer, payer ou placer de l'argent : aucun outil ne le permet |
+| Lire ton dossier (situation, mois en cours, aides, patrimoine, énergie, documents officiels, alertes) | Déplacer, virer, payer ou placer de l'argent : aucun outil ne le permet |
+| Répondre « je peux l'acheter ? » (oui, oui mais, à partir du…, dans N mois) et « où placer ? » avec les calculs de Bank | Inventer un chiffre : les verdicts et le plan viennent de Bank, il les explique |
 | Évaluer un achat ou une épargne avec la prévision de Bank | Changer son propre mandat (rôle, lignes rouges, seuil) : refusé côté serveur |
 | Mener ton onboarding et enregistrer tes réponses | Appliquer un réglage sans toi : il **propose**, tu valides dans Bank |
 | Reclasser une opération, si ton mandat est « gestionnaire » | Voir les noms des particuliers, IBAN, e-mails, téléphones (masqués par défaut) |
@@ -70,7 +71,10 @@ qu'ils restent chez toi, utilise `--deliver local` ou une messagerie chiffrée d
 | `get_month`, `get_alerts`, `get_aids`, `get_wealth` | read | Vues ciblées |
 | `spending_summary` (`months`) | read | Moyennes par catégorie, identifiants de catégories |
 | `list_transactions` | read:transactions | Opérations (libellés anonymisés ; refusé en mode agrégats) |
-| `evaluate_purchase` (`amount_eur`, `label`, `on_date`, `category`) | read | Verdict ok / serre / attendre / deconseille, meilleure date, enveloppe |
+| `can_i_buy` (`amount_eur`, `label`, `category`) | read | « Oui / oui mais / à partir du… / dans N mois » avec les deux chemins d'épargne (matelas d'abord, au plus vite) |
+| `evaluate_purchase` (`amount_eur`, `label`, `on_date`, `category`) | read | Verdict ok / serre / attendre / deconseille à une date précise, enveloppe |
+| `investment_plan` | read | Où placer, par priorité : mois d'avance, dette chère, matelas (LEP / livrets), projets datés, long terme (PEA / AV / PER selon tranche, risque, horizon, lignes rouges) |
+| `get_energy` | read | Linky : kWh et coût sur 30 jours et par mois, facture annuelle estimée, écart avec la mensualité, pic |
 | `what_if_savings` (`monthly_eur`) | read | Effet d'une épargne mensuelle sur le budget, le matelas, les objectifs |
 | `onboarding_status`, `record_answer` | read, write:onboarding | Questionnaire « Ma situation » : ni le mandat, ni une réponse que tu as donnée toi-même, ni les dépenses prévues (il les propose) |
 | `simulate_aids` | simulate | Simulation OpenFisca de tes droits |
@@ -79,6 +83,15 @@ qu'ils restent chez toi, utilise `--deliver local` ou une messagerie chiffrée d
 
 Ressource `bank://questions` (catalogue de l'onboarding) ; prompts `onboarding_interview`, `daily_brief`,
 `weekly_review`.
+
+## Routines : ce qu'elles regardent
+
+| Routine | Outils | Ce qu'HERMÈS en fait |
+|---|---|---|
+| Point du matin (7 h 30) | `get_dossier` | Reste à dépenser et paliers, échéances à 3 jours, alertes (dont énergie et fin de droits), une action |
+| Revue du dimanche (18 h) | `get_dossier`, `spending_summary`, `get_alerts`, `list_proposals` | Écarts d'enveloppes, matelas, 3 recommandations chiffrées → propositions |
+| Bilan du mois (le 1er, 9 h) | `spending_summary`, `get_wealth`, `get_aids`, `get_energy`, `simulate_aids` | Le mois raconté, enveloppes du mois suivant, épargne, aides, électricité (rattrapage probable) |
+| À la demande | `can_i_buy`, `investment_plan` | « Je peux l'acheter ? » et « où placer ? » avec les calculs de Bank |
 
 ## Confidentialité
 

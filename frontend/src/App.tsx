@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type Me } from "./api";
 import { ErrorNote, Loading, ToastProvider } from "./components/ui";
 import { Aids } from "./pages/Aids";
+import { Connecteurs } from "./pages/Connecteurs";
 import { Login, Setup } from "./pages/Auth";
 import { Operations } from "./pages/Operations";
 import { Settings } from "./pages/Settings";
@@ -10,14 +11,24 @@ import { Today } from "./pages/Today";
 import { Wealth } from "./pages/Wealth";
 import { useRoute } from "./router";
 
-const NAV: { page: string; label: string; short: string }[] = [
-  { page: "aujourdhui", label: "Aujourd'hui", short: "Jour" },
-  { page: "operations", label: "Opérations", short: "Opérations" },
-  { page: "aides", label: "Aides", short: "Aides" },
-  { page: "patrimoine", label: "Patrimoine", short: "Patrimoine" },
-  { page: "situation", label: "Ma situation", short: "Situation" },
-  { page: "reglages", label: "Réglages", short: "Réglages" },
+const NAV: { page: string; label: string }[] = [
+  { page: "aujourdhui", label: "Aujourd'hui" },
+  { page: "operations", label: "Opérations" },
+  { page: "aides", label: "Aides" },
+  { page: "patrimoine", label: "Patrimoine" },
+  { page: "situation", label: "Ma situation" },
+  { page: "connecteurs", label: "Connecteurs" },
+  { page: "reglages", label: "Réglages" },
 ];
+// Sur mobile, cinq onglets lisibles ; le reste derrière « Plus ».
+const TABS: { page: string; short: string }[] = [
+  { page: "aujourdhui", short: "Jour" },
+  { page: "operations", short: "Opérations" },
+  { page: "situation", short: "Situation" },
+  { page: "patrimoine", short: "Patrimoine" },
+  { page: "plus", short: "Plus" },
+];
+const MORE = new Set(["aides", "connecteurs", "reglages", "plus"]);
 
 type Phase = "loading" | "setup" | "login" | "ready" | "offline";
 
@@ -58,7 +69,7 @@ export function App() {
   if (phase === "setup") return <Setup onDone={() => setPhase("login")} />;
   if (phase === "login" || !me) return <Login onDone={() => void refresh()} />;
 
-  const page = route.page === "banques" ? "reglages" : route.page;
+  const page = route.page === "banques" ? "connecteurs" : route.page;
   const logout = async () => {
     await api("/api/auth/logout", { method: "POST" }).catch(() => undefined);
     setMe(null);
@@ -86,18 +97,34 @@ export function App() {
             : page === "aides" ? <Aids />
             : page === "patrimoine" ? <Wealth />
             : page === "situation" ? <Situation />
-            : page === "reglages" ? (
-              <Settings me={me} bankResult={route.page === "banques" ? route.params.get("result") : null}
-                        onMeChange={() => void refresh()} />
-            )
+            : page === "connecteurs" ? <Connecteurs bankResult={route.page === "banques" ? route.params.get("result") : null} />
+            : page === "plus" ? <More username={me.username} onLogout={() => void logout()} />
+            : page === "reglages" ? <Settings me={me} onMeChange={() => void refresh()} />
             : <Today totpEnabled={me.totp_enabled} />}
         </main>
       </div>
       <nav className="tabbar" aria-label="Navigation">
-        {NAV.map((n) => (
-          <a key={n.page} href={`#/${n.page}`} aria-current={page === n.page ? "page" : undefined}>{n.short}</a>
+        {TABS.map((n) => (
+          <a key={n.page} href={`#/${n.page}`}
+             aria-current={page === n.page || (n.page === "plus" && MORE.has(page)) ? "page" : undefined}>
+            {n.short}
+          </a>
         ))}
       </nav>
     </ToastProvider>
+  );
+}
+
+function More({ username, onLogout }: { username: string; onLogout: () => void }) {
+  return (
+    <>
+      <div className="page-head"><h1>Plus</h1></div>
+      <ul className="more">
+        <li><a href="#/aides"><b>Aides</b><span className="faint">CAF, France Travail, simulation de tes droits</span></a></li>
+        <li><a href="#/connecteurs"><b>Connecteurs</b><span className="faint">Banques, Linky, documents de l'État, agents IA</span></a></li>
+        <li><a href="#/reglages"><b>Réglages</b><span className="faint">Comptes, budget, sécurité, journal</span></a></li>
+      </ul>
+      <p className="muted" style={{ marginTop: "2rem" }}>{username} · <button className="btn link" onClick={onLogout}>Se déconnecter</button></p>
+    </>
   );
 }

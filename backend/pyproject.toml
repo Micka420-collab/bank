@@ -18,6 +18,7 @@ dependencies = [
   "python-multipart>=0.0.9",
   "segno>=1.6",
   "mcp>=2.3,<3",  # serveur MCP des agents IA (API MCPServer de la v2)
+  "pypdf>=6.21,<7",  # lecture des documents officiels (texte seulement) ; 6.21 : plafonds configurables (apply_configuration)
 ]
 
 [project.optional-dependencies]
