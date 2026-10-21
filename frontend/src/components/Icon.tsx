@@ -29,6 +29,14 @@ const PATHS: Record<string, string> = {
   trendUp: "M4 17 10 11l4 4 6-7M14 8h6v6",
   trendDown: "M4 7l6 6 4-4 6 7M14 16h6v-6",
   close: "M6 6l12 12M18 6 6 18",
+  memory: "M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6zM6 3v18M10 8h5M10 12h5",
+  thumbUp: "M7 10v11H4V10zM7 10l4-7a2 2 0 0 1 3 2l-1 5h6a2 2 0 0 1 2 2.3l-1.4 7a2 2 0 0 1-2 1.7H7",
+  thumbDown: "M7 14V3H4v11zM7 14l4 7a2 2 0 0 0 3-2l-1-5h6a2 2 0 0 0 2-2.3l-1.4-7A2 2 0 0 0 17.6 3H7",
+  undo: "M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11",
+  pin: "M12 17v5M9 3h6l-1 6 3 3v2H7v-2l3-3z",
+  trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
+  edit: "M4 20h4L19 9l-4-4L4 16zM14 6l4 4",
+  newChat: "M12 8v6M9 11h6M4 5h16v11H9l-5 4z",
   logout: "M10 17l5-5-5-5M15 12H3M12 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6",
 };
 

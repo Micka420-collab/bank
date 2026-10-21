@@ -4,15 +4,13 @@ journal sans contenu), API, et catégories proposées reprises par les cartes «
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
-from typing import Any, ClassVar
+from typing import Any
 
 import httpx
 import pytest
 from sqlalchemy import select, text
 from starlette.testclient import TestClient
 
-from app.api import deps
 from app.models import AuditLog, LlmProvider, LlmUsage, MerchantHint
 from app.providers.openrouter import (
     ChatResult,
@@ -23,10 +21,8 @@ from app.providers.openrouter import (
 )
 from app.services import assistant
 from tests.conftest import PASSWORD
-from tests.scenario import TODAY, seed_household
-
-KEY = "sk-or-v1-0123456789abcdef0123456789abcdef"
-MODEL = "anthropic/claude-haiku-5.5"
+from tests.llm import KEY, MODEL, FakeLlm, configure
+from tests.scenario import TODAY
 
 
 # ------------------------------------------------------------------ client : transport simulé
@@ -162,57 +158,6 @@ def test_models_are_filtered_to_text_and_sorted_free_then_cheapest() -> None:
 
 
 # ------------------------------------------------------------------ service + API : client simulé
-class FakeLlm:
-    """Modèle simulé : journalise les messages reçus, répond ce qu'on lui dit, peut échouer."""
-
-    calls: ClassVar[list[dict[str, Any]]] = []
-    reply: ClassVar[str] = "Tu peux dépenser **75 €** par jour."
-    cost: ClassVar[float] = 0.0005
-    fail: ClassVar[OpenRouterError | None] = None
-    keys: ClassVar[list[str | None]] = []
-
-    def __init__(self, api_key: str | None) -> None:
-        FakeLlm.keys.append(api_key)
-
-    def chat(
-        self, model: str, messages: list[dict[str, str]], *, max_tokens: int = 700, temperature: float = 0.3
-    ) -> ChatResult:
-        FakeLlm.calls.append(
-            {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature}
-        )
-        if FakeLlm.fail is not None:
-            raise FakeLlm.fail
-        return ChatResult(FakeLlm.reply, model, 1500, 60, FakeLlm.cost, "stop")
-
-    def list_models(self) -> list[Any]:
-        raise OpenRouterError("pas de réseau en test")
-
-
-@pytest.fixture
-def world(app, auth_client: TestClient) -> Iterator[TestClient]:  # type: ignore[no-untyped-def]
-    app.dependency_overrides[deps.today] = lambda: TODAY
-    app.state.llm_client_factory = FakeLlm
-    FakeLlm.calls, FakeLlm.keys, FakeLlm.fail, FakeLlm.cost = [], [], None, 0.0005
-    FakeLlm.reply = "Tu peux dépenser **75 €** par jour."
-    with app.state.sessionmaker() as db:
-        seed_household(db)
-    yield auth_client
-    app.dependency_overrides.clear()
-
-
-def configure(world: TestClient, **over: Any) -> Any:
-    body = {
-        "password": PASSWORD,
-        "api_key": KEY,
-        "model": MODEL,
-        "privacy": "redacted",
-        "monthly_cap_usd_cents": 300,
-        "daily_calls_cap": 5,
-    }
-    body.update(over)
-    return world.put("/api/assistant", json=body)
-
-
 def test_not_configured_state_and_validation(world: TestClient) -> None:
     st = world.get("/api/assistant").json()
     assert st["configured"] is False and "redacted" in st["privacy_modes"]

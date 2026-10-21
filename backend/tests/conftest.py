@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy.orm import Session
 from starlette.testclient import TestClient
 
+from app.api import deps
 from app.config import Settings
 from app.main import create_app
 from app.security.crypto import Keyring, install_keyring
@@ -82,3 +83,19 @@ def auth_client(client: TestClient) -> TestClient:
 
 def fixture_bytes(name: str) -> bytes:
     return (FIXTURES / name).read_bytes()
+
+
+@pytest.fixture
+def world(app, auth_client: TestClient) -> Iterator[TestClient]:  # type: ignore[no-untyped-def]
+    """Foyer de démonstration, horloge figée, modèle de langage simulé (tests de l'assistant et de sa mémoire)."""
+    from tests.llm import FakeLlm
+    from tests.scenario import TODAY, seed_household
+
+    app.dependency_overrides[deps.today] = lambda: TODAY
+    app.state.llm_client_factory = FakeLlm
+    FakeLlm.calls, FakeLlm.keys, FakeLlm.fail, FakeLlm.cost, FakeLlm.script = [], [], None, 0.0005, []
+    FakeLlm.reply = "Tu peux dépenser **75 €** par jour."
+    with app.state.sessionmaker() as db:
+        seed_household(db)
+    yield auth_client
+    app.dependency_overrides.clear()

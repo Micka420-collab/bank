@@ -16,6 +16,10 @@ DEFAULTS: dict[str, Any] = {
     "elec_cents_per_100kwh": 2001,
     "elec_subscription_cents_per_year": 19035,
     "elec_tariff_label": "Base 6 kVA (tarif réglementé)",
+    # Assistant : son nom, la durée de conservation des conversations, ce que chaque modèle sait faire.
+    "assistant_name": "Bank",
+    "conversation_retention_days": 365,
+    "llm_model_caps": {},
 }
 
 

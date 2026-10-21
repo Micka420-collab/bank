@@ -16,9 +16,13 @@ from app.models import (
     Account,
     AuditLog,
     Category,
+    Consent,
+    Conversation,
     EnergyReading,
     InitiativeState,
     LlmUsage,
+    MemoryEntry,
+    MemoryProposal,
     MerchantHint,
     OfficialFact,
     SavingsGoal,
@@ -144,6 +148,53 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
                 "cost_microusd": u.cost_microusd,
             }
             for u in db.scalars(select(LlmUsage).order_by(LlmUsage.id))
+        ],
+        # Mémoire de l'assistant : tout ce qu'il retient de toi, et vos conversations conservées.
+        "memory": [
+            {
+                "store": m.store,
+                "content": m.content,
+                "pinned": m.pinned,
+                "origin": m.origin,
+                "created_at": m.created_at.isoformat(),
+                "updated_at": m.updated_at.isoformat(),
+            }
+            for m in db.scalars(select(MemoryEntry).order_by(MemoryEntry.id))
+        ],
+        "memory_proposals": [
+            {
+                "store": p.store,
+                "action": p.action,
+                "target": p.target_snapshot,
+                "new_text": p.new_text,
+                "reason": p.reason,
+                "status": p.status,
+            }
+            for p in db.scalars(select(MemoryProposal).order_by(MemoryProposal.id))
+        ],
+        "conversations": [
+            {
+                "started_at": c.started_at.isoformat(),
+                "last_at": c.last_at.isoformat(),
+                "title": c.title,
+                "summary": c.summary,
+                "model": c.model,
+                "messages": [
+                    {
+                        "ts": m.ts.isoformat(),
+                        "role": m.role,
+                        "content": m.content,
+                        "feedback": m.feedback,
+                        "feedback_note": m.feedback_note,
+                    }
+                    for m in c.messages
+                ],
+            }
+            for c in db.scalars(select(Conversation).order_by(Conversation.id))
+        ],
+        "consents": [
+            {"purpose": c.purpose, "granted": c.granted, "version": c.wording_version, "at": c.updated_at.isoformat()}
+            for c in db.scalars(select(Consent))
         ],
     }
     audit.record(db, ctx.user.username, "export.done", transactions=len(payload["transactions"]))

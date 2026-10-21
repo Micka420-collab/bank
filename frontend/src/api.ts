@@ -621,9 +621,12 @@ export type History = {
 
 // ------------------------------------------------------------------ assistant (OpenRouter)
 export type AssistantPrivacy = "full" | "redacted" | "aggregates";
+export type MemoryStatus = { consent: boolean; asked: boolean; available: boolean };
 export type AssistantStatus = {
   configured: boolean;
   privacy_modes: Record<AssistantPrivacy, string>;
+  name: string;
+  memory: MemoryStatus;
   provider?: string;
   key_prefix?: string;
   model?: string;
@@ -646,15 +649,90 @@ export type AssistantModel = {
   completion_usd_per_million: number;
   free: boolean;
 };
+export type MemoryStore = "user" | "notes";
+export type MemoryNotice = { action: "add" | "patch" | "remove"; store: MemoryStore; id: number; content: string; before?: string };
 export type AssistantAnswer = {
   answer: string;
+  conversation_id: number;
+  message_id: number;
   model: string;
+  name: string;
   privacy: AssistantPrivacy;
+  memory_on: boolean;
+  memory: MemoryNotice[];
+  tools: string[];
   cost_usd: number;
   prompt_tokens: number;
   completion_tokens: number;
   truncated: boolean;
+  review_due: boolean;
   calls_today: number;
   month_cost_usd_cents: number;
+};
+export type MessageMeta = {
+  model?: string;
+  cost_usd?: number;
+  privacy?: AssistantPrivacy;
+  truncated?: boolean;
+  tools?: string[];
+  memory?: { action: string; store: MemoryStore; id: number }[];
+};
+export type ConversationSummary = {
+  id: number;
+  title: string;
+  summary: string | null;
+  started_at: string;
+  last_at: string;
+  turns: number;
+  memory_on: boolean;
+  closed: boolean;
+};
+export type ConversationDetail = {
+  id: number;
+  title: string;
+  summary: string | null;
+  memory_on: boolean;
+  closed: boolean;
+  messages: { id: number; role: "user" | "assistant"; content: string; ts: string; meta: MessageMeta; feedback: "up" | "down" | null }[];
+};
+export type MemoryEntryView = {
+  id: number;
+  content: string;
+  pinned: boolean;
+  origin: "chat" | "review" | "user";
+  blocked: boolean;
+  created_at: string;
+  updated_at: string;
+};
+export type MemoryProposalView = {
+  id: number;
+  store: MemoryStore;
+  action: "add" | "patch" | "remove";
+  old_text: string | null;
+  new_text: string | null;
+  reason: string | null;
+  created_at: string;
+};
+export type MemoryView = {
+  stores: Record<MemoryStore, { limit: number; used: number; usage: string; entries: MemoryEntryView[] }>;
+  proposals: MemoryProposalView[];
+  name: string;
+  retention_days: number;
+  retention_choices: number[];
+  conversations: number;
+  consent: boolean;
+  available: boolean;
+  titles: Record<MemoryStore, string>;
+  forgotten?: { entries: number; conversations: number };
+};
+export type ConsentView = {
+  purpose: string;
+  title: string;
+  text: string;
+  granted: boolean;
+  explicit: boolean;
+  decided: boolean;
+  updated_at: string | null;
+  default: boolean;
 };
 export type AssistantHints = { suggested: number; merchants: number; hints: Record<string, string> };

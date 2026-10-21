@@ -1,14 +1,35 @@
-// « Demande à Bank » : un panneau latéral où tu poses une question en français ; le modèle (OpenRouter, ta clé)
-// répond à partir de ton dossier. La conversation vit dans la page, jamais sur le serveur. Chaque réponse dit
-// quel modèle a répondu, ce que ça a coûté et ce qu'il a vu (anonymisé par défaut).
+// « Demande à Bank » : un panneau latéral où tu parles à ton assistant. Il répond à partir de ton dossier et, si tu
+// l'as permis, se souvient de toi d'une conversation à l'autre : chaque chose qu'il retient s'affiche sous sa
+// réponse et s'annule d'un clic ; tout le reste se voit et se corrige dans « Ce qu'il retient ». Sans ton accord,
+// rien n'est appris et la conversation s'efface quand elle se termine.
 
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { api, useApi, type AssistantAnswer, type AssistantStatus } from "../api";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import {
+  api,
+  useApi,
+  type AssistantAnswer,
+  type AssistantStatus,
+  type ConversationDetail,
+  type ConversationSummary,
+  type MemoryNotice,
+} from "../api";
 import { Icon } from "./Icon";
 import { Markdown } from "./Markdown";
 import { usd } from "../pages/AssistantSettings";
 
-export type Turn = { role: "user" | "assistant"; content: string; meta?: { model: string; cost_usd: number; privacy: string; truncated: boolean } };
+type Notice = MemoryNotice & { undone?: boolean; failed?: string };
+export type Turn =
+  | { role: "user"; content: string }
+  | { role: "divider"; content: string }
+  | {
+      role: "assistant";
+      content: string;
+      messageId?: number;
+      meta?: { model?: string; cost_usd?: number; privacy?: string; truncated?: boolean };
+      notices?: Notice[];
+      feedback?: "up" | "down" | null;
+    };
+type AssistantTurn = Extract<Turn, { role: "assistant" }>;
 
 export const SUGGESTIONS = [
   "Combien je peux dépenser d'ici ma prochaine paie ?",
@@ -16,8 +37,10 @@ export const SUGGESTIONS = [
   "Je peux m'offrir 300 € de vacances le mois prochain ?",
   "Qu'est-ce que je devrais faire en priorité pour mon épargne ?",
 ];
+export const RESUME_HOURS = 6; // au-delà, la conversation est fermée côté serveur (et relue si la mémoire est active)
 
 const PRIVACY_SHORT: Record<string, string> = { full: "dossier complet", redacted: "dossier anonymisé", aggregates: "chiffres seuls" };
+const NOTICE_LABEL: Record<MemoryNotice["action"], string> = { add: "Retenu", patch: "Corrigé", remove: "Oublié" };
 
 export function costLabel(cost: number): string {
   if (cost <= 0) return "gratuit";
@@ -25,15 +48,34 @@ export function costLabel(cost: number): string {
   return usd(Math.round(cost * 100));
 }
 
+function fromServer(detail: ConversationDetail): Turn[] {
+  return detail.messages.map((m) =>
+    m.role === "user"
+      ? { role: "user", content: m.content }
+      : {
+          role: "assistant",
+          content: m.content,
+          messageId: m.id,
+          feedback: m.feedback,
+          meta: { model: m.meta.model, cost_usd: m.meta.cost_usd, privacy: m.meta.privacy, truncated: m.meta.truncated },
+        },
+  );
+}
+
 export function Assistant({ open, onClose }: { open: boolean; onClose: () => void }) {
   const status = useApi<AssistantStatus>(open ? "/api/assistant" : null);
+  const [conversationId, setConversationId] = useState<number | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
+  const [resumed, setResumed] = useState(false);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [noteFor, setNoteFor] = useState<number | null>(null);
+  const [note, setNote] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const returnTo = useRef<HTMLElement | null>(null);
+  const triedResume = useRef(false);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -54,28 +96,128 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
     };
   }, [open, onClose]);
 
+  const configured = status.data?.configured === true;
+
+  // Reprise : la dernière conversation, si elle est encore ouverte et récente (après un rechargement de la page).
+  useEffect(() => {
+    if (!open || !configured || triedResume.current) return undefined;
+    triedResume.current = true;
+    if (conversationId !== null || turns.length > 0) return undefined;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [last] = await api<ConversationSummary[]>("/api/assistant/conversations?limit=1");
+        if (!last || last.closed || Date.now() - Date.parse(last.last_at) > RESUME_HOURS * 3_600_000) return;
+        const detail = await api<ConversationDetail>(`/api/assistant/conversations/${last.id}`);
+        if (cancelled || detail.closed || detail.messages.length === 0) return;
+        setConversationId(detail.id);
+        setTurns(fromServer(detail));
+        setResumed(true);
+      } catch {
+        /* pas de reprise : on repart d'une page blanche */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, configured, conversationId, turns.length]);
+
   useEffect(() => {
     const el = listRef.current;
     if (el && typeof el.scrollTo === "function") el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [turns, busy]);
+
+  const updateAssistantTurn = useCallback((index: number, change: (t: AssistantTurn) => AssistantTurn) => {
+    setTurns((prev) => prev.map((t, i) => (i === index && t.role === "assistant" ? change(t) : t)));
+  }, []);
 
   const send = async (text: string) => {
     const q = text.trim();
     if (!q || busy) return;
     setError(null);
     setBusy(true);
-    const history = turns.slice(-6).map((t) => ({ role: t.role, content: t.content }));
     setTurns((prev) => [...prev, { role: "user", content: q }]);
     setQuestion("");
     try {
-      const r = await api<AssistantAnswer>("/api/assistant/ask", { method: "POST", body: { question: q, history } });
-      setTurns((prev) => [...prev, { role: "assistant", content: r.answer, meta: { model: r.model, cost_usd: r.cost_usd, privacy: r.privacy, truncated: r.truncated } }]);
+      const r = await api<AssistantAnswer>("/api/assistant/ask", {
+        method: "POST",
+        body: { question: q, conversation_id: conversationId },
+      });
+      setTurns((prev) => {
+        const next = [...prev];
+        // La conversation précédente a été fermée entre-temps (longue pause) : on le montre.
+        if (conversationId !== null && r.conversation_id !== conversationId) {
+          next.splice(next.length - 1, 0, { role: "divider", content: "Nouvelle conversation" });
+        }
+        next.push({
+          role: "assistant",
+          content: r.answer,
+          messageId: r.message_id,
+          meta: { model: r.model, cost_usd: r.cost_usd, privacy: r.privacy, truncated: r.truncated },
+          notices: r.memory,
+          feedback: null,
+        });
+        return next;
+      });
+      setConversationId(r.conversation_id);
+      if (r.memory.length > 0) status.reload();
     } catch (e) {
       setError((e as Error).message);
       setQuestion(q);
       setTurns((prev) => prev.slice(0, -1));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const newConversation = () => {
+    if (conversationId !== null) {
+      // Fermer, c'est aussi donner le signal de la relecture (ce qui mérite d'être retenu).
+      void api(`/api/assistant/conversations/${conversationId}/close`, { method: "POST" }).catch(() => undefined);
+    }
+    setConversationId(null);
+    setTurns([]);
+    setResumed(false);
+    setError(null);
+    setNoteFor(null);
+    inputRef.current?.focus();
+  };
+
+  const undo = async (turnIndex: number, k: number) => {
+    const turn = turns[turnIndex];
+    const n = turn?.role === "assistant" ? turn.notices?.[k] : undefined;
+    if (!n || n.undone) return;
+    const mark = (patch: Partial<Notice>) =>
+      updateAssistantTurn(turnIndex, (t) => ({ ...t, notices: t.notices?.map((x, j) => (j === k ? { ...x, ...patch } : x)) }));
+    try {
+      if (n.action === "add") await api(`/api/memory/entries/${n.id}`, { method: "DELETE" });
+      else if (n.action === "patch") await api(`/api/memory/entries/${n.id}`, { method: "PATCH", body: { content: n.before } });
+      else await api("/api/memory/entries", { method: "POST", body: { store: n.store, content: n.content } });
+      mark({ undone: true, failed: undefined });
+    } catch (e) {
+      mark({ failed: (e as Error).message });
+    }
+  };
+
+  const sendFeedback = async (turnIndex: number, value: "up" | "down" | null, text?: string) => {
+    const turn = turns[turnIndex];
+    if (turn?.role !== "assistant" || turn.messageId === undefined) return;
+    const previous = turn.feedback ?? null;
+    updateAssistantTurn(turnIndex, (t) => ({ ...t, feedback: value }));
+    try {
+      await api(`/api/assistant/messages/${turn.messageId}/feedback`, { method: "PUT", body: { value, note: text || null } });
+    } catch (e) {
+      updateAssistantTurn(turnIndex, (t) => ({ ...t, feedback: previous }));
+      setError((e as Error).message);
+    }
+  };
+
+  const decideMemory = async (granted: boolean) => {
+    try {
+      await api("/api/consents/ai_memory", { method: "PUT", body: { granted } });
+      status.reload();
+    } catch (e) {
+      setError((e as Error).message);
     }
   };
 
@@ -91,16 +233,36 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
   };
 
   if (!open) return null;
-  const configured = status.data?.configured === true;
+  const name = status.data?.name ?? "Bank";
+  const memory = status.data?.memory;
+  const memoryOn = Boolean(memory?.consent && memory.available);
+  const askConsent = configured && memory?.available === true && !memory.consent && !memory.asked;
   return (
     <div className="assistant-backdrop" onClick={onClose}>
       <aside className="assistant-panel" role="dialog" aria-modal="true" aria-labelledby="assistant-panel-title" onClick={(e) => e.stopPropagation()}>
         <header className="assistant-head">
           <div>
-            <h2 id="assistant-panel-title"><Icon name="spark" /> Demande à Bank</h2>
-            {configured && status.data?.privacy && <span className="faint">{status.data.model} · {PRIVACY_SHORT[status.data.privacy] ?? status.data.privacy}</span>}
+            <h2 id="assistant-panel-title"><Icon name="spark" /> Demande à {name}</h2>
+            {configured && status.data?.privacy && (
+              <span className="faint">
+                {status.data.model} · {PRIVACY_SHORT[status.data.privacy] ?? status.data.privacy}
+                {memoryOn ? " · se souvient de toi" : ""}
+              </span>
+            )}
           </div>
-          <button type="button" className="btn ghost sm" onClick={onClose} aria-label="Fermer"><Icon name="close" /></button>
+          <div className="assistant-head-actions">
+            {configured && turns.length > 0 && (
+              <button type="button" className="btn ghost sm" onClick={newConversation} aria-label="Nouvelle conversation" title="Nouvelle conversation">
+                <Icon name="newChat" />
+              </button>
+            )}
+            {configured && (
+              <a className="btn ghost sm" href="#/memoire" onClick={onClose} aria-label={`Ce que ${name} retient`} title={`Ce que ${name} retient`}>
+                <Icon name="memory" />
+              </a>
+            )}
+            <button type="button" className="btn ghost sm" onClick={onClose} aria-label="Fermer"><Icon name="close" /></button>
+          </div>
         </header>
 
         <div className="assistant-body" ref={listRef}>
@@ -109,6 +271,20 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
               <p><b>L'assistant n'est pas encore branché.</b> Ajoute ta clé OpenRouter dans Connecteurs : Bank lui enverra un dossier anonymisé et il répondra à tes questions ici.</p>
               <a className="btn" href="#/connecteurs" onClick={onClose}><Icon name="connectors" /> Ouvrir Connecteurs</a>
             </div>
+          )}
+          {askConsent && (
+            <section className="memory-consent" aria-labelledby="memory-consent-title">
+              <h3 id="memory-consent-title"><span className="memory-mark" aria-hidden="true">§</span> Je peux me souvenir de toi</h3>
+              <p>
+                Tes projets, tes préférences, ce qui marche pour toi : je les retiens d'une conversation à l'autre, et je
+                m'améliore avec tes retours. Tout reste chiffré chez toi, visible et effaçable. Ce que je retiens est envoyé
+                à ton modèle avec le dossier ; jamais d'IBAN, de numéro de carte ni de code.
+              </p>
+              <div className="actions">
+                <button type="button" className="btn sm" onClick={() => void decideMemory(true)}>Oui, souviens-toi</button>
+                <button type="button" className="btn quiet sm" onClick={() => void decideMemory(false)}>Pas maintenant</button>
+              </div>
+            </section>
           )}
           {configured && turns.length === 0 && (
             <div className="assistant-empty">
@@ -120,20 +296,79 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
               </div>
             </div>
           )}
-          {turns.map((t, i) => (
-            <div key={i} className={`assistant-turn is-${t.role}`}>
-              {t.role === "user" ? <p>{t.content}</p> : <Markdown source={t.content} />}
-              {t.meta && (
-                <div className="assistant-meta faint">
-                  {t.meta.model} · {costLabel(t.meta.cost_usd)} · {PRIVACY_SHORT[t.meta.privacy] ?? t.meta.privacy}
-                  {t.meta.truncated && " · réponse coupée (plafond de longueur)"}
-                </div>
-              )}
-            </div>
-          ))}
+          {resumed && turns.length > 0 && (
+            <p className="assistant-resumed faint">
+              Suite de votre dernière conversation · <button type="button" className="btn link" onClick={newConversation}>en commencer une autre</button>
+            </p>
+          )}
+          {turns.map((t, i) =>
+            t.role === "divider" ? (
+              <p key={i} className="assistant-divider faint" role="separator">{t.content}</p>
+            ) : (
+              <div key={i} className={`assistant-turn is-${t.role}`}>
+                {t.role === "user" ? <p>{t.content}</p> : <Markdown source={t.content} />}
+                {t.role === "assistant" && t.notices && t.notices.length > 0 && (
+                  <ul className="memory-notes" aria-label={`Ce que ${name} vient de retenir`}>
+                    {t.notices.map((n, k) => (
+                      <li key={`${n.id}-${k}`} className={n.undone ? "is-undone" : undefined}>
+                        <span className="memory-mark" aria-hidden="true">§</span>
+                        <span className="memory-note-text">
+                          <b>{n.undone ? "Annulé" : NOTICE_LABEL[n.action]}</b> « {n.content} »
+                          {n.failed && <span className="error"> — {n.failed}</span>}
+                        </span>
+                        {!n.undone && (
+                          <button type="button" className="btn link" onClick={() => void undo(i, k)}>
+                            <Icon name="undo" /> Annuler
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {t.role === "assistant" && t.meta && (
+                  <div className="assistant-meta faint">
+                    <span>
+                      {t.meta.model} · {costLabel(t.meta.cost_usd ?? 0)} · {PRIVACY_SHORT[t.meta.privacy ?? ""] ?? t.meta.privacy}
+                      {t.meta.truncated && " · réponse coupée (plafond de longueur)"}
+                    </span>
+                    {t.messageId !== undefined && (
+                      <span className="assistant-feedback">
+                        <button type="button" className={`btn ghost xs${t.feedback === "up" ? " is-on" : ""}`} aria-pressed={t.feedback === "up"}
+                                aria-label="Réponse utile" title="Réponse utile"
+                                onClick={() => void sendFeedback(i, t.feedback === "up" ? null : "up")}>
+                          <Icon name="thumbUp" />
+                        </button>
+                        <button type="button" className={`btn ghost xs${t.feedback === "down" ? " is-on" : ""}`} aria-pressed={t.feedback === "down"}
+                                aria-label="Réponse à revoir" title="Réponse à revoir"
+                                onClick={() => {
+                                  if (t.feedback === "down") return void sendFeedback(i, null);
+                                  setNote("");
+                                  setNoteFor(i);
+                                  void sendFeedback(i, "down");
+                                }}>
+                          <Icon name="thumbDown" />
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                )}
+                {noteFor === i && t.role === "assistant" && (
+                  <form className="assistant-note" onSubmit={(e) => {
+                    e.preventDefault();
+                    void sendFeedback(i, "down", note.trim());
+                    setNoteFor(null);
+                  }}>
+                    <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} autoFocus
+                           placeholder="Qu'est-ce qui n'allait pas ? (facultatif)" aria-label="Ce qui n'allait pas" />
+                    <button className="btn sm">Envoyer</button>
+                  </form>
+                )}
+              </div>
+            ),
+          )}
           {busy && (
             <div className="assistant-turn is-assistant" aria-live="polite">
-              <p className="muted"><span className="spinner" aria-hidden="true" /> Bank lit ton dossier…</p>
+              <p className="muted"><span className="spinner" aria-hidden="true" /> {name} lit ton dossier…</p>
             </div>
           )}
           {error && <div className="notice danger" role="alert"><Icon name="alert" /><span>{error}</span></div>}
@@ -146,7 +381,16 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
             <button className={`btn${busy ? " is-loading" : ""}`} disabled={busy || question.trim().length < 2} aria-label="Envoyer"><Icon name="arrow" /></button>
           </form>
         )}
-        <p className="assistant-foot faint"><Icon name="shield" /> Rien n'est gardé : la conversation disparaît quand tu fermes le panneau.</p>
+        <p className="assistant-foot faint">
+          <Icon name="shield" />
+          {memoryOn ? (
+            <span>{name} se souvient de toi : tout est chiffré chez toi, <a href="#/memoire" onClick={onClose}>visible et effaçable</a>.</span>
+          ) : memory && !memory.available ? (
+            <span>Mode « chiffres seuls » : pas de mémoire, rien de ce que tu écris n'est retenu.</span>
+          ) : (
+            <span>Sans mémoire : rien n'est appris, la conversation s'efface quand elle se termine.</span>
+          )}
+        </p>
       </aside>
     </div>
   );

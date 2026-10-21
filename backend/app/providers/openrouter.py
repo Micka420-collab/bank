@@ -26,10 +26,13 @@ MODEL_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._\-]{0,60}/[a-z0-9][a-z0-9._:\-]{0,8
 
 
 class OpenRouterError(Exception):
-    def __init__(self, message: str, status: int | None = None, *, permanent: bool = False) -> None:
+    def __init__(
+        self, message: str, status: int | None = None, *, permanent: bool = False, tools_unsupported: bool = False
+    ) -> None:
         super().__init__(message)
         self.status = status
         self.permanent = permanent  # clé refusée, modèle inconnu : inutile de réessayer tel quel
+        self.tools_unsupported = tools_unsupported  # le modèle ne sait pas appeler d'outils : réessayer sans
 
 
 def looks_like_key(key: str) -> bool:
@@ -41,6 +44,13 @@ def valid_model_id(model: str) -> bool:
 
 
 @dataclass(frozen=True)
+class ToolCall:
+    id: str
+    name: str
+    arguments: str  # JSON tel que produit par le modèle : à valider avant tout usage
+
+
+@dataclass(frozen=True)
 class ChatResult:
     text: str
     model: str
@@ -48,6 +58,17 @@ class ChatResult:
     completion_tokens: int
     cost_usd: float  # tel que facturé par OpenRouter (usage.cost), 0 pour un modèle gratuit
     finish_reason: str
+    tool_calls: tuple[ToolCall, ...] = ()
+
+    def assistant_message(self) -> dict[str, Any]:
+        """Le message de l'assistant à renvoyer au modèle avant les résultats d'outils (format OpenAI)."""
+        msg: dict[str, Any] = {"role": "assistant", "content": self.text or ""}
+        if self.tool_calls:
+            msg["tool_calls"] = [
+                {"id": c.id, "type": "function", "function": {"name": c.name, "arguments": c.arguments}}
+                for c in self.tool_calls
+            ]
+        return msg
 
 
 @dataclass(frozen=True)
@@ -114,10 +135,20 @@ class OpenRouterClient:
                     raise OpenRouterError(
                         "Accès refusé par OpenRouter (403) : modèle ou clé non autorisés", 403, permanent=True
                     )
-                if resp.status_code == 404:
-                    raise OpenRouterError(
-                        "Modèle inconnu chez OpenRouter (404) : choisis-en un autre", 404, permanent=True
-                    )
+                if resp.status_code in (400, 404):
+                    detail = _error_detail(resp)
+                    if "tool" in detail and ("support" in detail or "no endpoints" in detail):
+                        raise OpenRouterError(
+                            "Ce modèle ne sait pas utiliser d'outils",
+                            resp.status_code,
+                            permanent=True,
+                            tools_unsupported=True,
+                        )
+                    if resp.status_code == 404:
+                        raise OpenRouterError(
+                            "Modèle inconnu chez OpenRouter (404) : choisis-en un autre", 404, permanent=True
+                        )
+                    raise OpenRouterError("Requête refusée par OpenRouter (400)", 400, permanent=True)
                 if resp.status_code == 429:
                     raise OpenRouterError("Trop de requêtes vers OpenRouter (429) : réessaie dans une minute", 429)
                 if resp.status_code >= 500:
@@ -152,27 +183,47 @@ class OpenRouterClient:
     def chat(
         self,
         model: str,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         max_tokens: int = 700,
         temperature: float = 0.3,
+        tools: list[dict[str, Any]] | None = None,
     ) -> ChatResult:
         if not self._key:
             raise OpenRouterError("Aucune clé OpenRouter enregistrée", permanent=True)
         if not valid_model_id(model):
             raise OpenRouterError("Identifiant de modèle invalide", permanent=True)
-        body = {
+        body: dict[str, Any] = {
             "model": model,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
             "usage": {"include": True},  # coût réel renvoyé avec la réponse
         }
+        if tools:
+            body["tools"] = tools
+            body["tool_choice"] = "auto"
         payload = self._request("POST", "/chat/completions", auth=True, body=body)
         return _parse_chat(payload, model)
 
 
 # ---------------------------------------------------------------------------- lecture tolérante
+def _error_detail(resp: httpx.Response) -> str:
+    """Message d'erreur d'OpenRouter, lu sur 4 Ko au plus, en minuscules (pour reconnaître un cas, pas l'afficher)."""
+    raw = b""
+    for chunk in resp.iter_bytes():
+        raw += chunk
+        if len(raw) > 4_096:
+            break
+    try:
+        payload = json.loads(raw[:4_096])
+    except (ValueError, RecursionError):
+        return raw[:500].decode("utf-8", "replace").lower()
+    err = payload.get("error") if isinstance(payload, dict) else None
+    message = err.get("message") if isinstance(err, dict) else None
+    return str(message or "").lower()[:500]
+
+
 def _price_per_million(value: Any) -> float | None:
     try:
         per_token = float(value)
@@ -245,6 +296,23 @@ def _parse_chat(payload: Any, model: str) -> ChatResult:
     raw_model = payload.get("model")
     used: str = raw_model if isinstance(raw_model, str) else model
     finish = choices[0].get("finish_reason")
+    calls: list[ToolCall] = []
+    raw_calls = message.get("tool_calls")
+    if isinstance(raw_calls, list):
+        for i, c in enumerate(raw_calls[:8]):
+            fn = _dict(c.get("function")) if isinstance(c, dict) else {}
+            name = fn.get("name")
+            args = fn.get("arguments")
+            if not isinstance(name, str) or not re.fullmatch(r"[a-z_]{1,40}", name):
+                continue
+            cid = c.get("id") if isinstance(c, dict) else None
+            calls.append(
+                ToolCall(
+                    id=str(cid)[:80] if cid else f"call_{i}",
+                    name=name,
+                    arguments=args[:20_000] if isinstance(args, str) else json.dumps(args or {})[:20_000],
+                )
+            )
     return ChatResult(
         text=content.strip(),
         model=used[:120],
@@ -252,4 +320,5 @@ def _parse_chat(payload: Any, model: str) -> ChatResult:
         completion_tokens=as_int(usage.get("completion_tokens")),
         cost_usd=cost_usd,
         finish_reason=str(finish or "")[:20],
+        tool_calls=tuple(calls),
     )

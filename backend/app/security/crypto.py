@@ -91,6 +91,28 @@ class Keyring:
     def needs_reencrypt(self, token: str) -> bool:
         return not token.startswith(f"{_PREFIX}:{self._active}:")
 
+    # ------------------------------------------------------------ fichiers (coffre)
+    # Format binaire versionné : b"BKV1" | len(kid) (1 octet) | kid | nonce (12) | chiffré+tag. Le contexte (AAD)
+    # lie le chiffré à son document : un fichier recopié sous un autre identifiant ne se déchiffre pas.
+    _BLOB_MAGIC = b"BKV1"
+
+    def encrypt_bytes(self, data: bytes, context: str) -> bytes:
+        kid = self._active.encode()
+        nonce = os.urandom(12)
+        ct = self._enc[self._active].encrypt(nonce, data, context.encode())
+        return self._BLOB_MAGIC + bytes([len(kid)]) + kid + nonce + ct
+
+    def decrypt_bytes(self, blob: bytes, context: str) -> bytes:
+        try:
+            if not blob.startswith(self._BLOB_MAGIC):
+                raise ValueError("format")
+            n = blob[4]
+            kid = blob[5 : 5 + n].decode("ascii")
+            body = blob[5 + n :]
+            return self._enc[kid].decrypt(body[:12], body[12:], context.encode())
+        except (ValueError, KeyError, IndexError, InvalidTag, UnicodeDecodeError) as exc:
+            raise CryptoError("Déchiffrement impossible") from exc
+
     # ------------------------------------------------------------ index aveugle
     def blind_index(self, value: str, context: str) -> str:
         msg = f"{context}\x00{normalize_identifier(value)}".encode()

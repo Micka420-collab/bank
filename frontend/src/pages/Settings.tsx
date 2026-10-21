@@ -2,7 +2,7 @@
 // sont repliés tant qu'on n'en a pas besoin.
 
 import { useEffect, useState, type FormEvent } from "react";
-import { api, useApi, type Account, type AccountKind, type BudgetResponse, type Me } from "../api";
+import { api, useApi, type Account, type AccountKind, type BudgetResponse, type ConsentView, type Me } from "../api";
 import { Icon } from "../components/Icon";
 import { Segmented } from "../components/Segmented";
 import { EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
@@ -37,6 +37,7 @@ export function Settings({ me, onMeChange }: { me: Me; onMeChange: () => void })
       <Accounts />
       <BudgetSettings />
       <Appearance />
+      <Privacy />
       <Security me={me} onChange={onMeChange} />
       <Audit />
     </>
@@ -130,6 +131,49 @@ function Accounts() {
         {error && <p className="error" role="alert" style={{ marginTop: "0.75rem" }}>{error}</p>}
         <div className="actions"><button className={`btn${busy ? " is-loading" : ""}`} disabled={busy}>Ajouter le compte</button></div>
       </form>
+      )}
+    </section>
+  );
+}
+
+// ------------------------------------------------------------------ confidentialité
+// Un accord par finalité, lisible, daté, révocable : l'effet est immédiat (aucun traitement ne démarre sans).
+export function Privacy() {
+  const consents = useApi<ConsentView[]>("/api/consents");
+  const [busy, error, run] = useAsyncAction();
+  const toggle = (c: ConsentView) =>
+    void run(async () => {
+      await api(`/api/consents/${c.purpose}`, { method: "PUT", body: { granted: !c.granted } });
+      consents.reload();
+    });
+  return (
+    <section className="card section" aria-labelledby="privacy-title">
+      <div className="card-head">
+        <h2 id="privacy-title">Confidentialité</h2>
+        <a className="btn link" href="#/memoire">Ce que l'assistant retient</a>
+      </div>
+      <p className="muted">Ce que Bank fait de plus avec tes données dépend de ton accord, finalité par finalité. Retirer un accord prend effet tout de suite.</p>
+      {error && <p className="error" role="alert">{error}</p>}
+      {!consents.data && <Loading />}
+      {consents.data && (
+        <ul className="consent-list">
+          {consents.data.map((c) => (
+            <li key={c.purpose}>
+              <div>
+                <b>{c.title}</b>
+                <p className="muted">{c.text}</p>
+                <span className="faint">
+                  {c.explicit && c.updated_at ? `${c.granted ? "Accordé" : "Refusé"} le ${shortDate(c.updated_at)}` : c.granted ? "Actif par défaut" : "Pas encore demandé"}
+                </span>
+              </div>
+              <label className="switch">
+                <input type="checkbox" role="switch" checked={c.granted} disabled={busy} onChange={() => toggle(c)}
+                       aria-label={`${c.title} : ${c.granted ? "accordé" : "refusé"}`} />
+                <span aria-hidden="true" />
+              </label>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );

@@ -2896,3 +2896,453 @@ input[aria-invalid="true"] {
   --brand: var(--accent);
   color: var(--on-accent);
 }
+
+/* ------------------------------------------------------------------ mémoire de l'assistant
+   Le « § » est le vrai séparateur des carnets (une entrée = un fait) : c'est la marque visuelle de la mémoire. */
+.memory-mark {
+  font-weight: 750;
+  color: var(--accent);
+  line-height: 1;
+  flex: none;
+}
+.assistant-head-actions {
+  display: flex;
+  gap: 0.15rem;
+  flex: none;
+}
+.assistant-head > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.assistant-head h2 {
+  white-space: nowrap;
+}
+.btn.xs {
+  min-height: 2rem;
+  min-width: 2rem;
+  padding: 0.25rem 0.4rem;
+  font-size: var(--t-xs);
+}
+.btn.ghost.is-on {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.memory-consent {
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: var(--accent-soft);
+  border-radius: var(--r-m);
+  padding: 0.9rem 1rem;
+  display: grid;
+  gap: 0.6rem;
+}
+.memory-consent h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-size: var(--t-md);
+}
+.memory-consent p {
+  font-size: var(--t-sm);
+  line-height: 1.55;
+}
+.memory-consent .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.memory-notes {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+.memory-notes li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--r-s);
+  background: var(--surface);
+  border: 1px dashed color-mix(in srgb, var(--accent) 40%, var(--line));
+  font-size: var(--t-sm);
+  animation: note-in var(--d-slow) var(--ease-out);
+}
+.memory-notes li.is-undone {
+  opacity: 0.6;
+  border-style: solid;
+  border-color: var(--line);
+}
+.memory-notes li.is-undone .memory-note-text {
+  text-decoration: line-through;
+}
+.memory-note-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.memory-notes .btn.link {
+  font-size: var(--t-xs);
+  gap: 0.2rem;
+  white-space: nowrap;
+}
+.memory-notes .btn.link .icon {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+@keyframes note-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+.assistant-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.assistant-feedback {
+  display: inline-flex;
+  gap: 0.1rem;
+}
+.assistant-feedback .icon {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+.assistant-note {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+.assistant-note input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-sm);
+}
+.assistant-resumed,
+.assistant-divider {
+  font-size: var(--t-xs);
+  text-align: center;
+}
+.assistant-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.assistant-divider::before,
+.assistant-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--line);
+}
+.assistant-foot a {
+  color: inherit;
+}
+
+/* page « Ce que Bank retient » */
+.memory-state {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.memory-state::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+.memory-state.is-on {
+  background: var(--positive-soft);
+  color: var(--positive);
+}
+.memory-state.is-on::before {
+  background: var(--positive);
+}
+.memory-off p {
+  max-width: 60ch;
+  line-height: 1.6;
+}
+.memory-books {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 1.25rem;
+  margin-top: 2.5rem;
+}
+.memory-books > .card.section {
+  margin: 0;
+}
+.memory-book {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+.memory-book .card-head {
+  margin-bottom: 0;
+}
+.memory-hint {
+  font-size: var(--t-sm);
+}
+.memory-gauge {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.memory-gauge span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width var(--d-slow) var(--ease-out);
+}
+.memory-gauge.is-full span {
+  background: var(--warning);
+}
+.memory-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.memory-entry {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: start;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--line);
+}
+.memory-entry:first-child {
+  border-top: 0;
+}
+.memory-entry .memory-mark {
+  padding-top: 0.15rem;
+}
+.memory-entry-body p {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.memory-entry-body .faint {
+  font-size: var(--t-xs);
+}
+.memory-entry.is-pinned .memory-mark {
+  color: var(--ink);
+}
+.memory-entry.is-blocked .memory-entry-body p {
+  color: var(--negative);
+  text-decoration: line-through;
+}
+.memory-entry-actions {
+  display: flex;
+  gap: 0.1rem;
+}
+.memory-entry-actions .icon {
+  width: 1rem;
+  height: 1rem;
+}
+.memory-edit {
+  display: grid;
+  gap: 0.5rem;
+}
+.memory-edit textarea,
+.memory-add input {
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.memory-edit .actions,
+.memory-proposals .actions,
+.conversation-list .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+}
+.memory-add {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.memory-add input {
+  flex: 1;
+  min-width: 0;
+}
+.memory-empty {
+  font-size: var(--t-sm);
+}
+.memory-proposals,
+.conversation-list,
+.consent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.memory-proposals li,
+.consent-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--line);
+}
+.memory-proposals li:first-child,
+.consent-list li:first-child,
+.conversation-list li:first-child {
+  border-top: 0;
+}
+.memory-old {
+  color: var(--ink-3);
+  text-decoration: line-through;
+  margin-top: 0.3rem;
+}
+.memory-new {
+  color: var(--ink);
+  margin-top: 0.2rem;
+}
+.memory-old,
+.memory-new {
+  overflow-wrap: anywhere;
+}
+.conversation-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.4rem 1rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--line);
+}
+.conversation-id {
+  display: grid;
+  gap: 0.15rem;
+}
+.conversation-id p {
+  font-size: var(--t-sm);
+  margin-top: 0.2rem;
+}
+.conversation-replay {
+  grid-column: 1 / -1;
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0.75rem;
+  border-radius: var(--r-m);
+  background: var(--surface-2);
+  display: grid;
+  gap: 0.6rem;
+  max-height: 28rem;
+  overflow-y: auto;
+}
+.conversation-replay li {
+  display: block;
+  padding: 0.55rem 0.75rem;
+  border: 0;
+  border-radius: var(--r-s);
+  background: var(--surface);
+  font-size: var(--t-sm);
+  line-height: 1.55;
+}
+.conversation-replay li.is-user {
+  justify-self: end;
+  max-width: 85%;
+  background: var(--accent-soft);
+}
+.consent-list p {
+  font-size: var(--t-sm);
+  margin: 0.2rem 0;
+  max-width: 62ch;
+}
+.consent-list .faint {
+  font-size: var(--t-xs);
+}
+.switch {
+  position: relative;
+  flex: none;
+  width: 2.75rem;
+  height: 1.6rem;
+  margin-top: 0.15rem;
+}
+.switch input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.switch span {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transition: background var(--d-fast);
+  pointer-events: none;
+}
+.switch span::after {
+  content: "";
+  position: absolute;
+  top: 0.2rem;
+  left: 0.2rem;
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  transition: transform var(--d-base) var(--ease-out);
+}
+.switch input:checked + span {
+  background: var(--accent);
+}
+.switch input:checked + span::after {
+  transform: translateX(1.15rem);
+}
+.switch input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.switch input:disabled + span {
+  opacity: 0.55;
+}
+@media (max-width: 760px) {
+  .conversation-list li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .memory-proposals li {
+    flex-direction: column;
+  }
+  /* Sur téléphone, le texte d'une entrée prend toute la largeur ; ses actions passent dessous. */
+  .memory-entry {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .memory-entry-actions {
+    grid-column: 2;
+    margin-top: -0.25rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .memory-notes li,
+  .memory-gauge span,
+  .switch span::after {
+    animation: none;
+    transition: none;
+  }
+}

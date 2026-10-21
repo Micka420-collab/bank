@@ -21,6 +21,7 @@ from app.api import (
     assistant,
     auth,
     banks,
+    consents,
     decisions,
     deps,
     documents,
@@ -28,6 +29,7 @@ from app.api import (
     imports,
     initiatives,
     insights,
+    memory,
     planning,
     system,
     transactions,
@@ -99,6 +101,28 @@ async def _planning_loop(app: FastAPI) -> None:
             log.exception("synchronisation du planning en échec")
 
 
+def _housekeeping_once(app: FastAPI, today: date) -> dict[str, int]:
+    with app.state.sessionmaker() as db:
+        report = assistant_service.housekeeping(db, today=today, make_client=app.state.llm_client_factory)
+        db.commit()
+        return report
+
+
+async def _housekeeping_loop(app: FastAPI) -> None:
+    """Toutes les heures : conversations au-delà de la durée choisie effacées, conversations endormies fermées et
+    relues (l'assistant apprend même si tu n'as pas cliqué « Nouvelle conversation »)."""
+    delay = 300.0
+    while True:
+        await asyncio.sleep(delay)
+        delay = 3600 + random.uniform(0, 300)  # noqa: S311  # nosec B311
+        try:
+            report = await asyncio.to_thread(_housekeeping_once, app, date.today())  # noqa: DTZ011
+            if any(report.values()):
+                log.info("entretien : %s", report)
+        except Exception:
+            log.exception("entretien en échec")
+
+
 async def _sync_loop(app: FastAPI) -> None:
     hours = app.state.settings.sync_interval_hours
     while True:
@@ -130,6 +154,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if settings.energy_enabled:
             tasks.append(asyncio.create_task(_energy_loop(app)))
         tasks.append(asyncio.create_task(_planning_loop(app)))
+        tasks.append(asyncio.create_task(_housekeeping_loop(app)))
         # Le serveur MCP a son propre cycle de vie (gestionnaire de sessions HTTP) : on l'imbrique.
         async with mcp_mount.running() if mcp_mount else contextlib.nullcontext():
             yield
@@ -168,6 +193,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         auth,
         accounts,
         assistant,
+        memory,
+        consents,
         transactions,
         imports,
         insights,

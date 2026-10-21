@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -484,3 +485,267 @@ class MerchantHint(Base):
     category_slug: Mapped[str] = mapped_column(String(40))
     model: Mapped[str] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+# ---------------------------------------------------------------------------- consentements (par finalité)
+class Consent(Base):
+    """Ton accord pour une finalité précise (mémoire de l'assistant, lecture de documents par un modèle externe,
+    conservation de pièces sensibles, veille). Révocable à tout moment : l'effet est immédiat."""
+
+    __tablename__ = "consents"
+
+    purpose: Mapped[str] = mapped_column(String(32), primary_key=True)
+    granted: Mapped[bool] = mapped_column(Boolean, default=False)
+    wording_version: Mapped[int] = mapped_column(Integer, default=1)  # texte auquel tu as dit oui
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+
+# ---------------------------------------------------------------------------- coffre-fort de documents
+class VaultDocument(Base):
+    """Un document que tu as confié à Bank : métadonnées et texte chiffrés, fichier dans VaultBlob."""
+
+    __tablename__ = "vault_documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(24), index=True)  # payslip | tax_notice | identity | invoice…
+    title: Mapped[str] = mapped_column(EncryptedText("vault.title"))
+    filename: Mapped[str] = mapped_column(EncryptedText("vault.filename"))
+    mime: Mapped[str] = mapped_column(String(40))
+    size: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64), unique=True)  # même fichier déposé deux fois : un seul document
+    pages: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(12), default="to_review")  # to_review | verified
+    sensitive: Mapped[bool] = mapped_column(Boolean, default=False)
+    source: Mapped[str] = mapped_column(String(12), default="upload")  # upload | camera
+    method: Mapped[str] = mapped_column(String(12), default="none")  # pdf_text | ocr | none
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)  # confiance de la lecture (0 à 1)
+    text: Mapped[str | None] = mapped_column(EncryptedText("vault.text"))
+    issuer: Mapped[str | None] = mapped_column(EncryptedText("vault.issuer"))
+    document_date: Mapped[date | None] = mapped_column(Date)
+    expires_on: Mapped[date | None] = mapped_column(Date, index=True)
+    retention_until: Mapped[date | None] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    verified_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+    fields: Mapped[list[VaultField]] = relationship(back_populates="document", cascade="all, delete-orphan")
+
+
+class VaultBlob(Base):
+    """Le fichier lui-même (et sa vignette), chiffrés AES-256-GCM avec l'identifiant du document en AAD."""
+
+    __tablename__ = "vault_blobs"
+
+    document_id: Mapped[int] = mapped_column(ForeignKey("vault_documents.id", ondelete="CASCADE"), primary_key=True)
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    thumb: Mapped[bytes | None] = mapped_column(LargeBinary)
+
+
+class VaultField(Base):
+    """Une valeur lue dans un document, liée à sa source ; tu peux la corriger (l'originale est gardée)."""
+
+    __tablename__ = "vault_fields"
+    __table_args__ = (UniqueConstraint("document_id", "key", name="uq_vault_field"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("vault_documents.id", ondelete="CASCADE"), index=True)
+    key: Mapped[str] = mapped_column(String(40))
+    value: Mapped[str] = mapped_column(EncryptedText("vault.field"))  # JSON
+    original: Mapped[str | None] = mapped_column(EncryptedText("vault.field_original"))  # JSON, avant correction
+    evidence: Mapped[str | None] = mapped_column(EncryptedText("vault.field_evidence"))  # extrait du texte
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    source: Mapped[str] = mapped_column(String(12), default="extraction")  # extraction | user
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+    document: Mapped[VaultDocument] = relationship(back_populates="fields")
+
+
+# ---------------------------------------------------------------------------- démarches
+class Procedure(Base):
+    """Une démarche suivie de bout en bout. Le contenu (champs, pièces, revue) est chiffré ; l'étape est en clair
+    pour le tableau de bord. « Envoyée » n'est possible qu'avec une validation liée à l'empreinte du dossier."""
+
+    __tablename__ = "procedures"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    template: Mapped[str] = mapped_column(String(32), index=True)
+    title: Mapped[str] = mapped_column(EncryptedText("procedure.title"))
+    stage: Mapped[str] = mapped_column(String(12), default="discover", index=True)
+    data: Mapped[str] = mapped_column(EncryptedText("procedure.data"))  # JSON : champs, pièces, notes
+    approval: Mapped[str | None] = mapped_column(EncryptedText("procedure.approval"))  # JSON : empreinte, date
+    reference: Mapped[str | None] = mapped_column(EncryptedText("procedure.reference"))  # n° de dossier, accusé
+    submission_key: Mapped[str | None] = mapped_column(String(64), unique=True)  # anti double envoi
+    opportunity_key: Mapped[str | None] = mapped_column(String(160), index=True)
+    deadline: Mapped[date | None] = mapped_column(Date, index=True)
+    next_check: Mapped[date | None] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+    submitted_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    closed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+    events: Mapped[list[ProcedureEvent]] = relationship(
+        back_populates="procedure", cascade="all, delete-orphan", order_by="ProcedureEvent.id"
+    )
+
+
+class ProcedureEvent(Base):
+    """Fil de la démarche : chaque étape, correction, validation, envoi — traçable."""
+
+    __tablename__ = "procedure_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    procedure_id: Mapped[int] = mapped_column(ForeignKey("procedures.id", ondelete="CASCADE"), index=True)
+    ts: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    kind: Mapped[str] = mapped_column(String(24))
+    detail: Mapped[str] = mapped_column(EncryptedText("procedure.event"))  # JSON
+
+    procedure: Mapped[Procedure] = relationship(back_populates="events")
+
+
+# ---------------------------------------------------------------------------- opportunités et valeur obtenue
+class OpportunityState(Base):
+    """Ce que tu as décidé d'une opportunité : prise (avec la démarche liée), écartée, ou à revoir plus tard."""
+
+    __tablename__ = "opportunity_states"
+
+    key: Mapped[str] = mapped_column(String(160), primary_key=True)
+    status: Mapped[str] = mapped_column(String(10))  # started | dismissed | snoozed | done
+    until: Mapped[date | None] = mapped_column(Date)
+    procedure_id: Mapped[int | None] = mapped_column(ForeignKey("procedures.id", ondelete="SET NULL"))
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+
+class ValueEvent(Base):
+    """Valeur produite par Bank : une estimation (au départ d'une démarche) ou un gain confirmé (argent reçu,
+    dépense arrêtée). Les deux ne se mélangent jamais dans les totaux."""
+
+    __tablename__ = "value_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    opportunity_key: Mapped[str] = mapped_column(String(160), index=True)
+    kind: Mapped[str] = mapped_column(String(10))  # estimated | confirmed
+    amount_cents: Mapped[int] = mapped_column(BigInteger)
+    period: Mapped[str] = mapped_column(String(8))  # once | month | year
+    on_date: Mapped[date] = mapped_column(Date)
+    label: Mapped[str] = mapped_column(EncryptedText("value.label"))
+    evidence: Mapped[str | None] = mapped_column(EncryptedText("value.evidence"))
+    source: Mapped[str] = mapped_column(String(8), default="user")  # user | auto
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+# ---------------------------------------------------------------------------- veille
+class WatchSource(Base):
+    """Une source surveillée : officielle (préréglée) ou ajoutée par toi. Jamais de donnée personnelle envoyée."""
+
+    __tablename__ = "watch_sources"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    slug: Mapped[str] = mapped_column(String(40), unique=True)
+    kind: Mapped[str] = mapped_column(String(10))  # rss | pypi
+    name: Mapped[str] = mapped_column(String(120))
+    url: Mapped[str] = mapped_column(String(500))
+    trust: Mapped[str] = mapped_column(String(12))  # officiel | secondaire | perso
+    interval_hours: Mapped[int] = mapped_column(Integer, default=24)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    builtin: Mapped[bool] = mapped_column(Boolean, default=False)
+    etag: Mapped[str | None] = mapped_column(String(200))
+    last_modified: Mapped[str | None] = mapped_column(String(80))
+    last_checked_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_ok_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_error: Mapped[str | None] = mapped_column(String(300))
+
+
+class WatchItem(Base):
+    """Une information trouvée : provenance, date de publication, première vue, dernière vérification, empreinte
+    du contenu (pour voir ce qui change), sujets reconnus. Jamais présentée comme une règle en vigueur."""
+
+    __tablename__ = "watch_items"
+    __table_args__ = (UniqueConstraint("source_id", "external_id", name="uq_watch_item"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("watch_sources.id", ondelete="CASCADE"), index=True)
+    external_id: Mapped[str] = mapped_column(String(64))  # empreinte du guid / lien
+    title: Mapped[str] = mapped_column(String(300))
+    summary: Mapped[str] = mapped_column(Text, default="")
+    url: Mapped[str] = mapped_column(String(500))
+    published_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    first_seen_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    last_verified_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    changed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    topics: Mapped[str] = mapped_column(String(300), default="[]")  # JSON
+    status: Mapped[str] = mapped_column(String(10), default="new")  # new | seen | dismissed
+
+
+# ---------------------------------------------------------------------------- mémoire de l'assistant
+class MemoryEntry(Base):
+    """Une entrée d'un des deux carnets (« user » : qui tu es ; « notes » : ton environnement financier).
+    Chiffrée ; épinglée = seul toi peux la modifier ou la retirer."""
+
+    __tablename__ = "memory_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store: Mapped[str] = mapped_column(String(8), index=True)
+    content: Mapped[str] = mapped_column(EncryptedText("memory.entry"))
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False)
+    origin: Mapped[str] = mapped_column(String(8), default="chat")  # chat | review | user
+    conversation_id: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+
+class MemoryProposal(Base):
+    """Ce que la relecture automatique voudrait modifier ou retirer (ou ajouter quand le carnet est plein) :
+    rien ne change sans ta validation. L'entrée visée est figée pour détecter une modification entre-temps."""
+
+    __tablename__ = "memory_proposals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store: Mapped[str] = mapped_column(String(8))
+    action: Mapped[str] = mapped_column(String(8))  # add | patch | remove
+    old_text: Mapped[str | None] = mapped_column(EncryptedText("memory.proposal_old"))
+    new_text: Mapped[str | None] = mapped_column(EncryptedText("memory.proposal_new"))
+    target_snapshot: Mapped[str | None] = mapped_column(EncryptedText("memory.proposal_target"))
+    reason: Mapped[str | None] = mapped_column(EncryptedText("memory.proposal_reason"))
+    conversation_id: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(10), default="pending")  # pending | approved | rejected
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class Conversation(Base):
+    """Une conversation avec l'assistant. La mémoire injectée est figée au début (même contexte du premier au
+    dernier message) ; titre et résumé viennent de la relecture."""
+
+    __tablename__ = "conversations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, index=True)
+    last_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, index=True)
+    title: Mapped[str | None] = mapped_column(EncryptedText("conversation.title"))
+    summary: Mapped[str | None] = mapped_column(EncryptedText("conversation.summary"))
+    model: Mapped[str] = mapped_column(String(120), default="")
+    memory_on: Mapped[bool] = mapped_column(Boolean, default=False)
+    memory_snapshot: Mapped[str | None] = mapped_column(EncryptedText("conversation.memory"))
+    user_turns: Mapped[int] = mapped_column(Integer, default=0)
+    reviewed_turns: Mapped[int] = mapped_column(Integer, default=0)
+    reviewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    closed: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    messages: Mapped[list[ConversationMessage]] = relationship(
+        back_populates="conversation", cascade="all, delete-orphan", order_by="ConversationMessage.id"
+    )
+
+
+class ConversationMessage(Base):
+    __tablename__ = "conversation_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
+    ts: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    role: Mapped[str] = mapped_column(String(10))  # user | assistant
+    content: Mapped[str] = mapped_column(EncryptedText("conversation.message"))
+    meta: Mapped[str] = mapped_column(Text, default="{}")  # modèle, coût, jetons, opérations de mémoire (sans contenu)
+    feedback: Mapped[str | None] = mapped_column(String(6))  # up | down
+    feedback_note: Mapped[str | None] = mapped_column(EncryptedText("conversation.feedback"))
+
+    conversation: Mapped[Conversation] = relationship(back_populates="messages")

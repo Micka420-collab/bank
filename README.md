@@ -169,9 +169,28 @@ mobile) et propose des enveloppes pour les marchands non classés (Opérations, 
 
 Ce que le modèle voit : par défaut le dossier **anonymisé** (marchands et montants, jamais un nom de particulier,
 un IBAN ou un numéro), ou **chiffres seuls** (aucun libellé), ou complet si tu le choisis. Ce que Bank garde : la
-clé chiffrée (jamais réaffichée, seul son début « sk-or-v1-ab12… » sert à la reconnaître), et pour chaque appel le
-modèle, les jetons et le coût — jamais le contenu de la question ni de la réponse. Deux plafonds (crédits par mois,
-appels par jour) l'arrêtent avant ta limite. Il explique et propose ; il ne classe ni ne modifie rien sans ton clic.
+clé chiffrée (jamais réaffichée, seul son début « sk-or-v1-ab12… » sert à la reconnaître), la conversation en cours
+(chiffrée), et pour chaque appel le modèle, les jetons et le coût — le journal d'audit ne contient jamais le texte
+échangé. Deux plafonds (crédits par mois, appels par jour) l'arrêtent avant ta limite, relecture comprise. Il
+explique et propose ; il ne classe ni ne modifie rien sans ton clic.
+
+### Un assistant qui se souvient de toi (à la manière d'Hermes Agent)
+
+Avec ton accord (demandé une fois, révocable dans Réglages › Confidentialité), l'assistant devient un compagnon
+qui apprend — tu peux même lui donner un prénom :
+
+- **Deux carnets courts** : « qui tu es » (situation, projets, préférences, façon de parler d'argent) et « ton
+  environnement financier » (habitudes, contraintes, ce qui marche). Ils sont relus au début de chaque conversation.
+- **Pendant la conversation**, il note ce qui compte (« fais plus court », « je pars au Japon en 2027 ») : chaque
+  écriture s'affiche sous sa réponse, avec **Annuler**. Il peut aussi retrouver une conversation passée et faire
+  calculer un achat par Bank (« je peux m'acheter… ? »).
+- **Relecture** toutes les 8 questions et à la fin d'une conversation : il retient ce qui mérite de l'être, en
+  tenant compte de tes 👍 / 👎. Elle ne fait qu'**ajouter** ; corriger ou effacer t'attend dans « À valider ».
+- **Tout est visible** dans « Ce que Bank retient » (Plus › Mémoire, ou l'icône du panneau) : corriger, épingler
+  (il ne pourra plus y toucher), effacer, relire ou supprimer une conversation, choisir combien de temps les garder,
+  tout oublier (mot de passe demandé).
+- **Jamais** d'IBAN, de numéro de carte, de sécurité sociale, de téléphone, d'e-mail, de code ni de consigne cachée :
+  filtrés à l'écriture **et** à la relecture. En mode « chiffres seuls », pas de mémoire du tout.
 
 ## Brancher HERMÈS (ton agent IA)
 

@@ -1,23 +1,55 @@
-"""« Demande à Bank » (OpenRouter, ta clé) : réglages, liste des modèles, question, catégories proposées."""
+"""« Demande à Bank » (OpenRouter, ta clé) : réglages, modèles, conversations (avec mémoire si tu l'as permis),
+retours sur les réponses, catégories proposées."""
 
 from __future__ import annotations
 
+import logging
+import threading
 import time
+from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, FastAPI, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from app.api.deps import AuthDep, DbDep, TodayDep, client_ip
+from app.models import Conversation
 from app.providers.openrouter import OpenRouterClient, OpenRouterError
 from app.security import audit
 from app.security.auth import verify_password
 from app.services import assistant
+from app.services import memory as memory_service
 
 router = APIRouter(prefix="/api/assistant", tags=["assistant"])
+log = logging.getLogger("bank")
 
 MODELS_CACHE_SECONDS = 12 * 3600
+_reviewing: set[int] = set()  # une seule relecture à la fois par conversation (pas de doublons en mémoire)
+_reviewing_lock = threading.Lock()
+
+
+def review_in_background(app: FastAPI, conversation_id: int, actor: str, today: date) -> None:
+    """Relecture qui apprend, hors requête, dans sa propre transaction. Une erreur ne remonte jamais à l'écran."""
+    with _reviewing_lock:
+        if conversation_id in _reviewing:
+            return
+        _reviewing.add(conversation_id)
+    try:
+        with app.state.sessionmaker() as db:
+            assistant.run_review(
+                db,
+                conversation_id=conversation_id,
+                actor=actor,
+                today=today,
+                make_client=app.state.llm_client_factory,
+            )
+            db.commit()
+    except Exception:
+        log.exception("relecture de la mémoire en échec")
+    finally:
+        with _reviewing_lock:
+            _reviewing.discard(conversation_id)
 
 
 class ConfigureIn(BaseModel):
@@ -43,7 +75,13 @@ class Turn(BaseModel):
 
 class AskIn(BaseModel):
     question: str = Field(min_length=1, max_length=2_000)
-    history: list[Turn] = Field(default_factory=list, max_length=12)
+    conversation_id: int | None = Field(default=None, ge=1)
+    history: list[Turn] = Field(default_factory=list, max_length=12)  # clients sans conversation enregistrée
+
+
+class FeedbackIn(BaseModel):
+    value: str | None = Field(default=None, pattern="^(up|down)$")
+    note: str | None = Field(default=None, max_length=300)
 
 
 def _raise(db: DbDep, exc: assistant.AssistantError) -> HTTPException:
@@ -152,20 +190,66 @@ async def test(request: Request, ctx: AuthDep, db: DbDep, today: TodayDep) -> di
 
 
 @router.post("/ask")
-async def ask(body: AskIn, request: Request, ctx: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
+async def ask(
+    body: AskIn, request: Request, background: BackgroundTasks, ctx: AuthDep, db: DbDep, today: TodayDep
+) -> dict[str, Any]:
     _limited(request)
     try:
-        return await run_in_threadpool(
+        result: dict[str, Any] = await run_in_threadpool(
             assistant.ask,
             db,
             actor=ctx.user.username,
             today=today,
             question=body.question,
+            conversation_id=body.conversation_id,
             history=[t.model_dump() for t in body.history],
             make_client=_factory(request),
         )
     except assistant.AssistantError as exc:
         raise _raise(db, exc) from exc
+    if result.get("review_due"):
+        db.commit()  # la relecture lit la conversation dans sa propre transaction : elle doit être écrite
+        background.add_task(review_in_background, request.app, result["conversation_id"], ctx.user.username, today)
+    return result
+
+
+@router.get("/conversations")
+def conversations(_: AuthDep, db: DbDep, limit: int = Query(default=30, ge=1, le=100)) -> list[dict[str, Any]]:
+    return memory_service.conversation_list(db, limit)
+
+
+@router.get("/conversations/{conversation_id}")
+def conversation(conversation_id: int, _: AuthDep, db: DbDep) -> dict[str, Any]:
+    conv = db.get(Conversation, conversation_id)
+    if conv is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation introuvable")
+    return memory_service.conversation_view(conv)
+
+
+@router.post("/conversations/{conversation_id}/close", status_code=204)
+def close(
+    conversation_id: int, request: Request, background: BackgroundTasks, ctx: AuthDep, db: DbDep, today: TodayDep
+) -> None:
+    found, review_due = assistant.close_conversation(db, conversation_id=conversation_id)
+    if not found:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation introuvable")
+    if review_due:
+        db.commit()
+        background.add_task(review_in_background, request.app, conversation_id, ctx.user.username, today)
+
+
+@router.delete("/conversations/{conversation_id}", status_code=204)
+def delete_conversation(conversation_id: int, ctx: AuthDep, db: DbDep) -> None:
+    if not assistant.delete_conversation(db, conversation_id=conversation_id, actor=ctx.user.username):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation introuvable")
+
+
+@router.put("/messages/{message_id}/feedback", status_code=204)
+def feedback(message_id: int, body: FeedbackIn, ctx: AuthDep, db: DbDep) -> None:
+    try:
+        memory_service.set_feedback(db, message_id, body.value, body.note, actor=ctx.user.username)
+    except memory_service.MemoryServiceError as exc:
+        raise HTTPException(exc.status, str(exc)) from exc
 
 
 @router.get("/hints")

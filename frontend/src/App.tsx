@@ -7,6 +7,7 @@ import { ErrorNote, Loading, ToastProvider } from "./components/ui";
 import { Aids } from "./pages/Aids";
 import { Connecteurs } from "./pages/Connecteurs";
 import { Login } from "./pages/Auth";
+import { Memory } from "./pages/Memory";
 import { Operations } from "./pages/Operations";
 import { Settings } from "./pages/Settings";
 import { Situation } from "./pages/Situation";
@@ -31,7 +32,7 @@ const TABS: { page: string; short: string; icon: IconName }[] = [
   { page: "patrimoine", short: "Patrimoine", icon: "wealth" },
   { page: "plus", short: "Plus", icon: "more" },
 ];
-const MORE = new Set(["aides", "connecteurs", "reglages", "plus"]);
+const MORE = new Set(["aides", "connecteurs", "reglages", "memoire", "plus"]);
 
 type Phase = "loading" | "setup" | "login" | "ready" | "offline";
 
@@ -103,6 +104,7 @@ export function App() {
             : page === "connecteurs" ? <Connecteurs bankResult={route.page === "banques" ? route.params.get("result") : null} />
             : page === "plus" ? <More username={me.username} onLogout={() => void logout()} />
             : page === "reglages" ? <Settings me={me} onMeChange={() => void refresh()} />
+            : page === "memoire" ? <Memory />
             : <Today />}
         </main>
       </div>
@@ -150,7 +152,8 @@ function More({ username, onLogout }: { username: string; onLogout: () => void }
       <ul className="more">
         <li><a href="#/aides"><b><Icon name="aids" /> Aides</b><span className="faint">CAF, France Travail, simulation de tes droits</span></a></li>
         <li><a href="#/connecteurs"><b><Icon name="connectors" /> Connecteurs</b><span className="faint">Banques, planning de travail, Linky, documents de l'État, agents IA</span></a></li>
-        <li><a href="#/reglages"><b><Icon name="settings" /> Réglages</b><span className="faint">Comptes, budget, sécurité, journal</span></a></li>
+        <li><a href="#/memoire"><b><Icon name="memory" /> Mémoire de l'assistant</b><span className="faint">Ce qu'il retient de toi, vos conversations</span></a></li>
+        <li><a href="#/reglages"><b><Icon name="settings" /> Réglages</b><span className="faint">Comptes, budget, confidentialité, sécurité, journal</span></a></li>
       </ul>
       <p className="muted" style={{ marginTop: "2rem" }}>{username} · <button className="btn link" onClick={onLogout}>Se déconnecter</button></p>
     </>
