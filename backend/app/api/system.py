@@ -12,7 +12,18 @@ from sqlalchemy import select
 
 from app.api.deps import AuthDep, DbDep, client_ip
 from app.db import utcnow
-from app.models import Account, AuditLog, Category, EnergyReading, OfficialFact, SavingsGoal, Transaction
+from app.models import (
+    Account,
+    AuditLog,
+    Category,
+    EnergyReading,
+    InitiativeState,
+    OfficialFact,
+    SavingsGoal,
+    Transaction,
+    WorkPlan,
+    WorkShift,
+)
 from app.security import audit
 from app.security.auth import verify_password
 
@@ -63,7 +74,7 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
         db.commit()
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Mot de passe incorrect")
     cats = {c.id: c.slug for c in db.scalars(select(Category))}
-    payload = {
+    payload: dict[str, Any] = {
         "exported_at": utcnow().isoformat(),
         "format": "bank-export/v1",
         "accounts": [
@@ -100,6 +111,22 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
         ],
         "official_facts": [
             {"kind": f.kind, "period": f.period, "fields": json.loads(f.data)} for f in db.scalars(select(OfficialFact))
+        ],
+        # Planning : les journées et le modèle de paie, jamais l'adresse privée de l'agenda.
+        "work_plan": next(
+            (
+                {"source": w.source, "label": w.label, "model": json.loads(w.model) if w.model else None}
+                for w in db.scalars(select(WorkPlan))
+            ),
+            None,
+        ),
+        "work_shifts": [
+            {"day": s.day.isoformat(), "hours": s.hours, "all_day": s.all_day, "title": s.title}
+            for s in db.scalars(select(WorkShift).order_by(WorkShift.day))
+        ],
+        "initiative_states": [
+            {"key": i.key, "status": i.status, "until": i.until.isoformat() if i.until else None, "note": i.note}
+            for i in db.scalars(select(InitiativeState))
         ],
     }
     audit.record(db, ctx.user.username, "export.done", transactions=len(payload["transactions"]))

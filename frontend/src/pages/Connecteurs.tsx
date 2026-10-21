@@ -15,6 +15,7 @@ import { BANK_BRANDS, brandOf, initials, matchBrand, searchAspsps, type BankBran
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
 import { AgentTokens } from "./Agents";
+import { Planning } from "./Planning";
 
 export function Connecteurs({ bankResult }: { bankResult: string | null }) {
   return (
@@ -24,6 +25,7 @@ export function Connecteurs({ bankResult }: { bankResult: string | null }) {
         <p className="muted">Branche tes sources en quelques clics : plus Bank en sait, plus ses conseils sont justes.</p>
       </div>
       <Banks result={bankResult} />
+      <Planning />
       <Linky />
       <Etat />
       <AgentTokens />

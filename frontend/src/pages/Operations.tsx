@@ -6,7 +6,7 @@ import { dayNumber, money, monthLabel, plural, shortDate } from "../format";
 type Page = { items: Transaction[]; total: number };
 const PAGE = 100;
 
-export function Operations() {
+export function Operations({ openImport = false }: { openImport?: boolean }) {
   const accounts = useApi<Account[]>("/api/accounts");
   const categories = useApi<Category[]>("/api/categories");
   const [q, setQ] = useState("");
@@ -14,7 +14,7 @@ export function Operations() {
   const [category, setCategory] = useState("");
   const [account, setAccount] = useState("");
   const [limit, setLimit] = useState(PAGE);
-  const [showImport, setShowImport] = useState(false);
+  const [showImport, setShowImport] = useState(openImport);
 
   const params = new URLSearchParams({ limit: String(limit) });
   if (query) params.set("q", query);
@@ -69,9 +69,17 @@ export function Operations() {
         {list.error && <ErrorNote message={list.error} onRetry={list.reload} />}
         {!list.data && !list.error && <Loading />}
         {list.data && list.data.total === 0 && (
-          <p className="muted">
-            {query || category || account ? "Aucune opération ne correspond." : "Aucune opération pour l'instant : importe un relevé pour commencer."}
-          </p>
+          query || category || account ? (
+            <p className="muted">Aucune opération ne correspond.</p>
+          ) : (
+            <div className="empty-inline">
+              <p className="muted">Aucune opération pour l'instant.</p>
+              <div className="actions" style={{ marginTop: "0.5rem" }}>
+                <button className="btn" onClick={() => setShowImport(true)}>Importer un relevé</button>
+                <a className="btn quiet" href="#/connecteurs">Connecter ma banque</a>
+              </div>
+            </div>
+          )
         )}
         {list.data && list.data.total > 0 && (
           <>
@@ -159,8 +167,19 @@ function ImportPanel({ accounts, onImported }: { accounts: Account[]; onImported
   const [accountId, setAccountId] = useState<string>(accounts[0] ? String(accounts[0].id) : "");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportResult | null>(null);
+  const [newName, setNewName] = useState("Compte courant");
   const [busy, error, run] = useAsyncAction();
   const toast = useToast();
+
+  const createAccount = (e: FormEvent) => {
+    e.preventDefault();
+    void run(async () => {
+      const a = await api<Account>("/api/accounts", { method: "POST", body: { name: newName.trim() || "Compte courant", kind: "checking", balance_cents: 0 } });
+      setAccountId(String(a.id));
+      toast(`Compte « ${a.name} » créé : tu peux importer son relevé.`);
+      onImported();
+    });
+  };
 
   const send = (dryRun: boolean) =>
     run(async () => {
@@ -188,9 +207,14 @@ function ImportPanel({ accounts, onImported }: { accounts: Account[]; onImported
 
   if (accounts.length === 0) {
     return (
-      <div className="notice">
-        Crée d'abord le compte qui reçoit ce relevé, dans <a href="#/reglages">Réglages</a>.
-      </div>
+      <form className="panel" onSubmit={createAccount} aria-label="Premier compte">
+        <p className="muted">Un relevé appartient à un compte : donne-lui un nom, le solde se calera sur le relevé.</p>
+        <div className="form-grid" style={{ marginTop: "0.75rem" }}>
+          <Field label="Nom du compte"><input value={newName} onChange={(e) => setNewName(e.target.value)} required maxLength={120} /></Field>
+        </div>
+        {error && <p className="error" role="alert">{error}</p>}
+        <div className="actions"><button className="btn" disabled={busy}>Créer le compte et continuer</button></div>
+      </form>
     );
   }
 

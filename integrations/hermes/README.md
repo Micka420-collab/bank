@@ -16,7 +16,7 @@ HERMÈS (192.168.1.112) ──HTTPS + jeton bnk_…──> reverse proxy ──>
 
 | Il peut | Il ne peut pas |
 |---|---|
-| Lire ton dossier (situation, mois en cours, aides, patrimoine, énergie, documents officiels, alertes) | Déplacer, virer, payer ou placer de l'argent : aucun outil ne le permet |
+| Lire ton dossier (situation, mois en cours, aides, patrimoine, énergie, documents officiels, paie prévue depuis ton planning, ce que Bank aimerait te demander, alertes) | Déplacer, virer, payer ou placer de l'argent : aucun outil ne le permet |
 | Répondre « je peux l'acheter ? » (oui, oui mais, à partir du…, dans N mois) et « où placer ? » avec les calculs de Bank | Inventer un chiffre : les verdicts et le plan viennent de Bank, il les explique |
 | Évaluer un achat ou une épargne avec la prévision de Bank | Changer son propre mandat (rôle, lignes rouges, seuil) : refusé côté serveur |
 | Mener ton onboarding et enregistrer tes réponses | Appliquer un réglage sans toi : il **propose**, tu valides dans Bank |
@@ -67,7 +67,7 @@ qu'ils restent chez toi, utilise `--deliver local` ou une messagerie chiffrée d
 
 | Outil | Portée | Rôle |
 |---|---|---|
-| `get_dossier` (`output: json\|markdown`) | read | Toute la situation, avec la provenance de chaque fait — à lire en premier |
+| `get_dossier` (`output: json\|markdown`) | read | Toute la situation, avec la provenance de chaque fait — à lire en premier. Contient `work` (employeur, jour de paie, paie prévue d'après le planning) et `bank_asks` (les cartes que Bank te montre) |
 | `get_month`, `get_alerts`, `get_aids`, `get_wealth` | read | Vues ciblées |
 | `spending_summary` (`months`) | read | Moyennes par catégorie, identifiants de catégories |
 | `list_transactions` | read:transactions | Opérations (libellés anonymisés ; refusé en mode agrégats) |

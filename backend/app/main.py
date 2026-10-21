@@ -25,7 +25,9 @@ from app.api import (
     documents,
     energy,
     imports,
+    initiatives,
     insights,
+    planning,
     system,
     transactions,
 )
@@ -38,6 +40,7 @@ from app.security.auth import SlidingWindowLimiter
 from app.security.crypto import Keyring, install_keyring
 from app.security.middleware import AccessLogMiddleware, BodyLimitMiddleware, SecurityHeadersMiddleware
 from app.services import energy as energy_service
+from app.services import planning as planning_service
 from app.services.bank_sync import sync_all
 from app.services.categories import seed_categories
 
@@ -73,6 +76,27 @@ async def _energy_loop(app: FastAPI) -> None:
             log.exception("synchronisation énergie en échec")
 
 
+def _planning_sync_once(app: FastAPI, today: date) -> int:
+    with app.state.sessionmaker() as db:
+        n = planning_service.sync(db, today, fetch=app.state.ics_fetcher)
+        db.commit()
+        return int(n)
+
+
+async def _planning_loop(app: FastAPI) -> None:
+    """L'agenda de travail change peu : une relecture par jour, peu après le démarrage puis toutes les 24 h."""
+    delay = 120.0
+    while True:
+        await asyncio.sleep(delay)
+        delay = 24 * 3600 + random.uniform(0, 1800)  # noqa: S311  # nosec B311
+        try:
+            count = await asyncio.to_thread(_planning_sync_once, app, date.today())  # noqa: DTZ011
+            if count:
+                log.info("planning : %s journées relues", count)
+        except Exception:
+            log.exception("synchronisation du planning en échec")
+
+
 async def _sync_loop(app: FastAPI) -> None:
     hours = app.state.settings.sync_interval_hours
     while True:
@@ -103,6 +127,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             tasks.append(asyncio.create_task(_sync_loop(app)))
         if settings.energy_enabled:
             tasks.append(asyncio.create_task(_energy_loop(app)))
+        tasks.append(asyncio.create_task(_planning_loop(app)))
         # Le serveur MCP a son propre cycle de vie (gestionnaire de sessions HTTP) : on l'imbrique.
         async with mcp_mount.running() if mcp_mount else contextlib.nullcontext():
             yield
@@ -133,8 +158,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.enablebanking = _build_enablebanking(settings)
     app.state.fiscal_client = FiscalClient(settings.fiscal_engine_url, settings.fiscal_token_value)
     app.state.energy_client_factory = energy_service.default_client
+    app.state.ics_fetcher = planning_service.fetch_ics
 
-    for r in (auth, accounts, transactions, imports, insights, banks, agents, decisions, energy, documents, system):
+    routers = (
+        auth,
+        accounts,
+        transactions,
+        imports,
+        insights,
+        banks,
+        agents,
+        decisions,
+        energy,
+        documents,
+        planning,
+        initiatives,
+        system,
+    )
+    for r in routers:
         app.include_router(r.router)
 
     # Serveur MCP pour les agents IA (HERMÈS). Même horloge que l'API (surchargeable en test).
@@ -172,7 +213,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         BodyLimitMiddleware,
         default_limit=256_000,
         upload_limit=settings.max_upload_bytes + 64_000,
-        upload_prefixes=("/api/imports", "/api/documents/preview"),
+        upload_prefixes=("/api/imports", "/api/documents/preview", "/api/planning/file"),
     )
     app.add_middleware(
         SecurityHeadersMiddleware,

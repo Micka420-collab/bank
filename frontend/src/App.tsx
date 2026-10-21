@@ -93,14 +93,14 @@ export function App() {
           </div>
         </nav>
         <main className="sheet" id="contenu" tabIndex={-1}>
-          {page === "operations" ? <Operations />
+          {page === "operations" ? <Operations openImport={route.params.get("import") === "1"} />
             : page === "aides" ? <Aids />
             : page === "patrimoine" ? <Wealth />
             : page === "situation" ? <Situation />
             : page === "connecteurs" ? <Connecteurs bankResult={route.page === "banques" ? route.params.get("result") : null} />
             : page === "plus" ? <More username={me.username} onLogout={() => void logout()} />
             : page === "reglages" ? <Settings me={me} onMeChange={() => void refresh()} />
-            : <Today totpEnabled={me.totp_enabled} />}
+            : <Today />}
         </main>
       </div>
       <nav className="tabbar" aria-label="Navigation">
@@ -121,7 +121,7 @@ function More({ username, onLogout }: { username: string; onLogout: () => void }
       <div className="page-head"><h1>Plus</h1></div>
       <ul className="more">
         <li><a href="#/aides"><b>Aides</b><span className="faint">CAF, France Travail, simulation de tes droits</span></a></li>
-        <li><a href="#/connecteurs"><b>Connecteurs</b><span className="faint">Banques, Linky, documents de l'État, agents IA</span></a></li>
+        <li><a href="#/connecteurs"><b>Connecteurs</b><span className="faint">Banques, planning de travail, Linky, documents de l'État, agents IA</span></a></li>
         <li><a href="#/reglages"><b>Réglages</b><span className="faint">Comptes, budget, sécurité, journal</span></a></li>
       </ul>
       <p className="muted" style={{ marginTop: "2rem" }}>{username} · <button className="btn link" onClick={onLogout}>Se déconnecter</button></p>

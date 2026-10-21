@@ -19,6 +19,8 @@ dependencies = [
   "segno>=1.6",
   "mcp>=2.3,<3",  # serveur MCP des agents IA (API MCPServer de la v2)
   "pypdf>=6.21,<7",  # lecture des documents officiels (texte seulement) ; 6.21 : plafonds configurables (apply_configuration)
+  "icalendar>=6,<7",  # planning de travail (agenda iCal), développement des répétitions via python-dateutil
+  "python-dateutil>=2.9",
 ]
 
 [project.optional-dependencies]
@@ -30,6 +32,7 @@ dev = [
   "mypy>=1.11",
   "bandit>=1.7",
   "pip-audit>=2.7",
+  "types-python-dateutil",
 ]
 
 [build-system]
@@ -77,7 +80,7 @@ disallow_untyped_decorators = false
 warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
-module = ["segno.*", "pyotp.*"]
+module = ["segno.*", "pyotp.*", "icalendar.*"]
 ignore_missing_imports = true
 
 [tool.bandit]

@@ -50,7 +50,7 @@ from app.models import (
     Transaction,
 )
 from app.security import audit
-from app.services import analytics, documents
+from app.services import analytics, documents, initiatives, planning
 from app.services import energy as energy_service
 
 EXPENSIVE_DEBT_RATE = Decimal(5)  # au-delà, rembourser rapporte plus qu'un livret ou un placement prudent
@@ -669,6 +669,8 @@ def build_dossier(db: Session, today: date, privacy: str = "redacted") -> dict[s
         "values": {"priorities": values.get("priorities"), "money_stress": values.get("money_stress")},
         "energy": energy_service.summary_for_agent(db, today),
         "official_documents": _official_documents(db, privacy),
+        "work": planning.summary_for_agent(db, today, analytics.salary_series(inputs.series)),
+        "bank_asks": initiatives.agent_view(db, today),
         "alerts": alerts(db, today, f),
     }
 

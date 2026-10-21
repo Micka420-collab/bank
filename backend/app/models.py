@@ -9,6 +9,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     Date,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -392,3 +393,49 @@ class OfficialFact(Base):
     title: Mapped[str] = mapped_column(String(120))
     data: Mapped[str] = mapped_column(EncryptedText("official.fact"))
     imported_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+# ---------------------------------------------------------------------------- planning de travail
+class WorkPlan(Base):
+    """Agenda de travail (iCal) relié à la paie : l'adresse privée est chiffrée, le modèle de paie aussi."""
+
+    __tablename__ = "work_plan"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(8), default="file")  # url | file
+    url: Mapped[str | None] = mapped_column(EncryptedText("planning.url"))
+    label: Mapped[str] = mapped_column(String(80), default="Planning")
+    tz: Mapped[str] = mapped_column(String(40), default="Europe/Paris")
+    model: Mapped[str | None] = mapped_column(EncryptedText("planning.model"))  # JSON PayModel
+    status: Mapped[str] = mapped_column(String(16), default="active")  # active | error
+    last_sync_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_error: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class WorkShift(Base):
+    """Une journée d'un événement de l'agenda (titre chiffré : il peut être personnel)."""
+
+    __tablename__ = "work_shifts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("work_plan.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column(Date, index=True)
+    start_day: Mapped[date] = mapped_column(Date)
+    hours: Mapped[float] = mapped_column(Float, default=0.0)
+    all_day: Mapped[bool] = mapped_column(Boolean, default=True)
+    title: Mapped[str] = mapped_column(EncryptedText("planning.title"))
+    uid_hash: Mapped[str] = mapped_column(String(32), default="")
+
+
+# ---------------------------------------------------------------------------- initiatives (« Bank te demande »)
+class InitiativeState(Base):
+    """Ce que tu as répondu à une carte : faite, remise à plus tard (jusqu'à une date) ou écartée."""
+
+    __tablename__ = "initiative_states"
+
+    key: Mapped[str] = mapped_column(String(160), primary_key=True)
+    status: Mapped[str] = mapped_column(String(10))  # done | snoozed | dismissed
+    until: Mapped[date | None] = mapped_column(Date)
+    note: Mapped[str | None] = mapped_column(String(40))  # réponse courte (« voulu », « inconnu », « terminé »)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
@@ -34,6 +34,7 @@ from app.models import (
     Transaction,
     WealthSnapshot,
 )
+from app.services import planning
 from app.services.categories import category_infos
 from app.services.settings_store import get_setting
 
@@ -118,6 +119,23 @@ def planned_expense_events(db: Session, today: date) -> list[UpcomingEvent]:
     return out
 
 
+def salary_series(series: Sequence[RecurringSeries]) -> RecurringSeries | None:
+    """La paie principale : le plus gros flux entrant récurrent classé « salaire »."""
+    candidates = [s for s in series if s.direction == "in" and s.category == "salaire"]
+    return max(candidates, key=lambda s: s.amount_cents) if candidates else None
+
+
+def with_predicted_salary(db: Session, today: date, series: list[RecurringSeries]) -> list[RecurringSeries]:
+    """Quand le planning permet de prévoir la prochaine paie, son montant remplace la médiane dans la prévision."""
+    salary = salary_series(series)
+    if salary is None:
+        return series
+    predicted = planning.predicted_amount_for(db, today, salary)
+    if predicted is None or predicted == salary.amount_cents:
+        return series
+    return [replace(s, amount_cents=predicted) if s.key == salary.key else s for s in series]
+
+
 def forecast_inputs(db: Session, today: date) -> ForecastInputs:
     accounts = budget_accounts(db)
     txns = load_txns(db, [a.id for a in accounts], today - timedelta(days=HISTORY_DAYS))
@@ -125,7 +143,7 @@ def forecast_inputs(db: Session, today: date) -> ForecastInputs:
         today=today,
         txns=txns,
         balance_cents=sum(a.balance_cents for a in accounts),
-        series=detect_recurring(txns, today),
+        series=with_predicted_salary(db, today, detect_recurring(txns, today)),
         categories=category_infos(db),
         savings_goal_cents=int(get_setting(db, "savings_goal_cents")),
         buffer_cents=int(get_setting(db, "buffer_cents")),

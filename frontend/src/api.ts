@@ -535,3 +535,69 @@ export type ParsedDocument = {
 };
 
 export type OfficialFact = { id: number; kind: string; period: string; title: string; fields: Record<string, unknown>; imported_at: string };
+
+// ------------------------------------------------------------------ initiatives (« Bank te demande »)
+export type CardAction = {
+  id: string;
+  label: string;
+  style: "primary" | "secondary" | "link";
+  effect: { type: string; [k: string]: unknown };
+};
+export type CardInput =
+  | { kind: "money"; placeholder?: string }
+  | { kind: "int"; minimum: number | null; maximum: number | null }
+  | { kind: "choice"; options: { value: string; label: string }[] }
+  | { kind: "multi"; options: { value: string; label: string }[]; max_items: number }
+  | { kind: "category"; options: { value: string; label: string }[] };
+export type Card = {
+  key: string;
+  kind: "question" | "notice" | "celebrate" | "tip";
+  priority: number;
+  title: string;
+  body: string;
+  why: string | null;
+  evidence: string | null;
+  topic: string;
+  input: CardInput | null;
+  actions: CardAction[];
+};
+export type Initiatives = { cards: Card[]; total: number; by_topic: Record<string, number> };
+export type ActResult = Initiatives & { result: string };
+
+// ------------------------------------------------------------------ planning de travail
+export type PayRule = { pattern: string; unit: "per_event" | "per_day" | "per_hour"; amount_cents: number; learned?: boolean };
+export type PayModel = { base_cents: number; base_learned: boolean; offset_months: 0 | 1; rules: PayRule[] };
+export type PayExtra = { pattern: string; unit: string; amount_cents: number; count: number; hours: number; total_cents: number; learned: boolean };
+export type PayPrediction = {
+  pay_date: string;
+  period_start: string;
+  period_end: string;
+  amount_cents: number;
+  base_cents: number;
+  extras: PayExtra[];
+  worked_days: number;
+  worked_hours: number;
+  shifts_in_period: number;
+};
+export type PlanningStatus = {
+  connected: boolean;
+  employer: string | null;
+  pay_day: number | null;
+  usual_pay_cents: number | null;
+  next_pay_date: string | null;
+  plan: {
+    source: "url" | "file";
+    label: string;
+    status: string;
+    last_sync_at: string | null;
+    last_error: string | null;
+    shifts: number;
+    coverage_start: string | null;
+    coverage_end: string | null;
+  } | null;
+  model: PayModel | null;
+  learned: (PayModel & { periods: number; residual_cents: number; note: string }) | null;
+  predictions: PayPrediction[];
+  upcoming: { day: string; title: string; hours: number; all_day: boolean }[];
+  imported?: number;
+};

@@ -1,9 +1,10 @@
 import { api, useApi, type AidsResponse, type BudgetResponse, type Category, type MonthForecast } from "../api";
 import { Decide } from "../components/Decide";
+import { Initiatives } from "../components/Initiatives";
 import { MonthChart } from "../components/MonthChart";
 import { Amount, ErrorNote, Loading, useToast } from "../components/ui";
+import { Welcome } from "../components/Welcome";
 import { amountOnly, dayNumber, longDate, money, monthLabel, plural, shortDate } from "../format";
-import { navigate } from "../router";
 
 function verdict(f: MonthForecast): string {
   if (f.status === "risk" && f.overdraft_date) {
@@ -19,7 +20,7 @@ function verdict(f: MonthForecast): string {
   return `Le mois passe sans découvert. Point bas : ${money(f.lowest_balance_cents, { whole: true })} le ${shortDate(f.lowest_balance_date)}.`;
 }
 
-export function Today({ totpEnabled }: { totpEnabled: boolean }) {
+export function Today() {
   const budget = useApi<BudgetResponse>("/api/budget");
   const aids = useApi<AidsResponse>("/api/aids");
   const cats = useApi<Category[]>("/api/categories");
@@ -38,47 +39,13 @@ export function Today({ totpEnabled }: { totpEnabled: boolean }) {
     budget.reload();
   };
 
-  if (isEmpty) {
-    return (
-      <div className="empty">
-        <h1>Bienvenue</h1>
-        <p className="muted">
-          Pour calculer ce que tu peux dépenser chaque jour, Bank a besoin de tes opérations : importe un relevé
-          (CSV ou OFX, toutes banques) ou connecte ta banque.
-        </p>
-        <div className="actions">
-          <button className="btn" onClick={() => navigate("operations")}>Importer un relevé</button>
-          <button className="btn quiet" onClick={() => navigate("connecteurs")}>Connecter ma banque</button>
-        </div>
-      </div>
-    );
-  }
+  if (isEmpty) return <Welcome onStarted={budget.reload} />;
 
   const perDay = f.safe_to_spend_per_day_cents;
   const unbudgeted = Object.entries(suggested).filter(([slug]) => !f.budgets.some((b) => b.slug === slug));
 
   return (
     <>
-      {!totpEnabled && (
-        <div className="notice warn" style={{ marginBottom: "1.5rem" }}>
-          Ton accès n'est protégé que par un mot de passe.{" "}
-          <a href="#/reglages">Active la double authentification</a>.
-        </div>
-      )}
-
-      {agent.data && agent.data.pending_proposals > 0 && (
-        <div className="notice" style={{ marginBottom: "1.5rem" }}>
-          Ton agent a {plural(agent.data.pending_proposals, "proposition", "propositions")} pour toi.{" "}
-          <a href="#/situation">Les examiner</a>
-        </div>
-      )}
-      {agent.data && agent.data.pending_proposals === 0 && agent.data.onboarding_percent < 60 && (
-        <div className="notice" style={{ marginBottom: "1.5rem" }}>
-          Ton agent ne connaît que {agent.data.onboarding_percent} % de ta situation : ses conseils seront meilleurs
-          avec quelques réponses de plus. <a href="#/situation">Compléter « Ma situation »</a>
-        </div>
-      )}
-
       <section className="today" aria-labelledby="today-title">
         <p className="today-lead" id="today-title">
           {perDay > 0 ? "Tu peux dépenser" : "Plus de marge ce mois-ci"}
@@ -89,6 +56,15 @@ export function Today({ totpEnabled }: { totpEnabled: boolean }) {
         <p className="muted">{allowanceSentence(f, settings.buffer_cents, settings.savings_goal_cents)}</p>
         <p className="verdict" data-status={f.status}>{verdict(f)}</p>
       </section>
+
+      {agent.data && agent.data.pending_proposals > 0 && (
+        <div className="notice" style={{ marginBottom: "1.5rem" }}>
+          Ton agent a {plural(agent.data.pending_proposals, "proposition", "propositions")} pour toi.{" "}
+          <a href="#/situation">Les examiner</a>
+        </div>
+      )}
+
+      <Initiatives onChanged={budget.reload} />
 
       <MonthChart
         history={f.history}

@@ -301,6 +301,12 @@ const ACTIONS: Record<string, string> = {
   "mcp.refused": "Action refusée à un agent",
   "mcp.auth_failed": "Jeton d'agent refusé",
   "agent.token.denied": "Création de jeton refusée (mot de passe)",
+  "initiative.act": "Réponse à une carte « Bank te demande »",
+  "planning.connect": "Agenda de travail relié",
+  "planning.disconnect": "Agenda de travail retiré",
+  "planning.model": "Règles de paie modifiées",
+  "planning.sync_manual": "Relecture de l'agenda demandée",
+  "planning.sync_failed": "Relecture de l'agenda en échec",
 };
 
 function Audit() {

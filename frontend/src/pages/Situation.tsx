@@ -16,9 +16,11 @@ import {
   type StoredAnswer,
   type Suggestion,
 } from "../api";
+import { Initiatives } from "../components/Initiatives";
 import { Markdown } from "../components/Markdown";
 import { ErrorNote, EuroInput, Loading, useAsyncAction, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
+import type { PlanningStatus } from "../api";
 
 // ------------------------------------------------------------------ libellés
 export function sourceLabel(source: string): string {
@@ -84,20 +86,24 @@ export function Situation() {
       </div>
 
       <section className="knowledge" aria-labelledby="gauge-title">
-        <p className="today-lead" id="gauge-title">Ce que ton agent sait de toi</p>
+        <p className="today-lead" id="gauge-title">Ce que Bank sait de toi</p>
         <div className="gauge" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={data.percent}
              aria-label="Complétude de ta situation">
           <i style={{ width: `${data.percent}%` }} />
         </div>
         <p className="muted">
-          <b>{data.percent} %</b> — {data.answered} réponses sur {data.total}. Les questions les plus utiles viennent en
-          premier ; chacune dit pourquoi elle compte. Tu peux aussi y répondre en discutant avec HERMÈS.
+          <b>{knowledgeLevel(data.percent)}</b> — {data.answered} réponses sur {data.total}. Bank te demande le reste
+          une question à la fois, en disant pourquoi ; tu peux aussi répondre en discutant avec HERMÈS.
         </p>
         <p className="faint">
           Profil de risque : <b>{RISK_LABEL[data.risk_profile.label]}</b>
           {data.risk_profile.capacity_limited && ` — capacité limitée : ${data.risk_profile.reason.toLowerCase()}`}.
         </p>
       </section>
+
+      <Knowledge data={data} onEdit={(s) => setSection(s)} />
+
+      <Initiatives onChanged={refresh} />
 
       {proposals.data && proposals.data.length > 0 && (
         <ProposalsInbox items={proposals.data} questions={data.questions} onDecided={refresh} />
@@ -145,6 +151,74 @@ export function Situation() {
       <DossierPreview />
       <Activity questions={data.questions} />
     </>
+  );
+}
+
+// ------------------------------------------------------------------ ce que Bank sait (lisible d'un coup d'œil)
+export function knowledgeLevel(percent: number): string {
+  if (percent >= 80) return "Bank te connaît bien";
+  if (percent >= 50) return "Bank te connaît";
+  if (percent >= 20) return "Bank commence à te connaître";
+  return "Bank ne te connaît pas encore";
+}
+
+function Knowledge({ data, onEdit }: { data: OnboardingResponse; onEdit: (section: string) => void }) {
+  const planning = useApi<PlanningStatus>("/api/planning");
+  const w = planning.data;
+  const employer = w?.employer && w.usual_pay_cents
+    ? `${w.employer} te verse ${money(w.usual_pay_cents, { whole: true })}${w.pay_day ? ` vers le ${w.pay_day}` : ""} de chaque mois` +
+      (w.predictions[0] ? ` ; prochaine paie prévue ${money(w.predictions[0].amount_cents, { whole: true })} le ${shortDate(w.predictions[0].pay_date)}` : "") + "."
+    : null;
+  const detected = data.suggestions
+    .map((s) => ({ s, q: data.questions.find((x) => x.id === s.question_id) }))
+    .filter((x): x is { s: Suggestion; q: Question } => Boolean(x.q) && !(x.q!.id in data.answers));
+  const bySection = data.sections.map((sec) => {
+    const qs = data.questions.filter((q) => q.section === sec.id && q.weight > 0);
+    const known = qs.filter((q) => q.id in data.answers);
+    return { ...sec, known, total: qs.length };
+  });
+  const jump = (id: string) => window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  return (
+    <section className="section fiche" aria-labelledby="fiche-title">
+      <h2 id="fiche-title">Ta fiche</h2>
+      <dl className="fiche-lines">
+        {(employer || detected.length > 0) && (
+          <div className="is-observed">
+            <dt>
+              Lu dans tes relevés
+              {detected.length > 0 && <button type="button" className="btn link" onClick={() => jump("asks-title")}>confirmer</button>}
+            </dt>
+            <dd>
+              {employer && <span className="fiche-fact">{employer}</span>}
+              {detected.map(({ s, q }) => (
+                <span key={q.id} className="fiche-fact is-probable" title={s.evidence}>
+                  <span className="faint">{SHORT_LABELS[q.id] ?? q.question}</span> {summarize(q, s.value)} <span className="faint">?</span>
+                </span>
+              ))}
+            </dd>
+          </div>
+        )}
+        {bySection.map((sec) => (
+          <div key={sec.id} className={sec.known.length === 0 ? "is-empty" : ""}>
+            <dt>
+              {sec.title}
+              <button type="button" className="btn link" onClick={() => { onEdit(sec.id); jump("q-title"); }}>
+                {sec.known.length === 0 ? "compléter" : "modifier"}
+              </button>
+            </dt>
+            <dd>
+              {sec.known.length === 0
+                ? <span className="faint">Rien encore ({sec.total} question{sec.total > 1 ? "s" : ""}).</span>
+                : sec.known.map((q) => (
+                    <span key={q.id} className="fiche-fact">
+                      <span className="faint">{SHORT_LABELS[q.id] ?? q.question}</span> {summarize(q, data.answers[q.id]!.value)}
+                    </span>
+                  ))}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 

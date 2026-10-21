@@ -14,9 +14,17 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
 - **Connecteurs** : banques en un clic (DSP2), compteur **Linky** (consommation réelle, facture annuelle estimée,
   rattrapage probable, pics), documents de l'**État** (avis d'impôt, attestations CAF et France Travail lus pour
   leurs chiffres — identifiants jetés), et les agents IA.
-- **Ma situation + agent IA** : un onboarding qui pré-remplit ce que tes relevés révèlent (salaire, loyer, crédits,
-  capacité d'épargne) et te demande le reste ; un serveur MCP gouverné pour qu'HERMÈS devienne ton gestionnaire
-  d'argent — il lit, calcule avec la prévision de Bank et propose, tu valides. Voir [integrations/hermes](integrations/hermes/README.md).
+- **Bank prend des initiatives** : une fiche à la fois sur la page du jour — « ton loyer, c'est bien 650 € ? »,
+  « NETFLIX, 13,49 € chaque mois, c'est voulu ? », « septembre : il t'est resté 540 €, on en met 260 de côté
+  chaque mois ? », « ton salaire est arrivé : c'est le moment du virement », « ton accès n'a pas de double
+  authentification »… Tu réponds d'un geste (ou « plus tard »), Bank apprend et ne redemande jamais la même chose.
+- **Planning de travail → paie prévue** : relie ton agenda (iCal) ; Bank connaît déjà ton employeur, ton jour de
+  paie et la paie habituelle depuis tes relevés, il ajoute tes astreintes, heures ou jours planifiés selon tes
+  règles (« astreinte = 180 € »), **apprend** les vrais montants sur tes paies passées, et met la paie prévue dans
+  la prévision du mois.
+- **Ma situation + agent IA** : ta fiche (ce que Bank sait, lu dans tes relevés ou déclaré), un questionnaire
+  posé une question à la fois ; un serveur MCP gouverné pour qu'HERMÈS devienne ton gestionnaire d'argent — il
+  lit, calcule avec la prévision de Bank et propose, tu valides. Voir [integrations/hermes](integrations/hermes/README.md).
 
 ## Architecture
 
@@ -29,11 +37,12 @@ HERMÈS ─────HTTPS + jeton bnk_… ──┘ (/mcp)              │ r
                                                    ▼                               ▼
                                          fiscal : OpenFisca France        api.enablebanking.com (banques)
                                          (aucun accès Internet)           conso.boris.sh (Linky / Enedis)
+                                                                          ton agenda iCal (https, hôte public)
 ```
 
 | Dossier | Contenu |
 |---|---|
-| `backend/app/domain` | Cœur métier pur, sans I/O : montants, normalisation des libellés, catégorisation, récurrences, prévision, aides, patrimoine |
+| `backend/app/domain` | Cœur métier pur, sans I/O : montants, normalisation des libellés, catégorisation, récurrences, prévision, aides, patrimoine, décisions, planning → paie, initiatives (cartes) |
 | `backend/app/importers` | CSV toutes banques (auto-détection), OFX 1.x/2.x sans parseur XML |
 | `backend/app/security` | Chiffrement AES-256-GCM par champ, index aveugles, Argon2id, TOTP, sessions, audit chaîné HMAC, middlewares |
 | `backend/app/providers` | Client Enable Banking (JWT RS256) |
@@ -111,6 +120,12 @@ OpenFisca France est sous licence AGPL-3.0 : rien à faire tant que le service r
   jour chaque nuit ; le jeton et le PRM sont chiffrés en base ; révocable ici ou chez Enedis. Enedis a changé son
   API fin 2026 : Bank lit l'ancien format et toute structure (date, valeur, unité) du nouveau ; en cas de format
   inconnu il le dit au lieu d'inventer.
+- **Planning de travail** : colle l'adresse privée iCal de ton agenda (Google Agenda › « Adresse secrète au
+  format iCal », Outlook › « Publier ») ou dépose un .ics. Bank garde les journées et les titres (chiffrés),
+  relit l'adresse chaque nuit, et calcule la prochaine paie : part fixe (la paie habituelle lue dans tes relevés)
+  + règles par mot-clé (par événement, par jour ou par heure). Dès quatre paies connues, il apprend les montants
+  réels par régression et les utilise s'ils collent à la réalité (écart médian < 5 %). La paie prévue remplace
+  la médiane dans la prévision du mois ; HERMÈS la voit (`work`), jamais l'agenda.
 - **État** : pas d'API ouverte aux particuliers (FranceConnect est réservé aux services agréés). Télécharge l'avis
   d'impôt (impots.gouv), l'attestation CAF ou France Travail, dépose le PDF : Bank montre les chiffres lus (revenu
   fiscal de référence, parts, taux de prélèvement ; droits CAF ; allocation et fin de droits), tu corriges, tu
@@ -118,6 +133,20 @@ OpenFisca France est sous licence AGPL-3.0 : rien à faire tant que le service r
   et le revenu N-2 de la simulation des aides en découlent ; une fin de droits proche déclenche une alerte. Le PDF
   est lu dans un processus séparé et confiné (CPU, mémoire, délai, sans secret ni réseau) : un fichier piégé ne
   peut rien atteindre.
+
+## Bank te demande (initiatives)
+
+Bank ne t'impose pas un formulaire : il remarque, demande une chose à la fois en disant pourquoi, et se tait
+quand tu dis « plus tard ». Les cartes viennent de ce qu'il lit : faits détectés à confirmer (salaire, loyer,
+crédits, foyer), prélèvements réguliers à reconnaître une fois (abonnements), marchands non classés (un geste
+classe tout et apprend la règle), changement de salaire, bilan du mois dans la première semaine (avec une épargne
+mensuelle proposée), « se payer en premier » le lendemain de la paie, bonnes nouvelles (trois mois d'historique,
+matelas constitué, objectif atteint), hygiène (double authentification, consentement bancaire qui expire, Linky
+muet, avis d'impôt de l'année disponible), et le planning (relier l'agenda, régler les règles, paie prévue).
+Chaque réponse est journalisée ; l'état (faite, remise à plus tard, écartée) est conservé par carte.
+
+Première ouverture : trois chemins — connecter sa banque, importer un relevé (le compte se crée sur place), ou
+« juste trois chiffres » (solde, revenu, loyer) pour un premier budget en trente secondes.
 
 ## Brancher HERMÈS (ton agent IA)
 
@@ -142,8 +171,8 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 453 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
-JSON-RPC MCP de bout en bout, intégration OpenFisca réelle), couverture 95 %, 24 tests front, mypy strict sans
+Qualité au moment de la livraison : 486 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+JSON-RPC MCP de bout en bout, intégration OpenFisca réelle), couverture 95 %, 31 tests front, mypy strict sans
 erreur, ruff, bandit, shellcheck et pip-audit propres, `npm audit` sans vulnérabilité, aucune violation CSP.
 
 ## Sauvegarde

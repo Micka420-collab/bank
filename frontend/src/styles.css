@@ -1412,6 +1412,296 @@ pre.code {
   justify-items: start;
 }
 
+/* ------------------------------------------------------------------ « Bank te demande » : la fiche bristol
+   Une fiche posée sur la page : bord gauche de la couleur du propos (plume = question, vert = bonne nouvelle,
+   ocre = remarque), lignes du cahier en fond. Elle entre quand on vient d'en traiter une : le mouvement répond
+   au geste, jamais au chargement. */
+.asks {
+  margin-top: 2rem;
+  max-width: 44rem;
+}
+.asks-stack {
+  display: grid;
+  gap: 0.75rem;
+}
+.ask {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--pen);
+  border-radius: 0 var(--radius-m) var(--radius-m) 0;
+  padding: 1rem 1.25rem 1.1rem;
+  background-image: repeating-linear-gradient(
+    transparent 0 calc(var(--row) - 1px),
+    color-mix(in srgb, var(--rule-faint) 70%, transparent) calc(var(--row) - 1px) var(--row)
+  );
+  background-origin: content-box;
+  animation: ask-in 220ms ease-out;
+}
+.ask.is-leaving {
+  animation: ask-out 220ms ease-in forwards;
+}
+.ask-celebrate {
+  border-left-color: var(--gain);
+}
+.ask-notice {
+  border-left-color: var(--warn);
+}
+.ask-tip {
+  border-left-color: var(--ink-faint);
+}
+.ask-kind {
+  font-size: var(--step--1);
+  color: var(--ink-faint);
+  margin-bottom: 0.2rem;
+}
+.ask-celebrate .ask-kind {
+  color: var(--gain);
+}
+.ask h3 {
+  font-size: var(--step-1);
+  line-height: 1.25;
+  max-width: 34ch;
+}
+.ask-body {
+  margin-top: 0.5rem;
+  color: var(--ink-soft);
+  max-width: 58ch;
+}
+.ask-evidence {
+  margin-top: 0.35rem;
+}
+.ask-why {
+  margin-top: 0.5rem;
+  font-size: var(--step--1);
+}
+.ask-why .btn.link {
+  font-size: inherit;
+  font-weight: 500;
+}
+.ask-actions {
+  margin-top: 0.9rem;
+}
+.ask-input {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+  justify-items: start;
+}
+.ask-input select,
+.ask-input input:not([type="radio"]) {
+  min-height: 2.5rem;
+}
+.ask-input .euro-field input {
+  width: 9rem;
+}
+.ask-input select {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+}
+.asks-more {
+  margin-top: 0.75rem;
+  font-size: var(--step--1);
+}
+.asks.compact .ask {
+  padding: 0.85rem 1rem;
+}
+@keyframes ask-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.4rem);
+  }
+}
+@keyframes ask-out {
+  to {
+    opacity: 0;
+    transform: translateX(1rem);
+  }
+}
+
+/* ------------------------------------------------------------------ première ouverture : trois chemins */
+.welcome {
+  display: grid;
+  gap: 1rem;
+  max-width: 60rem;
+  padding-top: 1rem;
+}
+.welcome-kicker {
+  color: var(--margin);
+  font-weight: 650;
+}
+.paths-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.path {
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+  text-align: left;
+  padding: 1.1rem 1.2rem 1.2rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-m);
+  cursor: pointer;
+  min-height: 11rem;
+}
+.path:hover,
+.path[aria-pressed="true"] {
+  border-color: var(--pen);
+  box-shadow: inset 0 0 0 1px var(--pen);
+}
+.path b {
+  font-size: var(--step-1);
+  font-weight: 650;
+}
+.path span {
+  color: var(--ink-soft);
+}
+.path small {
+  color: var(--pen);
+  font-weight: 600;
+  margin-top: auto;
+}
+.figures-form {
+  margin-top: 0.5rem;
+  max-width: 48rem;
+}
+.figures-form .euro-field input {
+  width: 100%;
+}
+.empty-inline {
+  padding: 1rem 0;
+}
+
+/* ------------------------------------------------------------------ ta fiche (ce que Bank sait) */
+.fiche-lines {
+  display: grid;
+  gap: 0.6rem;
+  max-width: 60rem;
+  margin: 0;
+}
+.fiche-lines > div {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--rule-faint);
+}
+.fiche-lines dt {
+  font-weight: 600;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+.fiche-lines dt .btn.link {
+  font-size: var(--step--1);
+  font-weight: 500;
+}
+.fiche-lines dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.25rem;
+}
+.fiche-lines .is-empty dt {
+  color: var(--ink-soft);
+}
+.fiche-fact .faint {
+  margin-right: 0.3rem;
+}
+.fiche-lines .is-observed {
+  background: var(--pen-wash);
+  border-radius: var(--radius-s);
+  padding: 0.6rem 0.75rem;
+  border-bottom: 0;
+}
+.fiche-fact.is-probable {
+  border-bottom: 1px dashed var(--ink-faint);
+}
+
+/* ------------------------------------------------------------------ planning de travail */
+.pay-forecast {
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--gain);
+  border-radius: 0 var(--radius-m) var(--radius-m) 0;
+  background: var(--surface);
+  max-width: 44rem;
+}
+.pay-figure {
+  font-size: var(--step-3);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 0.15rem 0 0.4rem;
+}
+.rules {
+  display: grid;
+  gap: 0.5rem;
+}
+.rule {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1.4fr) minmax(8rem, 1fr) 8rem auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+.rule input,
+.rule select {
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+}
+.rule .euro-field input {
+  width: 100%;
+}
+.upcoming-shifts summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+.plain-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+/* ------------------------------------------------------------------ chargement : lignes du cahier en attente */
+.skeleton {
+  display: grid;
+  gap: 0.6rem;
+  max-width: 40rem;
+}
+.skeleton > i {
+  display: block;
+  height: 0.9rem;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--rule-faint), var(--rule), var(--rule-faint));
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+.skeleton > i:nth-child(2) {
+  width: 80%;
+}
+.skeleton > i:nth-child(3) {
+  width: 55%;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
 /* ------------------------------------------------------------------ mobile */
 .tabbar {
   display: none;
@@ -1474,6 +1764,24 @@ pre.code {
   }
   .figures {
     gap: 1.25rem 2rem;
+  }
+  .paths-grid {
+    grid-template-columns: 1fr;
+  }
+  .path {
+    min-height: 0;
+  }
+  .rule {
+    grid-template-columns: 1fr 1fr;
+  }
+  .fiche-lines > div {
+    grid-template-columns: 1fr;
+  }
+  .ask h3 {
+    font-size: var(--step-0);
+  }
+  .ask .btn:not(.link) {
+    min-height: 2.75rem;
   }
 }
 

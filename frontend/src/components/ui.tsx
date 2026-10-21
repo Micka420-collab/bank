@@ -31,7 +31,13 @@ export function Amount({ cents, whole = false }: { cents: number; whole?: boolea
 }
 
 export function Loading({ what = "Chargement" }: { what?: string }) {
-  return <p className="muted">{what}…</p>;
+  // Trois lignes du cahier qui attendent l'encre, plutôt qu'un mot : le texte reste pour les lecteurs d'écran.
+  return (
+    <div className="skeleton" role="status" aria-live="polite">
+      <span className="sr-only">{what}…</span>
+      <i aria-hidden="true" /><i aria-hidden="true" /><i aria-hidden="true" />
+    </div>
+  );
 }
 
 export function ErrorNote({ message, onRetry }: { message: string; onRetry?: () => void }) {
