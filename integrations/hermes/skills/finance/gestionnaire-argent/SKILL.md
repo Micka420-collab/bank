@@ -114,6 +114,17 @@ dans Bank. Le prompt MCP `onboarding_interview` contient la même consigne.
    une liste de questions à poser (frais, versements, disponibilité), sans jamais te substituer à un conseiller
    agréé. Un objectif Bank correspondant peut être proposé (`propose_action`, `create_goal`).
 
+### H. Pistes et démarches
+
+1. `mcp_bank_get_opportunities` : les pistes sont déjà classées par Bank (gain net attendu sur un an). Présente
+   les trois premières : ce qui est en jeu, la chance, le temps, et pourquoi (`estimates`, `hypotheses`,
+   `sources` avec leur date). Dis « estimé » pour un montant estimé ; un droit se confirme auprès de l'organisme.
+2. La valeur obtenue (`confirmed_yearly_cents`) et l'en-cours (`estimated_yearly_cents`) ne s'additionnent
+   jamais. Si `gains_to_confirm` > 0 : invite Micka à confirmer dans Bank › Opportunités.
+3. `mcp_bank_get_procedures` : signale ce qui est `due` (à relancer), ce qui bloque (`contradictions`,
+   `missing_values`, `missing_pieces`, `pieces_to_verify`) et ce qui est prêt à valider. Tu ne valides ni ne
+   transmets jamais rien : c'est Bank › Démarches, par Micka.
+
 ### F. Décider : le cadre
 
 Suis `references/cadre-decision.md`. L'ordre par défaut : pas de découvert → matelas de sécurité → dette chère →

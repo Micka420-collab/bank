@@ -214,6 +214,52 @@ scans, reconnaissance de texte (Tesseract, en français), le tout dans des proce
 - **Photos sans traces** : position GPS, appareil et date de prise de vue sont retirés ; l'original n'est pas gardé.
 - **Portabilité** : export de tout le coffre en .zip (fichiers + valeurs + preuves), protégé par ton mot de passe.
 
+## Opportunités : ce que tu pourrais gagner, chiffré honnêtement
+
+Bank › **Opportunités** liste ce que tu pourrais récupérer, payer en moins, gagner, mieux placer ou anticiper,
+tiré de tes comptes, de tes documents et de règles datées : écart entre tes droits estimés et tes aides perçues,
+Complémentaire santé solidaire face à ta mutuelle, frais bancaires au-delà des plafonds légaux, abonnements,
+livret d'épargne populaire, épargne qui dort, découvert prévu, papiers qui expirent.
+
+- **Classées par gain net attendu** : ce que ça peut rapporter sur un an × la chance que ça marche − le temps que
+  ça te prend (une heure de ton temps compte pour 15 €, réglable).
+- **Expliquées** : pour chaque piste, ce qui est *constaté* dans tes données, ce qui est *estimé* par Bank, ce qui
+  est *supposé*, et les sources avec leur date de vérification.
+- **Un clic pour préparer la démarche** (préremplie), « Plus tard » ou « Pas pour moi ».
+- **Ce que Bank t'a fait gagner** : l'*obtenu* (constaté sur tes comptes, confirmé par toi) et l'*en cours*
+  (estimé) côte à côte, jamais additionnés. Quand un remboursement arrive ou qu'un prélèvement s'arrête, Bank te
+  le propose ; c'est toi qui confirmes.
+
+Bank n'est pas un conseiller financier agréé : ce sont des repères et des calculs, jamais des promesses.
+
+## Démarches : Bank prépare, tu transmets
+
+Bank › **Démarches** : prime d'activité (caf.fr), Complémentaire santé solidaire (ameli), réclamation de frais
+bancaires, résiliation d'un abonnement, ouverture d'un LEP, ou une démarche libre à suivre.
+
+1. **Préparer** : les valeurs sont préremplies depuis ton profil, tes comptes et ton coffre (tes trois derniers
+   bulletins : montant net social), chacune avec sa provenance et la ligne du document qui la prouve.
+2. **Vérifier** : une valeur qui contredit son justificatif bloque le dossier jusqu'à ce que les deux concordent ;
+   les pièces viennent du coffre (une pièce non vérifiée bloque aussi).
+3. **Relire et valider** : un écran récapitule exactement ce qui partira ; chaque conséquence et chaque engagement
+   se coche un par un ; ta validation porte sur cette version précise — un changement l'annule.
+4. **Transmettre** : c'est toi, sur le site officiel (étapes guidées, sources datées) ou par lettre (copie,
+   téléchargement), puis « Je l'ai transmis » — compté une seule fois.
+5. **Suivre** : prochain point daté, relance, médiateur bancaire après deux mois sans réponse, résultat.
+
+Bank ne transmet jamais rien à ta place, ne te demande jamais un mot de passe ni ton numéro de sécurité sociale
+(tu les saisis sur le site officiel).
+
+## Veille : ce qui change, pour toi
+
+Bank › **Veille** relève les actualités du ministère de l'Économie et les versions du moteur de calcul des aides
+(OpenFisca-France, comparé à la version qui tourne chez toi), plus les flux RSS que tu ajoutes. Chaque élément
+garde sa source, sa date de publication, sa dernière vérification et ses versions ; ceux qui touchent à ta
+situation passent en premier (le rapprochement se fait sur ton serveur, rien ne part). Si une règle des aides
+change après ta simulation, une piste te propose de la relancer. Les taux, barèmes et sources que Bank utilise
+affichent leur date de prochaine vérification et passent « à revérifier » quand elle est dépassée. La veille se
+coupe dans Réglages › Confidentialité.
+
 ## Brancher HERMÈS (ton agent IA)
 
 1. Bank › **Ma situation** : confirme ce que Bank a lu dans tes relevés, réponds aux questions les plus utiles.
@@ -237,11 +283,11 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 488 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
-JSON-RPC MCP de bout en bout, intégration OpenFisca réelle), couverture 95 %, 45 tests front (dont le parcours de
-première ouverture, la connexion bancaire, les graphiques et la connexion rapide), mypy strict sans erreur, ruff,
-bandit, shellcheck et pip-audit propres, `npm audit` sans vulnérabilité, aucune violation CSP, aucun débordement
-horizontal à 390 px (vérifié par Playwright sur chaque page).
+Qualité au moment de la livraison : 662 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, intégration OpenFisca réelle), couverture
+93 %, 75 tests front (parcours de première ouverture, coffre, démarches, opportunités, veille, assistant),
+mypy strict sans erreur, ruff et bandit propres, `pip-audit` et `npm audit` sans vulnérabilité connue, aucune
+erreur de console ni débordement horizontal à 390 px (vérifié par Playwright).
 
 ## Sauvegarde
 

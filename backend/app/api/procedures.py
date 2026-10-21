@@ -100,6 +100,15 @@ def set_fields(proc_id: int, body: FieldsIn, ctx: AuthDep, db: DbDep, today: Tod
         raise _http(exc) from exc
 
 
+@router.post("/{proc_id}/fields/{key}/restore")
+def restore_field(proc_id: int, key: str, ctx: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
+    try:
+        procedures.restore_field(db, proc_id, key[:40], actor=ctx.user.username, today=today)
+        return procedures.view(db, proc_id, today)
+    except procedures.ProcedureError as exc:
+        raise _http(exc) from exc
+
+
 @router.put("/{proc_id}/pieces/{piece_key}")
 def set_pieces(
     proc_id: int, piece_key: str, body: PiecesIn, ctx: AuthDep, db: DbDep, today: TodayDep

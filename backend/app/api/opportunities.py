@@ -34,7 +34,8 @@ class ConfirmIn(BaseModel):
 
 
 class SettingsIn(BaseModel):
-    time_value_cents_per_hour: int = Field(ge=0, le=50_000)
+    time_value_cents_per_hour: int | None = Field(default=None, ge=0, le=50_000)
+    priorities: list[str] | None = Field(default=None, max_length=5)
 
 
 def _http(exc: opportunities.OpportunityError | procedures.ProcedureError) -> HTTPException:
@@ -87,6 +88,9 @@ def confirm(body: ConfirmIn, ctx: AuthDep, db: DbDep, today: TodayDep) -> None:
 @router.put("/settings", status_code=204)
 def settings(body: SettingsIn, ctx: AuthDep, db: DbDep) -> None:
     try:
-        opportunities.set_time_value(db, body.time_value_cents_per_hour, actor=ctx.user.username)
+        if body.time_value_cents_per_hour is not None:
+            opportunities.set_time_value(db, body.time_value_cents_per_hour, actor=ctx.user.username)
+        if body.priorities is not None:
+            opportunities.set_priorities(db, body.priorities, actor=ctx.user.username)
     except opportunities.OpportunityError as exc:
         raise _http(exc) from exc

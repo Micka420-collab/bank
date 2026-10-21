@@ -330,6 +330,26 @@ def set_fields(db: Session, proc_id: int, values: dict[str, Any], *, actor: str,
     return proc
 
 
+def restore_field(db: Session, proc_id: int, key: str, *, actor: str, today: date) -> Procedure:
+    """« Reprendre la valeur du justificatif » : la valeur redevient celle lue dans le document, provenance comprise."""
+    proc = _get(db, proc_id)
+    _ensure_open(proc)
+    tpl = _template(proc.template)
+    data = _data(proc)
+    _follow_documents(db, tpl, data)
+    entry = data["fields"].get(key)
+    prefilled = (entry or {}).get("prefilled")
+    if not prefilled:
+        raise ProcedureError("Cette valeur ne vient d'aucun document", 409)
+    data["fields"][key] = {**prefilled, "source": "vault", "prefilled": prefilled}
+    proc.data = json.dumps(data, ensure_ascii=False)
+    _event(proc, "fields", keys=[key], restored=True)
+    _restage(db, proc, today)
+    db.flush()
+    audit.record(db, actor, "procedure.restore", procedure=proc.id)
+    return proc
+
+
 def set_pieces(
     db: Session, proc_id: int, piece_key: str, document_ids: list[int], *, actor: str, today: date
 ) -> Procedure:

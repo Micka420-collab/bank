@@ -262,6 +262,8 @@ def test_fees_over_the_caps_become_a_complaint_then_a_confirmed_refund(app, worl
     again = world.post("/api/opportunities/start", json={"key": "fees:2026-10"}).json()["procedure_id"]
     assert again == proc_id  # une opportunité = une démarche
     proc = world.get(f"/api/procedures/{proc_id}").json()
+    assert proc["title"] == "Contester les frais d'octobre 2026"  # avec l'élision
+    assert so._of("septembre 2026") == "de septembre 2026" and so._of("août 2026") == "d'août 2026"
     fields = {f["key"]: f for f in proc["fields"]}
     assert fields["montant"]["value"] == 1_790 and fields["motif"]["value"] == "plafond"
     assert fields["periode"]["value"] == "octobre 2026" and "8,90 €" in fields["detail"]["value"]
@@ -429,3 +431,43 @@ def test_confirm_checks_the_procedure_matches(app, world: TestClient) -> None:  
 )
 def test_fee_refund_recognition(label: str, expected: bool) -> None:
     assert bool(so._FEE_REFUND.search(label)) is expected
+
+
+def test_priorities_and_the_copilot_summary(app, world: TestClient) -> None:  # type: ignore[no-untyped-def]
+    assert (
+        world.put("/api/opportunities/settings", json={"priorities": ["epargne", "recuperer", "epargne"]}).status_code
+        == 204
+    )
+    assert _center(world)["priorities"] == ["epargne", "recuperer"]
+    assert world.put("/api/opportunities/settings", json={"priorities": ["loterie"]}).status_code == 422
+    _add(app, OCTOBER_FEES)
+    summary = world.get("/api/copilot/summary").json()
+    assert 1 <= len(summary["opportunities"]) <= 3 and summary["confirmations"] == 0
+    assert summary["procedures"] == {"open": 0, "ready": 0, "waiting": 0, "due": []}
+    assert summary["value"] == {"confirmed_yearly_cents": 0, "estimated_yearly_cents": 0}
+    assert summary["watch"]["enabled"] is True and summary["watch"]["new_relevant"] == 0
+    proc_id = world.post("/api/opportunities/start", json={"key": "fees:2026-10"}).json()["procedure_id"]
+    world.patch(f"/api/procedures/{proc_id}/fields", json={"values": {"nom": "Micka Exemple"}})
+    proc = _approve(world, world.get(f"/api/procedures/{proc_id}").json())
+    world.post(f"/api/procedures/{proc['id']}/sent", json={})
+    app.dependency_overrides[deps.today] = lambda: TODAY + timedelta(days=61)
+    later = world.get("/api/copilot/summary").json()
+    assert later["procedures"]["waiting"] == 1 and later["procedures"]["due"][0]["id"] == proc_id
+    assert later["value"]["estimated_yearly_cents"] == 1_432
+    badges = world.get("/api/copilot/badges").json()
+    assert badges == {"procedures_due": 1, "procedures_ready": 0, "confirmations": 0, "watch_new_relevant": 0}
+
+
+def test_export_carries_procedures_value_ledger_and_sources(app, world: TestClient) -> None:  # type: ignore[no-untyped-def]
+    from tests.conftest import PASSWORD
+
+    _add(app, OCTOBER_FEES)
+    proc_id = world.post("/api/opportunities/start", json={"key": "fees:2026-10"}).json()["procedure_id"]
+    world.patch(f"/api/procedures/{proc_id}/fields", json={"values": {"nom": "Micka Exemple"}})
+    data = json.loads(world.post("/api/export", json={"password": PASSWORD}).text)
+    (proc,) = data["procedures"]
+    assert proc["template"] == "contester_frais" and proc["data"]["fields"]["nom"]["value"] == "Micka Exemple"
+    assert proc["events"] and proc["opportunity_key"] == "fees:2026-10"
+    assert data["opportunity_states"] == [{"key": "fees:2026-10", "status": "started", "until": None}]
+    assert data["value_events"][0]["kind"] == "estimated" and data["value_events"][0]["amount_cents"] == 1_432
+    assert isinstance(data["watch_sources"], list)

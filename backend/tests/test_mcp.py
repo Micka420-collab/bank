@@ -127,7 +127,7 @@ def test_initialize_and_catalogue(app, world: TestClient) -> None:  # type: igno
         "get_dossier", "get_alerts", "get_month", "spending_summary", "list_transactions", "get_aids",
         "simulate_aids", "get_wealth", "evaluate_purchase", "what_if_savings", "onboarding_status",
         "record_answer", "categorize_transaction", "propose_action", "list_proposals",
-        "can_i_buy", "investment_plan", "get_energy",
+        "can_i_buy", "investment_plan", "get_energy", "get_opportunities", "get_procedures",
     }  # fmt: skip
     assert tools["get_dossier"]["annotations"]["readOnlyHint"] is True
     # Aucun outil ne peut déplacer de l'argent : il n'en existe tout simplement pas.
@@ -460,3 +460,35 @@ def test_onboarding_status_respects_privacy(app, world: TestClient) -> None:  # 
     blind = make_agent(app, world, name="agg", privacy="aggregates").ok("onboarding_status")
     assert "notes" not in blind["answers"]
     assert "Marie" not in json.dumps(make_agent(app, world, name="agg2", privacy="aggregates").ok("get_dossier"))
+
+
+def test_opportunities_and_procedures_are_readable_never_actionable(app, world: TestClient) -> None:  # type: ignore[no-untyped-def]
+    """L'agent voit les pistes et l'avancement des démarches pour en parler ; il ne lance, n'écarte, ne valide ni ne
+    transmet rien (aucun outil pour cela), et le mode « chiffres seuls » ne laisse passer aucun libellé."""
+    from datetime import date
+
+    from app.importers.base import ParsedTransaction
+    from app.models import Account
+    from app.services.ingest import ingest
+
+    with app.state.sessionmaker() as db:
+        account = db.scalars(select(Account).where(Account.kind == "checking")).one()
+        rows = [ParsedTransaction(date(2026, 10, d), -890, "COMMISSION D INTERVENTION") for d in range(1, 12)]
+        ingest(db, account, rows, provider="file")
+        db.commit()
+    proc_id = world.post("/api/opportunities/start", json={"key": "fees:2026-10"}).json()["procedure_id"]
+    world.patch(f"/api/procedures/{proc_id}", json={"title": "Dossier de Jean Dupont"})
+    agent = make_agent(app, world)
+    data = agent.ok("get_opportunities")
+    fees = next(o for o in data["opportunities"] if o.get("title", "").startswith("Frais bancaires"))
+    assert fees["procedure_stage"] == "À vérifier" and fees["amount_cents"] == 1_790 and fees["sources"]
+    assert data["value"]["estimated_yearly_cents"] == 1_432 and "conseiller financier agréé" in data["disclaimer"]
+    procs = agent.ok("get_procedures")["procedures"]
+    assert procs[0]["title"] == "Contester des frais bancaires" and procs[0]["missing_values"] == 1  # le nom
+    assert "Dupont" not in json.dumps(procs) and "Micka" not in json.dumps(procs)
+    numbers_only = make_agent(app, world, name="chiffres", privacy="aggregates")
+    blind = numbers_only.ok("get_opportunities")
+    assert all("title" not in o and "facts" not in o for o in blind["opportunities"])
+    assert "COMMISSION" not in json.dumps(blind)
+    tools = {t["name"] for t in agent.rpc("tools/list")["tools"]}
+    assert not {"start_opportunity", "approve_procedure", "mark_sent"} & tools

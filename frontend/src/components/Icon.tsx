@@ -42,6 +42,14 @@ const PATHS: Record<string, string> = {
   download: "M12 4v11M7 10l5 5 5-5M4 20h16",
   vault: "M4 5h16v14H4zM14 12a2 2 0 1 0-4 0 2 2 0 0 0 4 0ZM12 10V8M7 19v2M17 19v2",
   logout: "M10 17l5-5-5-5M15 12H3M12 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6",
+  target: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM12 12h.01",
+  route: "M6 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM18 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM8 17h7a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h7",
+  news: "M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 13h7M7 17h4",
+  send: "M21 3 3 10.5l7 2.5 2.5 7zM10 13 21 3",
+  external: "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
+  clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3 2",
+  copy: "M8 8h11v13H8zM5 16H4V3h11v1",
+  flag: "M5 21V4M5 4h11l-2 4 2 4H5",
 };
 
 export type IconName = keyof typeof PATHS;

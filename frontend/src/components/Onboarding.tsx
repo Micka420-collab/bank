@@ -3,13 +3,13 @@
 // « Je connecterai mes comptes plus tard » est toujours là.
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { api, useApi, type Account, type Connection } from "../api";
-import { money } from "../format";
+import { api, useApi, type Account, type Connection, type ConsentView, type Opportunity, type OpportunityCategory } from "../api";
+import { money, perPeriod } from "../format";
 import { KIND_LABELS } from "../pages/Settings";
 import { BankConnect, BankMark } from "./BankConnect";
 import { CountUp } from "./CountUp";
 import { Icon } from "./Icon";
-import { Field, useAsyncAction, useToast } from "./ui";
+import { Field, Loading, useAsyncAction, useToast } from "./ui";
 
 const KEY = "bank:onboarding";
 
@@ -28,8 +28,8 @@ export function setOnboarding(state: "pending" | "done"): void {
   }
 }
 
-type Stage = "intro" | "access" | "bank" | "syncing" | "done";
-const STEPS: Stage[] = ["intro", "access", "bank", "done"];
+type Stage = "intro" | "access" | "bank" | "syncing" | "done" | "goals";
+const STEPS: Stage[] = ["intro", "access", "bank", "goals"];
 
 export function Onboarding({ stage, bankResult = null, onAccess, onDone }: {
   stage: "intro" | "bank";
@@ -38,11 +38,13 @@ export function Onboarding({ stage, bankResult = null, onAccess, onDone }: {
   onDone?: () => void;
 }) {
   const [current, setCurrent] = useState<Stage>(() => (stage === "intro" ? "intro" : bankResult === "connected" ? "syncing" : "bank"));
-  const finish = () => {
+  // Avant le tableau de bord : tes priorités et tes accords, puis tes premières pistes.
+  const finish = () => setCurrent("goals");
+  const done = () => {
     setOnboarding("done");
     onDone?.();
   };
-  const stepIndex = STEPS.indexOf(current === "syncing" ? "bank" : current);
+  const stepIndex = STEPS.indexOf(current === "syncing" || current === "done" ? "bank" : current);
   return (
     <div className="onboarding">
       <div className="onboarding-top">
@@ -57,6 +59,7 @@ export function Onboarding({ stage, bankResult = null, onAccess, onDone }: {
         {current === "bank" && <Bank result={bankResult} onLater={finish} />}
         {current === "syncing" && <Syncing onDone={() => setCurrent("done")} />}
         {current === "done" && <Done onAnother={() => { window.location.hash = "#/bienvenue"; setCurrent("bank"); }} onFinish={finish} />}
+        {current === "goals" && <Goals onFinish={done} />}
       </div>
       <div className="onboarding-foot">
         {(current === "bank" || current === "intro") && (
@@ -336,8 +339,94 @@ function Done({ onAnother, onFinish }: { onAnother: () => void; onFinish: () => 
         ))}
       </ul>
       <div className="actions">
-        <button type="button" className="btn lg" onClick={onFinish}>Voir mon tableau de bord <Icon name="arrow" /></button>
+        <button type="button" className="btn lg" onClick={onFinish}>Continuer <Icon name="arrow" /></button>
         <button type="button" className="btn quiet lg" onClick={onAnother}><Icon name="plus" /> Ajouter une autre banque</button>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ 6. priorités, accords, premières pistes
+const PRIORITIES: { key: OpportunityCategory; label: string; hint: string }[] = [
+  { key: "recuperer", label: "Récupérer ce à quoi j'ai droit", hint: "Aides non demandées, frais injustifiés" },
+  { key: "reduire", label: "Payer moins", hint: "Abonnements oubliés, frais bancaires" },
+  { key: "revenus", label: "Gagner un peu plus", hint: "Prime d'activité, droits liés à ton salaire" },
+  { key: "epargne", label: "Mettre de côté", hint: "Le bon livret, l'argent qui dort" },
+  { key: "anticiper", label: "Ne plus être pris de court", hint: "Découvert, papiers qui expirent" },
+];
+
+function Goals({ onFinish }: { onFinish: () => void }) {
+  const consents = useApi<ConsentView[]>("/api/consents");
+  const top = useApi<{ opportunities: Opportunity[] }>("/api/opportunities/top");
+  const [chosen, setChosen] = useState<Set<OpportunityCategory>>(new Set());
+  const [busy, error, run] = useAsyncAction();
+  const toggle = (k: OpportunityCategory) => {
+    const next = new Set(chosen);
+    if (next.has(k)) next.delete(k);
+    else next.add(k);
+    setChosen(next);
+  };
+  const setConsent = (c: ConsentView) =>
+    void run(async () => {
+      await api(`/api/consents/${c.purpose}`, { method: "PUT", body: { granted: !c.granted } });
+      consents.reload();
+    });
+  const finish = () =>
+    void run(async () => {
+      if (chosen.size) await api("/api/opportunities/settings", { method: "PUT", body: { priorities: [...chosen] } });
+      onFinish();
+    });
+  const leads = top.data?.opportunities ?? [];
+  return (
+    <div className="stack goals" style={{ gap: "1.5rem" }}>
+      <div>
+        <p className="welcome-kicker"><Icon name="target" /> Dernière étape</p>
+        <h1>Qu'est-ce qui compte le plus pour toi ?</h1>
+        <p className="muted" style={{ marginTop: "0.5rem" }}>Bank cherche pour toi ce qui peut te faire gagner ou économiser. Dis-lui par quoi commencer ; tu pourras changer d'avis.</p>
+      </div>
+      <div className="goals-grid" role="group" aria-label="Tes priorités">
+        {PRIORITIES.map((g) => (
+          <button key={g.key} type="button" className="goal" aria-pressed={chosen.has(g.key)} onClick={() => toggle(g.key)}>
+            <b>{g.label}</b>
+            <span className="faint">{g.hint}</span>
+          </button>
+        ))}
+      </div>
+      <section aria-labelledby="goals-consents">
+        <h2 id="goals-consents" className="goals-h2">Ce que tu autorises</h2>
+        {!consents.data && <Loading what="Accords" />}
+        {consents.data && (
+          <ul className="consent-list">
+            {consents.data.map((c) => (
+              <li key={c.purpose}>
+                <div>
+                  <b>{c.title}</b>
+                  <p className="muted">{c.text}</p>
+                </div>
+                <label className="switch">
+                  <input type="checkbox" role="switch" checked={c.granted} disabled={busy} onChange={() => setConsent(c)}
+                         aria-label={`${c.title} : ${c.granted ? "accordé" : "refusé"}`} />
+                  <span aria-hidden="true" />
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="faint">Modifiable à tout moment dans Réglages › Confidentialité. Bank ne t'envoie jamais rien à un organisme sans ta validation.</p>
+      </section>
+      {leads.length > 0 && (
+        <section aria-labelledby="goals-leads">
+          <h2 id="goals-leads" className="goals-h2">Tes premières pistes</h2>
+          <ul className="copilot-list">
+            {leads.map((o) => (
+              <li key={o.key}><Icon name="target" /><span>{o.title}</span>{o.amount_cents > 0 && <span className="copilot-amount">{perPeriod(o.amount_cents, o.period)}</span>}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {error && <p className="error" role="alert">{error}</p>}
+      <div className="actions">
+        <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} disabled={busy} onClick={finish}>Voir mon tableau de bord <Icon name="arrow" /></button>
       </div>
     </div>
   );

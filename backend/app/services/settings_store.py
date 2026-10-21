@@ -22,6 +22,8 @@ DEFAULTS: dict[str, Any] = {
     "llm_model_caps": {},
     # Opportunités : ce que vaut une heure de ton temps (hypothèse réglable) pour classer par gain net attendu.
     "time_value_cents_per_hour": 1_500,
+    # Tes priorités (choisies à l'accueil ou dans Opportunités) : les catégories montrées d'abord.
+    "opportunity_priorities": [],
 }
 
 

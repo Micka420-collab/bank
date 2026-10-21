@@ -796,3 +796,205 @@ export type VaultListing = {
   total_bytes: number;
 };
 export type VaultUpload = { documents: VaultSummary[]; skipped: { filename: string; reason: string; document_id?: number }[] };
+
+// ------------------------------------------------------------------ opportunités
+export type OpportunityCategory = "recuperer" | "reduire" | "revenus" | "epargne" | "anticiper";
+export type Period = "once" | "month" | "year";
+export type SourceRef = { title: string; url: string | null; verified_on: string | null; kind?: string };
+export type OpportunityAction = { template?: string; initial?: Record<string, unknown>; link?: string; label?: string };
+export type Opportunity = {
+  key: string;
+  category: OpportunityCategory;
+  category_label: string;
+  title: string;
+  summary: string;
+  amount_cents: number;
+  period: Period;
+  yearly_cents: number;
+  probability: number;
+  effort_minutes: number;
+  cost_cents: number;
+  expected_net_cents: number;
+  confidence: "élevée" | "moyenne" | "faible";
+  facts: string[];
+  estimates: string[];
+  hypotheses: string[];
+  sources: SourceRef[];
+  action: OpportunityAction;
+  deadline: string | null;
+  status: "new" | "started" | "snoozed" | "dismissed" | "done";
+  procedure: { id: number; stage: string; stage_label: string } | null;
+};
+export type ValueEvent = {
+  key: string;
+  amount_cents: number;
+  period: Period;
+  on: string;
+  label: string;
+  evidence: string | null;
+  source: "user" | "auto";
+};
+export type ValueSummary = {
+  confirmed: Record<Period, number>;
+  confirmed_yearly_cents: number;
+  estimated: Record<Period, number>;
+  estimated_yearly_cents: number;
+  history: ValueEvent[];
+  pending: ValueEvent[];
+};
+export type Confirmation = { key: string; procedure_id: number; title: string; label: string; amount_cents: number; period: Period };
+export type OpportunityCenter = {
+  opportunities: Opportunity[];
+  hidden: number;
+  categories: Record<OpportunityCategory, string>;
+  priorities: OpportunityCategory[];
+  time_value_cents_per_hour: number;
+  value: ValueSummary;
+  confirmations: Confirmation[];
+  disclaimer: string;
+};
+
+// ------------------------------------------------------------------ démarches
+export type ProcedureStage = "verify" | "documents" | "ready" | "sent" | "waiting" | "done" | "abandoned";
+export type ProcedureFieldType = VaultFieldType | "choice" | "bool" | "longtext";
+export type ProcedureTemplate = {
+  key: string;
+  title: string;
+  summary: string;
+  category: string;
+  organisme: string;
+  channel: "online_official" | "letter" | "counter" | "libre";
+  recipient: string;
+  official_url: string | null;
+  steps: string[];
+  sources: SourceRef[];
+  confidence: string;
+  declarations: { key: string; text: string; kind: "honneur" | "engagement" | "consequence" }[];
+  followup_label: string;
+  has_letter: boolean;
+};
+export type Provenance = {
+  source: string;
+  label: string;
+  document_id?: number;
+  document_title?: string;
+  evidence?: string;
+  period?: string;
+};
+export type ProcedureConflict = { key: string; label: string; value: string; expected: string; document_id: number | null; evidence: string | null };
+export type ProcedureField = {
+  key: string;
+  label: string;
+  type: ProcedureFieldType;
+  required: boolean;
+  active: boolean;
+  help: string;
+  choices: { value: string; label: string }[];
+  value: number | string | boolean | null;
+  display: string;
+  provenance: Provenance | null;
+  missing: boolean;
+  conflict: ProcedureConflict | null;
+};
+export type ProcedureDoc = { id: number; title: string; status: VaultStatus; document_date: string | null };
+export type ProcedurePiece = {
+  key: string;
+  label: string;
+  required: boolean;
+  count: number;
+  help: string;
+  missing: boolean;
+  attached: ProcedureDoc[];
+  candidates: ProcedureDoc[];
+};
+export type ProcedureEvent = { ts: string; kind: string; detail: Record<string, unknown> };
+export type ProcedureView = {
+  id: number;
+  title: string;
+  template: ProcedureTemplate;
+  stage: ProcedureStage;
+  stage_label: string;
+  fields: ProcedureField[];
+  pieces: ProcedurePiece[];
+  evaluation: { missing_fields: string[]; conflicts: ProcedureConflict[]; missing_pieces: string[]; unverified: number[]; warnings: string[] };
+  letter: string | null;
+  hash: string;
+  approved: boolean;
+  approved_stale: boolean;
+  reference: string | null;
+  notes: string;
+  sent_on: string | null;
+  next_check: string | null;
+  due: boolean;
+  deadline: string | null;
+  escalation: { label: string; from: string; until: string } | null;
+  outcome: { result: string; amount_cents: number | null; period: Period; note: string } | null;
+  opportunity_key: string | null;
+  created_at: string;
+  updated_at: string;
+  events: ProcedureEvent[];
+};
+export type ProcedureRow = {
+  id: number;
+  title: string;
+  template: string;
+  stage: ProcedureStage;
+  stage_label: string;
+  next_check: string | null;
+  due: boolean;
+  deadline: string | null;
+  updated_at: string;
+  opportunity_key: string | null;
+};
+export type ProcedureListing = { procedures: ProcedureRow[]; stages: { key: ProcedureStage; label: string }[]; templates: ProcedureTemplate[] };
+
+// ------------------------------------------------------------------ veille
+export type WatchItemView = {
+  id: number;
+  title: string;
+  summary: string;
+  url: string | null;
+  published_at: string | null;
+  first_seen_at: string | null;
+  last_verified_at: string | null;
+  changed_at: string | null;
+  version: number;
+  topics: string[];
+  topic_labels: string[];
+  relevant: boolean;
+  status: "new" | "seen" | "dismissed";
+  source: { name: string; trust: string } | null;
+};
+export type WatchSourceView = {
+  id: number;
+  name: string;
+  url: string;
+  trust: "officiel" | "technique" | "secondaire" | "perso";
+  builtin: boolean;
+  enabled: boolean;
+  interval_hours: number;
+  last_checked_at: string | null;
+  last_ok_at: string | null;
+  last_error: string | null;
+};
+export type ReferenceCheck = { key: string; title: string; as_of: string | null; next_check: string; status: "ok" | "stale"; detail: string; source: string | null };
+export type WatchListing = {
+  enabled: boolean;
+  interests: string[];
+  interest_labels: Record<string, string>;
+  items: WatchItemView[];
+  counts: { new_relevant: number; new: number };
+  engine: { used: string | null; latest: string; latest_published_at: string | null; outdated: boolean; advice: string | null } | null;
+  references: ReferenceCheck[];
+  sources: WatchSourceView[];
+  report?: { checked: number; new: number; changed: number; errors: number; skipped: number };
+};
+
+// ------------------------------------------------------------------ copilote (écran Aujourd'hui, navigation)
+export type CopilotSummary = {
+  opportunities: Opportunity[];
+  value: { confirmed_yearly_cents: number; estimated_yearly_cents: number };
+  confirmations: number;
+  procedures: { open: number; ready: number; waiting: number; due: { id: number; title: string; next_check: string | null; stage_label: string }[] };
+  watch: { enabled: boolean; new_relevant: number; stale_references: number; engine_outdated: boolean };
+};

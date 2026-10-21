@@ -22,6 +22,7 @@ from app.api import (
     auth,
     banks,
     consents,
+    copilot,
     decisions,
     deps,
     documents,
@@ -225,6 +226,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         procedures,
         opportunities,
         watch,
+        copilot,
         system,
     )
     for r in routers:

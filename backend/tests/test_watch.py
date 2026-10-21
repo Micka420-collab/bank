@@ -343,6 +343,7 @@ def test_official_news_is_picked_up_dated_and_matched_to_you(app, world: TestCli
     assert "epargne" in data["interests"] and "aides" in data["interests"] and "emploi" in data["interests"]
     statuses = {r["key"]: r["status"] for r in data["references"]}
     assert statuses["rates"] == "ok" and any(k.startswith("source:") for k in statuses)
+    assert len(statuses) == len(data["references"])  # une clé par donnée (l'écran s'en sert comme identifiant)
     eco = next(s for s in data["sources"] if s["url"] == ECO)
     assert eco["builtin"] and eco["last_ok_at"] and eco["last_error"] is None
 
@@ -447,3 +448,34 @@ def test_items_can_be_dismissed_or_all_marked_seen(world: TestClient, fetcher: F
 def test_manual_refresh_is_rate_limited(world: TestClient, fetcher: FakeFetcher) -> None:
     codes = [world.post("/api/watch/refresh", json={}).status_code for _ in range(7)]
     assert codes[:6] == [200] * 6 and codes[6] == 429
+
+
+def test_news_about_aids_after_your_simulation_asks_to_run_it_again(
+    app, world: TestClient, fetcher: FakeFetcher
+) -> None:  # type: ignore[no-untyped-def]
+    """Scénario A jusqu'au bout : la source officielle publie sur la prime d'activité après ta simulation →
+    Bank le relève, le rapproche de ta situation et te propose de relancer la simulation, source à l'appui."""
+    with app.state.sessionmaker() as db:
+        db.add(FiscalSimulation(period="2026-10", result=json.dumps({"engine_version": "176.1.2", "estimates": []})))
+        db.commit()
+    ppa = (
+        "Prime d'activité : ce qui change au 1er janvier",
+        "https://www.economie.gouv.fr/particuliers/ppa-000444",
+        "Revalorisation.",
+        "2026-10-21 09:00:00",
+    )
+    fetcher.serve(ECO, rss(LIVRET, ppa))
+    item = next(i for i in _refresh(world)["items"] if i["title"].startswith("Prime d'activité"))
+    assert item["relevant"] is True and "Aides et prestations" in item["topic_labels"]
+    opps = {o["key"]: o for o in world.get("/api/opportunities").json()["opportunities"]}
+    key = next(k for k in opps if k.startswith("aid:resimulate:"))
+    lead = opps[key]
+    assert lead["action"] == {"link": "#/aides", "label": "Relancer la simulation"}
+    assert lead["sources"][0]["url"] == ppa[1] and "Prime d'activité" in lead["summary"]
+    assert world.get("/api/copilot/summary").json()["watch"]["new_relevant"] >= 1
+    # Masquer la nouveauté retire la piste ; une nouvelle simulation aussi
+    world.patch(f"/api/watch/items/{item['id']}", json={"status": "dismissed"})
+    assert not any(
+        k.startswith("aid:resimulate:")
+        for k in [o["key"] for o in world.get("/api/opportunities").json()["opportunities"]]
+    )

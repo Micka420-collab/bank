@@ -77,3 +77,14 @@ export function merchantCase(name: string): string {
     })
     .join("");
 }
+
+/** « 13,49 € par mois », « 258 € par an », « 17,90 € » (une fois). */
+export function perPeriod(cents: number, period: "once" | "month" | "year"): string {
+  const unit = period === "month" ? " par mois" : period === "year" ? " par an" : "";
+  return `${money(cents, { whole: cents >= 10_000 })}${unit}`;
+}
+
+/** Une adresse web (http ou https) ou rien : défense en profondeur contre un lien javascript: ou data: venu d'un flux. */
+export function safeHref(url: string | null | undefined): string | null {
+  return url && /^https?:\/\/[^\s<>"']+$/i.test(url.trim()) ? url.trim() : null;
+}

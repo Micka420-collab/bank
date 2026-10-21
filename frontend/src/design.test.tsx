@@ -128,6 +128,10 @@ describe("première ouverture", () => {
       "/api/auth/login": () => ({ mfa_required: false }),
       "/api/banks/aspsps": () => ASPSPS.map((name) => ({ name })),
       "/api/banks": () => ({ enabled: true, connections: [] }),
+      "/api/consents/watch": () => ({ purpose: "watch", granted: false }),
+      "/api/consents": () => [{ purpose: "watch", title: "Veille sur les sources officielles", text: "Bank interroge des sources publiques.", granted: true, explicit: false, decided: false, updated_at: null, default: true }],
+      "/api/opportunities/top": () => ({ opportunities: [{ key: "sub:x", title: "Netflix.com : 13,49 € par mois, tu t'en sers encore ?", amount_cents: 1349, period: "month" }], value: {} }),
+      "/api/opportunities/settings": () => new Response(null, { status: 204 }),
     });
     const onAccess = vi.fn();
     await render(<ToastProvider><Onboarding stage="intro" onAccess={onAccess} /></ToastProvider>);
@@ -156,6 +160,20 @@ describe("première ouverture", () => {
     expect(host.querySelectorAll(".bank-tile").length).toBeGreaterThan(0);
     expect(host.textContent).toContain("Je connecterai mes comptes plus tard");
     await click("Je connecterai mes comptes plus tard");
+    // Dernière étape : tes priorités, tes accords (chacun modifiable), tes premières pistes
+    await settle();
+    expect(host.textContent).toContain("Qu'est-ce qui compte le plus pour toi ?");
+    expect(onDone).not.toHaveBeenCalled();
+    await click("Payer moins");
+    expect(button("Payer moins").getAttribute("aria-pressed")).toBe("true");
+    await act(async () => { host.querySelector<HTMLInputElement>('.consent-list input[role="switch"]')!.click(); });
+    await settle();
+    expect(calls.find((c) => c.url === "/api/consents/watch")?.init?.method).toBe("PUT");
+    expect(host.textContent).toContain("Tes premières pistes");
+    await click("Voir mon tableau de bord");
+    await settle();
+    const saved = calls.find((c) => c.url === "/api/opportunities/settings");
+    expect(JSON.parse(String(saved?.init?.body))).toEqual({ priorities: ["reduire"] });
     expect(onDone).toHaveBeenCalled();
     expect(onboardingWanted()).toBe(false);
     expect(window.localStorage.getItem("bank:onboarding")).toBe("done");
@@ -189,7 +207,10 @@ describe("première ouverture", () => {
     expect(host.textContent).toContain("1 compte relié");
     expect(host.textContent).toContain("FR76 •••• 1234");
     expect(button("Ajouter une autre banque")).not.toBeNull();
+    await click("Continuer");
+    await settle();
     await click("Voir mon tableau de bord");
+    await settle();
     expect(onDone).toHaveBeenCalled();
     expect(window.localStorage.getItem("bank:onboarding")).toBe("done");
   }, 10000);

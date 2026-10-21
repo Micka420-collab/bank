@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from functools import cached_property
 from typing import Any
@@ -35,6 +35,8 @@ from app.models import (
     Transaction,
     ValueEvent,
     VaultDocument,
+    WatchItem,
+    WatchSource,
 )
 from app.security import audit
 from app.services import analytics, initiatives, procedures
@@ -104,6 +106,11 @@ def _month_label(key: str) -> str:
     return f"{MONTHS_FR[int(key[5:7]) - 1]} {key[:4]}"
 
 
+def _of(label: str) -> str:
+    """« de septembre », « d'octobre », « d'août » : l'élision devant une voyelle."""
+    return f"d'{label}" if label[:1].lower() in "aeiouyéèh" else f"de {label}"
+
+
 def _display_name(merchant: str) -> str:
     return " ".join(w.capitalize() if len(w) > 3 else w for w in merchant.split()) or merchant
 
@@ -123,9 +130,28 @@ class Ctx:
         return self.inputs.run()
 
     @cached_property
+    def simulation_row(self) -> FiscalSimulation | None:
+        return self.db.scalar(select(FiscalSimulation).order_by(FiscalSimulation.id.desc()).limit(1))
+
+    @cached_property
     def simulation(self) -> tuple[dict[str, Any], date] | None:
-        row = self.db.scalar(select(FiscalSimulation).order_by(FiscalSimulation.id.desc()).limit(1))
+        row = self.simulation_row
         return (json.loads(row.result), row.created_at.date()) if row is not None else None
+
+    def aid_news_since(self, since: datetime) -> WatchItem | None:
+        """La dernière nouveauté de la veille sur les aides, vue ou publiée après `since` (sources actives)."""
+        return self.db.scalar(
+            select(WatchItem)
+            .join(WatchSource, WatchSource.id == WatchItem.source_id)
+            .where(
+                WatchSource.enabled.is_(True),
+                WatchItem.status != "dismissed",
+                WatchItem.topics.contains('"aides"'),
+                (WatchItem.first_seen_at > since) | (WatchItem.published_at > since),
+            )
+            .order_by(WatchItem.first_seen_at.desc())
+            .limit(1)
+        )
 
     @cached_property
     def accounts(self) -> list[Account]:
@@ -180,6 +206,28 @@ def aid_gaps(ctx: Ctx) -> list[do.Opportunity]:
         estimates.setdefault(var, 0)
     stale = () if fresh else ("La simulation a plus de 45 jours : relance-la, ta situation a pu changer.",)
     out: list[do.Opportunity] = []
+    row = ctx.simulation_row
+    news = ctx.aid_news_since(row.created_at) if row is not None else None
+    if news is not None:  # scénario A : une source officielle a bougé depuis ta simulation
+        seen = (news.published_at or news.first_seen_at).date()
+        out.append(
+            do.Opportunity(
+                key=f"aid:resimulate:{news.id}:{news.version}",
+                category="revenus",
+                title="Les règles des aides ont peut-être changé depuis ta simulation",
+                summary=f"« {news.title} » : relance la simulation pour voir si tes droits bougent.",
+                amount_cents=0,
+                period="month",
+                probability=0.5,
+                effort_minutes=1,
+                confidence="moyenne",
+                facts=(f"Publié le {_day(seen)}, après ta simulation du {_day(when)}.",),
+                hypotheses=("La nouveauté concerne une aide que tu touches ou pourrais toucher : à vérifier.",),
+                sources=(do.Source(news.title, news.url or None, news.last_verified_at.date().isoformat()),),
+                action={"link": "#/aides", "label": "Relancer la simulation"},
+                urgency=1,
+            )
+        )
     for gap in compute_gaps(estimates, analytics.aids_summary(ctx.db, ctx.today).streams):
         received = (
             f"Tu perçois {_eur(gap.received_cents)} par mois de {gap.name} (moyenne des 3 derniers mois)."
@@ -321,9 +369,9 @@ def bank_fees(ctx: Ctx) -> list[do.Opportunity]:
             do.Opportunity(
                 key=f"fees:{month}",
                 category="recuperer",
-                title=f"Frais bancaires de {label} : {_eur(review.excess_cents)} au-delà des plafonds légaux"
+                title=f"Frais bancaires {_of(label)} : {_eur(review.excess_cents)} au-delà des plafonds légaux"
                 if over
-                else f"Frais bancaires de {label} : demande leur remboursement",
+                else f"Frais bancaires {_of(label)} : demande leur remboursement",
                 summary="Une réclamation écrite qui cite les articles de loi, puis le médiateur si besoin."
                 if over
                 else "Sous les plafonds, rien n'oblige ta banque à rembourser, mais un geste commercial se demande.",
@@ -339,6 +387,7 @@ def bank_fees(ctx: Ctx) -> list[do.Opportunity]:
                 sources=do.FEE_SOURCES,
                 action={
                     "template": "contester_frais",
+                    "title": f"Contester les frais {_of(label)}",
                     "initial": {
                         "montant": amount,
                         "periode": label,
@@ -409,6 +458,7 @@ def subscriptions(ctx: Ctx) -> list[do.Opportunity]:
                 sources=(_INC_CANCEL,),
                 action={
                     "template": "resilier_abonnement",
+                    "title": f"Résilier {name}"[:120],
                     "initial": {"fournisseur": name, "montant_mensuel": monthly},
                 },
             )
@@ -603,6 +653,7 @@ def center(db: Session, today: date) -> dict[str, Any]:
         "opportunities": visible,
         "hidden": hidden,
         "categories": do.CATEGORIES,
+        "priorities": priorities(db),
         "time_value_cents_per_hour": tv,
         "value": value_summary(db),
         "confirmations": confirmations(db, today),
@@ -645,6 +696,7 @@ def start(db: Session, key: str, *, actor: str, today: date) -> dict[str, Any]:
         today=today,
         opportunity_key=opp.key,
         initial=dict(opp.action.get("initial") or {}),
+        title=str(opp.action["title"]) if opp.action.get("title") else None,
     )
     already = db.scalar(
         select(ValueEvent.id).where(ValueEvent.opportunity_key == opp.key, ValueEvent.kind == "estimated")
@@ -694,6 +746,21 @@ def set_time_value(db: Session, cents_per_hour: int, *, actor: str) -> None:
         raise OpportunityError("Entre 0 et 500 € de l'heure")
     set_setting(db, "time_value_cents_per_hour", cents_per_hour)
     audit.record(db, actor, "opportunity.time_value", cents_per_hour=cents_per_hour)
+
+
+def priorities(db: Session) -> list[str]:
+    return [c for c in get_setting(db, "opportunity_priorities") or [] if c in do.CATEGORIES]
+
+
+def set_priorities(db: Session, categories: list[str], *, actor: str) -> list[str]:
+    """Ce qui compte le plus pour toi (récupérer, réduire, épargner…) : montré d'abord, sans changer le classement."""
+    unknown = [c for c in categories if c not in do.CATEGORIES]
+    if unknown:
+        raise OpportunityError("Catégorie inconnue")
+    chosen = list(dict.fromkeys(categories))
+    set_setting(db, "opportunity_priorities", chosen)
+    audit.record(db, actor, "opportunity.priorities", count=len(chosen))
+    return chosen
 
 
 # ------------------------------------------------------------------ valeur obtenue

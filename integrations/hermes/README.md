@@ -75,6 +75,8 @@ qu'ils restent chez toi, utilise `--deliver local` ou une messagerie chiffrée d
 | `evaluate_purchase` (`amount_eur`, `label`, `on_date`, `category`) | read | Verdict ok / serre / attendre / deconseille à une date précise, enveloppe |
 | `investment_plan` | read | Où placer, par priorité : mois d'avance, dette chère, matelas (LEP / livrets), projets datés, long terme (PEA / AV / PER selon tranche, risque, horizon, lignes rouges) |
 | `get_energy` | read | Linky : kWh et coût sur 30 jours et par mois, facture annuelle estimée, écart avec la mensualité, pic |
+| `get_opportunities` | read | Pistes classées par gain net attendu (estimé, supposé, sources datées), valeur obtenue et en cours — jamais additionnées ; en mode agrégats, chiffres seuls |
+| `get_procedures` | read | Démarches : étape, prochain point, échéance, ce qui manque ; jamais les valeurs du dossier ; le titre libre seulement en mode complet |
 | `what_if_savings` (`monthly_eur`) | read | Effet d'une épargne mensuelle sur le budget, le matelas, les objectifs |
 | `onboarding_status`, `record_answer` | read, write:onboarding | Questionnaire « Ma situation » : ni le mandat, ni une réponse que tu as donnée toi-même, ni les dépenses prévues (il les propose) |
 | `simulate_aids` | simulate | Simulation OpenFisca de tes droits |
@@ -89,7 +91,7 @@ Ressource `bank://questions` (catalogue de l'onboarding) ; prompts `onboarding_i
 | Routine | Outils | Ce qu'HERMÈS en fait |
 |---|---|---|
 | Point du matin (7 h 30) | `get_dossier` | Reste à dépenser et paliers, échéances à 3 jours, alertes (dont énergie et fin de droits), une action |
-| Revue du dimanche (18 h) | `get_dossier`, `spending_summary`, `get_alerts`, `list_proposals` | Écarts d'enveloppes, matelas, 3 recommandations chiffrées → propositions |
+| Revue du dimanche (18 h) | `get_dossier`, `spending_summary`, `get_alerts`, `list_proposals`, `get_opportunities`, `get_procedures` | Écarts d'enveloppes, matelas, 3 recommandations chiffrées → propositions ; la meilleure piste du moment ; les démarches à relancer |
 | Bilan du mois (le 1er, 9 h) | `spending_summary`, `get_wealth`, `get_aids`, `get_energy`, `simulate_aids` | Le mois raconté, enveloppes du mois suivant, épargne, aides, électricité (rattrapage probable) |
 | À la demande | `can_i_buy`, `investment_plan` | « Je peux l'acheter ? » et « où placer ? » avec les calculs de Bank |
 

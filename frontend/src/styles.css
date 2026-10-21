@@ -3779,3 +3779,924 @@ input[aria-invalid="true"] {
     animation: none;
   }
 }
+
+/* ------------------------------------------------------------------ opportunités
+   Le grand livre de valeur : l'obtenu (constaté, à l'encre du gain) et l'en-cours (estimé, en pointillé),
+   côte à côte, jamais additionnés. Chaque piste porte un filet de sa famille pour la repérer d'un coup d'œil. */
+.value-ledger {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 2rem;
+  padding: 1.25rem 1.5rem;
+}
+.value-col {
+  display: grid;
+  gap: 0.2rem;
+  align-content: start;
+}
+.value-col + .value-col {
+  border-left: 1px solid var(--line);
+  padding-left: 2rem;
+}
+.value-label {
+  font-size: var(--t-sm);
+  font-weight: 650;
+  color: var(--ink-2);
+}
+.value-figure {
+  font-size: var(--t-2xl);
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.value-col.is-confirmed .value-figure {
+  color: var(--positive);
+}
+.value-col.is-estimated .value-figure {
+  color: var(--ink-2);
+  text-decoration: underline dashed var(--line-strong);
+  text-underline-offset: 0.3em;
+  text-decoration-thickness: 2px;
+}
+.value-note {
+  grid-column: 1 / -1;
+  margin-top: 0.9rem;
+}
+.value-events {
+  margin-top: 0.75rem;
+  gap: 0.5rem;
+}
+.opp-filters {
+  margin-top: 1.5rem;
+}
+.opp-group > h2,
+.watch-engine h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.opp-group > h2 .icon {
+  color: var(--accent);
+}
+.opp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.9rem;
+}
+.opp {
+  --tone: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--tone);
+  border-radius: var(--r-m);
+  box-shadow: var(--shadow-1);
+  padding: 1.1rem 1.25rem;
+  display: grid;
+  gap: 0.45rem;
+}
+.opp.is-recuperer,
+.opp.is-revenus {
+  --tone: var(--positive);
+}
+.opp.is-anticiper {
+  --tone: var(--warning);
+}
+.opp h3 {
+  font-size: var(--t-lg);
+  line-height: 1.25;
+}
+.opp-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.opp-tags .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.opp-figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, max-content));
+  gap: 0.25rem 1.75rem;
+  margin: 0.35rem 0 0.15rem;
+}
+.opp-figures dt {
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+  font-weight: 600;
+}
+.opp-figures dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.opp-figures dd.is-gain {
+  color: var(--positive);
+}
+.opp-why {
+  border-top: 1px dashed var(--line);
+  padding-top: 0.5rem;
+}
+.opp-why > summary {
+  cursor: pointer;
+  color: var(--accent-ink);
+  font-weight: 600;
+  font-size: var(--t-sm);
+  width: fit-content;
+}
+.opp-why[open] > summary {
+  margin-bottom: 0.6rem;
+}
+.opp-evidence {
+  margin-top: 0.6rem;
+}
+.opp-evidence h4 {
+  font-size: var(--t-sm);
+  color: var(--ink-2);
+  margin: 0 0 0.25rem;
+}
+.opp-evidence ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.2rem;
+}
+.opp-evidence li {
+  position: relative;
+  padding-left: 1.1rem;
+  font-size: var(--t-sm);
+}
+.opp-evidence li::before {
+  position: absolute;
+  left: 0;
+  font-weight: 700;
+}
+.opp-evidence.is-fact li::before {
+  content: "✓";
+  color: var(--positive);
+}
+.opp-evidence.is-estimate li::before {
+  content: "≈";
+  color: var(--accent);
+}
+.opp-evidence.is-hypothesis li::before {
+  content: "?";
+  color: var(--warning);
+}
+.opp-evidence.is-source li::before {
+  content: "§";
+  color: var(--ink-3);
+}
+.opp-confirm > div {
+  display: grid;
+  gap: 0.35rem;
+}
+.opp-confirm .actions {
+  margin-top: 0.25rem;
+}
+.opp-empty {
+  margin-top: 1rem;
+}
+.opp-foot {
+  margin-top: 2.5rem;
+  display: grid;
+  gap: 0.5rem;
+  max-width: 72ch;
+}
+.opp-time {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.opp-time input {
+  width: 7rem;
+}
+
+/* ------------------------------------------------------------------ démarches */
+.proc-due {
+  margin-bottom: 1.25rem;
+}
+.proc-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+  align-items: start;
+}
+.proc-col {
+  background: var(--surface-2);
+  border-radius: var(--r-m);
+  padding: 0.9rem;
+  min-height: 9rem;
+}
+.proc-col h2 {
+  font-size: var(--t-md);
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+.proc-col > p {
+  font-size: var(--t-xs);
+  margin: 0.15rem 0 0.75rem;
+}
+.proc-col ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.proc-card a {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--r-s);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-1);
+  color: var(--ink);
+  text-decoration: none;
+  transition:
+    border-color var(--d-fast),
+    transform var(--d-fast) var(--ease-out);
+}
+.proc-card a:hover {
+  border-color: var(--accent);
+}
+.proc-card a:active {
+  transform: scale(0.99);
+}
+.proc-card.is-due a {
+  border-color: var(--warning);
+}
+.proc-card .tag {
+  justify-self: start;
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+.proc-col.is-done {
+  opacity: 0.85;
+}
+.proc-catalogue {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 1rem;
+}
+.proc-catalogue .card {
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+}
+.proc-catalogue .btn {
+  justify-self: start;
+  margin-top: 0.25rem;
+}
+.proc-channel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: var(--t-xs);
+}
+.proc-head .muted {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.proc-stage {
+  font-size: var(--t-sm);
+  padding: 0.25rem 0.7rem;
+}
+.proc-stage.is-ready {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.proc-stage.is-waiting,
+.proc-stage.is-sent {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.proc-stage.is-done {
+  background: var(--positive-soft);
+  color: var(--positive);
+}
+/* Les étapes d'une démarche : une vraie séquence, d'où la numérotation. */
+.proc-phases {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0;
+  counter-reset: phase;
+}
+.proc-phases li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--t-sm);
+  color: var(--ink-3);
+  font-weight: 600;
+}
+.proc-phases li + li::before {
+  content: "";
+  width: 1.5rem;
+  height: 1px;
+  background: var(--line-strong);
+  margin: 0 0.45rem;
+}
+.proc-phases li > span {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  font-size: var(--t-xs);
+  background: var(--surface);
+}
+.proc-phases li.is-done {
+  color: var(--ink-2);
+}
+.proc-phases li.is-done > span {
+  background: var(--positive-soft);
+  border-color: var(--positive-soft);
+  color: var(--positive);
+}
+.proc-phases li.is-active {
+  color: var(--ink);
+}
+.proc-phases li.is-active > span {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.proc-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(16rem, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+.proc-main > .section:first-child {
+  margin-top: 0;
+}
+.proc-main .section {
+  margin-top: 1.25rem;
+}
+.proc-aside {
+  display: grid;
+  gap: 1rem;
+  position: sticky;
+  top: 1rem;
+}
+.proc-aside h2 {
+  font-size: var(--t-md);
+  margin-bottom: 0.6rem;
+}
+.proc-aside .steps {
+  font-size: var(--t-sm);
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+}
+.proc-fields {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.proc-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  gap: 0.25rem 0.75rem;
+  align-items: center;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--line);
+}
+.proc-field:first-child {
+  border-top: 0;
+}
+.proc-field-label {
+  font-size: var(--t-sm);
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.proc-field-value {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+.proc-field.is-missing .proc-field-value {
+  color: var(--warning);
+}
+.proc-field-help,
+.proc-field-proof,
+.proc-field-edit,
+.proc-conflict,
+.proc-field > .error {
+  grid-column: 1 / -1;
+}
+.proc-field-help {
+  font-size: var(--t-xs);
+}
+.proc-field-proof {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+}
+.proc-field-proof q {
+  font-style: italic;
+}
+.proof-chip {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-weight: 650;
+}
+.proof-chip.is-vault,
+.proof-chip.is-coffre,
+.proof-chip.is-officiel {
+  background: var(--positive-soft);
+  color: var(--positive);
+}
+.proof-chip.is-opportunite,
+.proof-chip.is-profil {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.proof-chip.is-user {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.proc-field-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+.proc-field-edit input,
+.proc-field-edit select,
+.proc-field-edit textarea {
+  flex: 1 1 14rem;
+}
+.proc-conflict {
+  margin-top: 0.35rem;
+}
+.proc-conflict .actions {
+  margin-top: 0.5rem;
+}
+.proc-pieces {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.9rem;
+}
+.proc-pieces > li {
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+}
+.proc-pieces > li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.proc-piece-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.proc-doc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.6rem;
+  font-size: var(--t-sm);
+}
+.proc-doc .icon {
+  color: var(--ink-3);
+}
+.proc-candidates {
+  margin-top: 0.5rem;
+}
+.proc-candidates > summary {
+  cursor: pointer;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+.proc-letter {
+  margin: 0;
+  padding: 1.25rem 1.4rem;
+  background: var(--surface-2);
+  border-radius: var(--r-s);
+  border: 1px solid var(--line);
+  font-family: var(--font);
+  font-size: var(--t-sm);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 28rem;
+  overflow: auto;
+}
+.proc-recap {
+  display: grid;
+  gap: 0;
+  margin: 0.75rem 0 0;
+}
+.proc-recap > div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(0, 2fr);
+  gap: 0.75rem;
+  padding: 0.45rem 0;
+  border-top: 1px dashed var(--line);
+  font-size: var(--t-sm);
+}
+.proc-recap dt {
+  color: var(--ink-2);
+}
+.proc-recap dd {
+  margin: 0;
+  font-weight: 600;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.proc-declarations {
+  border: 0;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+.proc-declarations legend {
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+.proc-decl {
+  align-items: flex-start;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--r-s);
+  background: var(--surface-2);
+  border-left: 3px solid var(--accent);
+  font-weight: 450;
+}
+.proc-decl.is-consequence {
+  border-left-color: var(--warning);
+  background: var(--warning-soft);
+}
+.proc-decl input {
+  margin-top: 0.15rem;
+  flex: none;
+}
+.proc-transmit {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.proc-transmit > .btn {
+  justify-self: start;
+}
+.proc-close fieldset {
+  border: 0;
+  padding: 0;
+  margin: 1rem 0 0;
+  display: grid;
+  gap: 0.85rem;
+}
+.proc-close legend {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+.proc-notes textarea {
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+.proc-timeline li {
+  font-size: var(--t-sm);
+}
+.proc-delete {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.proc-locked {
+  border-style: dashed;
+  box-shadow: none;
+}
+
+/* ------------------------------------------------------------------ veille */
+.watch-engine {
+  margin-bottom: 0.5rem;
+}
+.watch-engine.is-outdated {
+  border-color: var(--warning);
+}
+.watch-engine h2 .icon {
+  color: var(--accent);
+}
+.watch-items,
+.watch-refs,
+.watch-sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.watch-item {
+  padding: 0.95rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  display: grid;
+  gap: 0.35rem;
+}
+.watch-item.is-new {
+  border-left: 3px solid var(--accent);
+}
+.watch-item h3 {
+  font-size: var(--t-md);
+  line-height: 1.35;
+}
+.watch-item h3 a {
+  color: var(--ink);
+  text-decoration-color: var(--line-strong);
+}
+.watch-item h3 a:hover {
+  color: var(--accent-ink);
+}
+.watch-item h3 .icon {
+  vertical-align: -2px;
+  color: var(--ink-3);
+}
+.watch-item-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.watch-meta {
+  font-size: var(--t-xs);
+}
+.watch-item .actions {
+  margin-top: 0.25rem;
+}
+.watch-refs li {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--line);
+}
+.watch-refs li:first-child {
+  border-top: 0;
+}
+.watch-refs .tag {
+  margin-top: 0.15rem;
+  flex: none;
+}
+.watch-refs p {
+  margin: 0.1rem 0;
+  font-size: var(--t-sm);
+}
+.watch-sources li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--line);
+}
+.watch-sources li:first-child {
+  border-top: 0;
+}
+.watch-url {
+  overflow-wrap: anywhere;
+  font-size: var(--t-xs);
+}
+.watch-source-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.watch-add {
+  margin-top: 1rem;
+}
+.watch-add h3 {
+  font-size: var(--t-md);
+  margin-bottom: 0.75rem;
+}
+
+/* ------------------------------------------------------------------ « Pour ton argent » (Aujourd'hui) */
+.copilot-value {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  text-decoration: none;
+  font-size: var(--t-sm);
+  font-weight: 650;
+}
+.copilot-value .is-confirmed {
+  color: var(--positive);
+}
+.copilot-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.copilot-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--line);
+}
+.copilot-list li:first-child {
+  border-top: 0;
+}
+.copilot-list .icon {
+  flex: none;
+  color: var(--accent);
+}
+.copilot-list li.is-due .icon {
+  color: var(--warning);
+}
+.copilot-list li.is-good .icon {
+  color: var(--positive);
+}
+.copilot-list a {
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 550;
+  min-width: 0;
+}
+.copilot-list a:hover {
+  color: var(--accent-ink);
+  text-decoration: underline;
+}
+.copilot-amount {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--positive);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1024px) {
+  .proc-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .proc-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .proc-aside {
+    position: static;
+  }
+}
+@media (max-width: 760px) {
+  .value-ledger {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+  .value-col + .value-col {
+    border-left: 0;
+    padding-left: 0;
+    border-top: 1px solid var(--line);
+    padding-top: 1rem;
+  }
+  .opp-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .proc-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .proc-col {
+    min-height: 0;
+  }
+  .proc-phases li + li::before {
+    width: 0.6rem;
+    margin: 0 0.3rem;
+  }
+  .proc-field {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .proc-field-label {
+    grid-column: 1 / -1;
+  }
+  .proc-recap > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.1rem;
+  }
+  .copilot-list li {
+    flex-wrap: wrap;
+  }
+  .copilot-amount {
+    margin-left: 1.85rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .proc-card a {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ accueil : priorités */
+.goals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.75rem;
+}
+.goal {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  padding: 0.9rem 1rem;
+  border-radius: var(--r-m);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  transition:
+    border-color var(--d-fast),
+    background var(--d-fast),
+    transform var(--d-fast) var(--ease-out);
+}
+.goal:hover {
+  border-color: var(--accent);
+}
+.goal:active {
+  transform: scale(0.99);
+}
+.goal[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.goals-h2 {
+  font-size: var(--t-lg);
+  margin-bottom: 0.5rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .goal {
+    transition: none;
+  }
+}
+
+.proc-field {
+  align-items: start;
+}
+.proc-field.is-longtext .proc-field-value {
+  font-weight: 450;
+  font-size: var(--t-sm);
+  line-height: 1.5;
+  max-height: 10rem;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+.proc-head .proc-channel {
+  margin-top: 0.35rem;
+}
+.proc-close .form-grid,
+.watch-add .form-grid,
+.proc-sent {
+  align-items: start;
+}
+.watch-fresh {
+  margin-top: 0.25rem;
+}
+.watch-fresh > summary {
+  cursor: pointer;
+  color: var(--accent-ink);
+  font-weight: 600;
+  font-size: var(--t-sm);
+  width: fit-content;
+  margin-bottom: 0.5rem;
+}
+@media (max-width: 760px) {
+  /* Sur téléphone, seule l'étape en cours garde son nom : la frise tient sur une ligne. */
+  .proc-phases {
+    flex-wrap: nowrap;
+  }
+  .proc-phases li:not(.is-active) .phase-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

@@ -142,6 +142,13 @@ def test_a_value_contradicting_its_proof_blocks_until_corrected(world: TestClien
     world.patch(f"/api/procedures/{pid}/fields", json={"values": {"salaire_m2": "9 999,00"}})
     world.put(f"/api/vault/{payslips['2026-08']}/fields/net_social", json={"value": "9 999,00"})
     assert world.get(f"/api/procedures/{pid}").json()["evaluation"]["conflicts"] == []
+    # Voie 3 : « reprendre la valeur du document » en un geste (sans retaper le montant)
+    proc = world.patch(f"/api/procedures/{pid}/fields", json={"values": {"salaire_m3": "1,00"}}).json()
+    assert proc["stage"] == "verify"
+    proc = world.post(f"/api/procedures/{pid}/fields/salaire_m3/restore").json()
+    assert proc["stage"] == "ready" and _fields(proc)["salaire_m3"]["value"] == 199_805
+    assert _fields(proc)["salaire_m3"]["provenance"]["source"] == "vault"
+    assert world.post(f"/api/procedures/{pid}/fields/allocataire/restore").status_code == 409  # saisi, sans document
 
 
 def test_approval_is_bound_to_the_exact_dossier(world: TestClient, payslips: dict[str, int]) -> None:

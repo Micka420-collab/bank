@@ -314,12 +314,13 @@ def _rates() -> dict[str, Any]:
 def references(today: date) -> list[dict[str, Any]]:
     sources: dict[str, tuple[str, str, str | None]] = {}
     for tpl in dp.TEMPLATES.values():
-        for tsrc in tpl.sources:
+        for n, tsrc in enumerate(tpl.sources):
             if tsrc.verified_on and tsrc.url:
-                sources.setdefault(tsrc.url, (tpl.key, f"Démarche « {tpl.title} » — {tsrc.title}", tsrc.verified_on))
-    for fsrc in FEE_SOURCES:
+                title = f"Démarche « {tpl.title} » — {tsrc.title}"
+                sources.setdefault(tsrc.url, (f"{tpl.key}-{n}", title, tsrc.verified_on))
+    for n, fsrc in enumerate(FEE_SOURCES):
         if fsrc.verified_on and fsrc.url:
-            sources.setdefault(fsrc.url, ("fees", f"Frais bancaires — {fsrc.title}", fsrc.verified_on))
+            sources.setdefault(fsrc.url, (f"fees-{n}", f"Frais bancaires — {fsrc.title}", fsrc.verified_on))
     checks = dw.reference_checks(_rates(), list(sources.values()), today)
     return [
         {
@@ -432,3 +433,27 @@ def due_now(db: Session) -> bool:
     """Au moins une source à relever : pour déclencher une relève à l'ouverture de l'écran."""
     now = utcnow()
     return any(_due(s, now) for s in db.scalars(select(WatchSource).where(WatchSource.enabled.is_(True))))
+
+
+def summary(db: Session, today: date) -> dict[str, Any]:
+    """Pour l'écran Aujourd'hui et la navigation : combien de nouveautés te concernent, ce qui est à revérifier."""
+    mine = interests(db, today)
+    engine_source = db.scalar(select(WatchSource).where(WatchSource.slug == ENGINE_SLUG))
+    new_items = db.scalars(select(WatchItem).where(WatchItem.status == "new"))
+    new_relevant = sum(
+        1
+        for i in new_items
+        if (engine_source is None or i.source_id != engine_source.id) and dw.relevant(json.loads(i.topics), mine)
+    )
+    engine_items = (
+        list(db.scalars(select(WatchItem).where(WatchItem.source_id == engine_source.id)))
+        if engine_source is not None
+        else []
+    )
+    engine = _engine(db, engine_items, engine_source)
+    return {
+        "enabled": consents.granted(db, "watch"),
+        "new_relevant": new_relevant,
+        "stale_references": sum(1 for r in references(today) if r["status"] == "stale"),
+        "engine_outdated": bool(engine and engine["outdated"]),
+    }

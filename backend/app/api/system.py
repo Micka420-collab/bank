@@ -25,9 +25,13 @@ from app.models import (
     MemoryProposal,
     MerchantHint,
     OfficialFact,
+    OpportunityState,
+    Procedure,
     SavingsGoal,
     Transaction,
+    ValueEvent,
     VaultDocument,
+    WatchSource,
     WorkPlan,
     WorkShift,
 )
@@ -211,6 +215,43 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
                 "fields": {f.key: json.loads(f.value) for f in d.fields},
             }
             for d in db.scalars(select(VaultDocument).order_by(VaultDocument.id))
+        ],
+        # Démarches : valeurs, pièces (identifiants du coffre), validations, envois déclarés, résultats, historique.
+        "procedures": [
+            {
+                "template": pr.template,
+                "title": pr.title,
+                "stage": pr.stage,
+                "data": json.loads(pr.data),
+                "approval": json.loads(pr.approval) if pr.approval else None,
+                "reference": pr.reference,
+                "opportunity_key": pr.opportunity_key,
+                "deadline": pr.deadline.isoformat() if pr.deadline else None,
+                "next_check": pr.next_check.isoformat() if pr.next_check else None,
+                "created_at": pr.created_at.isoformat(),
+                "events": [{"ts": e.ts.isoformat(), "kind": e.kind, "detail": json.loads(e.detail)} for e in pr.events],
+            }
+            for pr in db.scalars(select(Procedure).order_by(Procedure.id))
+        ],
+        "opportunity_states": [
+            {"key": o.key, "status": o.status, "until": o.until.isoformat() if o.until else None}
+            for o in db.scalars(select(OpportunityState))
+        ],
+        "value_events": [
+            {
+                "key": v.opportunity_key,
+                "kind": v.kind,
+                "amount_cents": v.amount_cents,
+                "period": v.period,
+                "on": v.on_date.isoformat(),
+                "label": v.label,
+                "evidence": v.evidence,
+            }
+            for v in db.scalars(select(ValueEvent).order_by(ValueEvent.id))
+        ],
+        "watch_sources": [
+            {"name": w.name, "url": w.url, "trust": w.trust, "enabled": w.enabled, "builtin": w.builtin}
+            for w in db.scalars(select(WatchSource).order_by(WatchSource.id))
         ],
     }
     audit.record(db, ctx.user.username, "export.done", transactions=len(payload["transactions"]))

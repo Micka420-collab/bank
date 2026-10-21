@@ -6,6 +6,7 @@ import { api, useApi, type AidsResponse, type BudgetResponse, type Category, typ
 import { Bars } from "../components/charts/Bars";
 import { Donut } from "../components/charts/Donut";
 import { TrendChart } from "../components/charts/TrendChart";
+import { Copilot } from "../components/Copilot";
 import { CountUp } from "../components/CountUp";
 import { Decide } from "../components/Decide";
 import { Icon } from "../components/Icon";
@@ -85,6 +86,8 @@ export function Today() {
       </section>
 
       <Initiatives onChanged={reload} />
+
+      <Copilot />
 
       {h && (
         <dl className="stats reveal" style={{ ["--i" as string]: 1 }}>

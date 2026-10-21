@@ -6,9 +6,10 @@
 
 ## 0. En une phrase
 
-Bank sait déjà lire tes comptes, prévoir ton mois, reconnaître tes aides et ton salaire, et poser les bonnes
-questions. Il lui manque de **garder tes documents**, de **mener tes démarches** jusqu'au bout, de **chiffrer ce
-qu'il peut te faire gagner** et de **surveiller ce qui change** côté administration — c'est l'objet des phases 2 à 7.
+Bank lit tes comptes, prévoit ton mois, reconnaît tes aides et ton salaire et pose les bonnes questions. Depuis ce
+chantier, il **garde tes documents**, **prépare et suit tes démarches** (sans jamais transmettre à ta place),
+**chiffre ce qu'il peut te faire gagner** en séparant l'estimé du constaté, et **surveille ce qui change** côté
+administration. Restent la proactivité hors de l'application et l'industrialisation (phases 6 à 8, § 13).
 
 ## 1. Audit de l'existant (octobre 2026, commit `25c82bc`)
 
@@ -136,9 +137,9 @@ tâches persistante, et tous les appels à un modèle passent par une **passerel
 |---|---|---|
 | 1. Fondations | Consentements par finalité révocables ; passerelle IA unique avec plafonds ; design system | ✅ registre versionné, retrait immédiat, plafonds vérifiés avant chaque appel |
 | 2. Documents | Une photo ou un PDF devient un document chiffré, typé, daté, avec des champs liés à leur source et corrigeables ; bulletin de paie lu | ✅ voir § 9 |
-| 3. Finances | Opportunités classées par gain net attendu (montant × probabilité − coût − effort), avec sources et confiance ; frais bancaires comparés aux plafonds légaux ; valeur obtenue mesurée | 🚧 ce passage |
-| 4. Veille | Sources officielles suivies avec date de vérification et empreinte ; changement détecté → carte pour toi ; données de référence périmées signalées | 🚧 ce passage |
-| 5. Démarches | Modèles sourcés, pièces liées au coffre, préparation bloquée en cas d'incohérence, revue obligatoire liée à l'empreinte, envoi marqué une seule fois, suivi des échéances | 🚧 ce passage |
+| 3. Finances | Opportunités classées par gain net attendu (montant × probabilité − coût − effort), avec sources et confiance ; frais bancaires comparés aux plafonds légaux ; valeur obtenue mesurée | ✅ voir § 11 |
+| 4. Veille | Sources officielles suivies avec date de vérification et empreinte ; changement détecté → carte pour toi ; données de référence périmées signalées | ✅ voir § 12 |
+| 5. Démarches | Modèles sourcés, pièces liées au coffre, préparation bloquée en cas d'incohérence, revue obligatoire liée à l'empreinte, envoi marqué une seule fois, suivi des échéances | ✅ voir § 10 |
 | 5 bis. Mémoire | L'assistant retient (faits, préférences, résumés), s'améliore par tes retours, et te montre tout ce qu'il sait | ✅ voir § 8 |
 | 6. Connecteurs et navigateur | Catalogue de connecteurs avec état ; parcours guidé quand aucune intégration n'est possible ; agent navigateur à l'étude | ⏳ |
 | 7. Proactivité | File de tâches persistante, notifications sortantes configurables (ntfy, e-mail), calendrier administratif | ⏳ |
@@ -148,12 +149,12 @@ tâches persistante, et tous les appels à un modèle passent par une **passerel
 
 | Scénario | Couvert par | État |
 |---|---|---|
-| A — Une information officielle change | Veille → empreinte → correspondance avec ton profil → carte « à vérifier » + relance de la simulation | 🚧 |
+| A — Une information officielle change | Veille → empreinte → correspondance avec ton profil → carte « à vérifier » + relance de la simulation | ✅ `test_official_news_is_picked_up_dated_and_matched_to_you`, `test_changes_are_detected_and_versioned`, `test_news_about_aids_after_your_simulation_asks_to_run_it_again` |
 | B — Photo d'un bulletin de paie | Coffre → type reconnu → champs extraits liés au document → vérification → rangement | ✅ `test_photo_of_a_payslip_end_to_end` |
-| C — Demander une aide | Démarche depuis un modèle sourcé → pièces → champs préremplis → revue complète avant transmission | 🚧 |
-| D — Plateforme non connectée | Démarche → connecteur disponible ? connexion officielle : parcours guidé sur le site officiel | 🚧 |
-| E — Dépense évitable | Opportunité frais bancaires / abonnement → alternatives avec coûts et conditions → démarche | 🚧 |
-| F — Valeur contradictoire | Démarche → champ ≠ justificatif → préparation bloquée jusqu'à correction | 🚧 |
+| C — Demander une aide | Démarche depuis un modèle sourcé → pièces → champs préremplis → revue complète avant transmission | ✅ `test_asking_for_the_prime_d_activite_end_to_end`, `test_css_procedure_is_prefilled_from_the_household` |
+| D — Plateforme non connectée | Démarche → connecteur disponible ? connexion officielle : parcours guidé sur le site officiel | ✅ parcours guidé caf.fr / ameli (étapes datées, lien officiel, « je l'ai transmis ») dans `test_asking_for_the_prime_d_activite_end_to_end` |
+| E — Dépense évitable | Opportunité frais bancaires / abonnement → alternatives avec coûts et conditions → démarche | ✅ `test_fees_over_the_caps_become_a_complaint_then_a_confirmed_refund`, `test_a_cancelled_subscription_is_confirmed_once_debits_stop` |
+| F — Valeur contradictoire | Démarche → champ ≠ justificatif → préparation bloquée jusqu'à correction | ✅ `test_a_value_contradicting_its_proof_blocks_until_corrected` (trois voies : reprendre la valeur, corriger le document, retaper) |
 
 ## 7. Volontairement écarté (pour l'instant)
 
@@ -214,3 +215,75 @@ une migration écrite.
 
 Tests : `backend/tests/test_vault.py` (45 cas, dont l'OCR réel d'une photo inclinée et d'un PDF scanné),
 `frontend/src/documents.test.tsx`.
+
+## 10. Démarches (livrées)
+
+| Étape | Ce qui se passe | Garantie |
+|---|---|---|
+| Choisir | 6 modèles : prime d'activité (caf.fr), Complémentaire santé solidaire (ameli), réclamation de frais bancaires, résiliation d'abonnement, ouverture d'un LEP, démarche libre — ou lancement depuis une opportunité (préremplie, titre précis) | Chaque modèle cite ses sources avec leur date de vérification et sa confiance |
+| Préremplir | Profil du foyer, comptes (banque, versements Caf), coffre (3 derniers bulletins : montant net social sinon net avant impôt, avis d'impôt), opportunité (montant, période, détail) | Chaque valeur garde sa provenance et sa preuve ; rien n'est deviné |
+| Vérifier | Une valeur saisie qui contredit son justificatif bloque ; trois sorties : reprendre la valeur du document, corriger le document (la démarche suit), retaper | `evaluate` : manque d'abord, pièces ensuite |
+| Pièces | Les pièces obligatoires du coffre jointes d'office, les facultatives à ton choix ; une pièce non vérifiée bloque ; une pièce trop ancienne est signalée | Le type de document est contrôlé |
+| Relire et valider | Écran de revue : destinataire, chaque valeur, chaque pièce, la lettre ; conséquences et engagements à cocher un par un | Validation liée à l'empreinte du dossier ; tout changement l'annule |
+| Transmettre | C'est toi : site officiel (étapes guidées) ou lettre (copie, téléchargement) ; « Je l'ai transmis » avec date et référence | Une seule fois (empreinte unique, même en double clic ou deux onglets) |
+| Suivre | Prochain point daté, relance, médiateur bancaire après deux mois (et dans l'année), résultat (obtenu / refusé / terminé / abandonné) | Un gain « obtenu » n'est compté qu'une fois |
+
+Ce que Bank ne fait jamais : transmettre à ta place, demander ou garder un numéro de sécurité sociale ou un numéro
+allocataire (saisis directement sur le site officiel), présenter une démarche comme acquise.
+
+Tests : `backend/tests/test_procedures.py` (scénarios C, D, F), `frontend/src/copilot.test.tsx`.
+
+## 11. Opportunités (livrées)
+
+Gain net attendu sur un an = montant annualisé × probabilité − coût − effort × valeur de ton temps (15 €/h par
+défaut, réglable). Les échéances proches passent devant ; une urgence légère ne passe jamais devant un gain chiffré.
+
+| Détecteur | Source des chiffres | Démarche liée |
+|---|---|---|
+| Écart d'aide (droit estimé > perçu) | Simulation OpenFisca chez toi vs versements reconnus | Prime d'activité si rien n'est perçu ; sinon vérifier la déclaration |
+| Risque de trop-perçu (perçu > estimé) | Idem | — (vérifier sa situation) |
+| Règles des aides modifiées depuis ta simulation | Veille (source officielle datée) | Relancer la simulation |
+| Complémentaire santé solidaire | Éligibilité OpenFisca ; économie = mutuelle prélevée − participation | Demande sur ameli |
+| Frais bancaires | Opérations « frais bancaires » du mois, plafonds R. 312-4-1, R. 312-4-2, D. 133-6 | Réclamation (plafond ou geste commercial) |
+| Cotisations bancaires élevées | 12 derniers mois | Comparateur public des tarifs |
+| Abonnements | Prélèvements mensuels récurrents (sauf ceux que tu as dit garder ; « je ne le reconnais pas » en tête) | Résiliation |
+| LEP | Éligibilité OpenFisca, taux datés | Ouverture à la banque |
+| Épargne qui dort | Point bas prévu − coussin − un mois de dépenses | Patrimoine |
+| Découvert prévu | Prévision du mois | Le mois |
+| Document qui expire | Date lue dans le coffre | Le document |
+
+Valeur obtenue : l'**estimé** (démarches en cours × chances) et le **confirmé** ne s'additionnent jamais ; un
+remboursement de frais ou l'arrêt d'un prélèvement constatés sur tes comptes te sont proposés, tu confirmes (un
+remboursement de soins n'est jamais pris pour un remboursement de frais). Une démarche refusée, abandonnée ou
+supprimée sort de l'estimé.
+
+Tests : `backend/tests/test_opportunities.py` (scénario E et propriétés Hypothesis sur le calcul).
+
+## 12. Veille (livrée)
+
+| Élément | Comportement |
+|---|---|
+| Sources intégrées | Ministère de l'Économie (toutes les actualités, RSS, toutes les 12 h) ; versions d'OpenFisca-France (PyPI, toutes les 24 h) comparées à la version qui calcule tes aides |
+| Tes sources | Flux RSS ou Atom en https, jamais vers ton réseau local ; 20 au plus |
+| Chaque élément | Source et niveau de confiance (officielle, technique, la tienne), date de publication, première lecture, dernière vérification, versions (contenu modifié → nouvelle version datée, de nouveau « nouveau » si tu l'avais lu) |
+| Pour toi | Thèmes (aides, épargne, impôts, énergie, banque, logement, santé, emploi, retraite, consommation) rapprochés ici de ta situation ; rien n'est envoyé aux sources |
+| Données de référence | Taux des livrets et tarif de l'électricité (révision au 1er février et au 1er août), barème de l'impôt (loi de finances suivante), sources des démarches (180 jours) : « à jour » ou « à revérifier », avec la date |
+| Réseau | https seulement, adresses publiques vérifiées puis épinglées (certificat vérifié pour le nom), 3 redirections contrôlées, 2 Mo, décompression bornée, requêtes conditionnelles, XML sans DTD ni entités |
+
+Le site Service-Public.fr ne publie pas de flux RSS ; d'autres sources officielles s'ajoutent comme « tes
+sources » ou dans le code, une fois leur format vérifié.
+
+Tests : `backend/tests/test_watch.py` (scénario A, réseau hostile, XML piégé, consentement, planning).
+
+## 13. Ce qui manque encore
+
+| Manque | Pourquoi ce n'est pas fait | Prochaine étape |
+|---|---|---|
+| Notifications hors de l'application (ntfy, e-mail) | Nécessite un canal choisi par toi et un serveur de notification | Phase 7 : ntfy auto-hébergé, contenu minimal (« 1 démarche à relancer »), jamais de montant |
+| File de tâches persistante | Les relèves et relances tournent dans une boucle horaire du processus web (idempotentes, sans perte grave) | Phase 7 |
+| Plus de démarches | Chaque modèle doit être vérifié sur sa source officielle avant d'exister | APL, déclaration trimestrielle Caf, changement de situation aux impôts, résiliation d'assurance emprunteur |
+| Plus de détecteurs | Même exigence de source | Énergie (consommation Linky vs offres), assurance emprunteur, frais réels |
+| Démarches et pistes dans l'assistant et pour HERMÈS | Lecture seule à concevoir (portées, anonymisation) | Outils MCP en lecture, propositions validées par toi |
+| Lettre en PDF prête à signer | Le texte suffit pour un envoi en ligne ou un copier-coller | Génération PDF locale |
+| Connecteurs publics (CAF, impôts, ameli) | Pas d'API ouverte aux applications personnelles | Parcours guidés (fait) ; navigateur assisté à l'étude |
+| Foyer multi-utilisateur | Changement de modèle profond | Après la phase 7 |
