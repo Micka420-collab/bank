@@ -1,0 +1,85 @@
+# Bank sur nimbus — 3 conteneurs, 4 réseaux, zéro port exposé hors du frontal.
+#
+#   ton reverse proxy TLS ──> web (nginx :8080) ──app──> api (FastAPI) ──fiscal──> fiscal (OpenFisca)
+#                                                          └──egress──> api.enablebanking.com
+#
+# * « fiscal » est sur un réseau interne : aucun accès Internet, ta situation fiscale ne sort jamais.
+# * « app » est interne : seul nginx parle à l'API.
+# * Tous les conteneurs : non-root, système de fichiers en lecture seule, aucune capability, pas d'escalade.
+
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs: ["/tmp:size=16m,mode=1777"]
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
+services:
+  web:
+    <<: *hardening
+    build: ./frontend
+    image: bank-web:latest
+    ports:
+      - "${BANK_BIND:-127.0.0.1}:${BANK_PORT:-8088}:8080"
+    tmpfs:
+      - /tmp:size=16m
+      - /var/cache/nginx:size=32m,uid=101,gid=101
+      - /var/run:size=1m,uid=101,gid=101
+    networks: [edge, app]
+    depends_on:
+      api: { condition: service_healthy }
+    deploy:
+      resources: { limits: { memory: 64m, pids: 64 } }
+
+  api:
+    <<: *hardening
+    build: ./backend
+    image: bank-api:latest
+    env_file: .env
+    environment:
+      BANK_ENV: prod
+      BANK_DATABASE_URL: sqlite:////data/bank.db
+      BANK_MASTER_KEY_FILE: /run/secrets/master_key
+      BANK_SETUP_TOKEN_FILE: /run/secrets/setup_token
+      BANK_FISCAL_ENGINE_URL: http://fiscal:8001
+      BANK_FISCAL_ENGINE_TOKEN_FILE: /run/secrets/fiscal_token
+    secrets: [master_key, setup_token, fiscal_token, enablebanking_key]
+    group_add: ["10010"]  # groupe « bank-secrets » : lecture des fichiers de ./secrets (mode 640)
+    volumes:
+      - bank-data:/data
+    networks: [app, fiscal, egress]
+    depends_on:
+      fiscal: { condition: service_healthy }
+    deploy:
+      resources: { limits: { memory: 384m, pids: 128 } }
+
+  fiscal:
+    <<: *hardening
+    build: ./fiscal-engine
+    image: bank-fiscal:latest
+    environment:
+      FISCAL_TOKEN_FILE: /run/secrets/fiscal_token
+    secrets: [fiscal_token]
+    group_add: ["10010"]
+    networks: [fiscal]
+    deploy:
+      resources: { limits: { memory: 768m, pids: 64 } }
+
+networks:
+  edge: {}
+  app: { internal: true }
+  fiscal: { internal: true }
+  egress: {}
+
+volumes:
+  bank-data: {}
+
+secrets:
+  master_key: { file: ./secrets/master_key }
+  setup_token: { file: ./secrets/setup_token }
+  fiscal_token: { file: ./secrets/fiscal_token }
+  # Clé privée de ton application Enable Banking (fichier vide tant que la synchro n'est pas configurée).
+  enablebanking_key: { file: ./secrets/enablebanking.pem }

@@ -1,0 +1,27 @@
+{
+  "as_of": "2026-08-01",
+  "source": "info.gouv.fr — taux des livrets réglementés au 1er août 2026 (publié le 31/07/2026)",
+  "products": [
+    {
+      "kind": "livret_a",
+      "name": "Livret A",
+      "rate_percent": "1.70",
+      "ceiling_cents": 2295000,
+      "note": "Intérêts exonérés d'impôt et de prélèvements sociaux. Plafond hors intérêts capitalisés."
+    },
+    {
+      "kind": "ldds",
+      "name": "LDDS",
+      "rate_percent": "1.70",
+      "ceiling_cents": 1200000,
+      "note": "Taux aligné sur le Livret A."
+    },
+    {
+      "kind": "lep",
+      "name": "Livret d'épargne populaire (LEP)",
+      "rate_percent": "2.50",
+      "ceiling_cents": 1000000,
+      "note": "Réservé sous condition de revenu fiscal de référence : l'éligibilité est vérifiée par la simulation OpenFisca."
+    }
+  ]
+}

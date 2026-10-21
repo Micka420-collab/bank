@@ -1,0 +1,4 @@
+# Version figée : un changement de barème = une mise à jour volontaire et testée (make fiscal-test).
+openfisca-france==176.1.2
+fastapi>=0.115
+uvicorn>=0.30

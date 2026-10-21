@@ -1,0 +1,21 @@
+# Secrets et données : JAMAIS dans git
+secrets/
+.env
+*.db
+*.db-wal
+*.db-shm
+backend/data/
+backups/
+
+# Outillage
+backend/.venv/
+fiscal-engine/.venv/
+**/__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.hypothesis/
+frontend/node_modules/
+frontend/dist/
