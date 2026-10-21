@@ -20,6 +20,8 @@ DEFAULTS: dict[str, Any] = {
     "assistant_name": "Bank",
     "conversation_retention_days": 365,
     "llm_model_caps": {},
+    # Opportunités : ce que vaut une heure de ton temps (hypothèse réglable) pour classer par gain net attendu.
+    "time_value_cents_per_hour": 1_500,
 }
 
 

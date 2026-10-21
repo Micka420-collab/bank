@@ -30,7 +30,9 @@ from app.api import (
     initiatives,
     insights,
     memory,
+    opportunities,
     planning,
+    procedures,
     system,
     transactions,
     vault,
@@ -212,6 +214,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         planning,
         initiatives,
         vault,
+        procedures,
+        opportunities,
         system,
     )
     for r in routers:
