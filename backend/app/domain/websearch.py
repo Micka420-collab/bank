@@ -163,7 +163,7 @@ def html_to_text(body: bytes | str, limit: int = MAX_PAGE_CHARS) -> str:
     try:
         parser.feed(raw[:1_500_000])
         parser.close()
-    except Exception:  # noqa: S110 - une page tordue ne doit rien casser : on garde ce qui a été lu
+    except Exception:  # noqa: S110 # nosec B110 - une page tordue ne doit rien casser : on garde ce qui a été lu
         pass
     text = _CONTROL.sub("", "".join(parser.parts))
     lines = [" ".join(line.split()) for line in text.splitlines()]

@@ -332,6 +332,17 @@ class AssistantError(Exception):
 
 
 ClientFactory = Callable[[str], OpenRouterClient]
+EventSink = Callable[[str, dict[str, Any]], None]  # (événement, données) : le fil d'une réponse en direct
+TOOL_STATUS = {
+    "web_search": "cherche sur le web",
+    "read_page": "lit une page",
+    "show_chart": "dessine le graphique",
+    "draw_diagram": "dessine un schéma",
+    "propose_actions": "prépare les boutons",
+    "can_i_buy": "fait le calcul",
+    "memory": "retient quelque chose",
+    "recall": "fouille vos conversations passées",
+}
 
 
 def default_client(api_key: str) -> OpenRouterClient:
@@ -915,9 +926,11 @@ def ask(
     channel: str | None = None,
     search_http: httpx.Client | None = None,
     search_resolver: netfetch.Resolver | None = None,
+    events: EventSink | None = None,
 ) -> dict[str, Any]:
     """Une question à l'assistant. ``privacy`` ne peut que resserrer le mode choisi pour le modèle (une messagerie
-    réglée sur « agrégats » ne reçoit jamais plus) ; ``channel`` nomme la messagerie d'où vient la question."""
+    réglée sur « agrégats » ne reçoit jamais plus) ; ``channel`` nomme la messagerie d'où vient la question ;
+    ``events`` reçoit le fil en direct (statuts, morceaux de texte) quand le client sait l'afficher."""
     row = provider(db)
     if row is None:
         raise AssistantError("Aucune clé OpenRouter enregistrée : ajoute-la dans Connecteurs", 409)
@@ -969,7 +982,7 @@ def ask(
         db, actor, today, conv.id, memory_on, catalogue=catalogue, search_on=search_on, search_http=search_http
     )
     try:
-        turn = _converse(db, row, ctx, messages, tools, make_client)
+        turn = _converse(db, row, ctx, messages, tools, make_client, events)
     except AssistantError:
         if created and not conv.messages:
             db.delete(conv)  # pas de conversation fantôme quand la toute première question échoue
@@ -1107,18 +1120,35 @@ def _converse(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]],
     make_client: ClientFactory,
+    events: EventSink | None = None,
 ) -> _Turn:
     """Boucle modèle ↔ outils, bornée : au plus MAX_TOOL_ROUNDS tours d'outils, puis une réponse sans outils.
-    Les plafonds sont revérifiés avant chaque appel ; chaque appel est compté (coût réel)."""
+    Les plafonds sont revérifiés avant chaque appel ; chaque appel est compté (coût réel). Avec ``events``, le
+    texte arrive en direct ; un tour d'outils après du texte envoie « reset » (ce texte n'était pas la réponse)."""
     client = make_client(row.api_key)
     cost = 0.0
     prompt_tokens = completion_tokens = calls = 0
     used: list[str] = []
+    streamed = False
+
+    def on_delta(piece: str) -> None:
+        nonlocal streamed
+        streamed = True
+        if events is not None:
+            events("delta", {"text": piece})
+
     while True:
         if calls:
             _check_caps(db, row, ctx.today)
         try:
-            result = client.chat(row.model, messages, max_tokens=900, temperature=0.4, tools=tools or None)
+            result = client.chat(
+                row.model,
+                messages,
+                max_tokens=900,
+                temperature=0.4,
+                tools=tools or None,
+                on_delta=on_delta if events is not None else None,
+            )
         except OpenRouterError as exc:
             if exc.tools_unsupported and tools:
                 _remember_no_tools(db, row.model)  # ce modèle ne sait pas : on ne lui proposera plus d'outils
@@ -1132,9 +1162,14 @@ def _converse(
         completion_tokens += result.completion_tokens
         if not (result.tool_calls and tools):
             return _Turn(result, calls, cost, prompt_tokens, completion_tokens, used)
+        if events is not None and streamed:
+            events("reset", {})  # ce qui a été montré précédait un appel d'outil : la vraie réponse vient après
+            streamed = False
         messages.append(result.assistant_message())
         for call in result.tool_calls[:MAX_CALLS_PER_ROUND]:
             used.append(call.name)
+            if events is not None:
+                events("status", {"text": TOOL_STATUS.get(call.name, "travaille"), "tool": call.name})
             messages.append(
                 {"role": "tool", "tool_call_id": call.id, "content": _execute_tool(ctx, call.name, call.arguments)}
             )

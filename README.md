@@ -58,6 +58,11 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
   assurances, bulletins, Linky… — avec ce que ça débloque), répond avec des boutons, des graphiques dessinés par
   Bank avec tes chiffres, des schémas, et cherche sur le web (SearXNG chez toi ou Brave, sous ton accord) en
   citant ses sources. Chaque bloc est construit et validé par le serveur, jamais par le modèle seul.
+- **Pensé pour le téléphone** : réponses de l'assistant en direct (le texte arrive au fil de l'eau, avec ce qu'il
+  fait — « cherche sur le web », « dessine le graphique »), chat en feuille qui reste au-dessus du clavier, bouton
+  flottant qui s'efface quand tu lis, cibles tactiles larges, installation sur l'écran d'accueil, bandeau hors
+  ligne — et des **notifications sur le téléphone** (Web Push, chiffrées pour ton appareil, sans messagerie ni
+  compte tiers) pour le découvert qui approche, la déclaration à faire, le gain à confirmer, le pilote arrêté.
 - **Simple et ludique** : cinq destinations (Aujourd'hui, Opérations, Gagner, Papiers, Épargne), des
   missions avec leur récompense, une tirelire qui se remplit avec ce que Bank t'a vraiment fait récupérer.
 - **Une interface de produit fini** : design system « Encre claire » (clair et sombre, choix dans Réglages),
@@ -275,6 +280,22 @@ L'assistant ne se contente pas de répondre ; il **prend l'initiative** et rend 
 Tout bloc (boutons, graphique, schéma, sources) est construit et validé par le serveur, conservé chiffré avec la
 conversation, et redevient du texte dans une messagerie (les boutons en indications, les sources en liens).
 
+La réponse arrive **en direct** : le texte au fil de l'eau (flux SSE, `POST /api/assistant/ask/stream`), des
+statuts qui disent ce que l'assistant fait (« lit ton dossier », « cherche sur le web », « dessine le graphique »),
+un « reset » quand ce qui a été montré précédait un appel d'outil, puis la réponse complète avec ses blocs. Un
+navigateur ou un serveur qui ne sait pas diffuser retombe sur la réponse en un bloc.
+
+### Notifications sur ton téléphone (Web Push)
+
+Réglages › **Notifications sur ce téléphone** › Activer : Bank te prévient par les notifications du navigateur —
+découvert qui approche, déclaration à faire, gain à confirmer, pilote arrêté, point du dimanche — sans messagerie
+ni compte tiers. Chaque message est chiffré pour ton appareil (RFC 8291, vérifié au bit près contre le vecteur de
+la norme) et signé par ton serveur (VAPID, RFC 8292) : le service de notification de l'éditeur du navigateur
+(Google, Apple, Mozilla) ne voit qu'un contenu illisible et l'adresse de ton serveur. Les appareils abonnés suivent
+le circuit des messageries (heures calmes, une seule fois, pause après trop d'échecs) ; un abonnement mort retire
+l'appareil ; huit appareils au plus ; accord « Notifications sur ce téléphone » révocable à tout moment. Sur
+iPhone, il faut d'abord ajouter Bank à l'écran d'accueil (Safari › Partager › Sur l'écran d'accueil).
+
 ### Un assistant qui se souvient de toi (à la manière d'Hermes Agent)
 
 Avec ton accord (demandé une fois, révocable dans Réglages › Confidentialité), l'assistant devient un compagnon
@@ -421,15 +442,17 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 892 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+Qualité au moment de la livraison : 902 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
 aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, scénarios adverses du
 banc d'essai crypto de Minara rejoués contre le pilote automatique, demandes simultanées qui ne passent jamais
 ensemble sous un plafond, Keccak-256 vérifié contre une implémentation de
 référence, intégration OpenFisca réelle, passkeys face à un authentificateur simulé, transaction validée avant
-l'envoi de chaque réponse, chat interactif face à un modèle simulé et à de faux moteurs de recherche), couverture
-92 %, 116 tests front (parcours de première ouverture, coffre, démarches, opportunités, veille, assistant, chat
-interactif, crypto, pilote, déclarations, corrélations, année qui vient, passkeys, erreurs qui disent quoi faire),
+l'envoi de chaque réponse, chat interactif face à un modèle simulé et à de faux moteurs de recherche, réponse en
+direct recomposée fragment par fragment, Web Push vérifié au bit près contre le vecteur de la RFC 8291 et déchiffré
+par un faux navigateur), couverture 92 %, 123 tests front (parcours de première ouverture, coffre, démarches,
+opportunités, veille, assistant, chat interactif et réponse en direct, notifications sur l'appareil, crypto,
+pilote, déclarations, corrélations, année qui vient, passkeys, erreurs qui disent quoi faire),
 mypy strict sans erreur,
 ruff et bandit propres, revue de sécurité indépendante du pilote et de la crypto (ses constats corrigés et
 testés), `pip-audit` et `npm audit` sans vulnérabilité connue, aucune erreur de console ni débordement

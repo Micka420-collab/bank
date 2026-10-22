@@ -36,12 +36,14 @@ from app.channels.signal import SignalAdapter
 from app.channels.slack import SlackAdapter
 from app.channels.telegram import TelegramAdapter
 from app.channels.text import LIMITS, measure_for, scrub, split_message
+from app.channels.webpush import WebPushAdapter
 from app.channels.whatsapp import WhatsAppAdapter
 from app.config import Settings
 from app.db import utcnow
 from app.models import ChannelConfig, ChannelLink
 from app.security.auth import SlidingWindowLimiter
 from app.services import channel_alerts, channels
+from app.services import push as push_service
 from app.services.assistant import ClientFactory
 
 log = logging.getLogger("bank.channels")
@@ -53,7 +55,7 @@ T = TypeVar("T")
 QUEUE_SIZE = 100
 SEND_ATTEMPTS = 3
 TYPING_EVERY = 4.0
-_FINGERPRINT_EXTRA = ("verify_token", "topic")
+_FINGERPRINT_EXTRA = ("verify_token", "topic", "vapid_public")
 
 
 def build_adapter(
@@ -110,7 +112,8 @@ def fingerprint(platform: str, row: ChannelConfig) -> str:
     """Ce qui, s'il change, impose de se reconnecter : les champs que tu saisis (pas le nom du robot, que la
     plateforme nous apprend à chaque connexion)."""
     sec, opt = channels.secrets_of(row), channels.options_of(row)
-    keys = [f.key for f in channels.PLATFORMS[platform].fields] + list(_FINGERPRINT_EXTRA)
+    spec = channels.PLATFORMS.get(platform)
+    keys = [f.key for f in (spec.fields if spec else ())] + list(_FINGERPRINT_EXTRA)
     material = {k: sec.get(k) or opt.get(k) for k in keys}
     return hashlib.sha256(json.dumps(material, sort_keys=True).encode()).hexdigest()
 
@@ -129,8 +132,12 @@ class Gateway:
         poll_seconds: float = 5.0,
         alert_seconds: float = 900.0,
         alert_first_delay: float = 60.0,
+        push_http: httpx.Client | None = None,
+        push_resolver: Callable[[str], list[str]] | None = None,
     ) -> None:
         self._db = factory_db
+        self._push_http = push_http  # client synchrone des notifications Web Push (remplaçable en test)
+        self._push_resolver = push_resolver
         self._settings = settings
         self._llm_factory = llm_factory
         self._limiter = limiter
@@ -210,15 +217,19 @@ class Gateway:
 
     def _start_platform(self, target: Wanted) -> None:
         assert self._http is not None  # créé par start()  # noqa: S101  # nosec B101
-        adapter = self._adapter_factory(
-            target.platform,
-            target.secrets,
-            target.options,
-            self._http,
-            cursor=target.cursor,
-            on_cursor=partial(self._cursor_saver, target.platform),
-            public_url=self._settings.public_url,
-        )
+        adapter: Adapter
+        if target.platform == push_service.PLATFORM:
+            adapter = WebPushAdapter(self._push_send)  # notifications du navigateur : envoi seulement, par appareil
+        else:
+            adapter = self._adapter_factory(
+                target.platform,
+                target.secrets,
+                target.options,
+                self._http,
+                cursor=target.cursor,
+                on_cursor=partial(self._cursor_saver, target.platform),
+                public_url=self._settings.public_url,
+            )
         queue: asyncio.Queue[Inbound] = asyncio.Queue(maxsize=QUEUE_SIZE)
         self.adapters[target.platform] = adapter
         self._queues[target.platform] = queue
@@ -413,6 +424,27 @@ class Gateway:
             await self._run(self._record_delivery, delivery, True, "", False)
             sent += 1
         return sent
+
+    def _push_send(self, chat_ref: str, text: str) -> None:
+        """Envoie une notification à un appareil (fil de travail) : l'abonnement est relu en base, jamais pris
+        tel quel du message, et un abonnement mort retire l'appareil."""
+        with self._db() as db:
+            link = push_service.link_for(db, chat_ref)
+            if link is None:
+                raise SendError("Appareil retiré", permanent=True)
+            try:
+                push_service.deliver(
+                    db,
+                    link,
+                    text,
+                    public_url=self._settings.public_url,
+                    http=self._push_http,
+                    resolver=self._push_resolver,
+                )
+            except push_service.PushError as exc:
+                db.commit()  # un abonnement expiré est noté même si l'envoi a échoué
+                raise SendError(str(exc), permanent=exc.status in (404, 410, 413)) from None
+            db.commit()
 
     def _plan(self, platforms: set[str], local: datetime) -> list[channel_alerts.Delivery]:
         with self._db() as db:

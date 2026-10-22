@@ -169,7 +169,7 @@ describe("panneau « Demande à Bank »", () => {
     expect(SUGGESTIONS.every((s) => host.textContent?.includes(s))).toBe(true);
     await click(SUGGESTIONS[0]!);
     await settle();
-    expect(body("/api/assistant/ask")).toEqual({ question: SUGGESTIONS[0], conversation_id: null });
+    expect(body("/api/assistant/ask/stream")).toEqual({ question: SUGGESTIONS[0], conversation_id: null });
     expect(host.querySelector(".assistant-turn.is-assistant strong")?.textContent).toBe("75 €");
     expect(host.textContent).toContain("anthropic/claude-haiku-5.5 · 0,21 ¢ · dossier anonymisé");
 
@@ -177,7 +177,7 @@ describe("panneau « Demande à Bank »", () => {
     await typeInto(ta, "Et mon loyer ?");
     await act(async () => { ta.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
     await settle();
-    const second = JSON.parse(String(calls.filter((c) => c.url === "/api/assistant/ask")[1]!.init!.body));
+    const second = JSON.parse(String(calls.filter((c) => c.url === "/api/assistant/ask/stream")[1]!.init!.body));
     expect(second).toEqual({ question: "Et mon loyer ?", conversation_id: 7 }); // l'historique vit côté serveur
     expect(host.textContent).toContain("réponse coupée");
     expect(host.textContent).toContain("Sans mémoire : rien n'est appris");

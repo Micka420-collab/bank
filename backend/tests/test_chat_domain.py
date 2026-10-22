@@ -55,7 +55,11 @@ def test_tenant_with_bank_connected_is_asked_for_the_lease_then_insurance() -> N
 
 def test_owner_is_not_asked_for_a_lease_and_a_stale_bank_asks_to_reconnect() -> None:
     inp = coverage.CoverageInput(
-        today=TODAY, bank_connected=1, transactions=50, last_transaction=date(2026, 9, 20), housing_status="proprietaire"
+        today=TODAY,
+        bank_connected=1,
+        transactions=50,
+        last_transaction=date(2026, 9, 20),
+        housing_status="proprietaire",
     )
     srcs = coverage.sources(inp)
     by = {s.key: s for s in srcs}
@@ -100,7 +104,11 @@ def test_catalogue_resolves_only_known_keys_and_caps_the_count() -> None:
 
 
 def test_chart_block_keeps_integers_colors_and_bounds() -> None:
-    items = [{"label": "Courses", "value": "12345.6", "color": "#AABBCC"}, {"label": "", "value": 1}, {"label": "X", "value": "abc"}]
+    items = [
+        {"label": "Courses", "value": "12345.6", "color": "#AABBCC"},
+        {"label": "", "value": 1},
+        {"label": "X", "value": "abc"},
+    ]
     block = blocks.chart_block("donut", "Dépenses", items=items, source="Bank", dataset="spend_by_category")
     assert block["items"] == [{"label": "Courses", "value": 12346, "color": "#AABBCC"}, {"label": "X", "value": 0}]
     pairs = blocks.chart_block("pairs", "Reçu/dépensé", items=[{"label": "oct.", "a": 100, "b": 50}])
@@ -152,7 +160,13 @@ def test_sources_block_keeps_https_only_and_validate_blocks_drops_junk() -> None
     assert src is not None and [it["n"] for it in src["items"]] == [1] and src["query"] == "apl 2026"
     out = blocks.validate_blocks(
         [
-            {"type": "actions", "items": [{"kind": "navigate", "label": "x", "page": "evil"}, {"kind": "ask", "label": "Q ?", "prompt": "q"}]},
+            {
+                "type": "actions",
+                "items": [
+                    {"kind": "navigate", "label": "x", "page": "evil"},
+                    {"kind": "ask", "label": "Q ?", "prompt": "q"},
+                ],
+            },
             {"type": "chart", "kind": "bars", "title": "t", "items": [{"label": "a", "value": 1}]},
             {"type": "diagram", "nodes": [{"id": "a", "label": "x"}]},
             {"type": "weird"},
@@ -189,7 +203,12 @@ def test_query_is_scrubbed_and_secrets_stop_it() -> None:
 def test_results_are_normalised_https_only_deduplicated_and_capped() -> None:
     payload = {
         "results": [
-            {"url": "https://www.service-public.fr/a", "title": "<b>APL</b>", "content": "Aide au logement…", "publishedDate": "2026-05-01T00:00:00"},
+            {
+                "url": "https://www.service-public.fr/a",
+                "title": "<b>APL</b>",
+                "content": "Aide au logement…",
+                "publishedDate": "2026-05-01T00:00:00",
+            },
             {"url": "https://www.service-public.fr/a", "title": "doublon"},
             {"url": "http://insecure.example", "title": "non"},
             {"url": "https://user:pw@evil.example/x", "title": "identifiants"},
@@ -199,7 +218,13 @@ def test_results_are_normalised_https_only_deduplicated_and_capped() -> None:
     out = websearch.parse_searxng(payload)
     assert len(out) == websearch.MAX_RESULTS and out[0].title == "APL" and out[0].host == "www.service-public.fr"
     assert out[0].date == "2026-05-01" and out[0].snippet == "Aide au logement…"
-    brave = websearch.parse_brave({"web": {"results": [{"title": "Brave", "url": "https://b.example/p", "description": "d", "age": "2 days ago"}]}})
+    brave = websearch.parse_brave(
+        {
+            "web": {
+                "results": [{"title": "Brave", "url": "https://b.example/p", "description": "d", "age": "2 days ago"}]
+            }
+        }
+    )
     assert brave[0].url == "https://b.example/p" and brave[0].snippet == "d"
     assert websearch.parse_brave({"web": "x"}) == [] and websearch.parse_searxng(None) == []
     shown = websearch.results_for_model(out[:2])

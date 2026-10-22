@@ -65,6 +65,18 @@ PURPOSES: dict[str, dict[str, Any]] = {
         "default": False,
         "version": 1,
     },
+    "push": {
+        "title": "Notifications sur ce téléphone",
+        "text": (
+            "Bank te prévient par les notifications de ton navigateur (découvert qui approche, déclaration à faire, "
+            "gain à confirmer, pilote arrêté). Le message est chiffré pour ton appareil : le service de notification "
+            "de l'éditeur du navigateur (Google, Apple, Mozilla) ne voit qu'un contenu illisible et l'adresse de ton "
+            "serveur. Les heures calmes des messageries s'appliquent. Révocable ici ou en coupant les notifications "
+            "sur l'appareil."
+        ),
+        "default": False,
+        "version": 1,
+    },
     "web_search": {
         "title": "Recherche web par l'assistant",
         "text": (

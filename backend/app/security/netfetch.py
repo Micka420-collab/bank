@@ -210,6 +210,50 @@ def post_json(
         raise FetchError("Réponse illisible (JSON attendu)") from exc
 
 
+@dataclass(frozen=True)
+class PostResult:
+    status: int
+    body: bytes
+
+
+def post_bytes(
+    url: str,
+    body: bytes,
+    *,
+    headers: dict[str, str],
+    http: httpx.Client | None = None,
+    resolver: Resolver | None = None,
+    max_bytes: int = 64_000,
+    seconds: float = 20.0,
+    pin: bool | None = None,
+) -> PostResult:
+    """POST d'un corps brut vers une adresse publique (service de notification Web Push) : mêmes garde-fous que
+    fetch, aucune redirection suivie, réponse courte ; le code HTTP est rendu tel quel (201 = accepté, 404/410 =
+    abonnement mort), à l'appelant de juger."""
+    pin = (not _proxy_configured()) if pin is None else pin
+    client = http or httpx.Client(timeout=httpx.Timeout(seconds, connect=10.0), follow_redirects=False)
+    started = time.monotonic()
+    try:
+        parts, ip = check_url(url, resolver)
+        host = parts.hostname or ""
+        sent = {"User-Agent": USER_AGENT, "Accept-Encoding": "identity"}
+        sent.update({k: v for k, v in headers.items() if k.lower() not in ("host", "cookie")})
+        target, extensions = url, {}
+        if pin:
+            netloc = f"[{ip}]" if ":" in ip else ip
+            target = urlunsplit((parts.scheme, netloc, parts.path or "/", parts.query, ""))
+            sent["Host"] = host
+            extensions = {"sni_hostname": host}
+        with client.stream("POST", target, headers=sent, content=body, extensions=extensions) as resp:
+            raw = _read(resp, max_bytes, started, seconds)
+            return PostResult(resp.status_code, raw)
+    except httpx.HTTPError as exc:
+        raise FetchError("Service injoignable (réseau)") from exc
+    finally:
+        if http is None:
+            client.close()
+
+
 def get_json(url: str, **kw: Any) -> Any:
     result = fetch(url, accept="application/json", **kw)
     try:

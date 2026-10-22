@@ -315,12 +315,19 @@ def set_status(db: Session, platform: str, status: str, *, error: str | None = N
         row.last_error = error[:300]
 
 
+WEBPUSH = "webpush"  # notifications du navigateur : même circuit d'alertes, mais pas une messagerie (accord « push »)
+
+
 def active_platforms(db: Session) -> dict[str, ChannelConfig]:
-    """Messageries à faire tourner : accord donné, activées, complètes."""
-    if not consents.granted(db, "channels"):
-        return {}
-    rows = db.scalars(select(ChannelConfig).where(ChannelConfig.enabled.is_(True)))
-    return {r.platform: r for r in rows if r.platform in PLATFORMS and not missing_fields(r, r.platform)}
+    """Messageries à faire tourner : accord donné, activées, complètes. Les notifications du navigateur suivent
+    leur propre accord."""
+    rows = list(db.scalars(select(ChannelConfig).where(ChannelConfig.enabled.is_(True))))
+    out: dict[str, ChannelConfig] = {}
+    if consents.granted(db, "channels"):
+        out = {r.platform: r for r in rows if r.platform in PLATFORMS and not missing_fields(r, r.platform)}
+    if consents.granted(db, "push"):
+        out.update({r.platform: r for r in rows if r.platform == WEBPUSH})
+    return out
 
 
 # ------------------------------------------------------------------ vue pour l'écran « Messageries »

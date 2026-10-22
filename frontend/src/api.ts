@@ -71,6 +71,86 @@ export async function api<T>(path: string, { method = "GET", body, form, signal 
   return (await res.blob()) as T;
 }
 
+/** Lecteur de flux SSE (« event: » / « data: », cadres séparés par une ligne vide). */
+export function parseSseChunk(buffer: string): { frames: { event: string; data: string }[]; rest: string } {
+  const frames: { event: string; data: string }[] = [];
+  let rest = buffer;
+  for (;;) {
+    const cut = rest.indexOf("\n\n");
+    if (cut < 0) break;
+    const raw = rest.slice(0, cut);
+    rest = rest.slice(cut + 2);
+    let event = "message";
+    const data: string[] = [];
+    for (const line of raw.split("\n")) {
+      if (line.startsWith("event:")) event = line.slice(6).trim();
+      else if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+    }
+    if (data.length) frames.push({ event, data: data.join("\n") });
+  }
+  return { frames, rest };
+}
+
+export type StreamHandlers = {
+  onStatus?: (text: string, tool?: string) => void;
+  onDelta?: (text: string) => void;
+  onReset?: () => void;
+};
+
+/** Une question à l'assistant, répondue en direct : les statuts et les morceaux de texte arrivent au fil de
+ * l'eau, la réponse complète (avec ses blocs) à la fin. Un serveur qui ne sait pas diffuser déclenche le repli
+ * vers la réponse en un bloc. */
+export async function askStream(
+  body: { question: string; conversation_id: number | null },
+  handlers: StreamHandlers,
+  signal?: AbortSignal,
+): Promise<AssistantAnswer> {
+  const headers: Record<string, string> = { Accept: "text/event-stream", "Content-Type": "application/json", "X-CSRF-Token": readCookie("bank_csrf") };
+  const res = await fetch("/api/assistant/ask/stream", { method: "POST", headers, body: JSON.stringify(body), credentials: "same-origin", cache: "no-store", signal });
+  if (res.status === 401) window.dispatchEvent(new Event("bank:unauthorized"));
+  if (res.status === 404 || res.status === 405) return api<AssistantAnswer>("/api/assistant/ask", { method: "POST", body, signal });
+  if (!res.ok) {
+    let detail: unknown = null;
+    try {
+      detail = (await res.json()).detail;
+    } catch {
+      /* corps non JSON */
+    }
+    throw new ApiError(res.status, errorMessage(detail, statusMessage(res.status)));
+  }
+  if (!res.body || !(res.headers.get("content-type") ?? "").includes("text/event-stream")) {
+    return (await res.json()) as AssistantAnswer;
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: AssistantAnswer | null = null;
+  for (;;) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+    const parsed = parseSseChunk(done ? buffer + "\n\n" : buffer);
+    buffer = parsed.rest;
+    for (const f of parsed.frames) {
+      let data: unknown = null;
+      try {
+        data = JSON.parse(f.data);
+      } catch {
+        continue;
+      }
+      const d = (data ?? {}) as Record<string, unknown>;
+      if (f.event === "status") handlers.onStatus?.(String(d.text ?? ""), typeof d.tool === "string" ? d.tool : undefined);
+      else if (f.event === "delta") handlers.onDelta?.(String(d.text ?? ""));
+      else if (f.event === "reset") handlers.onReset?.();
+      else if (f.event === "done") result = data as AssistantAnswer;
+      else if (f.event === "error") throw new ApiError(Number(d.status ?? 500), errorMessage(d.detail, statusMessage(Number(d.status ?? 500))));
+    }
+    if (done) break;
+  }
+  if (!result) throw new ApiError(502, "La réponse s'est interrompue : réessaie.");
+  window.dispatchEvent(new Event("bank:changed"));
+  return result;
+}
+
 export function useApi<T>(path: string | null): {
   data: T | null;
   error: string | null;

@@ -12,10 +12,13 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
+
+OnDelta = Callable[[str], None]
 
 BASE_URL = "https://openrouter.ai/api/v1"
 USER_AGENT = "Bank/0.4 (self-hosted personal finance)"  # ASCII only
@@ -112,13 +115,26 @@ class OpenRouterClient:
             chunks.append(chunk)
         return b"".join(chunks)
 
-    def _request(self, method: str, path: str, *, auth: bool, body: dict[str, Any] | None = None) -> Any:
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        auth: bool,
+        body: dict[str, Any] | None = None,
+        on_delta: OnDelta | None = None,
+    ) -> Any:
+        """Un appel ; avec ``on_delta``, la réponse est lue en flux SSE et chaque morceau de texte est transmis au
+        fur et à mesure — le résultat rendu est alors le même objet qu'en lecture d'un bloc."""
         started = time.monotonic()
         try:
+            headers = self._headers(auth=auth)
+            if on_delta is not None:
+                headers["Accept"] = "text/event-stream"
             with self._http.stream(
                 method,
                 f"{self._base}{path}",
-                headers=self._headers(auth=auth),
+                headers=headers,
                 content=json.dumps(body).encode("utf-8") if body is not None else None,
             ) as resp:
                 if resp.status_code in (301, 302, 303, 307, 308):
@@ -155,6 +171,8 @@ class OpenRouterClient:
                     raise OpenRouterError(f"OpenRouter indisponible ({resp.status_code})", resp.status_code)
                 if resp.status_code != 200:
                     raise OpenRouterError(f"Réponse inattendue ({resp.status_code})", resp.status_code)
+                if on_delta is not None and "text/event-stream" in resp.headers.get("content-type", ""):
+                    return _assemble_stream(self._sse_events(resp, started), on_delta)
                 raw = self._read_bounded(resp, started)
         except httpx.HTTPError as exc:
             # Le message d'httpx peut contenir l'URL : jamais la clé (elle voyage dans un en-tête).
@@ -163,6 +181,31 @@ class OpenRouterClient:
             return json.loads(raw)
         except (ValueError, RecursionError) as exc:
             raise OpenRouterError("Réponse non JSON", 200, permanent=True) from exc
+
+    def _sse_events(self, resp: httpx.Response, started: float) -> Iterator[Any]:
+        """Les objets JSON d'un flux SSE (``data: {...}``), lus ligne à ligne, bornés en taille et en durée ; les
+        commentaires (``: OPENROUTER PROCESSING``) et ``[DONE]`` sont ignorés."""
+        size = 0
+        buffer = b""
+        for chunk in resp.iter_bytes():
+            size += len(chunk)
+            if size > MAX_BODY_BYTES:
+                raise OpenRouterError("Réponse trop volumineuse", resp.status_code, permanent=True)
+            if time.monotonic() - started > MAX_SECONDS_PER_CALL:
+                raise OpenRouterError("OpenRouter trop lent (délai dépassé)", resp.status_code)
+            buffer += chunk
+            while b"\n" in buffer:
+                line, buffer = buffer.split(b"\n", 1)
+                text = line.strip().decode("utf-8", "replace")
+                if not text.startswith("data:"):
+                    continue  # commentaire de maintien, ligne vide, champ event
+                data = text[5:].strip()
+                if data == "[DONE]":
+                    return
+                try:
+                    yield json.loads(data)
+                except (ValueError, RecursionError):
+                    continue
 
     # ------------------------------------------------------------------ modèles
     def list_models(self) -> list[ModelInfo]:
@@ -188,7 +231,10 @@ class OpenRouterClient:
         max_tokens: int = 700,
         temperature: float = 0.3,
         tools: list[dict[str, Any]] | None = None,
+        on_delta: OnDelta | None = None,
     ) -> ChatResult:
+        """Une réponse du modèle. Avec ``on_delta``, elle est demandée en flux : chaque morceau de texte est
+        transmis dès qu'il arrive, et le résultat final est identique (texte, appels d'outils, usage, coût)."""
         if not self._key:
             raise OpenRouterError("Aucune clé OpenRouter enregistrée", permanent=True)
         if not valid_model_id(model):
@@ -203,8 +249,69 @@ class OpenRouterClient:
         if tools:
             body["tools"] = tools
             body["tool_choice"] = "auto"
-        payload = self._request("POST", "/chat/completions", auth=True, body=body)
+        if on_delta is not None:
+            body["stream"] = True
+        payload = self._request("POST", "/chat/completions", auth=True, body=body, on_delta=on_delta)
         return _parse_chat(payload, model)
+
+
+def _assemble_stream(events: Iterator[Any], on_delta: OnDelta) -> dict[str, Any]:
+    """Recompose, à partir des morceaux d'un flux, la même charge utile qu'une réponse en un bloc : texte,
+    appels d'outils (fragments d'arguments concaténés par index), raison d'arrêt, usage, modèle, ou erreur."""
+    text: list[str] = []
+    calls: dict[int, dict[str, Any]] = {}
+    finish: Any = None
+    usage: Any = None
+    model: Any = None
+    error: Any = None
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        if isinstance(ev.get("error"), dict):
+            error = ev["error"]
+        if ev.get("model"):
+            model = ev["model"]
+        if isinstance(ev.get("usage"), dict):
+            usage = ev["usage"]
+        choices = ev.get("choices")
+        if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+            continue
+        choice = choices[0]
+        if choice.get("finish_reason"):
+            finish = choice["finish_reason"]
+        delta = _dict(choice.get("delta"))
+        piece = delta.get("content")
+        if isinstance(piece, list):
+            piece = "".join(str(p.get("text", "")) for p in piece if isinstance(p, dict))
+        if isinstance(piece, str) and piece:
+            text.append(piece)
+            on_delta(piece)
+        raw_calls = delta.get("tool_calls")
+        if isinstance(raw_calls, list):
+            for c in raw_calls:
+                if not isinstance(c, dict):
+                    continue
+                idx = c.get("index")
+                key = idx if isinstance(idx, int) else len(calls)
+                slot = calls.setdefault(key, {"id": "", "function": {"name": "", "arguments": ""}})
+                if c.get("id"):
+                    slot["id"] = str(c["id"])
+                fn = _dict(c.get("function"))
+                if fn.get("name"):
+                    slot["function"]["name"] = str(fn["name"])
+                args = fn.get("arguments")
+                if isinstance(args, str):
+                    slot["function"]["arguments"] += args
+    if error is not None:
+        return {"error": error}
+    message: dict[str, Any] = {"role": "assistant", "content": "".join(text)}
+    if calls:
+        message["tool_calls"] = [calls[k] for k in sorted(calls)]
+    return {
+        "model": model,
+        "usage": usage or {},
+        "choices": [{"message": message, "finish_reason": finish or ("tool_calls" if calls else "stop")}],
+    }
 
 
 # ---------------------------------------------------------------------------- lecture tolérante

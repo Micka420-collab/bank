@@ -109,7 +109,7 @@ describe("chat interactif", () => {
     expect(host.querySelector(".assistant-opening")?.textContent).toContain("40 % de relié");
     expect(host.querySelectorAll(".chat-buttons .btn")).toHaveLength(2);
     await click("Où est parti mon argent ?");
-    expect(body("/api/assistant/ask")).toEqual({ question: "Où est parti mon argent ce mois-ci ?", conversation_id: null });
+    expect(body("/api/assistant/ask/stream")).toEqual({ question: "Où est parti mon argent ce mois-ci ?", conversation_id: null });
     expect(host.querySelector(".assistant-opening")).toBeNull(); // la conversation a commencé
     expect(host.textContent).toContain("Surtout le logement.");
   });
@@ -156,7 +156,7 @@ describe("chat interactif", () => {
     expect(button("Suivre la déclaration trimestrielle").disabled).toBe(true);
     // Question suivante : repart au modèle dans la même conversation.
     await click("Et mon loyer ?");
-    const asks = calls.filter((c) => c.url === "/api/assistant/ask").map((c) => JSON.parse(String(c.init!.body)));
+    const asks = calls.filter((c) => c.url === "/api/assistant/ask/stream").map((c) => JSON.parse(String(c.init!.body)));
     expect(asks[1]).toEqual({ question: "Et mon loyer ?", conversation_id: 7 });
   });
 

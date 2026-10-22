@@ -24,9 +24,11 @@ critères d'acceptation. Effort : S = une session, M = quelques-unes, L = un cha
 | [16](https://github.com/Micka420-collab/bank/issues/16) | **Sauvegarde hors site avec restauration testée** ; Renovate et pip-audit en CI | Dormir tranquille | S |
 | [17](https://github.com/Micka420-collab/bank/issues/17) | **Foyer à deux** : conjoint, comptes joints, qui voit quoi | Si c'est ta situation | L |
 | [18](https://github.com/Micka420-collab/bank/issues/18) | **Chat interactif** : l'assistant prend l'initiative (relier ce qui manque, avec ce que ça débloque), boutons, graphiques dessinés par Bank, schémas, recherche web (SearXNG ou Brave) avec sources | Un chat qui agit, jamais un chiffre ni un bouton inventé | L |
+| [19](https://github.com/Micka420-collab/bank/issues/19) | **Téléphone** : réponse du chat en direct, feuille de chat qui suit le clavier, bouton flottant discret, hors ligne, installation sur l'écran d'accueil, notifications Web Push (RFC 8291/8292, sans dépendance) | Bank se vit d'abord sur le téléphone | M |
 
 Ordre de développement : 1 → 2 → 3 → 5 → 13, puis le reste selon ce qui te sert d'abord. Livré le 22 octobre
 2026 : 1 et 2 ([docs/DECLARATIONS.md](DECLARATIONS.md)), 3 ([docs/CORRELATIONS.md](CORRELATIONS.md)), 5 (« L'année
-qui vient », README), 13 (passkeys, SECURITY.md), 18 (« Un chat qui agit », README et SECURITY.md). Les règles qui portent une
+qui vient », README), 13 (passkeys, SECURITY.md), 18 (« Un chat qui agit », README et SECURITY.md), 19 (« Pensé pour le
+téléphone » et « Notifications sur ton téléphone », README ; [docs/CANAUX.md](CANAUX.md)). Les règles qui portent une
 date (fenêtres d'actualisation, plafonds, taux) sont sourcées et datées dans le code et dans `docs/`, et Bank dit
 quand les revérifier.

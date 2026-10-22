@@ -312,7 +312,12 @@ def test_without_consent_nothing_is_learned_and_the_conversation_vanishes(app, w
     out = world.post("/api/assistant/ask", json={"question": "Combien il me reste ?"}).json()
     assert out["memory_on"] is False and out["memory"] == [] and out["conversation_id"]
     first = FakeLlm.calls[-1]
-    assert first["tools"] == ["can_i_buy", "propose_actions", "show_chart", "draw_diagram"]  # ni mémoire ni recherche dans le passé sans ton accord
+    assert first["tools"] == [
+        "can_i_buy",
+        "propose_actions",
+        "show_chart",
+        "draw_diagram",
+    ]  # ni mémoire ni recherche dans le passé sans ton accord
     assert "Tu es Bank" in first["messages"][0]["content"] and "Mémoire :" not in first["messages"][0]["content"]
     assert [m["role"] for m in first["messages"]] == ["system", "system", "system", "user"]
     # La suite de la conversation reprend l'historique côté serveur
@@ -339,7 +344,14 @@ def test_live_memory_writes_are_visible_and_the_snapshot_stays_frozen(app, world
         {"action": "add", "store": "user", "id": out["memory"][0]["id"], "content": "Préfère qu'on aille droit au but."}
     ]
     assert out["tools"] == ["memory"] and out["cost_usd"] == pytest.approx(0.0005)
-    assert FakeLlm.calls[0]["tools"] == ["memory", "recall", "can_i_buy", "propose_actions", "show_chart", "draw_diagram"]
+    assert FakeLlm.calls[0]["tools"] == [
+        "memory",
+        "recall",
+        "can_i_buy",
+        "propose_actions",
+        "show_chart",
+        "draw_diagram",
+    ]
     tool_msg = FakeLlm.calls[1]["messages"][-1]
     assert tool_msg["role"] == "tool" and json.loads(tool_msg["content"])["success"] is True
     assert FakeLlm.calls[1]["messages"][-2]["tool_calls"][0]["function"]["name"] == "memory"
@@ -412,7 +424,10 @@ def test_a_model_without_tools_is_retried_and_remembered(app, world: TestClient)
     ]
     out = world.post("/api/assistant/ask", json={"question": "Salut"}).json()
     assert out["answer"] == "Sans outils, mais je réponds."
-    assert FakeLlm.calls[0]["tools"] == ["can_i_buy", "propose_actions", "show_chart", "draw_diagram"] and FakeLlm.calls[1]["tools"] == []
+    assert (
+        FakeLlm.calls[0]["tools"] == ["can_i_buy", "propose_actions", "show_chart", "draw_diagram"]
+        and FakeLlm.calls[1]["tools"] == []
+    )
     world.post("/api/assistant/ask", json={"question": "Encore"})
     assert FakeLlm.calls[-1]["tools"] == []  # mémorisé : plus d'outils proposés à ce modèle
     assert world.get("/api/assistant").json()["last_error"] is None
@@ -530,7 +545,12 @@ def test_aggregates_privacy_turns_memory_off(world: TestClient) -> None:
     _consent(world)
     world.post("/api/memory/entries", json={"store": "user", "content": "Aime le vélo."})
     out = world.post("/api/assistant/ask", json={"question": "Bonjour"}).json()
-    assert out["memory_on"] is False and FakeLlm.calls[-1]["tools"] == ["can_i_buy", "propose_actions", "show_chart", "draw_diagram"]
+    assert out["memory_on"] is False and FakeLlm.calls[-1]["tools"] == [
+        "can_i_buy",
+        "propose_actions",
+        "show_chart",
+        "draw_diagram",
+    ]
     assert not any("vélo" in m["content"] for m in FakeLlm.calls[-1]["messages"])
     assert world.get("/api/assistant").json()["memory"] == {"consent": True, "asked": True, "available": False}
     assert world.get("/api/memory").json()["available"] is False
@@ -556,7 +576,12 @@ def test_revoking_consent_stops_memory_mid_conversation(world: TestClient) -> No
     assert out["memory_on"] is True
     _consent(world, False)
     out2 = world.post("/api/assistant/ask", json={"question": "Et ?", "conversation_id": out["conversation_id"]})
-    assert out2.json()["memory_on"] is False and FakeLlm.calls[-1]["tools"] == ["can_i_buy", "propose_actions", "show_chart", "draw_diagram"]
+    assert out2.json()["memory_on"] is False and FakeLlm.calls[-1]["tools"] == [
+        "can_i_buy",
+        "propose_actions",
+        "show_chart",
+        "draw_diagram",
+    ]
     assert not any("vélo" in m["content"] for m in FakeLlm.calls[-1]["messages"] if m["role"] == "system")
 
 

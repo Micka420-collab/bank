@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useReducer, useState } from "re
 import { api, ApiError, useApi, type Me } from "./api";
 import { Assistant } from "./components/Assistant";
 import { Icon, type IconName } from "./components/Icon";
+import { InstallHint, OfflineStrip, useScrollingDown } from "./components/mobile";
 import { Onboarding, onboardingWanted } from "./components/Onboarding";
 import { ErrorNote, Loading, ToastProvider } from "./components/ui";
 import { Login } from "./pages/Auth";
@@ -75,6 +76,7 @@ export function App() {
   // Fin de l'accueil déjà sur #/aujourdhui : le hash ne change pas, aucun « hashchange » — on redessine nous-mêmes.
   const [, redraw] = useReducer((n: number) => n + 1, 0);
   const route = useRoute();
+  const reading = useScrollingDown(); // on lit vers le bas : le bouton flottant s'efface, les chiffres restent visibles
 
   const refresh = useCallback(async () => {
     try {
@@ -155,7 +157,9 @@ export function App() {
           </Suspense>
         </main>
       </div>
-      <button type="button" className="fab" onClick={() => setAskOpen(true)} aria-label="Demande à Bank"><Icon name="spark" /></button>
+      <OfflineStrip />
+      <InstallHint />
+      <button type="button" className={`fab${reading ? " is-hidden" : ""}`} onClick={() => setAskOpen(true)} aria-label="Demande à Bank"><Icon name="spark" /></button>
       <Assistant open={askOpen} onClose={() => setAskOpen(false)} />
       <nav className="tabbar" aria-label="Navigation">
         {TABS.map((n) => (

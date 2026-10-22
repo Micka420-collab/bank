@@ -6,8 +6,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import {
   api,
+  askStream,
   useApi,
-  type AssistantAnswer,
   type AssistantOpening,
   type AssistantStatus,
   type ChatBlock,
@@ -33,6 +33,8 @@ export type Turn =
       notices?: Notice[];
       feedback?: "up" | "down" | null;
       blocks?: ChatBlock[];
+      streaming?: boolean; // réponse en cours : le texte arrive morceau par morceau
+      status?: string; // ce que l'assistant fait en ce moment (lit ton dossier, cherche sur le web…)
     };
 type AssistantTurn = Extract<Turn, { role: "assistant" }>;
 
@@ -146,6 +148,24 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
     if (el && typeof el.scrollTo === "function") el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [turns, busy]);
 
+  // Clavier virtuel (iOS surtout) : la feuille se raccourcit de la hauteur du clavier, la saisie reste visible.
+  const panelRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!open || !vv) return undefined;
+    const apply = () => {
+      const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      panelRef.current?.style.setProperty("--kb-offset", `${offset}px`);
+    };
+    apply();
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
+    return () => {
+      vv.removeEventListener("resize", apply);
+      vv.removeEventListener("scroll", apply);
+    };
+  }, [open]);
+
   const updateAssistantTurn = useCallback((index: number, change: (t: AssistantTurn) => AssistantTurn) => {
     setTurns((prev) => prev.map((t, i) => (i === index && t.role === "assistant" ? change(t) : t)));
   }, []);
@@ -155,15 +175,26 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
     if (!q || busy) return;
     setError(null);
     setBusy(true);
-    setTurns((prev) => [...prev, { role: "user", content: q }]);
+    // La question, puis une réponse « en cours » qui se remplit au fil de l'eau.
+    setTurns((prev) => [...prev, { role: "user", content: q }, { role: "assistant", content: "", streaming: true, status: "lit ton dossier" }]);
     setQuestion("");
-    try {
-      const r = await api<AssistantAnswer>("/api/assistant/ask", {
-        method: "POST",
-        body: { question: q, conversation_id: conversationId },
-      });
+    const patchLast = (change: (t: AssistantTurn) => AssistantTurn) =>
       setTurns((prev) => {
-        const next = [...prev];
+        const i = prev.length - 1;
+        const last = prev[i];
+        return last && last.role === "assistant" ? [...prev.slice(0, i), change(last)] : prev;
+      });
+    try {
+      const r = await askStream(
+        { question: q, conversation_id: conversationId },
+        {
+          onStatus: (label) => patchLast((t) => ({ ...t, status: label })),
+          onDelta: (piece) => patchLast((t) => ({ ...t, content: t.content + piece, status: undefined })),
+          onReset: () => patchLast((t) => ({ ...t, content: "", status: "réfléchit" })),
+        },
+      );
+      setTurns((prev) => {
+        const next = prev.slice(0, -1); // la réponse en cours laisse place à la réponse complète
         // La conversation précédente a été fermée entre-temps (longue pause) : on le montre.
         if (conversationId !== null && r.conversation_id !== conversationId) {
           next.splice(next.length - 1, 0, { role: "divider", content: "Nouvelle conversation" });
@@ -184,7 +215,7 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
     } catch (e) {
       setError((e as Error).message);
       setQuestion(q);
-      setTurns((prev) => prev.slice(0, -1));
+      setTurns((prev) => prev.slice(0, -2)); // ni la question ni la réponse amorcée : la question revient dans le champ
     } finally {
       setBusy(false);
     }
@@ -278,7 +309,7 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
   const askSearch = configured && !askConsent && search?.configured === true && !search.consent && !search.asked;
   return (
     <div className="assistant-backdrop" onClick={onClose}>
-      <aside className="assistant-panel" role="dialog" aria-modal="true" aria-labelledby="assistant-panel-title" onClick={(e) => e.stopPropagation()}>
+      <aside ref={panelRef} className="assistant-panel" role="dialog" aria-modal="true" aria-labelledby="assistant-panel-title" onClick={(e) => e.stopPropagation()}>
         <header className="assistant-head">
           <div>
             <h2 id="assistant-panel-title"><Icon name="spark" /> Demande à {name}</h2>
@@ -364,7 +395,12 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
               <p key={i} className="assistant-divider faint" role="separator">{t.content}</p>
             ) : (
               <div key={i} className={`assistant-turn is-${t.role}`}>
-                {t.role === "user" ? <p>{t.content}</p> : <Markdown source={t.content} />}
+                {t.role === "user" ? <p>{t.content}</p> : t.content ? <Markdown source={t.content} /> : null}
+                {t.role === "assistant" && t.streaming && (
+                  <p className="muted assistant-status" aria-live="polite">
+                    <span className="spinner" aria-hidden="true" /> {name} {t.status ?? "écrit"}…
+                  </p>
+                )}
                 {t.role === "assistant" && t.blocks && t.blocks.length > 0 && <ChatBlocks blocks={t.blocks} handlers={handlers} />}
                 {t.role === "assistant" && t.notices && t.notices.length > 0 && (
                   <ul className="memory-notes" aria-label={`Ce que ${name} vient de retenir`}>
@@ -425,18 +461,14 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
               </div>
             ),
           )}
-          {busy && (
-            <div className="assistant-turn is-assistant" aria-live="polite">
-              <p className="muted"><span className="spinner" aria-hidden="true" /> {name} lit ton dossier{search?.consent ? ", et cherche s'il le faut" : ""}…</p>
-            </div>
-          )}
           {error && <div className="notice danger" role="alert"><Icon name="alert" /><span>{error}</span></div>}
         </div>
 
         {configured && (
           <form className="assistant-input" onSubmit={submit}>
             <textarea ref={inputRef} value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={onKey} rows={2}
-                      placeholder="Pose ta question… (Entrée pour envoyer)" aria-label="Ta question" maxLength={2000} disabled={busy} />
+                      placeholder="Pose ta question…" aria-label="Ta question" maxLength={2000} disabled={busy}
+                      enterKeyHint="send" autoCapitalize="sentences" />
             <button className={`btn${busy ? " is-loading" : ""}`} disabled={busy || question.trim().length < 2} aria-label="Envoyer"><Icon name="arrow" /></button>
           </form>
         )}

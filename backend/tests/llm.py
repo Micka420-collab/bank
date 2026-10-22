@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any, ClassVar
 
 from starlette.testclient import TestClient
@@ -35,6 +36,7 @@ class FakeLlm:
         max_tokens: int = 700,
         temperature: float = 0.3,
         tools: list[dict[str, Any]] | None = None,
+        on_delta: Callable[[str], None] | None = None,
     ) -> ChatResult:
         FakeLlm.calls.append(
             {
@@ -43,6 +45,7 @@ class FakeLlm:
                 "max_tokens": max_tokens,
                 "temperature": temperature,
                 "tools": [t["function"]["name"] for t in tools or []],
+                "stream": on_delta is not None,
             }
         )
         if FakeLlm.fail is not None:
@@ -51,8 +54,14 @@ class FakeLlm:
             step = FakeLlm.script.pop(0)
             if isinstance(step, OpenRouterError):
                 raise step
-            return step
-        return ChatResult(FakeLlm.reply, model, 1500, 60, FakeLlm.cost, "stop")
+            result = step
+        else:
+            result = ChatResult(FakeLlm.reply, model, 1500, 60, FakeLlm.cost, "stop")
+        if on_delta is not None and result.text:  # en flux : le texte arrive en deux morceaux, comme sur le réseau
+            half = max(1, len(result.text) // 2)
+            on_delta(result.text[:half])
+            on_delta(result.text[half:])
+        return result
 
     def list_models(self) -> list[Any]:
         raise OpenRouterError("pas de réseau en test")

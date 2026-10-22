@@ -6359,3 +6359,159 @@ details.card.cx-details > summary {
 .assistant-opening .chat-blocks {
   margin-top: 0.6rem;
 }
+
+/* ---------------------------------------------------------------- téléphone : gestes et confort */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+button,
+a,
+select,
+label {
+  touch-action: manipulation; /* pas de délai au toucher, pas de double-tap-zoom sur les commandes */
+}
+.offline-strip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: calc(0.45rem + env(safe-area-inset-top)) 1rem 0.45rem;
+  background: var(--warning);
+  color: #fff;
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+.install-hint {
+  position: fixed;
+  left: 1rem;
+  right: 1rem;
+  bottom: calc(4.9rem + env(safe-area-inset-bottom));
+  z-index: 12;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: var(--r-m);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-3);
+  animation: fade-in var(--d-slow) var(--ease-out);
+}
+.install-hint > div {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+  font-size: var(--t-sm);
+}
+.install-hint > .icon {
+  color: var(--accent);
+}
+@media (min-width: 761px) {
+  .install-hint {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .fab {
+    transition:
+      transform var(--d-base) var(--ease-out),
+      opacity var(--d-base);
+  }
+  .fab.is-hidden {
+    transform: translateY(6.5rem);
+    opacity: 0;
+    pointer-events: none;
+  }
+  /* Cibles tactiles : 44 px au moins, même pour les petits boutons et les pastilles. */
+  .btn.sm,
+  .pill,
+  .btn.xs,
+  select.inline {
+    min-height: 2.75rem;
+  }
+  .btn.xs {
+    min-width: 2.75rem;
+  }
+  .tabbar a {
+    min-height: 3.25rem;
+  }
+  /* Filtres des opérations : les listes gardent leur texte entier (libellés courts, colonnes souples). */
+  .filters {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .filters select.inline {
+    font-size: var(--t-sm);
+  }
+  /* « Plus » : des tuiles sur deux colonnes, l'écran se parcourt d'un coup d'œil. */
+  .more {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+  .more a {
+    padding: 0.85rem 0.9rem;
+    min-height: 5.5rem;
+    align-content: start;
+  }
+  .more a .faint {
+    font-size: var(--t-xs);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  /* Le chat devient une feuille qui monte du bas, avec une poignée, et la saisie reste au-dessus du clavier. */
+  .assistant-backdrop {
+    align-items: flex-end;
+  }
+  .assistant-panel {
+    height: calc(100dvh - var(--kb-offset, 0px));
+    max-height: 100dvh;
+    border-radius: 0;
+    animation: sheet-up var(--d-slow) var(--ease-out);
+  }
+  .assistant-panel::before {
+    content: "";
+    display: block;
+    width: 2.75rem;
+    height: 0.3rem;
+    margin: 0.5rem auto 0;
+    border-radius: 999px;
+    background: var(--line-strong);
+  }
+  .assistant-panel {
+    grid-template-rows: auto auto 1fr auto auto;
+  }
+  .assistant-input {
+    padding-bottom: calc(0.6rem + env(safe-area-inset-bottom));
+  }
+  .assistant-foot {
+    padding-bottom: calc(0.6rem + env(safe-area-inset-bottom));
+  }
+  .assistant-input textarea {
+    font-size: 16px; /* iOS ne zoome pas sur un champ d'au moins 16 px */
+  }
+  @keyframes sheet-up {
+    from {
+      transform: translateY(12%);
+      opacity: 0.6;
+    }
+  }
+}
+.assistant-status {
+  margin: 0.25rem 0 0;
+  font-size: var(--t-sm);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fab,
+  .assistant-panel,
+  .install-hint {
+    animation: none;
+    transition: none;
+  }
+}

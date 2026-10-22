@@ -8,6 +8,7 @@ import { Segmented } from "../components/Segmented";
 import { EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
 import { applyTheme, readTheme, type ThemePref } from "../theme";
+import { disablePush, enablePush, pushPermission, pushSupported, thisDeviceId, type PushStatus } from "../push";
 import { registerPasskey, supportsPasskeys, type PasskeyView } from "../webauthn";
 
 export const KIND_LABELS: Record<AccountKind, string> = {
@@ -38,12 +39,94 @@ export function Settings({ me, onMeChange }: { me: Me; onMeChange: () => void })
       <Accounts />
       <BudgetSettings />
       <Appearance />
+      <Notifications />
       <Privacy />
       <Security me={me} onChange={onMeChange} />
       <Audit />
     </>
   );
 }
+
+// ------------------------------------------------------------------ notifications sur ce téléphone
+export function Notifications() {
+  const st = useApi<PushStatus>("/api/push");
+  const [busy, error, run] = useAsyncAction();
+  const toast = useToast();
+  const supported = pushSupported();
+  const permission = pushPermission();
+  const mine = thisDeviceId();
+  const here = st.data?.devices.find((d) => d.id === mine) ?? null;
+
+  const activate = () =>
+    void run(async () => {
+      if (!st.data) return;
+      if (!st.data.consent) await api("/api/consents/push", { method: "PUT", body: { granted: true } });
+      const device = await enablePush(st.data.public_key);
+      toast(`Notifications activées sur « ${device.label} ».`);
+      st.reload();
+    });
+  const remove = (id: number) =>
+    void run(async () => {
+      await disablePush(id);
+      toast("Appareil retiré.");
+      st.reload();
+    });
+  const probe = (id: number) =>
+    void run(async () => {
+      await api(`/api/push/${id}/test`, { method: "POST" });
+      toast("Notification d'essai envoyée : regarde ton écran.");
+      st.reload();
+    });
+
+  return (
+    <section className="card section" aria-labelledby="push-title">
+      <div className="card-head">
+        <h2 id="push-title"><Icon name="bell" /> Notifications sur ce téléphone</h2>
+      </div>
+      <p className="muted">
+        Bank te prévient ici même, sans messagerie : découvert qui approche, déclaration à faire, gain à confirmer,
+        pilote arrêté. Chaque message est chiffré pour ton appareil ; le service de notification du navigateur
+        (Google, Apple, Mozilla) ne voit qu'un contenu illisible. Les heures calmes s'appliquent.
+      </p>
+      {st.error && <p className="error" role="alert">{st.error}</p>}
+      {!supported && <p className="notice"><Icon name="alert" /> Ce navigateur ne sait pas recevoir de notifications. Sur iPhone : ajoute Bank à l'écran d'accueil (Partager → Sur l'écran d'accueil), puis reviens ici.</p>}
+      {supported && permission === "denied" && <p className="notice"><Icon name="alert" /> Les notifications sont bloquées par le navigateur pour Bank : réautorise-les dans ses réglages de site.</p>}
+      {st.data && (
+        <>
+          {here ? (
+            <p><Icon name="check" /> <b>Activées sur cet appareil</b> ({here.label}){here.last_notified_at ? ` · dernière le ${shortDate(here.last_notified_at)}` : ""}</p>
+          ) : (
+            supported && permission !== "denied" && (
+              <div className="actions">
+                <button type="button" className={`btn${busy ? " is-loading" : ""}`} disabled={busy} onClick={activate}>
+                  <Icon name="bell" /> Activer sur cet appareil
+                </button>
+              </div>
+            )
+          )}
+          {st.data.devices.length > 0 && (
+            <ul className="pk-list" aria-label="Appareils prévenus">
+              {st.data.devices.map((d) => (
+                <li key={d.id}>
+                  <span>
+                    <b>{d.label}</b>{d.id === mine ? " (cet appareil)" : ""}
+                    <span className="faint"> · depuis le {shortDate(d.linked_at)}{d.last_error ? ` · ${d.last_error}` : ""}</span>
+                  </span>
+                  <span className="actions" style={{ marginTop: 0 }}>
+                    <button type="button" className="btn quiet sm" disabled={busy} onClick={() => probe(d.id)}>Tester</button>
+                    <button type="button" className="btn link" disabled={busy} onClick={() => remove(d.id)}>Retirer</button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      {error && <p className="error" role="alert">{error}</p>}
+    </section>
+  );
+}
+
 
 // ------------------------------------------------------------------ comptes
 function Accounts() {

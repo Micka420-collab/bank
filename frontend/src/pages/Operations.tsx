@@ -66,13 +66,13 @@ export function Operations({ openImport = false }: { openImport?: boolean }) {
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Libellé, marchand, note…" aria-label="Rechercher" />
         </label>
         <select className="inline" value={category} aria-label="Catégorie" onChange={(e) => { setCategory(e.target.value); setLimit(PAGE); }}>
-          <option value="">Toutes les catégories</option>
+          <option value="">Toutes catégories</option>
           {(categories.data ?? []).map((c) => (
             <option key={c.slug} value={c.slug}>{c.name}</option>
           ))}
         </select>
         <select className="inline" value={account} aria-label="Compte" onChange={(e) => { setAccount(e.target.value); setLimit(PAGE); }}>
-          <option value="">Tous les comptes</option>
+          <option value="">Tous comptes</option>
           {activeAccounts.map((a) => (
             <option key={a.id} value={a.id}>{a.name}</option>
           ))}

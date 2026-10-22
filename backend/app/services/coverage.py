@@ -15,6 +15,7 @@ from app.domain.recurring import add_months
 from app.models import (
     Account,
     ChannelConfig,
+    ChannelLink,
     CryptoHolding,
     CryptoWallet,
     EnergyConnection,
@@ -90,6 +91,14 @@ def build_input(db: Session, today: date) -> dom.CoverageInput:
         totp=bool(user and user.totp_enabled),
         passkeys=int(db.scalar(select(func.count(Passkey.id))) or 0),
         goals=int(db.scalar(select(func.count(SavingsGoal.id))) or 0),
+        push_devices=int(
+            db.scalar(
+                select(func.count(ChannelLink.id)).where(
+                    ChannelLink.platform == "webpush", ChannelLink.revoked_at.is_(None)
+                )
+            )
+            or 0
+        ),
     )
 
 

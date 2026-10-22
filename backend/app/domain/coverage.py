@@ -41,6 +41,7 @@ class CoverageInput:
     totp: bool = False
     passkeys: int = 0
     goals: int = 0
+    push_devices: int = 0  # appareils qui reçoivent les notifications du navigateur
 
 
 @dataclass(frozen=True)
@@ -293,6 +294,20 @@ def sources(inp: CoverageInput) -> list[Source]:
                 "messageries",
                 "Relier une messagerie",
                 13,
+            )
+        )
+    if not inp.push_devices:
+        out.append(
+            Source(
+                "push",
+                "Notifications",
+                "missing",
+                "aucun appareil prévenu",
+                "être prévenu sur ton téléphone (découvert qui approche, déclaration à faire, gain à confirmer) "
+                "sans messagerie, message chiffré pour ton appareil",
+                "reglages",
+                "Activer les notifications",
+                9,
             )
         )
     if not inp.totp:

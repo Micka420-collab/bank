@@ -3,17 +3,23 @@ retours sur les réponses, catégories proposées."""
 
 from __future__ import annotations
 
+import json
 import logging
+import queue
 import threading
 import time
+from collections.abc import AsyncIterator
+from contextlib import contextmanager
 from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, FastAPI, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.api.deps import AuthDep, DbDep, TodayDep, client_ip
+from app.db import session_scope
 from app.models import Conversation
 from app.providers.openrouter import OpenRouterClient, OpenRouterError
 from app.security import audit
@@ -213,6 +219,69 @@ async def ask(
         db.commit()  # la relecture lit la conversation dans sa propre transaction : elle doit être écrite
         background.add_task(review_in_background, request.app, result["conversation_id"], ctx.user.username, today)
     return result
+
+
+def _sse(event: str, data: dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@router.post("/ask/stream")
+async def ask_stream(body: AskIn, request: Request, ctx: AuthDep, today: TodayDep) -> StreamingResponse:
+    """La même question, répondue en direct (SSE) : « status » (ce que l'assistant fait), « delta » (un morceau de
+    texte), « reset » (le texte montré précédait un outil), puis « done » avec la réponse complète et ses blocs,
+    ou « error ». La transaction vit dans le fil de travail, le temps de la réponse."""
+    _limited(request)
+    app = request.app
+    actor, question, conversation_id = ctx.user.username, body.question, body.conversation_id
+    history = [t.model_dump() for t in body.history]
+    q: queue.Queue[tuple[str, dict[str, Any]] | None] = queue.Queue()
+
+    def work() -> None:
+        review_due_for: int | None = None
+        try:
+            with contextmanager(session_scope)(app.state.sessionmaker) as db:
+                try:
+                    result: dict[str, Any] = assistant.ask(
+                        db,
+                        actor=actor,
+                        today=today,
+                        question=question,
+                        conversation_id=conversation_id,
+                        history=history,
+                        make_client=app.state.llm_client_factory,
+                        search_http=app.state.search_http,
+                        search_resolver=app.state.watch_resolver,
+                        events=lambda event, data: q.put((event, data)),
+                    )
+                except assistant.AssistantError as exc:
+                    q.put(("error", {"detail": str(exc), "status": exc.status}))
+                    return  # la session est validée (last_error, journal) comme pour la réponse en un bloc
+                if result.get("review_due"):
+                    review_due_for = int(result["conversation_id"])
+                q.put(("done", result))
+        except Exception:  # jamais une trace à l'écran ; le journal du serveur l'a
+            log.exception("réponse en direct en échec")
+            q.put(("error", {"detail": "Erreur interne : réessaie dans un instant", "status": 500}))
+        finally:
+            q.put(None)
+        if review_due_for is not None:
+            review_in_background(app, review_due_for, actor, today)
+
+    async def events() -> AsyncIterator[str]:
+        worker = threading.Thread(target=work, name="assistant-stream", daemon=True)
+        worker.start()
+        yield _sse("status", {"text": "lit ton dossier"})
+        while True:
+            item = await run_in_threadpool(q.get)
+            if item is None:
+                break
+            yield _sse(*item)
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/opening")
