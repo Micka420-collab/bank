@@ -150,6 +150,9 @@ class Gateway:
         # La base est synchrone : son travail part sur un petit groupe de fils à nous, qu'on attend à l'arrêt
         # (aucune connexion SQLite laissée ouverte quand l'application ferme son moteur).
         self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="bank-channels")
+        # Réveil des alertes : un mouvement du pilote automatique ne doit pas attendre le prochain quart d'heure.
+        self._wake = asyncio.Event()
+        self._event_loop: asyncio.AbstractEventLoop | None = None
 
     async def _run(self, fn: Callable[..., T], *args: Any) -> T:
         return await asyncio.get_running_loop().run_in_executor(self._executor, partial(fn, *args))
@@ -158,6 +161,7 @@ class Gateway:
     async def start(self) -> None:
         if self._http is None:
             self._http = httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0), follow_redirects=False)
+        self._event_loop = asyncio.get_running_loop()
         self._background = [asyncio.create_task(self._loop()), asyncio.create_task(self._alert_loop())]
 
     async def stop(self) -> None:
@@ -370,13 +374,25 @@ class Gateway:
 
     # ------------------------------------------------------------ alertes
     async def _alert_loop(self) -> None:
-        await asyncio.sleep(self._alert_first)
+        await self._pause(self._alert_first)
         while True:
             try:
                 await self.run_alerts()
             except Exception:
                 log.exception("messageries : alertes en échec")
-            await asyncio.sleep(self._alert_every)
+            await self._pause(self._alert_every)
+
+    async def _pause(self, seconds: float) -> None:
+        """Attend le prochain passage, ou un réveil (nudge) s'il arrive avant."""
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(self._wake.wait(), timeout=seconds)
+        self._wake.clear()
+
+    def nudge_threadsafe(self) -> None:
+        """Appelable depuis n'importe quel fil (outil MCP) : les alertes repartent tout de suite."""
+        loop = self._event_loop
+        if loop is not None and not loop.is_closed():
+            loop.call_soon_threadsafe(self._wake.set)
 
     async def run_alerts(self) -> int:
         await self._run(self._prune)

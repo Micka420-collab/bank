@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -19,7 +19,7 @@ from app.domain import procedures as dp
 from app.domain import watch as dw
 from app.domain.money import format_eur
 from app.models import ChannelConfig, ChannelLink, ChannelNotice, Procedure, WatchItem, WatchSource
-from app.services import analytics, opportunities, procedures
+from app.services import analytics, autonomy, opportunities, procedures
 from app.services import watch as watch_service
 from app.services.settings_store import get_setting
 
@@ -31,6 +31,7 @@ MAX_FAILURES = 3  # refus définitifs d'affilée avant de mettre le compte en pa
 class Notice:
     key: str
     text: str
+    urgent: bool = False  # passe même en heures calmes (pilote automatique arrêté, mouvement non rapporté)
 
 
 def is_quiet(local: datetime, hours: list[int] | tuple[int, int]) -> bool:
@@ -65,9 +66,15 @@ def _proc_title(p: Procedure, privacy: str) -> str:
     return p.title if privacy == "full" or template is None else template.title
 
 
-def collect(db: Session, *, today: date, local: datetime, privacy: str, public_url: str) -> list[Notice]:
+def collect(
+    db: Session, *, today: date, local: datetime, privacy: str, public_url: str, now: datetime | None = None
+) -> list[Notice]:
     """Tout ce qui mérite une alerte maintenant, du plus pressant au plus doux."""
-    out: list[Notice] = []
+    now = now or local.astimezone(UTC)
+    out: list[Notice] = [
+        Notice(key, text, urgent)
+        for key, text, urgent in autonomy.alerts(db, now=now, privacy=privacy, public_url=public_url)
+    ]
     forecast, _ = analytics.month_forecast(db, today)
     if forecast.overdraft_date is not None:
         out.append(
@@ -194,9 +201,11 @@ def plan(
     local: datetime,
     public_url: str,
 ) -> list[Delivery]:
-    """Ce qu'il faut envoyer maintenant à chaque compte relié qui reçoit les alertes (rien en heures calmes)."""
-    if not platforms or is_quiet(local, get_setting(db, "channel_quiet_hours")):
+    """Ce qu'il faut envoyer maintenant à chaque compte relié qui reçoit les alertes (en heures calmes, seulement
+    l'urgent : le pilote automatique qui s'arrête sur une anomalie ne peut pas attendre le matin)."""
+    if not platforms:
         return []
+    quiet = is_quiet(local, get_setting(db, "channel_quiet_hours"))
     links = list(
         db.scalars(
             select(ChannelLink).where(
@@ -212,7 +221,8 @@ def plan(
         cfg = db.get(ChannelConfig, link.platform)
         privacy = cfg.privacy if cfg else "redacted"
         if privacy not in by_privacy:
-            by_privacy[privacy] = collect(db, today=today, local=local, privacy=privacy, public_url=public_url)
+            found = collect(db, today=today, local=local, privacy=privacy, public_url=public_url)
+            by_privacy[privacy] = [n for n in found if n.urgent] if quiet else found
         todo = pending_for(db, link, by_privacy[privacy])
         if todo:
             out.append(

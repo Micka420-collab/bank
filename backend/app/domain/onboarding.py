@@ -366,7 +366,8 @@ QUESTIONS: tuple[Question, ...] = (
         "autonomy",
         "mandat",
         "Quel rôle donnes-tu à ton agent ?",
-        "Il ne déplace jamais d'argent : il observe, conseille, et propose des réglages que tu valides.",
+        "Sans ton accord il ne déplace jamais d'argent : il observe, conseille, propose. Le pilote automatique, "
+        "avec tes plafonds, se règle à part (Plus › Pilote automatique).",
         "choice",
         2,
         (

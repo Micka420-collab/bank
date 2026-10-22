@@ -42,6 +42,18 @@ PURPOSES: dict[str, dict[str, Any]] = {
         "default": False,
         "version": 1,
     },
+    "crypto_network": {
+        "title": "Suivi de tes adresses crypto",
+        "text": (
+            "Pour lire le solde de tes adresses publiques, Bank interroge des nœuds publics (mempool.space pour "
+            "Bitcoin, PublicNode pour Ethereum, Base, Solana…) ou le tien. Ils voient l'adresse demandée et "
+            "l'adresse IP de ton serveur, et peuvent faire le lien. Les cours viennent de CoinGecko, qui ne voit "
+            "que la liste des actifs (jamais tes montants). Sans ton accord, rien ne part : tu saisis tes quantités "
+            "à la main. Bank ne demande jamais de clé ni de phrase de récupération."
+        ),
+        "default": False,
+        "version": 1,
+    },
     "channels": {
         "title": "Bank dans tes messageries",
         "text": (

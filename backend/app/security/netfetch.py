@@ -11,12 +11,14 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import socket
 import time
 import urllib.request
 import zlib
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import SplitResult, urljoin, urlsplit, urlunsplit
 
 import httpx
@@ -152,6 +154,63 @@ def fetch(
     finally:
         if http is None:
             client.close()
+
+
+def post_json(
+    url: str,
+    payload: Any,
+    *,
+    http: httpx.Client | None = None,
+    resolver: Resolver | None = None,
+    max_bytes: int = 1_000_000,
+    seconds: float = 20.0,
+    pin: bool | None = None,
+) -> Any:
+    """POST JSON (appel JSON-RPC à un nœud public) avec les mêmes garde-fous que fetch : https, hôte public
+    vérifié, taille et durée bornées. Aucune redirection suivie : un POST ne se rejoue pas ailleurs."""
+    pin = (not _proxy_configured()) if pin is None else pin
+    client = http or httpx.Client(timeout=httpx.Timeout(seconds, connect=10.0), follow_redirects=False)
+    started = time.monotonic()
+    try:
+        parts, ip = check_url(url, resolver)
+        host = parts.hostname or ""
+        headers = {
+            "User-Agent": USER_AGENT,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Accept-Encoding": "gzip, identity",
+        }
+        target, extensions = url, {}
+        if pin:
+            netloc = f"[{ip}]" if ":" in ip else ip
+            target = urlunsplit((parts.scheme, netloc, parts.path or "/", parts.query, ""))
+            headers["Host"] = host
+            extensions = {"sni_hostname": host}
+        body = json.dumps(payload, separators=(",", ":")).encode()
+        with client.stream("POST", target, headers=headers, content=body, extensions=extensions) as resp:
+            if resp.status_code != 200:
+                raise FetchError(f"La source répond {resp.status_code}")
+            declared = resp.headers.get("content-length")
+            if declared and declared.isdigit() and int(declared) > max_bytes:
+                raise FetchError("Ressource trop volumineuse")
+            raw = _read(resp, max_bytes, started, seconds)
+    except httpx.HTTPError as exc:
+        raise FetchError("Source injoignable (réseau)") from exc
+    finally:
+        if http is None:
+            client.close()
+    try:
+        return json.loads(raw)
+    except ValueError as exc:
+        raise FetchError("Réponse illisible (JSON attendu)") from exc
+
+
+def get_json(url: str, **kw: Any) -> Any:
+    result = fetch(url, accept="application/json", **kw)
+    try:
+        return json.loads(result.body)
+    except ValueError as exc:
+        raise FetchError("Réponse illisible (JSON attendu)") from exc
 
 
 def _read(resp: httpx.Response, max_bytes: int, started: float, seconds: float) -> bytes:

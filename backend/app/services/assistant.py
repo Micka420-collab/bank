@@ -25,6 +25,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.channels.text import secret_kind
 from app.db import utcnow
 from app.domain import memory as memory_domain
 from app.models import Category, Conversation, LlmProvider, LlmUsage, MerchantHint, Transaction
@@ -593,6 +594,15 @@ def ask(
     q = _clean(question, MAX_QUESTION_CHARS)
     if len(q) < 2:
         raise AssistantError("Pose une question", 422)
+    leaked = secret_kind(q)
+    if leaked:
+        # Jamais au modèle, jamais dans l'historique : la question s'arrête ici.
+        audit.record(db, actor, "assistant.secret_refused", kind=leaked)
+        raise AssistantError(
+            f"Ta question contient {leaked} : je ne l'envoie pas au modèle et je ne la garde pas. Bank ne te "
+            "demandera jamais un mot de passe, un code, une phrase de récupération ni une clé privée.",
+            422,
+        )
     _check_caps(db, row, today)
     effective = stricter(row.privacy, privacy)
     memory_on = consents.granted(db, "ai_memory") and effective != "aggregates"

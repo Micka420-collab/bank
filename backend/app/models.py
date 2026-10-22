@@ -819,3 +819,135 @@ class ChannelNotice(Base):
     link_id: Mapped[int] = mapped_column(ForeignKey("channel_links.id", ondelete="CASCADE"), index=True)
     key: Mapped[str] = mapped_column(String(120))
     sent_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, index=True)
+
+
+# ---------------------------------------------------------------------------- pilote automatique
+class AutonomyMandate(Base):
+    """Ton accord pour que ton agent bouge de l'argent sans te demander — désactivé par défaut, borné de toutes
+    parts (plafonds, actifs, adresses, consignes, durée, pertes), lié à UN jeton d'agent précis, et coupé d'un
+    geste. Une seule ligne (id = 1)."""
+
+    __tablename__ = "autonomy_mandate"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    trial: Mapped[bool] = mapped_column(Boolean, default=True)  # mode essai : l'agent dit ce qu'il ferait, sans agir
+    agent_token_id: Mapped[int | None] = mapped_column(ForeignKey("agent_tokens.id", ondelete="SET NULL"))
+    agent_name: Mapped[str | None] = mapped_column(String(64))  # pour l'affichage ; l'autorisation suit le jeton
+    mode: Mapped[str] = mapped_column(String(8), default="rules")  # rules | free
+    scopes: Mapped[str] = mapped_column(Text, default='["crypto_spot"]')  # JSON
+    assets: Mapped[str] = mapped_column(Text, default='["BTC", "ETH", "USDC", "EURC"]')  # JSON
+    rules: Mapped[str] = mapped_column(EncryptedText("autonomy.rules"), default="[]")  # JSON : tes consignes
+    destinations: Mapped[str] = mapped_column(EncryptedText("autonomy.destinations"), default="[]")  # JSON
+    per_op_cents: Mapped[int] = mapped_column(BigInteger, default=2_500)
+    per_day_cents: Mapped[int] = mapped_column(BigInteger, default=5_000)
+    per_month_cents: Mapped[int] = mapped_column(BigInteger, default=20_000)
+    max_moves_per_day: Mapped[int] = mapped_column(Integer, default=5)
+    max_loss_cents: Mapped[int] = mapped_column(BigInteger, default=10_000)
+    enabled_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    disabled_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    disabled_reason: Mapped[str | None] = mapped_column(String(200))
+    disabled_by_user: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+
+class AutonomyMove(Base):
+    """Un mouvement demandé par l'agent : autorisé (réservé sur tes plafonds), puis rapporté exécuté ou échoué —
+    ou refusé, avec la raison. Le ticket n'est gardé qu'en empreinte."""
+
+    __tablename__ = "autonomy_moves"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ticket_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
+    agent_token_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    agent_name: Mapped[str] = mapped_column(String(64))
+    kind: Mapped[str] = mapped_column(String(10))  # buy | sell | swap | transfer
+    asset: Mapped[str] = mapped_column(String(16))
+    to_asset: Mapped[str | None] = mapped_column(String(16))
+    chain: Mapped[str | None] = mapped_column(String(24))
+    amount_cents: Mapped[int] = mapped_column(BigInteger)
+    destination_label: Mapped[str | None] = mapped_column(String(60))
+    rule_id: Mapped[str | None] = mapped_column(String(16), index=True)
+    period: Mapped[str | None] = mapped_column(String(12))  # 2026-10-21, 2026-W43 ou 2026-10 : cadence d'une consigne
+    rule: Mapped[str | None] = mapped_column(EncryptedText("autonomy.rule"))
+    reason: Mapped[str] = mapped_column(EncryptedText("autonomy.reason"))
+    # reserved | executed | failed | unreported | revoked | simulated | refused
+    status: Mapped[str] = mapped_column(String(10), index=True)
+    refusal: Mapped[str | None] = mapped_column(String(200))
+    tx_ref: Mapped[str | None] = mapped_column(EncryptedText("autonomy.tx"))
+    executed_cents: Mapped[int | None] = mapped_column(BigInteger)
+    pnl_cents: Mapped[int | None] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, index=True)
+    reported_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+# ---------------------------------------------------------------------------- crypto
+class CryptoWallet(Base):
+    """Une adresse PUBLIQUE suivie en lecture seule. Jamais de clé ni de phrase de récupération : Bank ne
+    pourrait de toute façon rien signer. L'adresse est chiffrée (elle relie ton identité à tout ton historique)."""
+
+    __tablename__ = "crypto_wallets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    label: Mapped[str] = mapped_column(String(60))
+    chain: Mapped[str] = mapped_column(String(16))
+    address: Mapped[str] = mapped_column(EncryptedText("crypto.address"))
+    address_index: Mapped[str] = mapped_column(String(64), unique=True)  # empreinte : pas deux fois la même
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    synced_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    sync_error: Mapped[str | None] = mapped_column(String(200))
+
+
+class CryptoHolding(Base):
+    """Une quantité d'un actif : relevée sur une adresse suivie, ou saisie (plateforme, portefeuille matériel…).
+    Quantité en texte décimal exact (jamais de flottant)."""
+
+    __tablename__ = "crypto_holdings"
+    __table_args__ = (UniqueConstraint("wallet_id", "asset", name="uq_crypto_wallet_asset"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    wallet_id: Mapped[int | None] = mapped_column(ForeignKey("crypto_wallets.id", ondelete="CASCADE"), index=True)
+    platform: Mapped[str | None] = mapped_column(String(60))  # Coinbase, Kraken, Ledger… (saisie manuelle)
+    foreign: Mapped[bool] = mapped_column(Boolean, default=False)  # compte hors de France : 3916-bis
+    asset: Mapped[str] = mapped_column(String(16))
+    coingecko_id: Mapped[str | None] = mapped_column(String(64))  # pour un actif hors catalogue
+    quantity: Mapped[str] = mapped_column(String(48), default="0")
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class CryptoPrice(Base):
+    """Dernier cours connu en euros (CoinGecko), avec sa date : un cours périmé se voit."""
+
+    __tablename__ = "crypto_prices"
+
+    asset: Mapped[str] = mapped_column(String(16), primary_key=True)
+    eur: Mapped[str] = mapped_column(String(48))
+    change_24h: Mapped[str | None] = mapped_column(String(24))
+    fetched_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class CryptoSnapshot(Base):
+    """Valeur du portefeuille crypto, une fois par jour : la courbe se dessine sans rien demander à personne."""
+
+    __tablename__ = "crypto_snapshots"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    value_cents: Mapped[int] = mapped_column(BigInteger)
+
+
+class CryptoTaxEvent(Base):
+    """Un achat payé en euros (acquisition) ou une vente contre des euros ou un bien (cession) : de quoi remplir
+    le 2086. Les échanges crypto contre crypto ne sont pas imposables et ne s'y notent pas."""
+
+    __tablename__ = "crypto_tax_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    day: Mapped[date] = mapped_column(Date, index=True)
+    kind: Mapped[str] = mapped_column(String(12))  # acquisition | cession
+    amount_cents: Mapped[int] = mapped_column(BigInteger)
+    fees_cents: Mapped[int] = mapped_column(BigInteger, default=0)
+    portfolio_value_cents: Mapped[int | None] = mapped_column(BigInteger)
+    asset: Mapped[str | None] = mapped_column(String(16))
+    note: Mapped[str | None] = mapped_column(EncryptedText("crypto.tax_note"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)

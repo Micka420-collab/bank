@@ -34,7 +34,7 @@ from app.models import ChannelConfig, ChannelLink, ChannelSeen, Procedure
 from app.security import audit
 from app.security.auth import SlidingWindowLimiter
 from app.security.crypto import get_keyring
-from app.services import analytics, consents, opportunities
+from app.services import analytics, autonomy, consents, opportunities
 from app.services import assistant as assistant_service
 from app.services.settings_store import get_setting, set_setting
 
@@ -579,8 +579,10 @@ def admit(
         return Admission(
             replies=[
                 f"Stop : ton message contient {kind}. Je ne l'ai ni lu ni gardé, et l'assistant ne l'a pas vu. "
-                "Supprime-le de cette conversation. Bank ne te demandera jamais un mot de passe, un code ou un "
-                "numéro de carte — ni ici, ni ailleurs."
+                "Supprime-le de cette conversation. Bank ne te demandera jamais un mot de passe, un code, un "
+                "numéro de carte, une phrase de récupération ni une clé privée — ni ici, ni ailleurs."
+                + CRYPTO_LEAK_ADVICE
+                * ("récupération" in kind or "clé privée" in kind)
             ]
         )
     command = _command(text)
@@ -644,6 +646,12 @@ def _stranger(
     )
 
 
+CRYPTO_LEAK_ADVICE = (
+    "\n\nSi cette phrase ou cette clé est la vraie, considère-la comme compromise : crée un nouveau portefeuille et "
+    "transfères-y tes fonds au plus vite."
+)
+
+
 # ------------------------------------------------------------------ commandes
 HELP = (
     "Pose-moi une question sur ton argent, ou essaie :\n"
@@ -652,10 +660,12 @@ HELP = (
     "- /demarches : où en sont tes démarches\n"
     "- /nouveau : repartir d'une conversation vierge\n"
     "- /pause ou /reprendre : mes alertes ici\n"
+    "- /pilote : où en est le pilote automatique (/pilote stop : tout arrêter)\n"
     "- /delier : ne plus me parler depuis ce compte\n\n"
     "Rien ne se valide ici : transmettre, confirmer, régler, c'est dans l'application."
 )
-_BARE_COMMANDS = {"aide", "help", "budget", "missions", "demarches", "pause", "reprendre", "nouveau"}
+_BARE_COMMANDS = {"aide", "help", "budget", "missions", "demarches", "pause", "reprendre", "nouveau", "pilote"}
+_PILOT_STOP = {"stop", "off", "arret", "arrete", "arreter", "coupe", "couper"}
 _ALIASES = {
     "help": "aide",
     "start": "aide",
@@ -667,6 +677,8 @@ _ALIASES = {
     "unlink": "delier",
     "mission": "missions",
     "demarche": "demarches",
+    "pilot": "pilote",
+    "autopilot": "pilote",
 }
 
 
@@ -735,6 +747,16 @@ def _run_command(
     if name == "reprendre":
         link.notify, link.failures, link.last_error = True, 0, None
         return ["Alertes réactivées : je te préviens ici quand quelque chose mérite ton attention."]
+    if name == "pilote":
+        if _fold(args.split(" ", 1)[0]) in _PILOT_STOP:
+            # Arrêter doit être facile partout, y compris d'ici. (Activer, jamais : c'est dans l'application.)
+            was = autonomy.stop(db, actor=f"canal:{link.platform}", now=now, reason="Arrêté par toi (messagerie)")
+            return [
+                "🛑 Pilote automatique arrêté : plus rien ne bouge sans toi."
+                if was
+                else "Le pilote automatique était déjà arrêté : rien ne bouge sans toi."
+            ]
+        return [autonomy.chat_status(db, now=now, privacy=cfg.privacy, public_url=public_url)]
     if name == "delier":
         link.revoked_at, link.conversation_id = now, None
         audit.record(db, f"canal:{link.platform}", "channel.unlinked", link=link.id, by="chat")

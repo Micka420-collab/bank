@@ -13,6 +13,7 @@ from datetime import date
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy import func, select
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api import (
@@ -20,10 +21,12 @@ from app.api import (
     agents,
     assistant,
     auth,
+    autonomy,
     banks,
     channels,
     consents,
     copilot,
+    crypto,
     decisions,
     deps,
     documents,
@@ -45,11 +48,14 @@ from app.config import Settings
 from app.db import Base, make_engine, make_sessionmaker, upgrade_schema, utcnow
 from app.fiscal.client import FiscalClient
 from app.mcp_server import AgentGate, McpDispatch, McpMount, build_mcp, mcp_asgi, silence_sdk_logs
+from app.models import CryptoHolding, CryptoWallet
 from app.providers.enablebanking import EnableBankingClient
 from app.security.auth import SlidingWindowLimiter
 from app.security.crypto import Keyring, install_keyring
 from app.security.middleware import AccessLogMiddleware, BodyLimitMiddleware, SecurityHeadersMiddleware
 from app.services import assistant as assistant_service
+from app.services import consents as consent_service
+from app.services import crypto as crypto_service
 from app.services import energy as energy_service
 from app.services import planning as planning_service
 from app.services import vault as vault_service
@@ -88,6 +94,33 @@ async def _energy_loop(app: FastAPI) -> None:
                 log.info("énergie : %s relevés mis à jour", changed)
         except Exception:
             log.exception("synchronisation énergie en échec")
+
+
+def _crypto_sync_once(app: FastAPI) -> int:
+    """Relève crypto en arrière-plan : seulement avec ton accord, et seulement s'il y a quelque chose à suivre."""
+    with app.state.sessionmaker() as db:
+        if not consent_service.granted(db, crypto_service.CONSENT):
+            return 0
+        if (
+            db.scalar(select(func.count()).select_from(CryptoHolding)) == 0
+            and db.scalar(select(func.count()).select_from(CryptoWallet)) == 0
+        ):
+            return 0
+        result = crypto_service.sync(db, net=app.state.crypto_net(), now=utcnow(), actor="system")
+        crypto_service.snapshot(db, date.today())  # noqa: DTZ011 - date locale du serveur
+        db.commit()
+        return int(result["wallets_synced"]) + int(result["prices"])
+
+
+async def _crypto_loop(app: FastAPI) -> None:
+    delay = 120.0
+    while True:
+        await asyncio.sleep(delay)
+        delay = 30 * 60 + random.uniform(0, 300)  # noqa: S311  # nosec B311
+        try:
+            await asyncio.to_thread(_crypto_sync_once, app)
+        except Exception:
+            log.exception("relève crypto en échec")
 
 
 def _planning_sync_once(app: FastAPI, today: date) -> int:
@@ -174,6 +207,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if settings.energy_enabled:
             tasks.append(asyncio.create_task(_energy_loop(app)))
         tasks.append(asyncio.create_task(_planning_loop(app)))
+        tasks.append(asyncio.create_task(_crypto_loop(app)))
         tasks.append(asyncio.create_task(_housekeeping_loop(app)))
         # Messageries : rien ne tourne tant qu'aucune n'est configurée, activée et couverte par ton accord.
         gateway: Gateway | None = None
@@ -218,6 +252,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "assistant": SlidingWindowLimiter(30, 300),  # questions au modèle : 30 par 5 min, en plus des plafonds
         "watch": SlidingWindowLimiter(6, 600),  # relèves de veille à la demande
         "channel": SlidingWindowLimiter(20, 300),  # messages par compte relié (messageries), avant « doucement »
+        "crypto": SlidingWindowLimiter(6, 600),  # relèves crypto à la demande (nœuds publics : on reste poli)
     }
     app.state.enablebanking = _build_enablebanking(settings)
     app.state.fiscal_client = FiscalClient(settings.fiscal_engine_url, settings.fiscal_token_value)
@@ -227,6 +262,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.watch_fetcher = watch_service.default_fetcher
     app.state.watch_resolver = None  # résolution DNS réelle (remplaçable en test)
     app.state.channels = None
+    app.state.crypto_net = crypto_service.default_net  # réseau réel (remplaçable en test)
     app.state.channels_options = {}  # surcharges de la passerelle (tests : fabrique d'adaptateurs, horloge…)
 
     routers = (
@@ -251,6 +287,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         watch,
         copilot,
         channels,
+        autonomy,
+        crypto,
         system,
     )
     for r in routers:
@@ -262,6 +300,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         factory,
         fiscal=lambda: app.state.fiscal_client,
         today=lambda: app.dependency_overrides.get(deps.today, deps.today)(),
+        # Pilote automatique : un mouvement autorisé ou rapporté réveille les alertes des messageries.
+        on_autonomy=lambda: app.state.channels.nudge_threadsafe() if app.state.channels is not None else None,
     )
     mcp_mount = (
         McpMount(

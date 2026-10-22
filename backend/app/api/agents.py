@@ -20,7 +20,7 @@ from app.models import AgentProposal, AgentToken, AuditLog, CategorySource, Tran
 from app.security import audit
 from app.security.agents import MAX_TTL_DAYS, PRESETS, PRIVACY_MODES, SCOPES, issue_agent_token
 from app.security.auth import verify_password
-from app.services import advisor
+from app.services import advisor, autonomy
 from app.services.proposals import ProposalError, decide, describe, expire_old
 
 router = APIRouter(prefix="/api", tags=["agents"])
@@ -132,6 +132,7 @@ def revoke_token(token_id: int, ctx: AuthDep, db: DbDep) -> None:
     if token.revoked_at is None:
         token.revoked_at = utcnow()
         audit.record(db, ctx.user.username, "agent.token.revoke", token=token_id)
+        autonomy.token_revoked(db, token_id, actor=ctx.user.username, now=token.revoked_at)  # pilote coupé avec
 
 
 @router.get("/agents/activity")

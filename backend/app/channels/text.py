@@ -9,6 +9,8 @@ import html
 import re
 from collections.abc import Callable
 
+from app.domain.crypto import secret_kind as crypto_secret_kind
+
 # Longueur maximale d'un message, par plateforme (Telegram compte en unités UTF-16).
 LIMITS: dict[str, int] = {
     "telegram": 4096,
@@ -235,6 +237,9 @@ _SECRET_WORDS = re.compile(
 
 def secret_kind(text: str) -> str | None:
     """Ce qui ressemble à un secret dans un message reçu : le message n'ira ni au modèle ni dans l'historique."""
+    crypto = crypto_secret_kind(text)  # phrase de récupération, clé privée : la pire fuite possible
+    if crypto:
+        return crypto
     for match in _CARD.finditer(text):
         digits = re.sub(r"\D", "", match.group(0))
         if 13 <= len(digits) <= 19 and _luhn(digits):

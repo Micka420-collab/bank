@@ -29,6 +29,11 @@ DEFAULTS: dict[str, Any] = {
     "channel_pairing": {},
     "channel_quiet_hours": [21, 8],
     "channel_weekly": True,
+    # Crypto : nœuds personnalisés par réseau (vide = nœuds publics par défaut), dernière humeur du marché,
+    # et le portefeuille compté dans le patrimoine.
+    "crypto_endpoints": {},
+    "crypto_sentiment": None,
+    "crypto_in_wealth": True,
 }
 
 
@@ -46,3 +51,4 @@ def set_setting(db: Session, key: str, value: Any) -> None:
         db.add(AppSetting(key=key, value=payload))
     else:
         row.value = payload
+    db.flush()  # la session ne vide pas d'elle-même : une relecture juste après doit voir la nouvelle valeur

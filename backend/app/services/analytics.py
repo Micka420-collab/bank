@@ -36,6 +36,7 @@ from app.models import (
 )
 from app.services import planning
 from app.services.categories import category_infos
+from app.services.crypto_value import portfolio_value_cents
 from app.services.settings_store import get_setting
 
 HISTORY_DAYS = 400
@@ -204,11 +205,21 @@ def monthly_income_series(db: Session, today: date) -> dict[str, dict[str, int]]
     return {k: dict(v) for k, v in out.items()}
 
 
+CRYPTO_LINE = "Cryptos suivies dans Bank"
+
+
 def account_balances(db: Session) -> list[AccountBalance]:
-    return [
+    out = [
         AccountBalance(a.id, a.name, a.kind, a.balance_cents)
         for a in db.scalars(select(Account).where(Account.archived.is_(False)))
     ]
+    # Le portefeuille crypto (adresses suivies, avoirs saisis) compte dans le patrimoine, comme une ligne à part
+    # (id 0) : jamais dans l'argent disponible, et réglable (Crypto › « Compter dans mon patrimoine »).
+    if get_setting(db, "crypto_in_wealth"):
+        value = portfolio_value_cents(db)
+        if value > 0:
+            out.append(AccountBalance(0, CRYPTO_LINE, "crypto", value))
+    return out
 
 
 def monthly_essentials(db: Session, today: date) -> int:

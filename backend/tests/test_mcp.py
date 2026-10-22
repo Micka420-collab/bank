@@ -128,9 +128,10 @@ def test_initialize_and_catalogue(app, world: TestClient) -> None:  # type: igno
         "simulate_aids", "get_wealth", "evaluate_purchase", "what_if_savings", "onboarding_status",
         "record_answer", "categorize_transaction", "propose_action", "list_proposals",
         "can_i_buy", "investment_plan", "get_energy", "get_opportunities", "get_procedures",
+        "autonomy_status", "request_autonomous_move", "report_autonomous_move", "get_crypto", "crypto_check",
     }  # fmt: skip
     assert tools["get_dossier"]["annotations"]["readOnlyHint"] is True
-    # Aucun outil ne peut déplacer de l'argent : il n'en existe tout simplement pas.
+    # Aucun outil ne déplace d'argent : il n'en existe pas. Le pilote automatique AUTORISE ou refuse, c'est tout.
     assert not [n for n in tools if any(w in n for w in ("transfer", "pay", "virement", "send", "withdraw"))]
     prompts = {p["name"] for p in agent.rpc("prompts/list")["prompts"]}
     assert prompts == {"onboarding_interview", "daily_brief", "weekly_review"}

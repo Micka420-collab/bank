@@ -9,17 +9,23 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.api.deps import AuthDep, DbDep, client_ip
 from app.db import utcnow
 from app.models import (
     Account,
     AuditLog,
+    AutonomyMandate,
+    AutonomyMove,
     Category,
     ChannelConfig,
     ChannelLink,
     Consent,
     Conversation,
+    CryptoHolding,
+    CryptoTaxEvent,
+    CryptoWallet,
     EnergyReading,
     InitiativeState,
     LlmUsage,
@@ -41,6 +47,52 @@ from app.security import audit
 from app.security.auth import verify_password
 
 router = APIRouter(prefix="/api", tags=["system"])
+
+
+def _autopilot(db: Session) -> dict[str, Any]:
+    row = db.get(AutonomyMandate, 1)
+    moves = db.scalars(select(AutonomyMove).order_by(AutonomyMove.id))
+    return {
+        "mandate": None
+        if row is None
+        else {
+            "enabled": row.enabled,
+            "trial": row.trial,
+            "agent": row.agent_name,
+            "mode": row.mode,
+            "scopes": json.loads(row.scopes or "[]"),
+            "assets": json.loads(row.assets or "[]"),
+            "rules": json.loads(row.rules or "[]"),
+            "destinations": json.loads(row.destinations or "[]"),
+            "per_op_cents": row.per_op_cents,
+            "per_day_cents": row.per_day_cents,
+            "per_month_cents": row.per_month_cents,
+            "max_moves_per_day": row.max_moves_per_day,
+            "max_loss_cents": row.max_loss_cents,
+            "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+        },
+        "moves": [
+            {
+                "id": m.id,
+                "agent": m.agent_name,
+                "kind": m.kind,
+                "asset": m.asset,
+                "to_asset": m.to_asset,
+                "chain": m.chain,
+                "amount_cents": m.amount_cents,
+                "executed_cents": m.executed_cents,
+                "pnl_cents": m.pnl_cents,
+                "destination": m.destination_label,
+                "rule": m.rule,
+                "reason": m.reason,
+                "status": m.status,
+                "refusal": m.refusal,
+                "tx_ref": m.tx_ref,
+                "created_at": m.created_at.isoformat(),
+            }
+            for m in moves
+        ],
+    }
 
 
 class ExportIn(BaseModel):
@@ -270,6 +322,37 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
             }
             for c in db.scalars(select(ChannelConfig).order_by(ChannelConfig.platform))
         ],
+        # Pilote automatique : ton cadre et son journal (le ticket n'existe qu'en empreinte, jamais exporté).
+        "autopilot": _autopilot(db),
+        # Crypto : adresses publiques suivies, avoirs, opérations fiscales (aucune clé : Bank n'en a jamais).
+        "crypto": {
+            "wallets": [
+                {"label": w.label, "chain": w.chain, "address": w.address}
+                for w in db.scalars(select(CryptoWallet).order_by(CryptoWallet.id))
+            ],
+            "holdings": [
+                {
+                    "asset": h.asset,
+                    "quantity": h.quantity,
+                    "platform": h.platform,
+                    "foreign": h.foreign,
+                    "watched": h.wallet_id is not None,
+                }
+                for h in db.scalars(select(CryptoHolding).order_by(CryptoHolding.id))
+            ],
+            "tax_events": [
+                {
+                    "day": e.day.isoformat(),
+                    "kind": e.kind,
+                    "amount_cents": e.amount_cents,
+                    "fees_cents": e.fees_cents,
+                    "portfolio_value_cents": e.portfolio_value_cents,
+                    "asset": e.asset,
+                    "note": e.note,
+                }
+                for e in db.scalars(select(CryptoTaxEvent).order_by(CryptoTaxEvent.day))
+            ],
+        },
     }
     audit.record(db, ctx.user.username, "export.done", transactions=len(payload["transactions"]))
     return Response(
