@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../api";
 import { Icon } from "../components/Icon";
 import { Field, useAsyncAction } from "../components/ui";
+import { loginWithPasskey, supportsPasskeys } from "../webauthn";
 
 const REMEMBER_KEY = "bank:username";
 
@@ -33,6 +34,13 @@ export function Login({ onDone }: { onDone: () => void }) {
   const [busy, error, run] = useAsyncAction();
   const formRef = useRef<HTMLFormElement>(null);
   const remembered = username.length > 0 && rememberedUsername() === username;
+  const passkeys = supportsPasskeys();
+  const withPasskey = () =>
+    void run(async () => {
+      const r = await loginWithPasskey();
+      remember(r.username);
+      onDone();
+    });
 
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
@@ -100,6 +108,11 @@ export function Login({ onDone }: { onDone: () => void }) {
         )}
         {error && <p className="error" role="alert">{error}</p>}
         <button className={`btn lg${busy ? " is-loading" : ""}`} disabled={busy}>{mfaToken ? "Valider le code" : "Se connecter"}</button>
+        {!mfaToken && passkeys && (
+          <button type="button" className="btn quiet lg" disabled={busy} onClick={withPasskey}>
+            <Icon name="lock" /> Se connecter avec une passkey
+          </button>
+        )}
         {mfaToken && (
           <button type="button" className="btn link" onClick={() => { setMfaToken(null); setCode(""); }}>Revenir à la connexion</button>
         )}

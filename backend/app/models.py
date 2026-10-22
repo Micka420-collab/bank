@@ -90,6 +90,25 @@ class User(Base):
     password_changed_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 
+class Passkey(Base):
+    """Une passkey (WebAuthn) : la clé publique et son compteur de signature ; rien de secret ici, le secret
+    reste dans l'authentificateur (téléphone, clé, ordinateur)."""
+
+    __tablename__ = "passkeys"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    credential_id: Mapped[str] = mapped_column(String(512), unique=True)  # base64url
+    public_key: Mapped[str] = mapped_column(Text)  # COSE, base64url
+    sign_count: Mapped[int] = mapped_column(BigInteger, default=0)
+    aaguid: Mapped[str] = mapped_column(String(40), default="")
+    transports: Mapped[str] = mapped_column(Text, default="[]")  # JSON
+    backed_up: Mapped[bool] = mapped_column(Boolean, default=False)
+    name: Mapped[str] = mapped_column(EncryptedText("passkey.name"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
 class AuthSession(Base):
     __tablename__ = "auth_sessions"
 
@@ -951,3 +970,43 @@ class CryptoTaxEvent(Base):
     asset: Mapped[str | None] = mapped_column(String(16))
     note: Mapped[str | None] = mapped_column(EncryptedText("crypto.tax_note"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+# ---------------------------------------------------------------------------- déclarations récurrentes
+class Obligation(Base):
+    """Une déclaration récurrente dont dépend une aide (actualisation France Travail, déclaration trimestrielle
+    CAF, renouvellement de la Complémentaire santé solidaire, déclaration de revenus, ou une obligation à toi).
+    Le libellé et les réglages sont chiffrés : ils disent de quelles aides tu vis."""
+
+    __tablename__ = "obligations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(24), index=True)
+    label: Mapped[str | None] = mapped_column(EncryptedText("obligation.label"))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    anchor: Mapped[date | None] = mapped_column(Date)  # mois de déclaration, fin de droits, prochaine échéance
+    cadence_months: Mapped[int] = mapped_column(Integer, default=12)
+    window_days: Mapped[int] = mapped_column(Integer, default=30)
+    settings: Mapped[str | None] = mapped_column(EncryptedText("obligation.settings"))  # JSON
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+    done: Mapped[list[ObligationDone]] = relationship(back_populates="obligation", cascade="all, delete-orphan")
+
+
+class ObligationDone(Base):
+    """Une période réglée : par toi, ou constatée par le versement qui a suivi. Ce que tu as déclaré (montants par
+    type de ressource) est gardé, chiffré, pour le comparer au versement qui suit."""
+
+    __tablename__ = "obligation_done"
+    __table_args__ = (UniqueConstraint("obligation_id", "period", name="uq_obligation_period"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    obligation_id: Mapped[int] = mapped_column(ForeignKey("obligations.id", ondelete="CASCADE"), index=True)
+    period: Mapped[str] = mapped_column(String(12))
+    done_on: Mapped[date] = mapped_column(Date)
+    how: Mapped[str] = mapped_column(String(40), default="user")  # user | payment:<id> | auto
+    declared: Mapped[str | None] = mapped_column(EncryptedText("obligation.declared"))  # JSON
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+    obligation: Mapped[Obligation] = relationship(back_populates="done")

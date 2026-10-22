@@ -5,6 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, useApi, type AidStream, type AidsResponse, type Profile, type Simulation } from "../api";
 import { CountUp } from "../components/CountUp";
 import { Icon } from "../components/Icon";
+import { Obligations } from "../components/Obligations";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { amountOnly, longDate, money, monthLabel, shortDate } from "../format";
 
@@ -104,6 +105,8 @@ export function Aids() {
           </ul>
         </section>
       )}
+
+      <Obligations />
 
       <section className="section" aria-labelledby="sim-title">
         <div className="section-head"><h2 id="sim-title"><Icon name="aids" /> Tes droits, simulés</h2></div>

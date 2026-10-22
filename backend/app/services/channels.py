@@ -34,7 +34,7 @@ from app.models import ChannelConfig, ChannelLink, ChannelSeen, Procedure
 from app.security import audit
 from app.security.auth import SlidingWindowLimiter
 from app.security.crypto import get_keyring
-from app.services import analytics, autonomy, consents, opportunities
+from app.services import analytics, autonomy, consents, obligations, opportunities
 from app.services import assistant as assistant_service
 from app.services.settings_store import get_setting, set_setting
 
@@ -660,11 +660,27 @@ HELP = (
     "- /demarches : où en sont tes démarches\n"
     "- /nouveau : repartir d'une conversation vierge\n"
     "- /pause ou /reprendre : mes alertes ici\n"
+    "- /declarations : ce que tu dois déclarer et quand (France Travail, CAF, impôts)\n"
     "- /pilote : où en est le pilote automatique (/pilote stop ou /stop : tout arrêter)\n"
     "- /delier : ne plus me parler depuis ce compte\n\n"
     "Rien ne se valide ici : transmettre, confirmer, régler, c'est dans l'application."
 )
-_BARE_COMMANDS = {"aide", "help", "budget", "missions", "demarches", "pause", "reprendre", "nouveau", "pilote", "stop"}
+_BARE_COMMANDS = {
+    "aide",
+    "help",
+    "budget",
+    "missions",
+    "demarches",
+    "declarations",
+    "declaration",
+    "actualisation",
+    "obligations",
+    "pause",
+    "reprendre",
+    "nouveau",
+    "pilote",
+    "stop",
+}
 _PILOT_STOP = {"stop", "off", "arret", "arrete", "arretes", "arreter", "coupe", "coupes", "couper", "desactive"}
 _PILOT_WORDS = {"pilote", "pilot", "autopilot", "autopilote"}
 _FILLERS = {"le", "la", "l", "mon", "ton", "automatique", "auto", "tout", "stp", "svp", "vite", "maintenant"}
@@ -680,6 +696,9 @@ _ALIASES = {
     "demarche": "demarches",
     "pilot": "pilote",
     "autopilot": "pilote",
+    "declaration": "declarations",
+    "actualisation": "declarations",
+    "obligations": "declarations",
 }
 
 
@@ -748,6 +767,13 @@ def _run_command(
         return [missions_text(db, today, cfg.privacy, public_url)]
     if name == "demarches":
         return [procedures_text(db, today, cfg.privacy, public_url)]
+    if name == "declarations":
+        lines = obligations.chat_lines(db, today, cfg.privacy, public_url)
+        return [
+            "\n".join(lines)
+            if lines
+            else f"Rien à déclarer de suivi pour l'instant. Pour ajouter une obligation : {public_url}/#/aides"
+        ]
     if name == "nouveau":
         if link.conversation_id:
             assistant_service.close_conversation(db, conversation_id=link.conversation_id)

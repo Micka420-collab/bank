@@ -37,11 +37,18 @@ def get_db(request: Request) -> Iterator[Session]:
     yield from session_scope(request.app.state.sessionmaker)
 
 
+# scope="function" : le commit (après le yield) s'exécute avant l'envoi de la réponse. Avec la portée par défaut
+# (« request »), FastAPI ≥ 0.118 ferme les dépendances après avoir envoyé la réponse : le client recevrait un 201
+# avant que la ligne soit écrite, et un commit qui échoue ne pourrait plus être signalé. Une app de finances ne
+# dit « enregistré » que quand c'est vrai.
+_DB = Depends(get_db, scope="function")
+
+
 def today() -> date:
     return date.today()  # noqa: DTZ011 - date locale du serveur = date « bancaire » de l'utilisateur
 
 
-DbDep = Annotated[Session, Depends(get_db)]
+DbDep = Annotated[Session, _DB]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 TodayDep = Annotated[date, Depends(today)]
 

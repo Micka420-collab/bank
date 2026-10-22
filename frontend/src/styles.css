@@ -5916,3 +5916,254 @@ details.card.cx-details > summary {
 .pl-frame .notice {
   margin-top: 0.75rem;
 }
+
+/* ------------------------------------------------------------------ aides : tes déclarations */
+.ob-list > li.is-off {
+  opacity: 0.6;
+}
+.ob-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.ob-suggest .actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.ob-detail {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--line);
+}
+.ob-periods,
+.ob-items,
+.ob-notes {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+.ob-items {
+  font-size: var(--t-sm);
+}
+.ob-anchor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.ob-anchor.is-compact {
+  margin-top: 1rem;
+}
+.ob-prefill {
+  margin-top: 0.75rem;
+}
+.ob-table td,
+.ob-table th {
+  vertical-align: top;
+}
+.ob-table .ob-cell {
+  padding: 0;
+  font-variant-numeric: tabular-nums;
+}
+.ob-table .tag {
+  margin-left: 0.35rem;
+}
+.ob-more {
+  margin-top: 0.75rem;
+}
+.ob-more summary {
+  cursor: pointer;
+  color: var(--ink-2);
+}
+.ob-add {
+  margin-bottom: 1rem;
+}
+
+/* ------------------------------------------------------------------ situation : ce qui est lié */
+.corr-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.corr-row {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: var(--r-s);
+  background: var(--surface);
+}
+.corr-row.is-danger {
+  border-left-color: var(--negative);
+}
+.corr-row.is-warning {
+  border-left-color: var(--warning);
+}
+.corr-row.is-info {
+  border-left-color: var(--accent);
+}
+.corr-row h3 {
+  margin: 0.35rem 0 0.25rem;
+  font-size: var(--t-md);
+}
+.corr-row p {
+  margin: 0;
+  color: var(--ink-2);
+}
+.corr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+.corr-stake {
+  margin-left: auto;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.corr-evidence {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  font-size: var(--t-sm);
+  color: var(--ink-2);
+}
+.corr-hints {
+  margin-top: 1rem;
+}
+.corr-hints summary {
+  cursor: pointer;
+  color: var(--ink-2);
+  margin-bottom: 0.5rem;
+}
+
+/* ------------------------------------------------------------------ aujourd'hui : l'année qui vient */
+.ya > summary {
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  cursor: pointer;
+}
+.ya > summary::-webkit-details-marker {
+  display: none;
+}
+.ya > summary .icon {
+  flex: none;
+  color: var(--accent);
+  transition: transform var(--d-base) var(--ease-out);
+}
+.ya[open] > summary .icon {
+  transform: rotate(90deg);
+}
+.ya[data-status="risk"] > summary .faint {
+  color: var(--negative);
+}
+.ya-chart {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 0.35rem;
+  align-items: end;
+  height: 9rem;
+  margin-top: 1rem;
+}
+.ya-month {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  height: 100%;
+  min-width: 0;
+  text-align: center;
+}
+.ya-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 0;
+}
+.ya-bar i {
+  display: block;
+  width: 70%;
+  border-radius: 3px 3px 0 0;
+  background: var(--positive);
+}
+.ya-month.is-negative .ya-bar i {
+  background: var(--negative);
+}
+.ya-month.is-lowest .ya-bar i {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+.ya-dot {
+  width: 6px;
+  height: 6px;
+  margin: 0.2rem auto 0;
+  border-radius: 50%;
+  background: var(--warning);
+}
+.ya-label {
+  font-size: 0.66rem;
+  letter-spacing: -0.01em;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ya-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.5rem 1rem;
+  margin: 1rem 0 0;
+}
+.ya-stats dt {
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+}
+.ya-stats dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ya-provision {
+  margin: 0.75rem 0 0;
+}
+.ya-spikes {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+.ya-spikes li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+.ya-amount {
+  margin-left: auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ya-add {
+  margin-top: 0.5rem;
+}
+
+/* ------------------------------------------------------------------ réglages : passkeys */
+.pk-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.pk-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}

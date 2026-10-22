@@ -45,6 +45,7 @@ from app.models import (
 )
 from app.security import audit
 from app.security.auth import verify_password
+from app.services import obligations as obligations_service
 
 router = APIRouter(prefix="/api", tags=["system"])
 
@@ -324,6 +325,8 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
         ],
         # Pilote automatique : ton cadre et son journal (le ticket n'existe qu'en empreinte, jamais exporté).
         "autopilot": _autopilot(db),
+        # Déclarations récurrentes : ce qui est suivi, ce qui a été fait et ce que tu as déclaré.
+        "obligations": obligations_service.export(db),
         # Crypto : adresses publiques suivies, avoirs, opérations fiscales (aucune clé : Bank n'en a jamais).
         "crypto": {
             "wallets": [

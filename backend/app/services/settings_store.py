@@ -34,6 +34,10 @@ DEFAULTS: dict[str, Any] = {
     "crypto_endpoints": {},
     "crypto_sentiment": None,
     "crypto_in_wealth": True,
+    # Déclarations récurrentes : les propositions que tu as écartées (« ne plus demander »).
+    "obligations_dismissed": [],
+    # L'année qui vient : pics ajoutés à la main et pics détectés que tu as écartés.
+    "year_spikes": {"custom": [], "ignored": []},
 }
 
 

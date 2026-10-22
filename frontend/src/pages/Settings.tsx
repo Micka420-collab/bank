@@ -8,6 +8,7 @@ import { Segmented } from "../components/Segmented";
 import { EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
 import { applyTheme, readTheme, type ThemePref } from "../theme";
+import { registerPasskey, supportsPasskeys, type PasskeyView } from "../webauthn";
 
 export const KIND_LABELS: Record<AccountKind, string> = {
   checking: "Compte courant",
@@ -317,6 +318,7 @@ function Security({ me, onChange }: { me: Me; onChange: () => void }) {
               <div className="codes" style={{ marginTop: "0.75rem" }}>{codes.map((c) => <span key={c}>{c}</span>)}</div>
             </div>
           )}
+          <Passkeys onChange={onChange} />
         </div>
         <div className="stack">
           <form className="stack" onSubmit={changePassword} aria-label="Changer de mot de passe">
@@ -338,6 +340,83 @@ function Security({ me, onChange }: { me: Me; onChange: () => void }) {
   );
 }
 
+// ------------------------------------------------------------------ passkeys
+function Passkeys({ onChange }: { onChange: () => void }) {
+  const list = useApi<{ passkeys: PasskeyView[]; rp_id: string; max: number }>("/api/auth/passkeys");
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [removing, setRemoving] = useState<number | null>(null);
+  const [removePw, setRemovePw] = useState("");
+  const [busy, error, run] = useAsyncAction();
+  const toast = useToast();
+  const supported = supportsPasskeys();
+  const add = (e: FormEvent) => {
+    e.preventDefault();
+    void run(async () => {
+      await registerPasskey(name, password);
+      setAdding(false); setName(""); setPassword("");
+      toast("Passkey ajoutée : tu peux te connecter avec, sans mot de passe.");
+      list.reload(); onChange();
+    });
+  };
+  const remove = (e: FormEvent) => {
+    e.preventDefault();
+    if (removing === null) return;
+    void run(async () => {
+      await api(`/api/auth/passkeys/${removing}/delete`, { method: "POST", body: { password: removePw } });
+      setRemoving(null); setRemovePw("");
+      toast("Passkey retirée.");
+      list.reload(); onChange();
+    });
+  };
+  const keys = list.data?.passkeys ?? [];
+  return (
+    <div className="stack pk" aria-labelledby="pk-title">
+      <h3 id="pk-title">Passkeys</h3>
+      <p className="muted">
+        Face ID, empreinte ou clé de sécurité : plus simple qu'un mot de passe sur le téléphone, et une fausse page ne
+        peut pas la voler — elle ne vaut que pour {list.data?.rp_id ?? "ton adresse Bank"}. Le mot de passe reste en secours et
+        pour les gestes sensibles.
+      </p>
+      {keys.length > 0 && (
+        <ul className="pk-list">
+          {keys.map((k) => (
+            <li key={k.id}>
+              <span><Icon name="lock" /> <b>{k.name}</b> <span className="faint">ajoutée le {shortDate(k.created_at)}{k.last_used_at ? `, utilisée le ${shortDate(k.last_used_at)}` : ", jamais utilisée"}{k.backed_up ? ", synchronisée" : ""}</span></span>
+              <button type="button" className="btn link" disabled={busy} onClick={() => { setRemoving(k.id); setRemovePw(""); }}>Retirer</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {removing !== null && (
+        <form className="stack" onSubmit={remove} aria-label="Retirer une passkey">
+          <Field label="Ton mot de passe pour retirer cette passkey"><input type="password" value={removePw} onChange={(e) => setRemovePw(e.target.value)} required autoComplete="current-password" /></Field>
+          <div className="actions" style={{ marginTop: 0 }}>
+            <button className="btn quiet sm" disabled={busy}>Retirer</button>
+            <button type="button" className="btn link" onClick={() => setRemoving(null)}>Annuler</button>
+          </div>
+        </form>
+      )}
+      {!supported ? (
+        <p className="faint">Ce navigateur ne propose pas les passkeys.</p>
+      ) : adding ? (
+        <form className="stack" onSubmit={add} aria-label="Ajouter une passkey">
+          <Field label="Nom de l'appareil" hint="Pour la reconnaître : « iPhone », « clé YubiKey »…"><input value={name} onChange={(e) => setName(e.target.value)} required maxLength={60} /></Field>
+          <Field label="Ton mot de passe"><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" /></Field>
+          <div className="actions" style={{ marginTop: 0 }}>
+            <button className={`btn${busy ? " is-loading" : ""}`} disabled={busy}><Icon name="lock" /> Créer la passkey</button>
+            <button type="button" className="btn link" onClick={() => setAdding(false)}>Annuler</button>
+          </div>
+        </form>
+      ) : (
+        <button type="button" className="btn quiet" disabled={busy || (list.data ? keys.length >= list.data.max : false)} onClick={() => setAdding(true)}><Icon name="plus" /> Ajouter une passkey</button>
+      )}
+      {error && <p className="error" role="alert">{error}</p>}
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------ journal
 const ACTIONS: Record<string, string> = {
   "setup.done": "Création de l'accès",
@@ -348,6 +427,11 @@ const ACTIONS: Record<string, string> = {
   "login.locked": "Tentative sur compte verrouillé",
   logout: "Déconnexion",
   "mfa.enabled": "Double authentification activée",
+  "passkey.added": "Passkey ajoutée",
+  "passkey.removed": "Passkey retirée",
+  "passkey.denied": "Passkey : refus (mot de passe ou réponse invalide)",
+  "login.passkey_failed": "Connexion par passkey refusée",
+  "login.passkey_unknown": "Passkey inconnue présentée",
   "password.changed": "Mot de passe changé",
   "password.change_denied": "Changement de mot de passe refusé",
   "account.create": "Compte ajouté",

@@ -16,6 +16,7 @@ import {
   type StoredAnswer,
   type Suggestion,
 } from "../api";
+import { Correlations } from "../components/Correlations";
 import { Initiatives } from "../components/Initiatives";
 import { Markdown } from "../components/Markdown";
 import { ErrorNote, EuroInput, Loading, useAsyncAction, useToast } from "../components/ui";
@@ -107,6 +108,8 @@ export function Situation() {
       <Knowledge data={data} onEdit={(s) => setSection(s)} />
 
       <Initiatives onChanged={refresh} />
+
+      <Correlations />
 
       {proposals.data && proposals.data.length > 0 && (
         <ProposalsInbox items={proposals.data} questions={data.questions} onDecided={refresh} />

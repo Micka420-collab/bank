@@ -14,7 +14,7 @@ application financière : messages privés seulement, aucune décision depuis un
 | Il fait | Il ne fait jamais |
 |---|---|
 | Répondre à tes questions, avec les chiffres de Bank et la mémoire de l'assistant si tu l'as activée | Transmettre une démarche, confirmer un gain, changer un réglage, allumer le pilote automatique : tout se valide dans l'application |
-| `/budget`, `/missions`, `/demarches`, `/pilote` sans même avoir besoin de l'assistant ; **arrêter** le pilote automatique (`/pilote stop`) | Te demander un mot de passe, un code, un numéro de carte, une phrase de récupération ou une clé privée. S'il en repère un dans ton message, il le refuse : le message ne va ni au modèle ni dans l'historique |
+| `/budget`, `/missions`, `/demarches`, `/declarations`, `/pilote` sans même avoir besoin de l'assistant ; **arrêter** le pilote automatique (`/pilote stop`) | Te demander un mot de passe, un code, un numéro de carte, une phrase de récupération ou une clé privée. S'il en repère un dans ton message, il le refuse : le message ne va ni au modèle ni dans l'historique |
 | Te prévenir une seule fois par événement, en un seul message qui regroupe tout, hors de tes heures calmes | Répondre à un inconnu : un compte non relié n'obtient **aucune** réponse, il ne sait même pas que ce robot est relié à Bank |
 | Écrire IBAN, numéro de carte, de sécurité sociale, d'allocataire ou fiscal ? Non : ils sont retirés de tout message sortant | Lire un groupe ou un salon : seulement les messages privés, et jamais ceux d'un autre robot |
 
@@ -165,6 +165,7 @@ ntfy n'affiche que des alertes : pas de question, pas de commande.
 | `/budget` | Ce que tu peux dépenser par jour, le point bas du mois |
 | `/missions` | Tes meilleures pistes et ta tirelire |
 | `/demarches` | Où en sont tes démarches |
+| `/declarations` | Ce que tu dois déclarer et avant quand (actualisation France Travail, déclaration CAF, impôts), et les chiffres prêts |
 | `/nouveau` | Une conversation vierge (ce que l'assistant a appris de toi reste) |
 | `/pause`, `/reprendre` | Couper ou rallumer les alertes sur ce compte |
 | `/pilote` | L'état du pilote automatique : en marche, en essai ou arrêté, ce qui reste sur 24 h, le dernier mouvement |

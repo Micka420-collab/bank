@@ -15,6 +15,7 @@ import { MonthChart } from "../components/MonthChart";
 import { Segmented } from "../components/Segmented";
 import { Amount, ErrorNote, Loading, useToast } from "../components/ui";
 import { Welcome } from "../components/Welcome";
+import { YearAhead } from "../components/YearAhead";
 import { amountOnly, dayNumber, longDate, merchantCase, money, monthLabel, plural, shortDate } from "../format";
 
 const RANGES: { value: HistoryRange; label: string }[] = [
@@ -95,6 +96,8 @@ export function Today() {
         <MonthChart history={f.history} projection={f.projection} events={f.upcoming} lowestCents={f.lowest_balance_cents}
                     lowestDate={f.lowest_balance_date} daysInMonth={f.days_in_month} bare />
       </section>
+
+      <YearAhead />
 
       <section className="card reveal" style={{ marginTop: "1rem", ["--i" as string]: 3 }}>
         <Decide />

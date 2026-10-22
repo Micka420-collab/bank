@@ -6,6 +6,21 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
 - **Comptes** : import CSV/OFX de n'importe quelle banque française, ou synchronisation DSP2 (Enable Banking).
 - **Budget** : reste à dépenser par jour contraint par la trésorerie (pas de « 216 €/j » qui suppose le salaire déjà arrivé), courbe du mois avec point bas et date de découvert, enveloppes, suggestions.
 - **Aides de l'État** : reconnaissance des versements CAF, France Travail, CPAM, MSA, impôts ; alertes de retard ou de changement ; simulation de tes droits par OpenFisca (le moteur officiel) et détection du non-recours.
+- **Tes déclarations** : l'actualisation France Travail, la déclaration trimestrielle CAF ou MSA, le renouvellement
+  de la Complémentaire santé solidaire, la déclaration de revenus — proposées d'après tes versements, rappelées à
+  l'ouverture, avant l'échéance et en cas de retard (alerte urgente), constatées par le versement qui suit ; les
+  chiffres de la déclaration trimestrielle sont préparés depuis tes relevés et tes bulletins. Voir
+  [docs/DECLARATIONS.md](docs/DECLARATIONS.md).
+- **Ce qui est lié** : Bank lit tes contrats dans le détail (bail : loyer, charges, dépôt, clause IRL, assureur
+  exigé ; assurances : assureur, type, prime, échéance) et les croise avec tes relevés et tes aides — deux
+  assurances habitation dont une vendue par ta banque, un loyer payé au-dessus du bail ou de l'IRL, une prime qui
+  monte, un bulletin qui ne colle pas au virement, une déclaration CAF que le versement ne reflète pas ; et des
+  pistes statistiques prudentes (huit mois, test par permutation). Chaque constat montre ses pièces et prépare la
+  démarche. Voir [docs/CORRELATIONS.md](docs/CORRELATIONS.md).
+- **L'année qui vient** : douze mois projetés depuis la fin du mois (revenus réguliers, charges fixes, dépenses
+  habituelles), les pics trimestriels et annuels détectés à leur deuxième occurrence et posés à leur mois (assurance
+  annuelle, impôts, eau), ceux que tu ajoutes, le point bas de l'année et la **provision mensuelle** qui lisse — que
+  Bank propose de réserver avec ton épargne visée. Alerte deux mois avant un pic.
 - **Patrimoine** : valeur nette, matelas de sécurité, livrets réglementés (taux au 1er août 2026), objectifs, projection.
 - **Décider** : « je peux m'acheter ça ? » répond oui, oui mais, à partir de telle date, ou dans N mois d'épargne
   (matelas d'abord ou au plus vite) ; « où placer mon argent ? » donne un plan par priorité (mois d'avance, dette
@@ -36,6 +51,9 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
   cadre — un jeton précis, tes actifs, tes adresses, tes consignes, des plafonds glissants, une perte maximale,
   une durée ; Bank autorise ou refuse chaque mouvement avant qu'il parte et coupe tout à la première anomalie.
   « Tout arrêter » d'un geste, ou `/pilote stop` (voire « stop pilote ») depuis ta messagerie.
+- **Passkeys** : Face ID, empreinte ou clé de sécurité pour te connecter sans mot de passe, résistant au phishing
+  (Réglages › Sécurité, mot de passe exigé pour en ajouter ou en retirer ; le mot de passe reste en secours et pour
+  les gestes sensibles).
 - **Simple et ludique** : cinq destinations (Aujourd'hui, Opérations, Gagner, Papiers, Épargne), des
   missions avec leur récompense, une tirelire qui se remplit avec ce que Bank t'a vraiment fait récupérer.
 - **Une interface de produit fini** : design system « Encre claire » (clair et sombre, choix dans Réglages),
@@ -131,6 +149,41 @@ reposent sur les revenus fiscaux d'il y a deux ans. Les résultats sont indicati
 tes droits.
 
 OpenFisca France est sous licence AGPL-3.0 : rien à faire tant que le service reste à ton seul usage.
+
+## L'année qui vient
+
+Sur la page du jour, sous la courbe du mois : une phrase (« année sans découvert, point bas 1 240 € en mars »), et en
+dépliant, douze barres de solde de fin de mois, les pics posés à leur mois avec leur source (détecté à sa deuxième
+occurrence, ajouté par toi, dépense prévue à l'accueil), la provision mensuelle qui les lisse. « Écarter » retire un
+pic détecté à tort ; « Ajouter » pose une dépense annuelle ou trimestrielle que les relevés ne montrent pas encore.
+Quand la provision n'est pas couverte par ton épargne visée, Bank te propose de la réserver d'un geste (elle sort
+alors du reste à dépenser du jour, et le pic ne surprend plus). Ton agent lit la même projection (`get_year_ahead`).
+
+## Ce qui est lié (corrélations)
+
+Bank › Plus › Ma situation › **Ce qui est lié**. Un bail déposé dans Papiers est lu pour ses petites lignes
+(loyer, charges, dépôt, clause de révision IRL, assurance exigée et assureur nommé, préavis) ; une attestation
+d'assurance pour son assureur — y compris Pacifica, ACM, Sogessur, Cardif et les autres assureurs des banques —,
+son type et sa prime. Bank croise ensuite avec tes prélèvements : deux assurances habitation → doublon chiffré par
+an et lettre de résiliation préremplie ; loyer payé au-dessus du bail → hausse non due sans clause, ou plafond IRL
+calculé (indice INSEE embarqué et daté) ; prime, box ou abonnement qui monte → le droit de partir qui va avec ;
+bulletin ≠ virement, quittance ≠ loyer, ressources déclarées à la CAF ≠ versement qui suit, mensualité d'énergie ≠
+consommation Linky. Les pistes statistiques (revenu ↔ catégorie, dépenses de la semaine de paie) ne parlent
+qu'avec huit mois et un test par permutation, et jamais comme des causes. Détails :
+[docs/CORRELATIONS.md](docs/CORRELATIONS.md).
+
+## Déclarations à ne pas oublier
+
+Bank › Gagner › Aides › **Tes déclarations**. Un versement France Travail reconnu dans tes relevés fait proposer
+l'actualisation mensuelle ; une prime d'activité ou un RSA, la déclaration trimestrielle de ressources ; la
+déclaration de revenus concerne tout le monde. Tu acceptes d'un geste sur la page du jour, Bank calcule les
+fenêtres (du 28 au 15 du mois suivant pour France Travail ; le mois de déclaration que tu lui indiques, tous les
+trois mois, pour la CAF ; la date limite de ton département pour les impôts), te prévient dans l'application et
+tes messageries, et **constate** que c'est fait quand le virement qui suit arrive — sans virement, alerte urgente.
+Pour la déclaration trimestrielle, « Mes chiffres » donne les trois mois de référence par type de ressource, chaque
+montant ouvert sur ses opérations, le montant net social quand un bulletin a été lu dans Papiers, et ce qui ne se
+déclare pas. Rien n'est envoyé : tu déclares sur le site de l'organisme. Règles datées et sourcées dans
+[docs/DECLARATIONS.md](docs/DECLARATIONS.md).
 
 ## Connecteurs
 
@@ -333,13 +386,15 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 825 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+Qualité au moment de la livraison : 871 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
 aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, scénarios adverses du
 banc d'essai crypto de Minara rejoués contre le pilote automatique, demandes simultanées qui ne passent jamais
 ensemble sous un plafond, Keccak-256 vérifié contre une implémentation de
-référence, intégration OpenFisca réelle), couverture 91 %, 98 tests front (parcours de première ouverture, coffre,
-démarches, opportunités, veille, assistant, crypto, pilote, erreurs qui disent quoi faire), mypy strict sans erreur,
+référence, intégration OpenFisca réelle, passkeys face à un authentificateur simulé, transaction validée avant
+l'envoi de chaque réponse), couverture 92 %, 111 tests front (parcours de première ouverture, coffre, démarches,
+opportunités, veille, assistant, crypto, pilote, déclarations, corrélations, année qui vient, passkeys, erreurs qui
+disent quoi faire), mypy strict sans erreur,
 ruff et bandit propres, revue de sécurité indépendante du pilote et de la crypto (ses constats corrigés et
 testés), `pip-audit` et `npm audit` sans vulnérabilité connue, aucune erreur de console ni débordement
 horizontal à 390 px (vérifié par Playwright), et un parcours complet dans Chromium à travers les conteneurs durcis,

@@ -27,6 +27,7 @@ from app.api import (
     channels,
     consents,
     copilot,
+    correlations,
     crypto,
     decisions,
     deps,
@@ -36,13 +37,16 @@ from app.api import (
     initiatives,
     insights,
     memory,
+    obligations,
     opportunities,
+    passkeys,
     planning,
     procedures,
     system,
     transactions,
     vault,
     watch,
+    yearahead,
 )
 from app.channels.gateway import Gateway
 from app.config import Settings
@@ -59,6 +63,7 @@ from app.services import autonomy as autonomy_service
 from app.services import consents as consent_service
 from app.services import crypto as crypto_service
 from app.services import energy as energy_service
+from app.services import obligations as obligations_service
 from app.services import planning as planning_service
 from app.services import vault as vault_service
 from app.services import watch as watch_service
@@ -175,6 +180,9 @@ def _housekeeping_once(app: FastAPI, today: date) -> dict[str, int]:
     with app.state.sessionmaker() as db:  # veille : sources dues seulement, chacune bornée en taille et en durée
         report.update(watch_service.housekeeping(db, now=utcnow(), fetcher=app.state.watch_fetcher))
         db.commit()
+    with app.state.sessionmaker() as db:  # déclarations constatées par le versement qui a suivi
+        report["obligations_detected"] = obligations_service.auto_detect(db, today)
+        db.commit()
     return report
 
 
@@ -270,6 +278,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.limiters = {
         "login": SlidingWindowLimiter(10, 300),
         "mfa": SlidingWindowLimiter(10, 300),
+        "passkey": SlidingWindowLimiter(30, 300),  # un défi par tentative : l'écran de connexion en redemande souvent
         "callback": SlidingWindowLimiter(20, 300),
         "agent": SlidingWindowLimiter(settings.agent_calls_per_minute, 60),
         "assistant": SlidingWindowLimiter(30, 300),  # questions au modèle : 30 par 5 min, en plus des plafonds
@@ -312,6 +321,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         channels,
         autonomy,
         crypto,
+        obligations,
+        correlations,
+        yearahead,
+        passkeys,
         system,
     )
     for r in routers:

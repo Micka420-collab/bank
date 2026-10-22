@@ -19,7 +19,7 @@ from app.domain import procedures as dp
 from app.domain import watch as dw
 from app.domain.money import format_eur
 from app.models import ChannelConfig, ChannelLink, ChannelNotice, Procedure, WatchItem, WatchSource
-from app.services import analytics, autonomy, opportunities, procedures
+from app.services import analytics, autonomy, correlations, obligations, opportunities, procedures, yearahead
 from app.services import watch as watch_service
 from app.services.settings_store import get_setting
 
@@ -74,6 +74,21 @@ def collect(
     out: list[Notice] = [
         Notice(key, text, urgent)
         for key, text, urgent in autonomy.alerts(db, now=now, privacy=privacy, public_url=public_url)
+    ]
+    # Déclarations récurrentes : une fenêtre qui s'ouvre, une échéance proche, un retard (urgent : l'aide est en jeu).
+    out += [
+        Notice(key, text, urgent)
+        for key, text, urgent in obligations.alerts(db, today=today, privacy=privacy, public_url=public_url)
+    ]
+    # L'année qui vient : un pic dans les deux mois, un passage sous zéro prévu.
+    out += [
+        Notice(key, text, urgent)
+        for key, text, urgent in yearahead.alerts(db, today=today, privacy=privacy, public_url=public_url)
+    ]
+    # Corrélations : seulement les constats sérieux (doublon d'assurance, loyer au-dessus de l'IRL), une fois.
+    out += [
+        Notice(key, text, urgent)
+        for key, text, urgent in correlations.alerts(db, today=today, privacy=privacy, public_url=public_url)
     ]
     forecast, _ = analytics.month_forecast(db, today)
     if forecast.overdraft_date is not None:
@@ -147,6 +162,9 @@ def weekly_text(db: Session, today: date, privacy: str, public_url: str, forecas
     if waiting:
         n = len(waiting)
         lines.append(f"- {n} démarche{'s' if n > 1 else ''} envoyée{'s' if n > 1 else ''}, en attente de réponse.")
+    for line in obligations.chat_lines(db, today, privacy, public_url)[:-1]:
+        if line.startswith(("📝", "🚨", "📅")):
+            lines.append(f"- {line}")
     lines.append(f"Bonne semaine ! {public_url}/#/aujourdhui")
     return "\n".join(lines)
 

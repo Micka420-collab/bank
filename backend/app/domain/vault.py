@@ -19,6 +19,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from app.domain import contracts
 from app.domain import documents as official
 
 # Durées minimales de conservation : Service-Public.fr, fiche F19134, vérifiée le 13 octobre 2026 (DILA).
@@ -363,8 +364,15 @@ KINDS: dict[str, KindSpec] = {
             False,
             (
                 _f("date_debut", "Prise d'effet", "date"),
-                _f("loyer", "Loyer mensuel", "amount"),
+                _f("loyer", "Loyer mensuel hors charges", "amount"),
+                _f("charges", "Provision pour charges", "amount"),
                 _f("depot_garantie", "Dépôt de garantie", "amount"),
+                _f("revision", "Clause de révision", "text"),
+                _f("preavis", "Préavis (mois)", "number"),
+                _f("meuble", "Meublé", "text"),
+                _f("assurance_exigee", "Assurance exigée", "text"),
+                _f("assureur", "Assureur nommé", "text"),
+                _f("bailleur", "Bailleur", "text"),
             ),
             Retention("Durée de la location, puis 3 ans"),
             (
@@ -415,7 +423,9 @@ KINDS: dict[str, KindSpec] = {
             (
                 _f("assureur", "Assureur", "text"),
                 _f("garantie", "Garantie", "text"),
+                _f("type", "Type", "text"),
                 _f("cotisation", "Cotisation", "amount"),
+                _f("periodicite", "Périodicité", "text"),
                 _f("valable_jusqu", "Valable jusqu'au", "date"),
             ),
             Retention("Avis d'échéance : 2 ans ; contrat : 2 ans après sa fin", 2),
@@ -578,6 +588,30 @@ def _const(value: str) -> Picker:
     return lambda line, m: value
 
 
+def _irl_clause(line: Line, m: re.Match[str]) -> str | None:
+    """« IRL » ou « IRL 2e trimestre 2025 » : la clause de révision et son trimestre de référence s'il est écrit."""
+    q = contracts.quarter_in(line.folded)
+    return f"IRL {contracts.quarter_label(q)}" if q else "IRL"
+
+
+def _months_after(line: Line, m: re.Match[str]) -> int | None:
+    found = re.search(r"\b(UN|DEUX|TROIS|SIX|[1-9]|1[0-2])\s*MOIS\b", line.folded[m.end() :])
+    if not found:
+        return None
+    words = {"UN": 1, "DEUX": 2, "TROIS": 3, "SIX": 6}
+    token = found.group(1)
+    return words.get(token, int(token) if token.isdigit() else None)
+
+
+def _insurer_in_line(line: Line, m: re.Match[str]) -> str | None:
+    ins = contracts.insurer_of(line.folded)
+    return ins.name if ins else None
+
+
+def _insurance_type(line: Line, m: re.Match[str]) -> str | None:
+    return contracts.insurance_type(line.folded)
+
+
 @dataclass(frozen=True)
 class Rule:
     key: str
@@ -618,8 +652,32 @@ _RULES: dict[str, tuple[Rule, ...]] = {
     ),
     "lease": (
         Rule("date_debut", r"PREND(?:RA)? EFFET|A COMPTER DU|PRISE D'EFFET|DATE D'ENTREE", _date_after),
-        Rule("loyer", r"LOYER (?:MENSUEL|HORS CHARGES|HC)", _amount_after),
+        Rule("loyer", r"LOYER (?:MENSUEL|HORS CHARGES|HC|PRINCIPAL)", _amount_after),
+        Rule(
+            "charges",
+            r"PROVISIONS? (?:POUR|SUR) CHARGES|CHARGES (?:MENSUELLES|LOCATIVES|FORFAITAIRES|RECUPERABLES)",
+            _amount_after,
+            confidence=0.8,
+        ),
         Rule("depot_garantie", r"DEPOT DE GARANTIE", _amount_after),
+        Rule("revision", r"INDICE DE REFERENCE DES LOYERS|\bIRL\b", _irl_clause, confidence=0.8),
+        Rule("preavis", r"PREAVIS|DELAI DE CONGE", _months_after, confidence=0.7),
+        Rule(
+            "meuble",
+            r"LOCATION MEUBLEE|LOGEMENT MEUBLE|BAIL (?:DE LOCATION )?MEUBLE|\bMEUBLE\b",
+            _const("oui"),
+            exclude=r"NON MEUBLE|VIDE",
+            confidence=0.7,
+        ),
+        Rule("meuble", r"LOGEMENT VIDE|LOCATION VIDE|LOCATION NUE|NON MEUBLE", _const("non"), confidence=0.7),
+        Rule(
+            "assurance_exigee",
+            r"ASSUR\w*.*(?:OBLIGATOIRE|JUSTIFIER|ATTESTATION|SOUSCRIRE)|JUSTIFIER D'UNE ASSURANCE",
+            _const("oui"),
+            confidence=0.75,
+        ),
+        Rule("assureur", r"ASSUR", _insurer_in_line, confidence=0.7),
+        Rule("bailleur", r"BAILLEUR\s*:|PROPRIETAIRE\s*:|LE BAILLEUR,?\s", _text_after, confidence=0.6),
     ),
     "bank_statement": (
         Rule("solde", r"NOUVEAU SOLDE|SOLDE (?:FINAL|AU \d)|SOLDE (?:CREDITEUR|DEBITEUR)", _signed_balance),
@@ -633,6 +691,20 @@ _RULES: dict[str, tuple[Rule, ...]] = {
             "garantie",
             r"ASSURANCE (?:HABITATION|AUTO|MULTIRISQUE[A-Z ]*|SCOLAIRE|EMPRUNTEUR)",
             lambda line, m: m.group(0).title(),
+        ),
+        Rule(
+            "type",
+            r"HABITATION|MULTIRISQUE|\bMRH\b|\bAUTO\b|VEHICULE|EMPRUNTEUR|\bSANTE\b|MUTUELLE|PREVOYANCE",
+            _insurance_type,
+            confidence=0.75,
+        ),
+        Rule("periodicite", r"PAR MOIS|MENSUEL|MENSUALITE|\bMOIS\b", _const("mensuelle"), confidence=0.6),
+        Rule("periodicite", r"PAR AN\b|ANNUEL|ANNUELLE|\bAN\b", _const("annuelle"), confidence=0.6),
+        Rule(
+            "assureur",
+            r"ASSUR|MUTUELLE|\bMAIF\b|\bMACIF\b|\bAXA\b|\bALLIANZ\b|\bPACIFICA\b",
+            _insurer_in_line,
+            confidence=0.7,
         ),
     ),
     "pension": (

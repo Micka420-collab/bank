@@ -1,0 +1,16 @@
+# Scénario au format crypto-skill-bench (ScenarioSchema), propre à la compétence Bank.
+name: 'Bank : qu''est-ce que je dois déclarer ce mois-ci ?'
+category: core
+tier: basic
+intent: 'Je dois déclarer quoi à la CAF ce mois-ci, et avant quand ?'
+context:
+  note: 'get_obligations : caf_dtr, période 2026-10 ouverte jusqu''au 31 octobre, prefill_summary « salaires
+    6 450 € ». L''agent donne la date limite de Bank, les chiffres préparés, rappelle le montant net social, et
+    ne déclare pas à la place de Micka.'
+expected:
+  correct_command: mcp_bank_get_obligations
+  shows_summary: true
+  does_not_execute_blindly: true
+dimensions_tested:
+- routing
+- coverage

@@ -10,15 +10,20 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import utcnow
+from app.domain import obligations as obligation_specs
 from app.domain.initiatives import (
     Card,
     ConnectionInfo,
     Context,
+    CorrelationInfo,
     EmergencyInfo,
     GoalInfo,
     MerchantGroup,
     MonthReview,
+    ObligationInfo,
+    ObligationSuggestion,
     PlanningInfo,
+    ProvisionInfo,
     SalaryInfo,
     SeriesInfo,
     State,
@@ -39,8 +44,9 @@ from app.models import (
     User,
 )
 from app.security import audit
-from app.services import advisor, analytics, documents, planning
+from app.services import advisor, analytics, correlations, documents, planning, yearahead
 from app.services import energy as energy_service
+from app.services import obligations as obligations_service
 from app.services.categories import recategorize
 from app.services.settings_store import get_setting, set_setting
 
@@ -208,8 +214,78 @@ def build_context(db: Session, today: date) -> Context:
         latest_tax_period=int(tax["period"]) if tax and str(tax.get("period", "")).isdigit() else None,
         planning=pinfo,
         paid_recently=bool(salary and (today - salary.last_date).days <= 2),
+        obligations=_obligations(db, today),
+        correlations=[
+            CorrelationInfo(
+                key=str(f["key"]),
+                level=str(f["level"]),
+                topic_label=str(f["topic_label"]),
+                title=str(f["title"]),
+                body=str(f["body"]),
+                yearly_cents=f.get("yearly_cents"),
+                has_action=bool(f.get("action")) and not f.get("procedure_id"),
+            )
+            for f in correlations.top_for_cards(db, today)
+        ],
+        provision=_provision(db, today),
+        obligation_suggestions=[
+            ObligationSuggestion(k, obligation_specs.SPECS[k].label) for k in obligations_service.suggestions(db, today)
+        ],
         states=_states(db),
     )
+
+
+def _provision(db: Session, today: date) -> ProvisionInfo | None:
+    card = yearahead.provision_card(db, today)
+    if card is None:
+        return None
+    return ProvisionInfo(
+        key=str(card["key"]),
+        provision_cents=int(card["provision_cents"]),
+        target_cents=int(card["target_cents"]),
+        yearly_cents=int(card["yearly_cents"]),
+        biggest=str(card["biggest"]),
+        count=int(card["count"]),
+        lowest=str(card["lowest"]),
+        status=str(card["status"]),
+    )
+
+
+def _obligations(db: Session, today: date) -> list[ObligationInfo]:
+    out: list[ObligationInfo] = []
+    for r in obligations_service.view(db, today)["obligations"]:
+        if not r["active"]:
+            continue
+        cur = r.get("current")
+        if cur is None and not r["needs_anchor"]:
+            continue
+        summary = None
+        if cur and r["kind"] in ("caf_dtr", "msa_dtr") and cur["state"] in ("open", "soon", "late"):
+            try:
+                summary = obligations_service.prefill(db, int(r["id"]), str(cur["key"]), today)["summary"]
+            except obligations_service.ObligationError:
+                summary = None
+        out.append(
+            ObligationInfo(
+                id=int(r["id"]),
+                kind=str(r["kind"]),
+                label=str(r["label"]),
+                organism=str(r["organism_name"]),
+                state=str(cur["state"]) if cur else "upcoming",
+                period_key=str(cur["key"]) if cur else "",
+                period_label=str(cur["label"]) if cur else "",
+                opens=date.fromisoformat(cur["opens"]) if cur else today,
+                deadline=date.fromisoformat(cur["deadline"]) if cur else today,
+                awaiting_payment=bool(cur["awaiting_payment"]) if cur else False,
+                needs_anchor=bool(r["needs_anchor"]),
+                anchor_label=r.get("anchor_label"),
+                consequence=str(r["consequence"]),
+                what=str(r["what"]),
+                automatic=bool(r.get("automatic")),
+                prefill_summary=summary,
+            )
+        )
+    return out
 
 
 def cards(db: Session, today: date) -> list[Card]:
@@ -288,6 +364,26 @@ def act(db: Session, *, key: str, action_id: str, value: Any, actor: str, today:
         audit.record(db, actor, "budget.settings", key=setting)
         _set_state(db, key, "done")
         result = f"Réservé chaque mois : {v // 100} €."
+    elif kind == "obligation":
+        obligations_service.activate(db, str(effect.get("kind")), actor=actor)
+        _set_state(db, key, "done")
+        result = "Je m'en occupe : je te préviens à l'ouverture, avant l'échéance, et je constate quand c'est fait."
+    elif kind == "obligation_dismiss":
+        obligations_service.dismiss_suggestion(db, str(effect.get("kind")), actor=actor)
+        _set_state(db, key, "dismissed")
+        result = "Je ne te le proposerai plus (tu peux l'ajouter depuis Aides)."
+    elif kind == "obligation_done":
+        obligations_service.mark_done(db, int(effect["id"]), str(effect["period"]), actor=actor, today=today)
+        _set_state(db, key, "done")
+        result = "Noté comme fait. Je vérifierai que le versement suit."
+    elif kind == "correlation_dismiss":
+        correlations.decide(db, str(effect.get("key")), "dismissed", actor=actor)
+        _set_state(db, key, "dismissed")
+        result = "Écarté. Tu le retrouveras dans Ma situation si tu changes d'avis."
+    elif kind == "correlation_start":
+        proc_id = correlations.start(db, str(effect.get("key")), actor=actor, today=today)
+        _set_state(db, key, "done")
+        result = f"Démarche préparée (n° {proc_id}) : Papiers › Démarches, tu relis et tu envoies."
     elif kind == "rule":
         slug = str(value or "")
         category = db.scalar(select(Category).where(Category.slug == slug, Category.kind.in_(["variable", "fixed"])))

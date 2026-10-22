@@ -94,6 +94,9 @@ volent les messages.
 | `simulate_aids` | simulate | Simulation OpenFisca de tes droits |
 | `categorize_transaction` | write:categorize | Une opération à la fois, si ton mandat est « gestionnaire » ; jamais une opération que tu as classée |
 | `propose_action`, `list_proposals` | propose, read | Enveloppe, épargne visée, coussin, objectif, règle de classement (avec le nombre d'opérations touchées), réponse « Ma situation » |
+| `get_obligations` | read | Déclarations récurrentes (actualisation France Travail, déclaration trimestrielle CAF ou MSA, Complémentaire santé solidaire, impôts) : période du moment, date limite datée et sourcée, versement attendu, chiffres préparés pour la déclaration trimestrielle (totaux masqués en mode agrégats) ; l'agent rappelle, ne déclare jamais |
+| `get_year_ahead` | read | L'année qui vient : douze mois projetés depuis la fin du mois, pics trimestriels et annuels à leur mois, point bas, provision mensuelle ; pics anonymes en mode agrégats |
+| `get_correlations` | read | Ce que les contrats lus (bail, assurances, bulletins), les relevés et les aides disent ensemble : doublon d'assurance habitation, loyer au-dessus du bail ou de l'IRL, prime qui monte, bulletin ≠ virement, déclaré ≠ versé, énergie ≠ consommation, pistes statistiques prudentes ; pièces en mode complet seulement |
 | `get_crypto` | read | Portefeuille crypto suivi : valeur, variation 24 h, répartition, humeur du marché, garde-fous, impôts de l'année (305 €, 2086, 3916-bis) ; jamais d'adresse ; en mode agrégats, totaux seulement |
 | `crypto_check` (`text`) | read | Signaux d'arnaque d'un message, d'une offre ou d'une adresse (sosie d'une de tes adresses compris), recours officiels ; rien n'est gardé |
 | `autonomy_status` | read | Le pilote automatique est-il allumé **pour ce jeton** ? Consignes, actifs, noms d'adresses, plafonds restants, mode essai |

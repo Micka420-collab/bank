@@ -121,6 +121,14 @@ AID_KINDS: tuple[AidKind, ...] = (
     AidKind("ft_are", "france_travail", "Allocation chômage (ARE)", (r"\bARE\b", r"ALLOCATION"), None),
     AidKind("ft_autre", "france_travail", "Autre versement France Travail", (), None),
     AidKind("msa_prestation", "msa", "Prestation MSA", (), None),
+    AidKind(
+        "cpam_ij",
+        "cpam",
+        "Indemnités journalières",
+        (r"\bIJ\b", r"\bIJSS\b", r"INDEMNIT\w* JOURNAL", r"\bMALADIE\b.*\bINDEMN", r"\bMATERNITE\b"),
+        None,
+    ),
+    AidKind("cpam_invalidite", "cpam", "Pension d'invalidité", (r"PENSION D.?INVALIDITE", r"\bINVALIDITE\b"), None),
     AidKind("cpam_rembt", "cpam", "Remboursement de soins", (), None),
     AidKind("dgfip_rembt", "dgfip", "Remboursement / crédit d'impôt", (), None),
     AidKind("retraite_pension", "retraite", "Pension de retraite", (), None),
@@ -148,8 +156,13 @@ def organism_of(kind_code: str) -> str:
     return _KIND_BY_CODE[kind_code].organism
 
 
+INCOME_LIKE = {"cpam_ij", "cpam_invalidite"}  # un revenu de remplacement, pas un remboursement de soins
+
+
 def income_category_for(kind_code: str) -> str:
     """Catégorie budgétaire d'un versement public : revenu régulier ou remboursement ponctuel."""
+    if kind_code in INCOME_LIKE:
+        return "aides"
     return "aides" if organism_of(kind_code) in RECURRING_ORGS else "remboursements"
 
 

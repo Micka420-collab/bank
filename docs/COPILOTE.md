@@ -325,7 +325,10 @@ messages, anti-boucle, empoisonnement d'adresse, jetons-appâts), sans en repren
   vérificateur ; ligne à part dans le patrimoine.
 - **Pilote** (`app/services/autonomy.py`) : mandat lié à un jeton, essai, consignes à cadence, plafonds
   glissants, ticket unique, arrêts automatiques, journal, alertes urgentes, `/pilote stop`.
-- **MCP** : `get_crypto`, `crypto_check`, `autonomy_status`, `request_autonomous_move`, `report_autonomous_move`.
+- **MCP** : `get_crypto`, `crypto_check`, `autonomy_status`, `request_autonomous_move`, `report_autonomous_move`,
+  `get_obligations` (déclarations récurrentes : fenêtres, retards, chiffres préparés — lecture seule) et
+  `get_correlations` (ce que contrats, relevés et aides disent ensemble — lecture seule), `get_year_ahead` (douze
+  mois, point bas, pics, provision — lecture seule).
 - **Écrans** : Épargne · Crypto · Pilote (ruban de répartition, humeur du marché, vérificateur, impôts ; état,
   jauges, cadre, journal).
 - **HERMÈS** : compétence v2 (porte d'entrée, comportement critique, procédures I à L), règle de routage dans

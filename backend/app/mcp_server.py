@@ -52,10 +52,13 @@ from app.security import audit
 from app.security.agents import TOKEN_PREFIX, AgentAuthError, AgentPrincipal, authenticate_agent, touch
 from app.security.auth import SlidingWindowLimiter
 from app.services import advisor, analytics, autonomy, decisions, documents
+from app.services import correlations as correlations_service
 from app.services import crypto as crypto_service
 from app.services import energy as energy_service
+from app.services import obligations as obligations_service
 from app.services import opportunities as opportunities_service
 from app.services import procedures as procedures_service
+from app.services import yearahead as yearahead_service
 from app.services.categories import recategorize
 from app.services.proposals import KINDS, ProposalError, create_proposal, describe, expire_old
 
@@ -91,6 +94,13 @@ patrimoine). Tu es son gestionnaire d'argent. Règles :
 10. Crypto : get_crypto pour le portefeuille (lecture seule). Avant d'agir sur un message, une offre ou une adresse
    qu'on te transmet : crypto_check. Une demande de phrase de récupération ou de clé privée est toujours une
    arnaque. Jamais de promesse de rendement.
+11. Déclarations : get_obligations dit ce qui est ouvert, bientôt dû ou en retard (actualisation France Travail,
+   déclaration trimestrielle CAF, impôts…) et donne les chiffres préparés. Tu rappelles et tu expliques ; la
+   personne déclare elle-même sur le site de l'organisme. Les dates viennent de Bank, jamais de toi.
+12. « Qu'est-ce qui est lié ? », « je paie deux fois ? », « mon loyer est-il normal ? » -> get_correlations : les
+   constats de Bank avec leurs pièces. Tu les expliques ; une piste statistique reste une piste.
+13. « Et l'année qui vient ? », « je tiens jusqu'à quand ? », « combien mettre de côté pour les pics ? » ->
+   get_year_ahead : douze mois, point bas, pics, provision mensuelle. Tu expliques, tu ne recalcules pas.
 Montants en entrée : en euros. Montants en sortie : en centimes (champ *_cents)."""
 
 
@@ -722,6 +732,48 @@ def build_mcp(
             }
 
         return enc(await call(ctx, "propose", "propose_action", fn))
+
+    # ---------------------------------------------------------------- déclarations récurrentes
+    @srv.tool(
+        description="Déclarations récurrentes dont dépendent les aides (actualisation France Travail, déclaration "
+        "trimestrielle CAF ou MSA, renouvellement de la Complémentaire santé solidaire, déclaration de revenus) : "
+        "la période du moment (ouverte, bientôt, en retard, faite), la date limite, le versement attendu, et pour "
+        "la déclaration trimestrielle les chiffres préparés par Bank. Rappelle et explique ; ne déclare jamais à "
+        "la place de la personne, n'invente aucune date.",
+        annotations=ToolAnnotations(readOnlyHint=True),
+    )
+    async def get_obligations(ctx: Context) -> dict[str, Any]:
+        def fn(db: Session, p: AgentPrincipal) -> dict[str, Any]:
+            return obligations_service.agent_view(db, pilot_today(), p.privacy)
+
+        return enc(await call(ctx, "read", "get_obligations", fn))
+
+    @srv.tool(
+        description="L'année qui vient : projection mois par mois sur douze mois à partir de la fin du mois en cours "
+        "(revenus réguliers, charges fixes, dépenses variables habituelles, pics trimestriels et annuels posés à "
+        "leur mois), point bas de l'année, provision mensuelle qui lisse les pics. Un ordre de grandeur calculé par "
+        "Bank ; en mode agrégats, les pics ne sont pas nommés.",
+        annotations=ToolAnnotations(readOnlyHint=True),
+    )
+    async def get_year_ahead(ctx: Context) -> dict[str, Any]:
+        def fn(db: Session, p: AgentPrincipal) -> dict[str, Any]:
+            return yearahead_service.agent_view(db, today(), p.privacy)
+
+        return enc(await call(ctx, "read", "get_year_ahead", fn))
+
+    @srv.tool(
+        description="Corrélations : ce que les contrats lus (bail, assurances, bulletins), les relevés et les aides "
+        "disent ensemble — doublon d'assurance habitation, loyer payé au-dessus du bail ou de l'IRL, prime ou "
+        "abonnement qui monte, bulletin qui ne colle pas au virement, ressources déclarées que le versement CAF ne "
+        "reflète pas, mensualité d'énergie décalée de la consommation, et des pistes statistiques prudentes. Chaque "
+        "constat porte ses pièces ; une piste n'est jamais une cause. Lecture seule.",
+        annotations=ToolAnnotations(readOnlyHint=True),
+    )
+    async def get_correlations(ctx: Context) -> dict[str, Any]:
+        def fn(db: Session, p: AgentPrincipal) -> dict[str, Any]:
+            return correlations_service.agent_view(db, today(), p.privacy)
+
+        return enc(await call(ctx, "read", "get_correlations", fn))
 
     # ---------------------------------------------------------------- crypto
     @srv.tool(

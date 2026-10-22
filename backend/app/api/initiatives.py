@@ -10,6 +10,9 @@ from pydantic import BaseModel, Field
 from app.api.deps import AuthDep, DbDep, TodayDep
 from app.domain.onboarding import AnswerError
 from app.services import initiatives
+from app.services.correlations import CorrelationError
+from app.services.obligations import ObligationError
+from app.services.procedures import ProcedureError
 
 router = APIRouter(prefix="/api/initiatives", tags=["initiatives"])
 
@@ -34,7 +37,7 @@ def act(
         result = initiatives.act(
             db, key=key, action_id=body.action, value=body.value, actor=f"user:{ctx.user.username}", today=today
         )
-    except (initiatives.InitiativeError, AnswerError) as exc:
+    except (initiatives.InitiativeError, AnswerError, ObligationError, CorrelationError, ProcedureError) as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     db.flush()
     return {"result": result, **initiatives.listing(db, today, limit)}

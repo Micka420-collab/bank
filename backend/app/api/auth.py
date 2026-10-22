@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from app.api.deps import CSRF_COOKIE, AuthDep, DbDep, SettingsDep, client_ip, session_cookie_name
 from app.config import Settings
 from app.db import utcnow
-from app.models import User
+from app.models import Passkey, User
 from app.security import audit
 from app.security.auth import (
     IssuedSession,
@@ -204,12 +204,13 @@ def logout(ctx: AuthDep, response: Response, db: DbDep, settings: SettingsDep) -
 
 
 @router.get("/auth/me")
-def me(ctx: AuthDep) -> dict[str, object]:
+def me(ctx: AuthDep, db: DbDep) -> dict[str, object]:
     return {
         "username": ctx.user.username,
         "totp_enabled": ctx.user.totp_enabled,
         "recovery_codes_left": len(json.loads(ctx.user.recovery_codes or "[]")),
         "session_expires_at": ctx.session.expires_at.isoformat(),
+        "passkeys": db.scalar(select(func.count()).select_from(Passkey).where(Passkey.user_id == ctx.user.id)) or 0,
     }
 
 

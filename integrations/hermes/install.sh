@@ -140,6 +140,8 @@ else
   autorisation du pilote automatique (request_autonomous_move) ; puis compte rendu.
 - Jamais de phrase de récupération, de clé privée, de mot de passe ni de numéro de carte : ni demandés, ni lus,
   ni recopiés.
+- Une date limite administrative (actualisation France Travail, déclaration CAF, impôts) vient de
+  get_obligations, jamais de mémoire ; Micka déclare lui-même, l'agent rappelle et explique.
 ROUTAGE
   ok "Règle de routage ajoutée à $MEMORY (sauvegarde .bak créée)"
 fi

@@ -265,6 +265,147 @@ export type AidsResponse = {
   disclaimer: string;
 };
 
+// ------------------------------------------------------------------ déclarations récurrentes
+export type ObligationState = "upcoming" | "open" | "soon" | "late" | "done" | "missed";
+export type ObligationPeriod = {
+  key: string;
+  label: string;
+  opens: string;
+  deadline: string;
+  reference_months: string[];
+  state: ObligationState;
+  done_on: string | null;
+  how: string | null;
+  proof: { day: string; amount_cents: number; kind: string } | null;
+  awaiting_payment: boolean;
+  estimated: boolean;
+  note: string | null;
+  declared: Record<string, number> | null;
+};
+export type Obligation = {
+  id: number;
+  kind: string;
+  label: string;
+  organism: string;
+  organism_name: string;
+  active: boolean;
+  anchor: string | null;
+  anchor_kind: "month" | "date" | null;
+  anchor_label: string | null;
+  needs_anchor: boolean;
+  cadence_months: number;
+  window_days: number;
+  what: string;
+  consequence: string;
+  url: string;
+  source: string;
+  automatic: boolean;
+  current: ObligationPeriod | null;
+  periods: ObligationPeriod[];
+};
+export type ObligationSpec = {
+  kind: string;
+  label: string;
+  organism: string;
+  organism_name: string;
+  cadence_months: number;
+  what: string;
+  consequence: string;
+  url: string;
+  source: string;
+  anchor: "month" | "date" | null;
+  anchor_label: string | null;
+};
+export type ObligationsView = {
+  obligations: Obligation[];
+  suggestions: ObligationSpec[];
+  catalog: ObligationSpec[];
+  checked_on: string;
+  disclaimer: string;
+};
+export type PrefillCell = {
+  amount_cents: number;
+  items: { id: number; day: string; label: string; amount_cents: number }[];
+  source: "releve" | "bulletin";
+  net_paid_cents?: number;
+  documents?: number[];
+};
+export type Prefill = {
+  period: string;
+  months: string[];
+  month_labels: string[];
+  kinds: { key: string; label: string }[];
+  cells: Record<string, Record<string, PrefillCell>>;
+  totals: Record<string, number>;
+  excluded: { id: number; day: string; label: string; amount_cents: number; why: string }[];
+  to_check: { id: number; day: string; label: string; amount_cents: number; why: string }[];
+  notes: string[];
+  summary: string;
+};
+
+// ------------------------------------------------------------------ l'année qui vient
+export type YearSpike = {
+  key: string;
+  label: string;
+  amount_cents: number;
+  day: string;
+  cadence: "quarterly" | "yearly" | "custom" | "planned";
+  source: "detected" | "custom" | "planned";
+  category: string | null;
+  occurrences: number;
+  confidence: number;
+};
+export type YearPoint = {
+  month: string;
+  label: string;
+  income_cents: number;
+  fixed_cents: number;
+  variable_cents: number;
+  spikes_cents: number;
+  spikes: string[];
+  end_balance_cents: number;
+};
+export type YearAhead = {
+  start_month: string;
+  start_balance_cents: number;
+  points: YearPoint[];
+  spikes: YearSpike[];
+  ignored: YearSpike[];
+  income_monthly_cents: number;
+  fixed_monthly_cents: number;
+  variable_monthly_cents: number;
+  yearly_spikes_cents: number;
+  provision_monthly_cents: number;
+  lowest_month: string;
+  lowest_label: string;
+  lowest_cents: number;
+  status: "ok" | "tight" | "risk";
+  notes: string[];
+  savings_goal_cents: number;
+  buffer_cents: number;
+  custom: { key: string; label: string; amount_cents: number; next_date: string; every_months: number }[];
+  disclaimer: string;
+};
+
+// ------------------------------------------------------------------ corrélations
+export type Correlation = {
+  key: string;
+  kind: string;
+  level: "danger" | "warning" | "info";
+  topic: string;
+  topic_label: string;
+  title: string;
+  body: string;
+  evidence: { label: string; value: string; ref: string | null }[];
+  yearly_cents: number | null;
+  action: { template?: string; label?: string; merchant?: string } | null;
+  confidence: number;
+  statistical: boolean;
+  status: "new" | "dismissed" | string;
+  procedure_id: number | null;
+};
+export type CorrelationsView = { findings: Correlation[]; hidden: number; irl_source: string; disclaimer: string };
+
 export type Profile = {
   birth_date: string;
   postal_insee_code: string;
@@ -324,7 +465,7 @@ export type ProjectionYear = {
   interest_cents: number;
 };
 
-export type Me = { username: string; totp_enabled: boolean; recovery_codes_left: number; session_expires_at: string };
+export type Me = { username: string; totp_enabled: boolean; recovery_codes_left: number; session_expires_at: string; passkeys?: number };
 
 export type Connection = {
   id: number;

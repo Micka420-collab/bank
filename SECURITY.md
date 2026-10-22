@@ -41,6 +41,7 @@ Clés dérivées par HKDF, une par usage (chiffrement, index aveugle, jetons sig
 | Conteneur compromis | Non-root, FS en lecture seule, toutes capabilities retirées, `no-new-privileges`, limites mémoire/pids, réseaux segmentés |
 | Données en cache | `Cache-Control: no-store` sur l'API ; le service worker ne met jamais `/api` en cache |
 | Export de toutes les données | Re-saisie du mot de passe, rate-limit, journalisé |
+| « Enregistré » dit avant que ce soit vrai | La transaction d'une requête est validée **avant** l'envoi de la réponse (portée `function` de la dépendance base) : un 201 signifie que la ligne est écrite, un commit qui échoue devient une erreur visible, et la requête suivante — ou un autre processus comme le gardien MCP — ne peut pas lire un état antérieur (`test_the_row_is_committed_before_the_response_leaves`) |
 | Fuite d'erreurs internes | Gestionnaire global : message générique, détails seulement dans les logs ; erreurs de validation sans les valeurs reçues (`test_validation_errors_never_echo_input`) |
 | Fuite de la clé OpenRouter | Chiffrée en base (AES-256-GCM), ajout protégé par ton mot de passe, jamais renvoyée par l'API (seul le préfixe `sk-or-v1-ab12…`), absente des exports, du journal et des messages d'erreur ; transmise uniquement dans l'en-tête `Authorization` vers `openrouter.ai`, sans redirection suivie (`test_configure_stores_the_key_encrypted_and_never_returns_it`) |
 | Données envoyées au modèle de langage | Dossier anonymisé par défaut (aucun nom de particulier, IBAN, téléphone ni long numéro), mode « chiffres seuls » sans aucun libellé ni mémoire ; le journal d'audit n'a que modèle, jetons, coût et noms d'outils, jamais le texte échangé (`test_ask_grounds_the_model_on_an_anonymised_dossier_and_logs_no_content`, `test_aggregates_privacy_turns_memory_off`) |
@@ -96,6 +97,34 @@ d'opération qui lui donne des « consignes »). Bank ne lui fait donc confiance
 
 `BANK_AGENTS_ENABLED=false` coupe le serveur MCP d'un coup (`test_mcp_can_be_disabled`).
 
+## Passkeys (WebAuthn)
+
+| Menace | Défense |
+|---|---|
+| Fausse page de connexion qui récupère le mot de passe | Une passkey ne signe que pour le domaine et l'origine de l'adresse publique de Bank (`rpId`, `origin` vérifiés par le protocole) : une copie du site, même parfaite, n'obtient rien (`test_phishing_replay_and_missing_verification_are_refused`) |
+| Rejeu d'une réponse capturée, authentificateur cloné | Défi aléatoire signé par Bank, valable cinq minutes et **à usage unique** ; compteur de signature qui doit croître ; vérification de l'utilisateur (code, biométrie) exigée à l'enregistrement comme à la connexion ; `userHandle` comparé à l'identifiant opaque de l'utilisateur |
+| Ajout ou retrait d'une passkey depuis une session volée | Mot de passe exigé dans les deux cas, limité en débit, refus audités ; dix passkeys au plus ; le mot de passe reste exigé pour les gestes sensibles (pilote, export, jetons, nœuds crypto) (`test_register_with_password_then_login_without_it`, `test_removing_a_passkey_needs_the_password_and_closes_the_door`) |
+| Traçage du modèle d'appareil | Aucune attestation demandée (`attestation: none`) ; Bank ne garde que la clé publique, le compteur, le nom que tu donnes (chiffré) et les dates |
+| Connexion par passkey = un seul facteur ? | Une passkey avec vérification de l'utilisateur vaut deux facteurs (possession + biométrie ou code) ; la connexion est auditée comme une connexion forte (`mfa: true, passkey: <id>`) |
+
+## Déclarations récurrentes
+
+| Menace | Défense |
+|---|---|
+| Une déclaration faite « par l'IA » à ton insu, ou une date inventée | Bank ne connaît aucun client réseau pour ces obligations : il rappelle, prépare les chiffres et constate ; déclarer reste ton geste sur le site de l'organisme. Les fenêtres sont des règles datées et sourcées dans le code (`domain/obligations.py`), l'agent ne reçoit que celles de Bank (`get_obligations`, lecture seule) (`test_nothing_in_the_calendar_posts_anything_anywhere`, `test_tax_zones_and_calendar`) |
+| Un oubli qui suspend une aide | Proposition d'après les versements reconnus, carte sur la page du jour à l'ouverture, rappel trois jours avant, alerte **urgente** en retard ou quand le versement qui devait suivre n'arrive pas (elle passe les heures calmes) (`test_the_payment_proves_the_actualisation_and_silence_raises_the_alarm`) |
+| Des chiffres faux dans la déclaration trimestrielle | Trois mois de référence calculés par Bank, chaque montant ouvert sur ses opérations, montant net social du bulletin lu quand il existe (le net versé ne suffit pas et Bank le dit), prestations, remboursements et virements internes jamais comptés, entrées douteuses mises à part « à regarder » (`test_quarterly_prefill_classifies_resources_and_prefers_the_net_social_amount`, `test_a_read_payslip_feeds_the_quarterly_figures`) |
+| Fuite de ce dont tu vis | Libellés, réglages et montants déclarés chiffrés en base ; en mode agrégats l'agent ne voit pas les montants ; une obligation libre n'est nommée que pour l'agent en mode complet (`test_agent_reads_the_calendar_and_chat_answers_declarations`) |
+
+## Corrélations
+
+| Menace | Défense |
+|---|---|
+| Un « doublon » ou un « trop-payé » affirmé à tort, qui te ferait résilier le mauvais contrat | Deux niveaux : sûr (« habitation » écrit dans les deux libellés, ou attestation qui nomme l'assureur) ou seulement « probable » (assureur connu sans type) ; chaque constat porte ses pièces (document, opérations) ; la démarche se prépare, elle ne s'envoie pas (`test_two_home_insurers_are_a_duplicate_and_the_bank_one_is_named`, `test_a_known_insurer_without_a_type_is_only_probable`) |
+| Un loyer déclaré « illégal » sur une mauvaise base | Plafond IRL calculé depuis les valeurs INSEE embarquées et datées, trimestre de référence lu dans la clause quand il y est ; sans indice connu, Bank dit « à vérifier » plutôt qu'un chiffre (`test_rent_paid_is_compared_with_the_lease_and_the_irl`, `test_allowed_rent_follows_the_lease_quarter_and_stops_at_the_last_published_index`) |
+| Une « corrélation » qui n'est que du bruit | Au moins huit mois, corrélation de rang, test par permutation reproductible (p ≤ 0,05), deux pistes au plus, toujours formulées comme des pistes et rangées à part (`test_statistical_links_need_eight_months_and_survive_the_permutation_test`) |
+| Fuite des contrats vers l'agent ou les messageries | L'agent reçoit les pièces en mode complet seulement, les titres et enjeux en agrégats ; les messageries n'annoncent que les constats sérieux, une fois, et le détail seulement en confidentialité complète ; rien n'est stocké hors de ce que tu décides (écarté, démarche) (`test_the_lease_and_the_bank_insurance_meet_in_a_duplicate_everywhere`) |
+
 ## Crypto et pilote automatique
 
 Le pilote automatique est le seul chemin par lequel un agent bouge de l'argent sans te redemander : il est
@@ -147,7 +176,6 @@ conçu comme une barrière qu'un agent manipulé (texte piégé, nom de jeton, f
   Garde `BANK_BIND=127.0.0.1` : publié sur le LAN, le port laisserait n'importe qui forger cet en-tête. C'est une
   défense en profondeur, le jeton reste la barrière principale.
 - Ce que fait HERMÈS de ses propres données (mémoire, journaux) relève de sa configuration, pas de Bank.
-- Passkeys (WebAuthn) : prévues, le TOTP couvre le besoin en attendant.
 
 ## Signaler un problème
 

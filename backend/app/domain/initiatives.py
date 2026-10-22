@@ -177,6 +177,61 @@ class PlanningInfo:
 
 
 @dataclass(frozen=True)
+class ObligationInfo:
+    """Une déclaration récurrente et sa période du moment (voir domain.obligations)."""
+
+    id: int
+    kind: str
+    label: str
+    organism: str
+    state: str  # late | soon | open | upcoming | done
+    period_key: str
+    period_label: str
+    opens: date
+    deadline: date
+    awaiting_payment: bool = False
+    needs_anchor: bool = False
+    anchor_label: str | None = None
+    consequence: str = ""
+    what: str = ""
+    automatic: bool = False
+    prefill_summary: str | None = None  # déclaration trimestrielle : les chiffres prêts
+
+
+@dataclass(frozen=True)
+class ObligationSuggestion:
+    kind: str
+    label: str
+
+
+@dataclass(frozen=True)
+class ProvisionInfo:
+    """La provision mensuelle qui lisse les pics de l'année (voir domain.yearahead)."""
+
+    key: str
+    provision_cents: int
+    target_cents: int
+    yearly_cents: int
+    biggest: str
+    count: int
+    lowest: str
+    status: str
+
+
+@dataclass(frozen=True)
+class CorrelationInfo:
+    """Un constat sérieux des corrélations (doublon d'assurance, loyer au-dessus du bail…), voir domain.correlations."""
+
+    key: str
+    level: str  # danger | warning
+    topic_label: str
+    title: str
+    body: str
+    yearly_cents: int | None = None
+    has_action: bool = False
+
+
+@dataclass(frozen=True)
 class State:
     status: str  # done | snoozed | dismissed
     until: date | None = None
@@ -206,6 +261,10 @@ class Context:
     latest_tax_period: int | None = None
     planning: PlanningInfo | None = None
     paid_recently: bool = False
+    obligations: Sequence[ObligationInfo] = ()
+    obligation_suggestions: Sequence[ObligationSuggestion] = ()
+    correlations: Sequence[CorrelationInfo] = ()
+    provision: ProvisionInfo | None = None
     states: Mapping[str, State] = field(default_factory=dict)
 
 
@@ -715,9 +774,191 @@ def gen_planning(ctx: Context) -> list[Card]:
     return out
 
 
+_SUGGEST_TITLES = {
+    "ft_actualisation": "Tu reçois France Travail : je te rappelle l'actualisation chaque mois ?",
+    "caf_dtr": "Tu touches la prime d'activité ou le RSA : je suis ta déclaration trimestrielle ?",
+    "msa_dtr": "Tu touches une prestation MSA : je suis ta déclaration trimestrielle ?",
+    "tax_return": "Je te rappelle la déclaration de revenus et la date limite de ton département ?",
+}
+_SUGGEST_BODIES = {
+    "ft_actualisation": "Du 28 au 15 du mois suivant, sinon radiation et allocation non versée. Je te préviens à "
+    "l'ouverture, trois jours avant la fin, et je constate que c'est fait quand le virement arrive.",
+    "caf_dtr": "Tous les trois mois, sinon prime d'activité ou RSA suspendus. Je prépare les chiffres des trois mois "
+    "de référence depuis tes relevés, et je constate la déclaration au versement suivant.",
+    "msa_dtr": "Tous les trois mois, sinon prestation suspendue. Je prépare les chiffres et je constate la déclaration "
+    "au versement suivant.",
+    "tax_return": "D'avril à la date limite de ta zone. Elle sert aussi au calcul de tes aides (APL, LEP, "
+    "Complémentaire santé solidaire).",
+}
+
+
+def gen_obligations(ctx: Context) -> list[Card]:
+    """Déclarations récurrentes : une proposition quand les versements la trahissent, puis la fenêtre ouverte,
+    l'échéance proche, le retard, le versement qui manque."""
+    out: list[Card] = []
+    for s in ctx.obligation_suggestions:
+        out.append(
+            Card(
+                f"obligation:suggest:{s.kind}",
+                "question",
+                12,
+                _SUGGEST_TITLES.get(s.kind, f"Je suis « {s.label} » pour toi ?"),
+                _SUGGEST_BODIES.get(s.kind, "Je te préviens à l'ouverture, avant l'échéance, et en cas de retard."),
+                (
+                    Action("obligation_on", "Oui, surveille", "primary", {"type": "obligation", "kind": s.kind}),
+                    snooze(14),
+                    Action("obligation_off", "Non merci", "link", {"type": "obligation_dismiss", "kind": s.kind}),
+                ),
+                why="Un oubli suspend l'aide ou crée un indu : Bank peut le voir venir d'après tes versements.",
+                topic="aides",
+            )
+        )
+    for o in ctx.obligations:
+        if o.needs_anchor:
+            out.append(
+                Card(
+                    f"obligation:{o.id}:anchor",
+                    "question",
+                    10,
+                    f"{o.label} : il me manque une date",
+                    f"{o.anchor_label or 'La prochaine échéance'} : indique-la dans Aides pour que je calcule tes "
+                    "fenêtres et tes rappels.",
+                    (navigate("aides", "Régler"), snooze(7)),
+                    topic="aides",
+                )
+            )
+            continue
+        done_action = Action(
+            "obligation_done",
+            "C'est fait",
+            "secondary",
+            {"type": "obligation_done", "id": o.id, "period": o.period_key},
+        )
+        see = navigate("aides", "Voir mes chiffres" if o.prefill_summary else "Voir", "link")
+        key = f"obligation:{o.id}:{o.period_key}"
+        if o.awaiting_payment:
+            out.append(
+                Card(
+                    f"{key}:nopay",
+                    "notice",
+                    1,
+                    f"{o.label} : le versement n'est pas arrivé",
+                    f"Il devrait être là. Déclaration faite ? Vérifie vite sur le site de {o.organism} : "
+                    f"{o.consequence}",
+                    (navigate("aides", "Voir"), snooze(1, "Demain")),
+                    topic="aides",
+                )
+            )
+        elif o.state == "late":
+            out.append(
+                Card(
+                    f"{key}:late",
+                    "notice",
+                    1,
+                    f"En retard : {o.label}",
+                    f"La date limite était le {fmt_day(o.deadline)}. {o.consequence} Fais-la maintenant, puis "
+                    "dis-le moi.",
+                    (done_action, see),
+                    topic="aides",
+                )
+            )
+        elif o.state in ("open", "soon"):
+            left = (o.deadline - ctx.today).days
+            when = "aujourd'hui, dernier jour" if left <= 0 else f"jusqu'au {fmt_day(o.deadline)}"
+            body = o.what if o.state == "open" else f"Plus que {left} jour{'s' if left > 1 else ''}. {o.consequence}"
+            if o.prefill_summary:
+                body += f" Tes chiffres sont prêts : {o.prefill_summary}."
+            if o.automatic:
+                body += " Pour toi, c'est normalement automatique : vérifie seulement le courrier."
+            out.append(
+                Card(
+                    f"{key}:{o.state}",
+                    "notice",
+                    2 if o.state == "soon" else 4,
+                    f"{o.label} : {when}",
+                    body,
+                    (done_action, see, snooze(1, "Demain")),
+                    topic="aides",
+                )
+            )
+    return out
+
+
+def gen_provision(ctx: Context) -> list[Card]:
+    """Les pics de l'année (assurance annuelle, impôts, factures trimestrielles) lissés par une provision mensuelle,
+    réservée avant le reste à dépenser."""
+    p = ctx.provision
+    if p is None or ctx.savings_goal_cents >= p.target_cents:
+        return []
+    risk = " Sans ça, ton solde passerait sous zéro vers " + p.lowest + "." if p.status == "risk" else ""
+    return [
+        Card(
+            p.key,
+            "tip",
+            6 if p.status == "risk" else 14,
+            f"Mettre {eur(p.provision_cents)} de côté chaque mois pour tes pics ?",
+            f"Sur l'année qui vient, {p.count} dépense{'s' if p.count > 1 else ''} trimestrielle"
+            f"{'s' if p.count > 1 else ''} ou annuelle{'s' if p.count > 1 else ''} ({eur(p.yearly_cents)} au total, "
+            f"la plus grosse : {p.biggest}). "
+            f"Réservée chaque mois avec ton épargne visée ({eur(ctx.savings_goal_cents)} → {eur(p.target_cents)}), "
+            f"elle ne surprend plus personne.{risk}",
+            (
+                Action(
+                    "yes",
+                    "Oui, réserver",
+                    "primary",
+                    {"type": "setting", "key": "savings_goal_cents", "value": p.target_cents},
+                ),
+                Action(
+                    "fix",
+                    "Un autre montant",
+                    "secondary",
+                    {"type": "setting", "key": "savings_goal_cents", "from_input": True},
+                ),
+                snooze(30),
+                dismiss(),
+            ),
+            why="Le reste à dépenser du jour déduit l'épargne visée : les pics sont ainsi payés d'avance, sans "
+            "découvert.",
+            input={"kind": "money", "placeholder": str(p.target_cents // 100)},
+            topic="argent",
+        )
+    ]
+
+
+def gen_correlations(ctx: Context) -> list[Card]:
+    """Ce que tes contrats et tes relevés disent ensemble, quand ça coûte : une carte par constat sérieux."""
+    out: list[Card] = []
+    for c in ctx.correlations:
+        actions: list[Action] = []
+        if c.has_action:
+            actions.append(
+                Action("corr_start", "Préparer la démarche", "primary", {"type": "correlation_start", "key": c.key})
+            )
+        actions.append(navigate("situation", "Voir les pièces", "link" if c.has_action else "primary"))
+        actions.append(Action("corr_dismiss", "Pas un problème", "link", {"type": "correlation_dismiss", "key": c.key}))
+        stake = f" ({eur(c.yearly_cents)} par an en jeu)" if c.yearly_cents else ""
+        out.append(
+            Card(
+                f"correlation:{c.key}",
+                "notice",
+                2 if c.level == "danger" else 5,
+                f"{c.title}{stake}",
+                c.body,
+                tuple(actions),
+                why="Bank croise tes contrats lus dans Papiers avec tes relevés : ce que chacun tait séparément.",
+                topic="argent",
+            )
+        )
+    return out
+
+
 GENERATORS = (
     gen_start,
     gen_celebrations,
+    gen_obligations,
+    gen_correlations,
+    gen_provision,
     gen_planning,
     gen_payday,
     gen_facts,
