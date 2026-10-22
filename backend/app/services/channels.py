@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from app.channels.base import Inbound
 from app.channels.text import secret_kind
 from app.db import utcnow
+from app.domain import chatblocks
 from app.domain import procedures as dp
 from app.domain.money import format_eur
 from app.models import ChannelConfig, ChannelLink, ChannelSeen, Procedure
@@ -898,4 +899,5 @@ def answer(db: Session, adm: Admission, *, today: date, make_client: assistant_s
     except assistant_service.AssistantError as exc:
         return [str(exc)]
     link.conversation_id = int(out["conversation_id"])
-    return [str(out["answer"])]
+    extra = chatblocks.text_fallback(out.get("blocks") or [])
+    return [str(out["answer"]) + ("\n\n" + "\n".join(extra) if extra else "")]

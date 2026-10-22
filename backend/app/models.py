@@ -495,6 +495,23 @@ class LlmUsage(Base):
     cost_microusd: Mapped[int] = mapped_column(BigInteger, default=0)
 
 
+class SearchProvider(Base):
+    """Le moteur de recherche web de l'assistant : SearXNG chez toi (adresse) ou Brave (clé chiffrée, jamais
+    réaffichée). Une seule ligne (id = 1). Sans ligne, l'assistant ne cherche pas sur le web."""
+
+    __tablename__ = "search_providers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(12))  # searxng | brave
+    base_url: Mapped[str | None] = mapped_column(String(300))  # SearXNG : https://recherche.chez-toi.lan
+    api_key: Mapped[str | None] = mapped_column(EncryptedText("search.api_key"))  # Brave
+    key_prefix: Mapped[str | None] = mapped_column(String(16))
+    daily_cap: Mapped[int] = mapped_column(Integer, default=40)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_error: Mapped[str | None] = mapped_column(String(300))
+
+
 class MerchantHint(Base):
     """Catégorie proposée par le modèle pour un marchand non classé ; appliquée seulement quand tu confirmes."""
 
@@ -769,6 +786,8 @@ class ConversationMessage(Base):
     meta: Mapped[str] = mapped_column(Text, default="{}")  # modèle, coût, jetons, opérations de mémoire (sans contenu)
     feedback: Mapped[str | None] = mapped_column(String(6))  # up | down
     feedback_note: Mapped[str | None] = mapped_column(EncryptedText("conversation.feedback"))
+    # Blocs interactifs d'une réponse (boutons, graphique, schéma, sources) : des chiffres et des libellés à toi.
+    blocks: Mapped[str | None] = mapped_column(EncryptedText("conversation.blocks"))
 
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
 

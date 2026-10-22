@@ -773,11 +773,43 @@ export type History = {
 // ------------------------------------------------------------------ assistant (OpenRouter)
 export type AssistantPrivacy = "full" | "redacted" | "aggregates";
 export type MemoryStatus = { consent: boolean; asked: boolean; available: boolean };
+/** Blocs interactifs d'une réponse : construits et validés par le serveur, jamais par le modèle seul. */
+export type ChatActionItem =
+  | { key: string; label: string; kind: "navigate"; page: string }
+  | { key: string; label: string; kind: "ask"; prompt: string }
+  | { key: string; label: string; kind: "act"; card: string; action: string };
+export type ChartItem = { label: string; value?: number; a?: number; b?: number; color?: string };
+export type ChatBlock =
+  | { type: "actions"; items: ChatActionItem[] }
+  | { type: "chart"; kind: "donut" | "bars" | "pairs" | "line"; title: string; unit: "eur" | "pct" | "kwh" | "count"; items: ChartItem[]; source: string; dataset: string }
+  | { type: "diagram"; kind: "flow" | "steps"; title: string; nodes: { id: string; label: string; note?: string }[]; edges: { from: string; to: string; label?: string }[] }
+  | { type: "sources"; query: string; items: { n: number; title: string; url: string; host: string; snippet: string; date: string }[] }
+  | { type: "note"; tone: "info" | "warning"; text: string };
+export type AssistantOpening = {
+  text: string;
+  blocks: ChatBlock[];
+  score: number;
+  next: { key: string; title: string; state: string; detail: string; unlocks: string; page: string; label: string }[];
+};
+export type SearchStatus = {
+  configured: boolean;
+  consent: boolean;
+  asked: boolean;
+  kinds: Record<"searxng" | "brave", string>;
+  kind?: "searxng" | "brave";
+  base_url?: string | null;
+  key_prefix?: string | null;
+  daily_cap?: number;
+  used_today?: number;
+  last_used_at?: string | null;
+  last_error?: string | null;
+};
 export type AssistantStatus = {
   configured: boolean;
   privacy_modes: Record<AssistantPrivacy, string>;
   name: string;
   memory: MemoryStatus;
+  search?: { configured: boolean; consent: boolean; asked: boolean };
   provider?: string;
   key_prefix?: string;
   model?: string;
@@ -804,6 +836,7 @@ export type MemoryStore = "user" | "notes";
 export type MemoryNotice = { action: "add" | "patch" | "remove"; store: MemoryStore; id: number; content: string; before?: string };
 export type AssistantAnswer = {
   answer: string;
+  blocks: ChatBlock[];
   conversation_id: number;
   message_id: number;
   model: string;
@@ -844,7 +877,7 @@ export type ConversationDetail = {
   summary: string | null;
   memory_on: boolean;
   closed: boolean;
-  messages: { id: number; role: "user" | "assistant"; content: string; ts: string; meta: MessageMeta; feedback: "up" | "down" | null }[];
+  messages: { id: number; role: "user" | "assistant"; content: string; ts: string; meta: MessageMeta; feedback: "up" | "down" | null; blocks?: ChatBlock[] }[];
 };
 export type MemoryEntryView = {
   id: number;

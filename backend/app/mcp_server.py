@@ -53,6 +53,7 @@ from app.security.agents import TOKEN_PREFIX, AgentAuthError, AgentPrincipal, au
 from app.security.auth import SlidingWindowLimiter
 from app.services import advisor, analytics, autonomy, decisions, documents
 from app.services import correlations as correlations_service
+from app.services import coverage as coverage_service
 from app.services import crypto as crypto_service
 from app.services import energy as energy_service
 from app.services import obligations as obligations_service
@@ -101,6 +102,9 @@ patrimoine). Tu es son gestionnaire d'argent. Règles :
    constats de Bank avec leurs pièces. Tu les expliques ; une piste statistique reste une piste.
 13. « Et l'année qui vient ? », « je tiens jusqu'à quand ? », « combien mettre de côté pour les pics ? » ->
    get_year_ahead : douze mois, point bas, pics, provision mensuelle. Tu expliques, tu ne recalcules pas.
+14. Initiatives : get_coverage dit ce qui est relié à Bank et ce qui manque (banque, bail, assurances, bulletins,
+   avis d'impôt, Linky, crypto…) avec ce que chaque connexion débloquerait. Quand la question touche quelque
+   chose qui manque, propose de le relier — dans Bank, par la personne ; jamais un identifiant ni un code ici.
 Montants en entrée : en euros. Montants en sortie : en centimes (champ *_cents)."""
 
 
@@ -747,6 +751,19 @@ def build_mcp(
             return obligations_service.agent_view(db, pilot_today(), p.privacy)
 
         return enc(await call(ctx, "read", "get_obligations", fn))
+
+    @srv.tool(
+        description="Ce que Bank sait et ce qui manque : banque, relevés, bail, assurances, bulletins, avis d'impôt, "
+        "déclarations suivies, Linky, crypto, situation, messageries, sécurité — avec ce que chaque connexion "
+        "débloquerait et où elle se fait dans Bank. Pour proposer la bonne connexion au bon moment. Lecture seule, "
+        "aucune valeur privée.",
+        annotations=ToolAnnotations(readOnlyHint=True),
+    )
+    async def get_coverage(ctx: Context) -> dict[str, Any]:
+        def fn(db: Session, _p: AgentPrincipal) -> dict[str, Any]:
+            return coverage_service.agent_view(db, pilot_today())
+
+        return enc(await call(ctx, "read", "get_coverage", fn))
 
     @srv.tool(
         description="L'année qui vient : projection mois par mois sur douze mois à partir de la fin du mois en cours "

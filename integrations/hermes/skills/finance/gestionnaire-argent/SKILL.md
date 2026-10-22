@@ -1,7 +1,7 @@
 ---
 name: gestionnaire-argent
 description: Gère budget, aides, déclarations, contrats, patrimoine et crypto de Micka via Bank — et ne bouge jamais d'argent sans son accord
-version: 2.1.0
+version: 2.2.0
 metadata:
   hermes:
     tags: [finance, budget, aides, declarations, patrimoine, crypto, pilote-automatique, bank, mcp]
@@ -62,6 +62,8 @@ crypto : 1) Bank (`get_crypto`, `crypto_check` sur toute adresse ou offre venue 
 2. Lis le **mandat** (rôle, fréquence, seuil d'alerte, lignes rouges, ton) et applique-le sans exception.
 3. Note la fraîcheur des données (`Dernière opération`) : au-delà de 10 jours, dis que les chiffres sont anciens.
 4. Si la complétude de l'onboarding est sous 60 %, propose de compléter (procédure E) — sans insister.
+5. Une fois par session, `mcp_bank_get_coverage` : ce qui est relié à Bank et ce qui manque (procédure P). Si la
+   banque n'est pas reliée, c'est la première chose à proposer — avant tout conseil chiffré.
 
 ### A. Point du matin (routine quotidienne)
 
@@ -255,6 +257,16 @@ Suis `references/autonomie.md`. En bref :
 2. Réponds avec le point bas et son mois, les deux ou trois pics qui comptent, et la provision ; si `status` est
    `risk`, dis-le d'abord. C'est un ordre de grandeur calculé par Bank : tu ne recalcules rien, tu n'ajoutes
    aucun pic de ta propre initiative (Micka les ajoute dans Bank).
+
+### P. Prendre l'initiative : « relie ça, ça débloque… »
+
+1. `mcp_bank_get_coverage` : `connected` (ce que Bank sait), `missing` (clé, `detail`, `unlocks`, `where`).
+2. Quand une question touche quelque chose qui manque (le loyer sans bail, une assurance sans attestation, une
+   déclaration sans bulletin, l'électricité sans Linky), dis-le en une phrase et propose de le relier : « Dans
+   Bank › Papiers, dépose ton bail : je vérifie ton loyer face à l'IRL et je cherche un doublon d'assurance. »
+3. Une proposition par réponse au plus, jamais la même deux fois dans la session, jamais sur un ton de reproche.
+4. La connexion se fait dans Bank, par Micka. Tu ne demandes jamais un identifiant bancaire, un mot de passe, un
+   code ni une clé — et tu ne proposes pas d'importer quoi que ce soit toi-même.
 
 ## Pitfalls
 

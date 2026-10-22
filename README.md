@@ -54,6 +54,10 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
 - **Passkeys** : Face ID, empreinte ou clé de sécurité pour te connecter sans mot de passe, résistant au phishing
   (Réglages › Sécurité, mot de passe exigé pour en ajouter ou en retirer ; le mot de passe reste en secours et pour
   les gestes sensibles).
+- **Un chat qui agit** : l'assistant prend l'initiative (il propose de relier ce qui manque — banque, bail,
+  assurances, bulletins, Linky… — avec ce que ça débloque), répond avec des boutons, des graphiques dessinés par
+  Bank avec tes chiffres, des schémas, et cherche sur le web (SearXNG chez toi ou Brave, sous ton accord) en
+  citant ses sources. Chaque bloc est construit et validé par le serveur, jamais par le modèle seul.
 - **Simple et ludique** : cinq destinations (Aujourd'hui, Opérations, Gagner, Papiers, Épargne), des
   missions avec leur récompense, une tirelire qui se remplit avec ce que Bank t'a vraiment fait récupérer.
 - **Une interface de produit fini** : design system « Encre claire » (clair et sombre, choix dans Réglages),
@@ -240,6 +244,37 @@ clé chiffrée (jamais réaffichée, seul son début « sk-or-v1-ab12… » sert
 échangé. Deux plafonds (crédits par mois, appels par jour) l'arrêtent avant ta limite, relecture comprise. Il
 explique et propose ; il ne classe ni ne modifie rien sans ton clic.
 
+### Un chat qui agit : boutons, graphiques, schémas, recherche web
+
+L'assistant ne se contente pas de répondre ; il **prend l'initiative** et rend sa réponse actionnable :
+
+- **Il propose de relier ce qui manque.** Bank calcule ce qu'il sait et ce qu'il ne sait pas encore (banque, relevés,
+  bail, assurances, bulletins, avis d'impôt, déclarations suivies, Linky, crypto, situation, messageries, sécurité) et
+  ce que chaque connexion débloquerait. La conversation s'ouvre là-dessus — sans appel au modèle, donc gratuit et
+  instantané — avec des boutons « Connecter ma banque », « Déposer mon bail »… ; et quand une question touche
+  quelque chose d'absent (ton loyer sans bail, par exemple), l'assistant le dit et propose le bouton. Le même
+  modèle de couverture est exposé aux agents (`get_coverage`).
+- **Des boutons sous les réponses**, comme dans un chat moderne : ouvrir l'écran utile, agir sur une carte « Bank
+  te demande » (suivre une déclaration, par exemple — par l'API des initiatives, avec ses contrôles), ou poser la
+  question suivante d'un clic. Le modèle ne choisit que dans un **catalogue** calculé par Bank à chaque question :
+  une clé inventée est ignorée, un bouton mène toujours à un écran qui existe.
+- **Des graphiques dessinés par Bank, avec ses chiffres** : répartition des dépenses, reçu/dépensé par mois, solde,
+  aides par organisme, année qui vient, patrimoine, crypto, électricité. Le modèle demande un jeu de données et
+  une période ; Bank dessine et lui rend les chiffres pour qu'il les commente — jamais l'inverse.
+- **Des schémas** quand il faut expliquer un mécanisme (comment une aide se calcule, les étapes d'une démarche,
+  d'où vient le reste à dépenser) : boîtes et flèches ou suite d'étapes, bornés (douze boîtes, pas de lien), et
+  présentés pour ce qu'ils sont : proposés par le modèle, à lire avec tes chiffres.
+- **La recherche web**, pour une règle, un barème ou une actualité : avec le moteur que tu branches dans
+  Connecteurs — **SearXNG** chez toi (format JSON activé) ou **Brave Search** (clé chiffrée) — et sous ton accord
+  « Recherche web par l'assistant ». La requête, rédigée par le modèle, est nettoyée avant de partir (jamais
+  d'IBAN, de numéro, d'e-mail, de téléphone ni de nom ; un secret l'arrête net) ; les pages sont lues depuis ton
+  serveur par le téléchargeur durci (https, adresses publiques seulement), et le modèle ne choisit jamais une
+  adresse, seulement un numéro de résultat. Les sources s'affichent sous la réponse, citées [1], [2]. Trois
+  recherches par question, un plafond par jour, et un journal qui compte sans jamais garder la requête.
+
+Tout bloc (boutons, graphique, schéma, sources) est construit et validé par le serveur, conservé chiffré avec la
+conversation, et redevient du texte dans une messagerie (les boutons en indications, les sources en liens).
+
 ### Un assistant qui se souvient de toi (à la manière d'Hermes Agent)
 
 Avec ton accord (demandé une fois, révocable dans Réglages › Confidentialité), l'assistant devient un compagnon
@@ -386,15 +421,16 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 871 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+Qualité au moment de la livraison : 892 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
 aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, scénarios adverses du
 banc d'essai crypto de Minara rejoués contre le pilote automatique, demandes simultanées qui ne passent jamais
 ensemble sous un plafond, Keccak-256 vérifié contre une implémentation de
 référence, intégration OpenFisca réelle, passkeys face à un authentificateur simulé, transaction validée avant
-l'envoi de chaque réponse), couverture 92 %, 111 tests front (parcours de première ouverture, coffre, démarches,
-opportunités, veille, assistant, crypto, pilote, déclarations, corrélations, année qui vient, passkeys, erreurs qui
-disent quoi faire), mypy strict sans erreur,
+l'envoi de chaque réponse, chat interactif face à un modèle simulé et à de faux moteurs de recherche), couverture
+92 %, 116 tests front (parcours de première ouverture, coffre, démarches, opportunités, veille, assistant, chat
+interactif, crypto, pilote, déclarations, corrélations, année qui vient, passkeys, erreurs qui disent quoi faire),
+mypy strict sans erreur,
 ruff et bandit propres, revue de sécurité indépendante du pilote et de la crypto (ses constats corrigés et
 testés), `pip-audit` et `npm audit` sans vulnérabilité connue, aucune erreur de console ni débordement
 horizontal à 390 px (vérifié par Playwright), et un parcours complet dans Chromium à travers les conteneurs durcis,

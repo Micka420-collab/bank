@@ -38,6 +38,7 @@ DEFAULTS: dict[str, Any] = {
     "obligations_dismissed": [],
     # L'année qui vient : pics ajoutés à la main et pics détectés que tu as écartés.
     "year_spikes": {"custom": [], "ignored": []},
+    "web_search_counter": {"day": "", "count": 0},  # recherches web du jour (plafond réglable)
 }
 
 

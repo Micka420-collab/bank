@@ -204,6 +204,8 @@ async def ask(
             conversation_id=body.conversation_id,
             history=[t.model_dump() for t in body.history],
             make_client=_factory(request),
+            search_http=request.app.state.search_http,
+            search_resolver=request.app.state.watch_resolver,
         )
     except assistant.AssistantError as exc:
         raise _raise(db, exc) from exc
@@ -211,6 +213,12 @@ async def ask(
         db.commit()  # la relecture lit la conversation dans sa propre transaction : elle doit être écrite
         background.add_task(review_in_background, request.app, result["conversation_id"], ctx.user.username, today)
     return result
+
+
+@router.get("/opening")
+def opening(_: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
+    """Le premier message d'une conversation : l'initiative de Bank (relier ce qui manque) et des questions prêtes."""
+    return assistant.opening(db, today)
 
 
 @router.get("/conversations")

@@ -102,18 +102,23 @@ def fetch(
     seconds: float = 20.0,
     max_redirects: int = 3,
     pin: bool | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> FetchResult:
     """GET d'une ressource publique, borné et vérifié à chaque saut. Derrière un proxy (le proxy résout lui-même
-    les noms), la connexion ne peut pas être épinglée sur l'adresse : les contrôles d'adresse restent faits."""
+    les noms), la connexion ne peut pas être épinglée sur l'adresse : les contrôles d'adresse restent faits.
+    ``extra_headers`` : un jeton d'API par exemple ; il ne suit pas une redirection vers un autre hôte."""
     pin = (not _proxy_configured()) if pin is None else pin
     client = http or httpx.Client(timeout=httpx.Timeout(seconds, connect=10.0), follow_redirects=False)
     started = time.monotonic()
     current = url
+    first_host = (urlsplit(url).hostname or "").lower()
     try:
         for _hop in range(max_redirects + 1):
             parts, ip = check_url(current, resolver)
             host = parts.hostname or ""
             headers = {"User-Agent": USER_AGENT, "Accept": accept, "Accept-Encoding": "gzip, identity"}
+            if extra_headers and host.lower() == first_host:
+                headers.update({k: v for k, v in extra_headers.items() if k.lower() not in ("host", "cookie")})
             if etag:
                 headers["If-None-Match"] = etag
             if last_modified:

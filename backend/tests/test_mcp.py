@@ -129,7 +129,7 @@ def test_initialize_and_catalogue(app, world: TestClient) -> None:  # type: igno
         "record_answer", "categorize_transaction", "propose_action", "list_proposals",
         "can_i_buy", "investment_plan", "get_energy", "get_opportunities", "get_procedures",
         "autonomy_status", "request_autonomous_move", "report_autonomous_move", "get_crypto", "crypto_check",
-        "get_obligations", "get_correlations", "get_year_ahead",
+        "get_obligations", "get_correlations", "get_year_ahead", "get_coverage",
     }  # fmt: skip
     assert tools["get_dossier"]["annotations"]["readOnlyHint"] is True
     # Aucun outil ne déplace d'argent : il n'en existe pas. Le pilote automatique AUTORISE ou refuse, c'est tout.

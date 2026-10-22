@@ -65,6 +65,18 @@ PURPOSES: dict[str, dict[str, Any]] = {
         "default": False,
         "version": 1,
     },
+    "web_search": {
+        "title": "Recherche web par l'assistant",
+        "text": (
+            "Quand une question le demande, l'assistant cherche sur le web avec le moteur que tu as branché "
+            "(SearXNG chez toi, ou Brave) et lit des pages publiques depuis ton serveur. La requête est rédigée par "
+            "le modèle à partir de ta question, puis nettoyée avant de partir : jamais d'IBAN, de numéro, d'e-mail, "
+            "de téléphone ni de nom de personne ; un secret l'arrête. Le moteur voit la requête et l'adresse de ton "
+            "serveur. Les résultats sont montrés avec leurs sources. Sans ton accord, l'assistant ne cherche pas."
+        ),
+        "default": False,
+        "version": 1,
+    },
     "watch": {
         "title": "Veille sur les sources officielles",
         "text": (

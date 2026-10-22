@@ -213,7 +213,7 @@ def test_ask_grounds_the_model_on_an_anonymised_dossier_and_logs_no_content(app,
     assert out["cost_usd"] == 0.0005 and out["calls_today"] == 1 and out["model"] == MODEL
     assert FakeLlm.keys == [KEY]
     msgs = FakeLlm.calls[-1]["messages"]
-    assert [m["role"] for m in msgs] == ["system", "system", "user", "assistant", "user"]
+    assert [m["role"] for m in msgs] == ["system", "system", "system", "user", "assistant", "user"]
     assert "Dossier financier" in msgs[1]["content"] and "<dossier>" in msgs[1]["content"]
     assert "JEAN DUPONT" not in msgs[1]["content"] and "0612345678" not in msgs[1]["content"]  # anonymisé
     assert "Salaire" in msgs[1]["content"] or "BRGM" in msgs[1]["content"]

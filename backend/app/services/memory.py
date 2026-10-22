@@ -23,6 +23,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db import utcnow
+from app.domain import chatblocks
 from app.domain import memory as dm
 from app.models import Conversation, ConversationMessage, MemoryEntry, MemoryProposal
 from app.security import audit
@@ -451,6 +452,7 @@ def conversation_view(conv: Conversation) -> dict[str, Any]:
                 "ts": m.ts.isoformat(),
                 "meta": json.loads(m.meta or "{}"),
                 "feedback": m.feedback,
+                "blocks": chatblocks.validate_blocks(json.loads(m.blocks)) if m.blocks else [],
             }
             for m in conv.messages
         ],

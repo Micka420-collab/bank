@@ -161,7 +161,7 @@ ntfy n'affiche que des alertes : pas de question, pas de commande.
 
 | | |
 |---|---|
-| Une question en français | L'assistant répond (s'il est branché : Connecteurs › OpenRouter), en 3 à 8 lignes |
+| Une question en français | L'assistant répond (s'il est branché : Connecteurs › OpenRouter), en 3 à 8 lignes. Ses blocs interactifs (boutons, graphique, schéma, sources) redeviennent du texte : « Dans Bank : Déposer mon bail », « (graphique à voir dans Bank) », et les sources en liens numérotés |
 | `/budget` | Ce que tu peux dépenser par jour, le point bas du mois |
 | `/missions` | Tes meilleures pistes et ta tirelire |
 | `/demarches` | Où en sont tes démarches |

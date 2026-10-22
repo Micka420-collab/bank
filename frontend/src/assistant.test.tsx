@@ -72,7 +72,7 @@ const body = (url: string) => JSON.parse(String(calls.find((c) => c.url === url 
 
 function answerOf(answer: string, over: Partial<AssistantAnswer> = {}): AssistantAnswer {
   return {
-    answer, conversation_id: 7, message_id: 11, model: "anthropic/claude-haiku-5.5", name: "Bank", privacy: "redacted",
+    answer, blocks: [], conversation_id: 7, message_id: 11, model: "anthropic/claude-haiku-5.5", name: "Bank", privacy: "redacted",
     memory_on: false, memory: [], tools: [], cost_usd: 0.0021, prompt_tokens: 1500, completion_tokens: 60, truncated: false,
     review_due: false, calls_today: 4, month_cost_usd_cents: 43, ...over,
   };

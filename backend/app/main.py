@@ -42,6 +42,7 @@ from app.api import (
     passkeys,
     planning,
     procedures,
+    search,
     system,
     transactions,
     vault,
@@ -291,6 +292,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.energy_client_factory = energy_service.default_client
     app.state.ics_fetcher = planning_service.fetch_ics
     app.state.llm_client_factory = assistant_service.default_client
+    app.state.search_http = None  # client HTTP de la recherche web (remplaçable en test)
     app.state.watch_fetcher = watch_service.default_fetcher
     app.state.watch_resolver = None  # résolution DNS réelle (remplaçable en test)
     app.state.channels = None
@@ -325,6 +327,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         correlations,
         yearahead,
         passkeys,
+        search,
         system,
     )
     for r in routers:

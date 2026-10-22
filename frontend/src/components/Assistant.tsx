@@ -8,11 +8,15 @@ import {
   api,
   useApi,
   type AssistantAnswer,
+  type AssistantOpening,
   type AssistantStatus,
+  type ChatBlock,
   type ConversationDetail,
   type ConversationSummary,
   type MemoryNotice,
 } from "../api";
+import { navigate } from "../router";
+import { ChatBlocks, type BlockHandlers } from "./chat/Blocks";
 import { Icon } from "./Icon";
 import { Markdown } from "./Markdown";
 import { usd } from "../pages/AssistantSettings";
@@ -28,6 +32,7 @@ export type Turn =
       meta?: { model?: string; cost_usd?: number; privacy?: string; truncated?: boolean };
       notices?: Notice[];
       feedback?: "up" | "down" | null;
+      blocks?: ChatBlock[];
     };
 type AssistantTurn = Extract<Turn, { role: "assistant" }>;
 
@@ -58,6 +63,7 @@ function fromServer(detail: ConversationDetail): Turn[] {
           messageId: m.id,
           feedback: m.feedback,
           meta: { model: m.meta.model, cost_usd: m.meta.cost_usd, privacy: m.meta.privacy, truncated: m.meta.truncated },
+          blocks: m.blocks ?? [],
         },
   );
 }
@@ -72,6 +78,7 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
   const [error, setError] = useState<string | null>(null);
   const [noteFor, setNoteFor] = useState<number | null>(null);
   const [note, setNote] = useState("");
+  const [opening, setOpening] = useState<AssistantOpening | null | undefined>(undefined);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const returnTo = useRef<HTMLElement | null>(null);
@@ -97,6 +104,18 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
   }, [open, onClose]);
 
   const configured = status.data?.configured === true;
+
+  // L'ouverture : ce que Bank propose de relier (son initiative) et des questions prêtes — calculé sans modèle.
+  useEffect(() => {
+    if (!open || !configured || opening !== undefined) return undefined;
+    let cancelled = false;
+    void api<AssistantOpening>("/api/assistant/opening")
+      .then((o) => { if (!cancelled) setOpening(o && typeof o.text === "string" ? { ...o, blocks: o.blocks ?? [] } : null); })
+      .catch(() => { if (!cancelled) setOpening(null); });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, configured, opening]);
 
   // Reprise : la dernière conversation, si elle est encore ouverte et récente (après un rechargement de la page).
   useEffect(() => {
@@ -156,6 +175,7 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
           meta: { model: r.model, cost_usd: r.cost_usd, privacy: r.privacy, truncated: r.truncated },
           notices: r.memory,
           feedback: null,
+          blocks: r.blocks ?? [],
         });
         return next;
       });
@@ -180,6 +200,7 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
     setResumed(false);
     setError(null);
     setNoteFor(null);
+    setOpening(undefined); // l'ouverture se recalcule : ce qui manque a pu changer
     inputRef.current?.focus();
   };
 
@@ -220,6 +241,22 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
       setError((e as Error).message);
     }
   };
+  const decideSearch = async (granted: boolean) => {
+    try {
+      await api("/api/consents/web_search", { method: "PUT", body: { granted } });
+      status.reload();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  const handlers: BlockHandlers = {
+    onAsk: (prompt) => void send(prompt),
+    onNavigate: (page) => {
+      onClose();
+      navigate(page);
+    },
+    onActed: () => setOpening(undefined),
+  };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -237,6 +274,8 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
   const memory = status.data?.memory;
   const memoryOn = Boolean(memory?.consent && memory.available);
   const askConsent = configured && memory?.available === true && !memory.consent && !memory.asked;
+  const search = status.data?.search;
+  const askSearch = configured && !askConsent && search?.configured === true && !search.consent && !search.asked;
   return (
     <div className="assistant-backdrop" onClick={onClose}>
       <aside className="assistant-panel" role="dialog" aria-modal="true" aria-labelledby="assistant-panel-title" onClick={(e) => e.stopPropagation()}>
@@ -286,7 +325,26 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
               </div>
             </section>
           )}
-          {configured && turns.length === 0 && (
+          {askSearch && (
+            <section className="memory-consent" aria-labelledby="search-consent-title">
+              <h3 id="search-consent-title"><Icon name="search" /> Je peux chercher sur le web</h3>
+              <p>
+                Pour une règle, un barème ou une actualité, je cherche avec le moteur que tu as branché et je cite mes
+                sources. La requête part nettoyée : jamais d'IBAN, de numéro, d'e-mail, de téléphone ni de nom.
+              </p>
+              <div className="actions">
+                <button type="button" className="btn sm" onClick={() => void decideSearch(true)}>Oui, cherche quand il faut</button>
+                <button type="button" className="btn quiet sm" onClick={() => void decideSearch(false)}>Pas maintenant</button>
+              </div>
+            </section>
+          )}
+          {configured && turns.length === 0 && opening && (
+            <div className="assistant-turn is-assistant assistant-opening">
+              <p>{opening.text}</p>
+              <ChatBlocks blocks={opening.blocks} handlers={handlers} />
+            </div>
+          )}
+          {configured && turns.length === 0 && opening === null && (
             <div className="assistant-empty">
               <p className="muted">Je réponds à partir de ce que Bank sait de toi : solde, échéances, aides, épargne, objectifs. Par exemple :</p>
               <div className="assistant-suggestions">
@@ -307,6 +365,7 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
             ) : (
               <div key={i} className={`assistant-turn is-${t.role}`}>
                 {t.role === "user" ? <p>{t.content}</p> : <Markdown source={t.content} />}
+                {t.role === "assistant" && t.blocks && t.blocks.length > 0 && <ChatBlocks blocks={t.blocks} handlers={handlers} />}
                 {t.role === "assistant" && t.notices && t.notices.length > 0 && (
                   <ul className="memory-notes" aria-label={`Ce que ${name} vient de retenir`}>
                     {t.notices.map((n, k) => (
@@ -368,7 +427,7 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
           )}
           {busy && (
             <div className="assistant-turn is-assistant" aria-live="polite">
-              <p className="muted"><span className="spinner" aria-hidden="true" /> {name} lit ton dossier…</p>
+              <p className="muted"><span className="spinner" aria-hidden="true" /> {name} lit ton dossier{search?.consent ? ", et cherche s'il le faut" : ""}…</p>
             </div>
           )}
           {error && <div className="notice danger" role="alert"><Icon name="alert" /><span>{error}</span></div>}
