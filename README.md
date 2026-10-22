@@ -313,6 +313,13 @@ Il ne peut ni changer son mandat, ni appliquer un réglage sans ton clic, ni bou
 sauf, si tu l'as allumé, dans le cadre du pilote automatique. Détails, outils et dépannage :
 [integrations/hermes/README.md](integrations/hermes/README.md).
 
+## Ce qui vient ensuite
+
+La feuille de route est dans [docs/ROADMAP.md](docs/ROADMAP.md) et dans les
+[issues](https://github.com/Micka420-collab/bank/issues) du dépôt : calendrier des obligations (actualisation France
+Travail, déclaration trimestrielle CAF), déclaration pré-calculée, corrélations entre tes contrats et tes relevés,
+prévision à 12 mois, passkeys… chacune avec ses garde-fous.
+
 ## Développement
 
 ```bash
