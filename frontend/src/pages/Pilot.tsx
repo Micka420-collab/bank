@@ -204,6 +204,15 @@ function Frame({ view, totp, onSaved }: { view: PilotView; totp: boolean; onSave
             </select>
           </Field>
         )}
+        {view.agents.find((a) => a.id === d.agent_token_id)?.ip_locked === false && (
+          <div className="notice warn" role="note">
+            <Icon name="alert" />
+            <span>
+              Ce jeton marche depuis n'importe quelle adresse. Restreins-le à la machine de ton agent dans{" "}
+              <a href="#/connecteurs">Connecteurs › Agents IA</a> : un jeton copié ailleurs ne pourra plus rien demander.
+            </span>
+          </div>
+        )}
       </fieldset>
 
       <fieldset>
@@ -228,7 +237,7 @@ function Frame({ view, totp, onSaved }: { view: PilotView; totp: boolean; onSave
           <Field label="Sur 24 h glissantes"><EuroInput value={d.per_day_cents} onChange={(v) => set({ per_day_cents: v })} /></Field>
           <Field label="Sur 30 jours glissants"><EuroInput value={d.per_month_cents} onChange={(v) => set({ per_month_cents: v })} /></Field>
           <Field label="Opérations par 24 h"><input type="number" min={1} max={20} value={d.max_moves_per_day} onChange={(e) => set({ max_moves_per_day: Number(e.target.value) })} /></Field>
-          <Field label="Perte maximale" hint="Atteinte : le pilote s'arrête seul"><EuroInput value={d.max_loss_cents} onChange={(v) => set({ max_loss_cents: v })} /></Field>
+          <Field label="Perte maximale" hint="Atteinte : le pilote s'arrête seul. 0 € : dès la première perte"><EuroInput value={d.max_loss_cents} onChange={(v) => set({ max_loss_cents: v })} /></Field>
           <Field label="Durée" hint={`1 à ${view.hard_max.days} jours, renouvelable`}><input type="number" min={1} max={view.hard_max.days} value={d.days} onChange={(e) => set({ days: Number(e.target.value) })} /></Field>
         </div>
       </fieldset>

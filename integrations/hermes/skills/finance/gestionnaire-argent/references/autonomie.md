@@ -21,11 +21,14 @@ journal, prévient Micka dans ses messageries et coupe tout à la première anom
 ## Le cycle d'un mouvement
 
 1. `request_autonomous_move(kind, asset, amount_eur, reason, [to_asset], [chain], [destination], [rule])`.
-2. Réponse `allowed: true` → `authorized` (paramètres exacts, `to_address` complète pour un envoi), `ticket`
-   (valable 10 minutes, une seule fois).
+2. Réponse `allowed: true` → `authorized` (paramètres exacts, `to_address` complète pour un envoi,
+   `max_quantity` pour un achat quand Bank a un cours récent), `ticket` (valable 10 minutes, une seule fois).
 3. Exécution par ton outil (Minara ou autre) : **exactement** `authorized`, une fois. Pas de montant
-   « arrondi au-dessus », pas d'autre réseau, pas d'autre adresse.
-4. `report_autonomous_move(ticket, status, executed_eur, [pnl_eur], [tx_ref])` — toujours, même en échec.
+   « arrondi au-dessus », pas d'autre réseau, pas d'autre adresse, jamais plus que `max_quantity` (un outil qui
+   lit « 20 » comme 20 ETH au lieu de 20 € est arrêté là).
+4. `report_autonomous_move(ticket, status, executed_eur, [pnl_eur], tx_ref)` — toujours, même en échec.
+   `tx_ref` (hash de transaction ou n° d'ordre) est **obligatoire** pour `executed` : sans preuve, pas
+   d'« exécuté ».
 
 ## Ce qui arrête tout (et pourquoi)
 
@@ -35,8 +38,10 @@ journal, prévient Micka dans ses messageries et coupe tout à la première anom
 | Pas de compte rendu sous 10 minutes | Mouvement compté comme dépensé, pilote arrêté. Un compte rendu tardif reste accepté. |
 | Pertes cumulées ≥ seuil de Micka | Pilote arrêté. |
 | 5 refus en une heure pour ton jeton | Pilote arrêté : un agent qui insiste est un agent manipulé. |
+| 3 échecs rapportés en 24 h | Pilote arrêté par prudence. Un échec reste compté dans les plafonds. |
+| Perte maximale à 0 € | La première perte arrête tout. |
 | Jeton révoqué ou expiré, échéance atteinte | Pilote arrêté. |
-| Micka : bouton « Tout arrêter » ou « /pilote stop » | Arrêt immédiat ; un ticket en cours reste rapportable. |
+| Micka : bouton « Tout arrêter », « /pilote stop », « /stop » ou « stop pilote » | Arrêt immédiat ; un ticket en cours reste rapportable. |
 
 ## Les refus et ce que tu fais
 

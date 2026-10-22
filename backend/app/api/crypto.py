@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field
 from app.api.deps import AuthDep, DbDep, TodayDep, client_ip
 from app.db import utcnow
 from app.domain.crypto import CryptoError
+from app.security import audit
+from app.security.auth import verify_password
 from app.services import consents
 from app.services import crypto as svc
 from app.services.settings_store import set_setting
@@ -51,6 +53,8 @@ class CheckIn(BaseModel):
 class SettingsIn(BaseModel):
     endpoints: dict[str, str | None] | None = Field(default=None, max_length=12)
     in_wealth: bool | None = None
+    # Envoyer tes adresses à un autre nœud : confirmation exigée (revenir aux nœuds publics, non).
+    password: str | None = Field(default=None, max_length=1024)
 
 
 def _fail(exc: Exception) -> HTTPException:
@@ -175,7 +179,15 @@ def delete_tax(event_id: int, ctx: AuthDep, db: DbDep) -> None:
 
 
 @router.put("/settings")
-def settings(body: SettingsIn, ctx: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
+def settings(body: SettingsIn, request: Request, ctx: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
+    if body.endpoints and any(body.endpoints.values()):
+        if not request.app.state.limiters["login"].hit(client_ip(request)):
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Trop de tentatives")
+        ok, _ = verify_password(ctx.user.password_hash, body.password or "")
+        if not ok:
+            audit.record(db, ctx.user.username, "crypto.endpoints.denied")
+            db.commit()
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Mot de passe incorrect")
     try:
         if body.endpoints is not None:
             svc.set_endpoints(db, body.endpoints, actor=ctx.user.username)

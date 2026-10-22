@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.crypto import qty_text, value_cents
+from app.domain.crypto import MAX_VALUE_CENTS, qty_text, value_cents
 from app.models import CryptoHolding, CryptoPrice, CryptoWallet
 
 
@@ -27,16 +27,20 @@ def holdings_value(db: Session) -> dict[str, dict[str, Any]]:
             qty = Decimal(h.quantity)
         except InvalidOperation:
             continue
-        if qty <= 0:
+        if not qty.is_finite() or qty <= 0:
             continue
         price = prices.get(h.asset)
         try:
             eur = Decimal(price.eur) if price else None
         except InvalidOperation:
             eur = None
+        if eur is not None and not eur.is_finite():
+            eur = None
         entry = out.setdefault(h.asset, {"qty": Decimal(0), "value_cents": 0, "sources": []})
         entry["qty"] += qty
-        entry["value_cents"] += value_cents(qty, eur) if eur is not None else 0
+        entry["value_cents"] = min(
+            entry["value_cents"] + (value_cents(qty, eur) if eur is not None else 0), MAX_VALUE_CENTS
+        )
         where = labels.get(h.wallet_id, "?") if h.wallet_id is not None else (h.platform or "Saisie")
         entry["sources"].append({"where": where, "quantity": qty_text(qty), "watched": h.wallet_id is not None})
     for entry in out.values():

@@ -5902,3 +5902,17 @@ details.card.cx-details > summary {
   align-items: center;
   gap: 0.4rem 0.75rem;
 }
+
+/* Réglages du suivi crypto : un nœud perso se remplace, il ne se réécrit pas */
+.cx-node {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.cx-node input {
+  flex: 1;
+  min-width: 0;
+}
+.pl-frame .notice {
+  margin-top: 0.75rem;
+}

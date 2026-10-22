@@ -186,6 +186,12 @@ def coingecko_id(asset: str, custom: str | None = None) -> str | None:
     return known.coingecko if known else None
 
 
+MAX_QUANTITY = Decimal("1e15")
+# Au-delà de 10 000 milliards d'euros par actif, ce n'est pas un patrimoine, c'est une erreur (ou un nœud menteur) :
+# la valeur est plafonnée pour ne jamais déborder une colonne ni fausser le reste.
+MAX_VALUE_CENTS = 10**15
+
+
 def quantity(raw: Any) -> Decimal:
     try:
         q = Decimal(str(raw).strip().replace(",", ".").replace(" ", "").replace(" ", ""))
@@ -193,7 +199,7 @@ def quantity(raw: Any) -> Decimal:
         raise CryptoError("Quantité illisible") from None
     if not q.is_finite() or q < 0:
         raise CryptoError("Quantité : un nombre positif")
-    if q > Decimal("1e15") or -q.as_tuple().exponent > 18:  # type: ignore[operator]
+    if q > MAX_QUANTITY or -q.as_tuple().exponent > 18:  # type: ignore[operator]
         raise CryptoError("Quantité hors de proportion (18 décimales au plus)")
     return q.normalize() if q else Decimal(0)
 
@@ -205,7 +211,10 @@ def qty_text(q: Decimal) -> str:
 
 
 def value_cents(qty: Decimal, price_eur: Decimal) -> int:
-    return int((qty * price_eur * 100).quantize(Decimal(1), rounding=ROUND_HALF_EVEN))
+    raw = qty * price_eur * 100
+    if not raw.is_finite() or raw <= 0:
+        return 0
+    return min(int(raw.quantize(Decimal(1), rounding=ROUND_HALF_EVEN)), MAX_VALUE_CENTS)
 
 
 # ------------------------------------------------------------------ Keccak-256 (EIP-55)

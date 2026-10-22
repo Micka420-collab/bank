@@ -19,7 +19,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db import utcnow
+from app.db import utcnow, write_lock
 from app.models import AuditLog
 from app.security.crypto import get_keyring
 
@@ -46,6 +46,9 @@ def _scrub(details: dict[str, Any]) -> dict[str, Any]:
 
 
 def record(db: Session, actor: str, action: str, **details: Any) -> AuditLog:
+    # Lire la tête puis écrire, sous le verrou d'écriture : deux écrivains parallèles ne s'accrochent jamais au
+    # même maillon (la chaîne ne « casse » pas toute seule sous la charge).
+    write_lock(db)
     prev = db.scalar(select(AuditLog.hash).order_by(AuditLog.id.desc()).limit(1)) or GENESIS
     ts = utcnow().replace(microsecond=0)
     det = json.dumps(_scrub(details), separators=(",", ":"), sort_keys=True, default=str)

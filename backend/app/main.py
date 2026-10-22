@@ -9,6 +9,7 @@ import random
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import date
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -54,6 +55,7 @@ from app.security.auth import SlidingWindowLimiter
 from app.security.crypto import Keyring, install_keyring
 from app.security.middleware import AccessLogMiddleware, BodyLimitMiddleware, SecurityHeadersMiddleware
 from app.services import assistant as assistant_service
+from app.services import autonomy as autonomy_service
 from app.services import consents as consent_service
 from app.services import crypto as crypto_service
 from app.services import energy as energy_service
@@ -110,6 +112,25 @@ def _crypto_sync_once(app: FastAPI) -> int:
         crypto_service.snapshot(db, date.today())  # noqa: DTZ011 - date locale du serveur
         db.commit()
         return int(result["wallets_synced"]) + int(result["prices"])
+
+
+def _autonomy_sweep_once(app: FastAPI) -> bool:
+    with app.state.sessionmaker() as db:
+        changed = autonomy_service.sweep(db, utcnow())
+        db.commit()
+        return changed
+
+
+async def _autonomy_loop(app: FastAPI) -> None:
+    """Le pilote automatique n'attend pas qu'on regarde : chaque minute, un mouvement autorisé mais non rapporté
+    est compté, le pilote s'arrête, et l'alerte urgente part tout de suite."""
+    while True:
+        await asyncio.sleep(60)
+        try:
+            if await asyncio.to_thread(_autonomy_sweep_once, app) and app.state.channels is not None:
+                app.state.channels.nudge_threadsafe()
+        except Exception:
+            log.exception("pilote automatique : ménage en échec")
 
 
 async def _crypto_loop(app: FastAPI) -> None:
@@ -200,6 +221,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             repaired = repair_aid_kinds(db)  # remboursements pris pour des bourses par une ancienne règle
             if repaired:
                 log.info("aides relues : %s opérations corrigées", repaired)
+            crypto_service.upgrade(db)
             db.commit()
         tasks = []
         if app.state.enablebanking is not None and settings.sync_interval_hours > 0:
@@ -208,6 +230,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             tasks.append(asyncio.create_task(_energy_loop(app)))
         tasks.append(asyncio.create_task(_planning_loop(app)))
         tasks.append(asyncio.create_task(_crypto_loop(app)))
+        tasks.append(asyncio.create_task(_autonomy_loop(app)))
         tasks.append(asyncio.create_task(_housekeeping_loop(app)))
         # Messageries : rien ne tourne tant qu'aucune n'est configurée, activée et couverte par ton accord.
         gateway: Gateway | None = None
@@ -300,6 +323,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         factory,
         fiscal=lambda: app.state.fiscal_client,
         today=lambda: app.dependency_overrides.get(deps.today, deps.today)(),
+        # Cadence des consignes du pilote : le jour civil de la personne (fuseau BANK_TIMEZONE), pas celui du serveur.
+        local_today=lambda: app.dependency_overrides.get(
+            deps.today, lambda: utcnow().astimezone(ZoneInfo(settings.timezone)).date()
+        )(),
         # Pilote automatique : un mouvement autorisé ou rapporté réveille les alertes des messageries.
         on_autonomy=lambda: app.state.channels.nudge_threadsafe() if app.state.channels is not None else None,
     )

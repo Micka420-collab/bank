@@ -863,7 +863,7 @@ def render_markdown(d: dict[str, Any]) -> str:
     pilot = mandate.get("autopilot") or {}
     if pilot.get("active"):
         trial = " (mode essai : rien n'est exécuté)" if pilot.get("trial") else ""
-        add(f"- Pilote automatique : actif pour « {pilot.get('agent')} »{trial} — voir autonomy_status")
+        add(f"- Pilote automatique : actif{trial} — autonomy_status dit s'il l'est pour toi")
     else:
         add("- Pilote automatique : éteint (tout mouvement d'argent se confirme avec la personne)")
 

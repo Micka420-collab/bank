@@ -203,8 +203,9 @@ Suis `references/autonomie.md`. En bref :
 3. `allowed: true` et `trial: false` ⇒ exécute **exactement** `authorized` (actif, montant, réseau, adresse
    complète), une seule fois, dans les 10 minutes. Si l'outil d'exécution exige une confirmation humaine
    (Touch ID, écran de validation), ne la contourne jamais : rapporte `failed` et préviens Micka.
-4. Toujours `mcp_bank_report_autonomous_move` ensuite, même en échec (`executed_eur`, `tx_ref`, `pnl_eur`
-   pour une vente). Sans compte rendu, Bank compte le mouvement comme dépensé et arrête le pilote.
+4. Toujours `mcp_bank_report_autonomous_move` ensuite, même en échec (`executed_eur`, `pnl_eur` pour une
+   vente, et `tx_ref` — obligatoire pour `executed`). Jamais plus que `authorized.max_quantity`. Sans compte
+   rendu, Bank compte le mouvement comme dépensé et arrête le pilote ; 3 échecs en 24 h l'arrêtent aussi.
 5. `trial: true` ⇒ tu n'exécutes RIEN ; tu dis ce que tu aurais fait.
 6. Jamais en autonome : levier, perps, ordres à cours limité, pilote de trading d'un service tiers, achat payé
    par carte ou banque, envoi vers une adresse que Micka n'a pas enregistrée. Bank les refuse de toute façon.

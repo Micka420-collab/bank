@@ -70,8 +70,7 @@ function cryptoView(over: Partial<CryptoView> = {}): CryptoView {
     },
     guards: [{ level: "warning", text: "La crypto pèse 80 % de ce que tu possèdes." }],
     network_consent: true,
-    endpoints: { ethereum: "https://ethereum-rpc.publicnode.com" },
-    default_endpoints: { ethereum: "https://ethereum-rpc.publicnode.com" },
+    endpoints: { ethereum: { custom: false, shown: "https://ethereum-rpc.publicnode.com" } },
     chains: [{ key: "ethereum", label: "Ethereum", native: "ETH", tokens: ["USDC"] }, { key: "bitcoin", label: "Bitcoin", native: "BTC", tokens: [] }],
     catalog: [{ symbol: "BTC", name: "Bitcoin" }, { symbol: "ETH", name: "Ether" }],
     in_wealth: true,
@@ -92,7 +91,7 @@ function pilotView(over: Partial<PilotView> = {}): PilotView {
     enabled_at: "2026-10-20T10:00:00+00:00", expires_at: new Date(Date.now() + 5 * 86_400_000).toISOString(),
     disabled_at: null, disabled_reason: null,
     usage: { day_cents: 2000, month_cents: 2000, moves_day: 1, loss_cents: 0 },
-    agents: [{ id: 3, name: "hermes" }], no_crypto: false,
+    agents: [{ id: 3, name: "hermes", ip_locked: false }], no_crypto: false,
     scope_labels: { crypto_spot: "Acheter, vendre, échanger", transfer: "Envoyer vers tes adresses" },
     every_labels: { day: "chaque jour", week: "chaque semaine", month: "chaque mois" },
     chains: ["bitcoin", "ethereum"], hard_rules: ["Jamais d'effet de levier."],
@@ -229,6 +228,30 @@ describe("écran Crypto", () => {
   });
 });
 
+describe("réglages du suivi crypto", () => {
+  it("ne montre jamais un nœud perso en entier et exige le mot de passe pour en mettre un", async () => {
+    const custom = cryptoView({ endpoints: { ethereum: { custom: true, shown: "https://node.example.org/…" } } });
+    mockApi({ "/api/crypto/settings": () => custom, "/api/crypto": () => custom, "/api/consents": () => [] });
+    await act(async () => root.render(<ToastProvider><Crypto /></ToastProvider>));
+    await settle();
+    expect(host.textContent).toContain("Ton nœud : https://node.example.org/…");
+    const input = host.querySelector<HTMLInputElement>("input[placeholder='Remplacer par…']")!;
+    expect(input.value).toBe("");
+    expect(button("Enregistrer les nœuds").disabled).toBe(true);
+    await typeInto(input, "https://autre.example.org/v3/cle");
+    await settle();
+    const pw = host.querySelector<HTMLInputElement>(".cx-details input[type=password]")!;
+    expect(pw).not.toBeNull();
+    await typeInto(pw, "ma phrase de passe");
+    await act(async () => { button("Enregistrer les nœuds").closest("form")!.requestSubmit(); });
+    await settle();
+    const put = sent("/api/crypto/settings", "PUT");
+    expect(body(put[0]!)).toEqual({ endpoints: { ethereum: "https://autre.example.org/v3/cle" }, password: "ma phrase de passe" });
+    await click("Nœud public");
+    expect(body(sent("/api/crypto/settings", "PUT")[1]!)).toEqual({ endpoints: { ethereum: null } });
+  });
+});
+
 describe("écran Pilote automatique", () => {
   it("affiche l'état, les jauges et le journal, et s'arrête sans mot de passe", async () => {
     mockApi({
@@ -255,6 +278,8 @@ describe("écran Pilote automatique", () => {
     });
     await act(async () => root.render(<ToastProvider><Pilot /></ToastProvider>));
     await settle();
+    expect(host.textContent).toContain("Ce jeton marche depuis n'importe quelle adresse");
+    expect(host.textContent).toContain("0 € : dès la première perte");
     await click("Ajouter la consigne");
     await typeInto(host.querySelector<HTMLInputElement>("input[type=password]")!, "phrase de passe");
     await act(async () => { button("Lancer l'essai").closest("form")!.requestSubmit(); });

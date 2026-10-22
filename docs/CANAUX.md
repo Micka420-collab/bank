@@ -168,7 +168,8 @@ ntfy n'affiche que des alertes : pas de question, pas de commande.
 | `/nouveau` | Une conversation vierge (ce que l'assistant a appris de toi reste) |
 | `/pause`, `/reprendre` | Couper ou rallumer les alertes sur ce compte |
 | `/pilote` | L'état du pilote automatique : en marche, en essai ou arrêté, ce qui reste sur 24 h, le dernier mouvement |
-| `/pilote stop` | **Tout arrêter tout de suite** (aussi `/pilote off`, `/pilote arrêt`) — l'allumer, jamais d'ici |
+| `/pilote stop` | **Tout arrêter tout de suite** (aussi `/pilote off`, `/pilote arrêt`, ou simplement « stop pilote », « arrête le pilote ») — l'allumer, jamais d'ici |
+| `/stop` | Pilote en marche : il s'arrête (tes alertes restent, pour que tu saches) ; sinon, les alertes se mettent en pause |
 | `/delier` | Ne plus parler à Bank depuis ce compte |
 
 Sans barre oblique, un mot seul marche aussi (`budget`, `missions`, `aide`…) : pratique sur WhatsApp.

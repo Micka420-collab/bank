@@ -36,8 +36,12 @@ Nœuds publics par défaut (relevés le 21 octobre 2026) : `mempool.space` pour 
 réseaux (`ethereum-rpc.publicnode.com`, `base-rpc.publicnode.com`, `arbitrum-one-rpc.publicnode.com`,
 `optimism-rpc.publicnode.com`, `polygon-bor-rpc.publicnode.com`, `avalanche-c-chain-rpc.publicnode.com`,
 `bsc-rpc.publicnode.com`, `solana-rpc.publicnode.com`). **Ton propre nœud** est le plus discret : « Réglages du
-suivi » accepte une adresse https publique par réseau. Chaque appel passe par la porte sûre de Bank (https,
-hôte public vérifié, taille et durée bornées, pas de redirection pour un appel JSON-RPC).
+suivi » accepte une adresse https publique par réseau, avec ton mot de passe (revenir au nœud public n'en demande
+pas). Comme elle porte souvent une clé d'accès (`…/v2/<clé>`), elle est chiffrée en base et Bank n'en montre plus
+que le schéma et l'hôte, nulle part en entier (écran, export, journaux). Chaque appel passe par la porte sûre de
+Bank (https, hôte public vérifié, taille et durée bornées, pas de redirection pour un appel JSON-RPC). Un nœud ou
+une source de cours qui renvoie n'importe quoi (solde négatif ou hors de proportion, cours de plus d'un milliard
+d'euros, variation absurde) est écarté : les dernières valeurs connues restent, et l'erreur s'affiche.
 
 Seuls les jetons du catalogue sont lus, avec leurs contrats officiels : USDC et EURC (pages de Circle, relevées
 le 21 octobre 2026), USDT, WBTC et WETH (contrats de leurs émetteurs). Un jeton inconnu arrivé sur ton adresse
@@ -57,7 +61,8 @@ le 21 octobre 2026), USDT, WBTC et WETH (contrats de leurs émetteurs). Un jeton
   c'est un refus net.
 
 Les adresses suivies sont chiffrées en base (elles relient ton identité à tout ton historique) ; l'agent IA
-n'en voit jamais aucune.
+n'en voit jamais aucune. Une même adresse EVM peut être suivie sur plusieurs réseaux (Ethereum et Base, par
+exemple) : ce sont des soldes distincts.
 
 ## Impôts (cessions de particulier, article 150 VH bis du CGI)
 
@@ -96,24 +101,33 @@ activée. Le cadre :
   (`transfer`) ; une liste d'actifs ; **consignes** (ex. « Acheter 20 € de BTC chaque semaine », suivies une
   fois par jour, semaine ou mois civil) ou **libre dans tes plafonds**.
 - **Combien** : par opération (1 000 € au plus), sur 24 h et sur 30 jours **glissants** (pas de remise à zéro
-  à minuit), nombre d'opérations par 24 h, perte maximale, durée (90 jours au plus, renouvelable).
+  à minuit), nombre d'opérations par 24 h, perte maximale (0 € : la première perte arrête tout), durée (90 jours
+  au plus, renouvelable).
 - **Mode essai** (conseillé pour commencer) : l'agent demande comme s'il allait agir, Bank note ce qu'il aurait
   fait (et applique les vrais plafonds), rien n'est exécuté.
 
 Chaque mouvement : l'agent demande (`request_autonomous_move`), Bank autorise ou refuse avec la raison, l'agent
-exécute exactement ce qui est autorisé (ticket unique, 10 minutes), puis rend compte
-(`report_autonomous_move`). Tu es prévenu dans tes messageries ; un arrêt pour anomalie passe même pendant tes
-heures calmes.
+exécute exactement ce qui est autorisé (ticket unique, 10 minutes ; pour un achat, une quantité maximale calculée
+sur le dernier cours de Bank, pour qu'un outil qui confond 20 € et 20 ETH soit arrêté), puis rend compte
+(`report_autonomous_move`, avec l'identifiant de la transaction ou de l'ordre : sans preuve, pas d'« exécuté »).
+Un échec rapporté reste compté dans les plafonds. Tu es prévenu dans tes messageries ; un arrêt pour anomalie
+passe même pendant tes heures calmes. Les décisions sont sérialisées (verrou d'écriture de la base) : deux
+demandes simultanées ne passent pas ensemble sous un plafond.
 
 Ce qui ne se règle pas : jamais de levier, de contrat à terme (perps), d'ordre à cours limité, de pilote de
 trading tiers ni d'achat payé par ta carte ou ta banque ; jamais d'envoi vers une adresse que tu n'as pas
-enregistrée ; jamais un actif hors de ta liste ni contre tes lignes rouges (« pas de crypto » coupe tout).
+enregistrée ; jamais un actif hors de ta liste ni contre tes lignes rouges (« pas de crypto » coupe tout ;
+« pas d'Ethereum », « pas de stablecoins » ou « pas d'altcoins » bloque ces actifs-là).
 Arrêt automatique si un montant exécuté dépasse l'autorisation (au-delà d'1 € de frais), si un mouvement
-autorisé n'est pas rapporté dans les 10 minutes (il est alors compté comme dépensé), si la perte maximale est
-atteinte, si l'agent essuie 5 refus en une heure, à l'échéance et si le jeton n'est plus valable.
+autorisé n'est pas rapporté dans les 10 minutes (il est alors compté comme dépensé ; Bank le constate seul,
+chaque minute), si la perte maximale est atteinte, si l'agent essuie 5 refus en une heure ou rapporte 3 échecs en
+24 h, à l'échéance et si le jeton n'est plus valable. Les demandes d'un autre agent sont refusées sans remplir
+ton journal (elles restent dans l'audit) et ne peuvent pas arrêter ton pilote à sa place.
 
-**Tout arrêter** : le bouton de l'écran Pilote (sans mot de passe), ou `/pilote stop` depuis une messagerie
-reliée. `/pilote` seul donne l'état.
+**Tout arrêter** : le bouton de l'écran Pilote (sans mot de passe), ou depuis une messagerie reliée
+`/pilote stop`, `/stop`, ou simplement « stop pilote », « arrête le pilote ». `/pilote` seul donne l'état.
+Conseil : restreins le jeton de ton agent à l'adresse IP de sa machine (Connecteurs › Agents IA) ; l'écran Pilote
+te le rappelle tant que ce n'est pas fait.
 
 Les scénarios adverses du banc d'essai de Minara (bait-and-switch, montant absurde ou trop précis, adresse
 empoisonnée, mauvais réseau, levier, essai suivi d'une exécution, insistance après refus…) sont rejoués contre

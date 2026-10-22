@@ -1134,8 +1134,7 @@ export type CryptoView = {
   tax: CryptoTax;
   guards: { level: "info" | "warning"; text: string }[];
   network_consent: boolean;
-  endpoints: Record<string, string>;
-  default_endpoints: Record<string, string>;
+  endpoints: Record<string, { custom: boolean; shown: string }>;
   chains: { key: string; label: string; native: string; tokens: string[] }[];
   catalog: { symbol: string; name: string }[];
   in_wealth: boolean;
@@ -1209,7 +1208,7 @@ export type PilotView = {
   disabled_at: string | null;
   disabled_reason: string | null;
   usage: { day_cents: number; month_cents: number; moves_day: number; loss_cents: number };
-  agents: { id: number; name: string }[];
+  agents: { id: number; name: string; ip_locked: boolean }[];
   no_crypto: boolean;
   scope_labels: Record<string, string>;
   every_labels: Record<string, string>;

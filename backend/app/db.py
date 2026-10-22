@@ -81,6 +81,21 @@ def make_engine(url: str) -> Engine:
     return engine
 
 
+def write_lock(db: Session) -> None:
+    """Prend tout de suite le verrou d'écriture de SQLite (BEGIN IMMEDIATE) pour la transaction en cours.
+
+    Sans lui, le pilote de Python ne commence une transaction qu'à la première écriture : deux requêtes parallèles
+    lisent le même état (plafonds, tête du journal d'audit), décident chacune de leur côté, puis écrivent — et
+    toutes passent. Avec lui, la seconde attend que la première ait validé, puis relit l'état à jour. Sans effet si
+    la transaction a déjà écrit (elle détient alors déjà le verrou), ni hors SQLite."""
+    conn = db.connection()
+    if conn.dialect.name != "sqlite":
+        return
+    raw = conn.connection.dbapi_connection
+    if raw is not None and not getattr(raw, "in_transaction", True):
+        conn.exec_driver_sql("BEGIN IMMEDIATE")
+
+
 def upsert(db: Session, model: type[Base], values: dict[str, Any], keys: list[str]) -> None:
     """INSERT … ON CONFLICT DO UPDATE : deux requêtes simultanées (un écran ouvert deux fois, la boucle de fond) ne
     se marchent plus dessus sur une ligne « une par jour »."""

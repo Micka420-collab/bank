@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time as clock
 from datetime import UTC, datetime, time, timedelta
 from types import SimpleNamespace
 from typing import Any
@@ -74,6 +75,8 @@ def ask(db: Session, tok: AgentToken, *, now: datetime = NOW, **kw: Any) -> dict
 
 def report(db: Session, tok: AgentToken, ticket: str, *, now: datetime = NOW, **kw: Any) -> dict[str, Any]:
     kw.setdefault("status", "executed")
+    if kw["status"] == "executed":
+        kw.setdefault("tx_ref", "0x" + "ab" * 32)  # exigé : sans preuve, pas d'« exécuté »
     return autonomy.report_move(db, token_id=tok.id, agent=tok.name, ticket=ticket, now=now, **kw)
 
 
@@ -88,12 +91,12 @@ def test_off_by_default_every_move_is_refused_and_logged(db: Session) -> None:
     tok = token(db)
     assert autonomy.status_for_agent(db, tok.id, now=NOW, today=TODAY)["enabled"] is False
     refused(ask(db, tok), "désactivé")
-    move = db.scalar(select(AutonomyMove))
-    assert move is not None and move.status == "refused" and move.reason == "Achat programmé"
+    # Un agent qui n'a pas la main ne remplit pas ton journal : le refus est tracé dans l'audit seulement.
+    assert db.scalar(select(AutonomyMove)) is None
     assert db.scalar(select(AuditLog).where(AuditLog.action == "autonomy.refused")) is not None
     # Rien n'est actif tant qu'on n'a pas activé : la vue le dit, et le dossier de l'agent aussi.
     v = autonomy.view(db, now=NOW, today=TODAY)
-    assert v["active"] is False and v["journal"][0]["status"] == "refused"
+    assert v["active"] is False and v["journal"] == []
     assert advisor.build_dossier(db, TODAY, "redacted")["mandate"]["autopilot"]["active"] is False
 
 
@@ -136,7 +139,7 @@ def test_enabling_needs_a_real_agent_a_duration_and_no_red_line(db: Session) -> 
                 "scopes": ["transfer"],
                 "destinations": [
                     {"label": "A", "chain": "ethereum", "address": LEDGER},
-                    {"label": "B", "chain": "base", "address": LEDGER},
+                    {"label": "B", "chain": "ethereum", "address": LEDGER.lower()},
                 ],
             },
             "deux fois",
@@ -302,7 +305,7 @@ def test_monthly_cap_and_failed_moves(db: Session) -> None:
         ok = ask(db, tok, amount_eur="25", now=at)
         report(db, tok, ok["ticket"], now=at)
     refused(ask(db, tok, amount_eur="5", now=NOW + timedelta(days=5)), "Plafond des 30 jours")
-    # Un échec rapporté libère le montant, mais compte comme une opération (pas de tentatives en boucle).
+    # Un échec rapporté compte comme une opération, et son montant reste dans les plafonds (prudence).
     tok2 = pilot(db, token(db, "hermes2"), max_moves_per_day=2, now=NOW + timedelta(days=40))
     for i in range(2):
         ok = ask(db, tok2, amount_eur="1", now=NOW + timedelta(days=40, minutes=i))
@@ -324,7 +327,8 @@ def test_an_unreported_move_counts_as_spent_and_stops_the_pilot(db: Session) -> 
     # La vérité peut encore entrer : le compte rendu tardif est accepté (une seule fois).
     out = report(db, tok, ok["ticket"], status="failed", now=later)
     assert out["late"] is True
-    assert autonomy.view(db, now=later, today=TODAY)["usage"]["day_cents"] == 0
+    # Un échec reste compté dans les plafonds : si l'agent se trompe (ou ment), rien ne dépasse ton cadre.
+    assert autonomy.view(db, now=later, today=TODAY)["usage"]["day_cents"] == 2_500
     with pytest.raises(autonomy.AutonomyError, match="déjà utilisé"):
         report(db, tok, ok["ticket"], now=later)
 
@@ -507,7 +511,7 @@ def test_api_needs_password_and_second_factor_but_stopping_needs_nothing(auth_cl
         s.commit()
         tok_id = tok.id
     view = auth_client.get("/api/autonomy").json()
-    assert view["active"] is False and view["agents"] == [{"id": tok_id, "name": "hermes"}]
+    assert view["active"] is False and view["agents"] == [{"id": tok_id, "name": "hermes", "ip_locked": False}]
     assert "hard_rules" in view and view["limits"]["per_op_cents"] == 2_500
     assert auth_client.put("/api/autonomy", json=_api_body(tok_id, password="faux")).status_code == 403
     bad = auth_client.put("/api/autonomy", json=_api_body(tok_id, days=0))
@@ -530,7 +534,7 @@ def test_api_needs_password_and_second_factor_but_stopping_needs_nothing(auth_cl
     assert off.status_code == 200 and off.json()["active"] is False
     with app.state.sessionmaker() as s:
         actions = [a for (a,) in s.execute(select(AuditLog.action).where(AuditLog.action.like("autonomy.%")))]
-        assert audit.verify_chain(s)
+        assert audit.verify_chain(s).ok
     assert "autonomy.denied" in actions and "autonomy.enabled" in actions and "autonomy.stopped" in actions
 
 
@@ -585,7 +589,7 @@ def test_mcp_round_trip_for_the_chosen_agent_only(auth_client: TestClient, app) 
     assert journal[0]["status"] == "refused" or journal[0]["status"] == "executed"
     assert any(m["status"] == "executed" and m["tx_ref"] == "0xabc" for m in journal)
     with app.state.sessionmaker() as s:
-        assert audit.verify_chain(s)
+        assert audit.verify_chain(s).ok
 
 
 def test_destinations_are_checksummed_and_lookalikes_refused(db: Session) -> None:
@@ -606,3 +610,232 @@ def test_destinations_are_checksummed_and_lookalikes_refused(db: Session) -> Non
     assert autonomy.view(db, now=NOW, today=TODAY)["destinations"][0]["address"] == LEDGER
     out = ask(db, tok, kind="transfer", asset="USDC", destination=LEDGER.lower())
     assert out["allowed"] is True and out["authorized"]["to_address"] == LEDGER
+
+
+# ------------------------------------------------------------------ concurrence
+def test_parallel_requests_never_exceed_the_caps(app, client, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Un agent qui lance plusieurs demandes en parallèle (outils appelés en même temps) : une seule passe."""
+    with app.state.sessionmaker() as s:
+        tok = pilot(s, per_op_cents=2_500, per_day_cents=2_500, max_moves_per_day=1)
+        s.commit()
+        tok_id, name = tok.id, tok.name
+    original = autonomy._usage
+
+    def slow_usage(*args: Any, **kwargs: Any) -> dict[str, int]:
+        out = original(*args, **kwargs)
+        clock.sleep(0.05)  # élargit la fenêtre entre la lecture des plafonds et l'écriture
+        return out
+
+    monkeypatch.setattr(autonomy, "_usage", slow_usage)
+    barrier = threading.Barrier(3)
+    results: list[dict[str, Any]] = []
+
+    def worker() -> None:
+        with app.state.sessionmaker() as s:
+            barrier.wait()
+            out = autonomy.request_move(
+                s, token_id=tok_id, agent=name, kind="buy", asset="BTC", amount_eur="25", reason="parallèle",
+                now=NOW, today=TODAY,
+            )  # fmt: skip
+            s.commit()
+            results.append(out)
+
+    threads = [threading.Thread(target=worker) for _ in range(3)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+    assert len(results) == 3
+    assert sum(1 for r in results if r["allowed"]) == 1, results
+    with app.state.sessionmaker() as s:
+        assert audit.verify_chain(s).ok, "les écritures parallèles ne cassent pas la chaîne d'audit"
+
+
+def test_parallel_reports_use_the_ticket_once(app, client) -> None:  # type: ignore[no-untyped-def]
+    with app.state.sessionmaker() as s:
+        tok = pilot(s)
+        ticket = ask(s, tok)["ticket"]
+        s.commit()
+        tok_id, name = tok.id, tok.name
+    barrier = threading.Barrier(2)
+    outcomes: list[str] = []
+
+    def worker() -> None:
+        with app.state.sessionmaker() as s:
+            barrier.wait()
+            try:
+                autonomy.report_move(s, token_id=tok_id, agent=name, ticket=ticket, status="executed", now=NOW,
+                                     tx_ref="0xabc")  # fmt: skip
+                s.commit()
+                outcomes.append("ok")
+            except autonomy.AutonomyError:
+                s.rollback()
+                outcomes.append("refusé")
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+    assert sorted(outcomes) == ["ok", "refusé"]
+
+
+# ------------------------------------------------------------------ revue de sécurité : les trous bouchés
+def test_executed_needs_a_proof_and_absurd_results_are_refused(db: Session) -> None:
+    tok = pilot(db)
+    ticket = ask(db, tok)["ticket"]
+    with pytest.raises(autonomy.AutonomyError, match="tx_ref obligatoire"):
+        autonomy.report_move(db, token_id=tok.id, agent=tok.name, ticket=ticket, status="executed", now=NOW)
+    with pytest.raises(autonomy.AutonomyError, match="proportions"):
+        report(db, tok, ticket, pnl_eur="-1e30")
+    with pytest.raises(autonomy.AutonomyError, match="proportions"):
+        report(db, tok, ticket, pnl_eur="Infinity")
+    with pytest.raises(autonomy.AutonomyError, match="tx_ref"):
+        report(db, tok, ticket, tx_ref="<script>")
+    assert report(db, tok, ticket, tx_ref="kraken:OQCLML-BW3P3-BUCMWZ")["recorded"] is True
+
+
+def test_zero_loss_means_stop_at_the_first_loss(db: Session) -> None:
+    tok = pilot(db, max_loss_cents=0)
+    gain = ask(db, tok, kind="sell")
+    assert report(db, tok, gain["ticket"], pnl_eur="4.20")["pilot_stopped"] is None
+    loss = ask(db, tok, kind="sell", now=NOW + timedelta(minutes=1))
+    out = report(db, tok, loss["ticket"], pnl_eur="-0.01", now=NOW + timedelta(minutes=1))
+    assert out["pilot_stopped"] == "Perte maximale atteinte" and autonomy.mandate(db).enabled is False
+
+
+def test_repeated_failures_stop_the_pilot(db: Session) -> None:
+    tok = pilot(db, max_moves_per_day=10)
+    outs = []
+    for i in range(autonomy.FAILED_BURST):
+        at = NOW + timedelta(minutes=i)
+        outs.append(report(db, tok, ask(db, tok, amount_eur="1", now=at)["ticket"], status="failed", now=at))
+    assert outs[0]["pilot_stopped"] is None
+    assert "échecs" in (outs[-1]["pilot_stopped"] or "") and autonomy.mandate(db).enabled is False
+
+
+def test_a_red_line_naming_one_asset_blocks_that_asset_only(db: Session) -> None:
+    tok = pilot(db, assets=["BTC", "ETH", "USDC"])
+    advisor.set_answer(db, "red_lines", [{"rule": "Pas d'Ethereum ni de stablecoins"}], source="user:micka")
+    assert autonomy.blocked_assets(db) >= {"ETH", "USDC", "EURC", "USDT"} and "BTC" not in autonomy.blocked_assets(db)
+    refused(ask(db, tok, asset="ETH"), "Ligne rouge")
+    refused(ask(db, tok, kind="swap", asset="BTC", to_asset="USDC"), "Ligne rouge")
+    assert ask(db, tok, asset="BTC", now=NOW + timedelta(minutes=1))["allowed"] is True
+    with pytest.raises(autonomy.AutonomyError, match="lignes rouges excluent ETH"):
+        pilot(db, tok, assets=["ETH"])
+    # « ton » en minuscules n'est pas le jeton TON : un symbole ne compte qu'écrit en capitales.
+    advisor.set_answer(db, "red_lines", [{"rule": "Rien qui mette ton matelas en danger"}], source="user:micka")
+    assert autonomy.blocked_assets(db) == set()
+
+
+def test_the_ticket_pins_a_maximum_quantity_from_a_fresh_price(db: Session) -> None:
+    from app.models import CryptoPrice
+
+    tok = pilot(db, max_moves_per_day=5, per_day_cents=10_000)
+    blind = ask(db, tok)["authorized"]
+    assert blind["max_quantity"] is None and "cours" in blind["quantity_note"]
+    db.add(CryptoPrice(asset="BTC", eur="60000", change_24h="1.00", fetched_at=NOW - timedelta(minutes=5)))
+    db.flush()
+    pinned = ask(db, tok, now=NOW + timedelta(minutes=1))["authorized"]
+    assert pinned["max_quantity"] == "0.00034333", "20 € ÷ 60 000 € × 1,03, arrondi vers le bas au satoshi"
+    old = db.get(CryptoPrice, "BTC")
+    assert old is not None
+    old.fetched_at = NOW - timedelta(hours=3)
+    db.flush()
+    assert ask(db, tok, now=NOW + timedelta(minutes=2))["authorized"]["max_quantity"] is None, "cours trop ancien"
+
+
+def test_another_agent_cannot_fill_the_journal_or_trip_the_pilot(db: Session) -> None:
+    tok = pilot(db)
+    stranger = token(db, "intrus")
+    for i in range(autonomy.REFUSAL_BURST + 2):
+        refused(ask(db, stranger, now=NOW + timedelta(minutes=i)), "pas celui")
+    assert db.scalar(select(AutonomyMove)) is None, "rien dans ton journal"
+    assert autonomy.mandate(db).enabled is True, "un intrus ne peut pas arrêter (ni épuiser) le pilote"
+    assert ask(db, tok, now=NOW + timedelta(minutes=30))["allowed"] is True
+
+
+def test_a_lookalike_destination_is_refused_even_under_the_same_name(db: Session) -> None:
+    tok = token(db)
+    twin = eip55(LEDGER[:6].lower() + ("0" if LEDGER[6] != "0" else "1") + LEDGER[7:].lower())
+    same_name = [
+        {"label": "Ledger", "chain": "ethereum", "address": LEDGER},
+        {"label": "Ledger", "chain": "base", "address": twin},
+    ]
+    with pytest.raises(autonomy.AutonomyError, match="empoisonnement"):
+        pilot(db, tok, scopes=["transfer"], destinations=same_name)
+    # La même adresse sur deux réseaux, c'est permis (deux destinations distinctes).
+    both = [
+        {"label": "Ledger", "chain": "ethereum", "address": LEDGER},
+        {"label": "Ledger Base", "chain": "base", "address": LEDGER},
+    ]
+    pilot(db, tok, scopes=["transfer"], destinations=both)
+    assert len(autonomy.view(db, now=NOW, today=TODAY)["destinations"]) == 2
+    with pytest.raises(autonomy.AutonomyError, match="secret"):
+        pilot(db, tok, scopes=["transfer"], destinations=[{**both[0], "label": " ".join(["abandon"] * 11 + ["about"])}])
+
+
+def test_the_background_sweep_stops_an_unreported_move_without_anyone_looking(db: Session) -> None:
+    tok = pilot(db)
+    ask(db, tok)
+    assert autonomy.sweep(db, NOW + timedelta(minutes=5)) is False, "encore dans les temps"
+    assert autonomy.sweep(db, NOW + timedelta(minutes=11)) is True
+    assert autonomy.mandate(db).enabled is False
+    assert autonomy.sweep(db, NOW + timedelta(minutes=12)) is False, "rien de neuf"
+
+
+def test_stop_from_chat_without_knowing_the_command(db: Session) -> None:
+    pilot(db)
+    for phrase in ("stop pilote", "Arrête le pilote !", "pilote off", "coupe le pilote automatique"):
+        assert channels._command(phrase) == ("pilote", "stop"), phrase
+    for phrase in ("si j'arrête le pilote, que se passe-t-il ?", "le pilote a-t-il acheté du bitcoin cette semaine"):
+        assert channels._command(phrase) is None, phrase
+    assert channels._command("stop") == ("stop", "") and channels._command("/stop") == ("stop", "")
+    link = SimpleNamespace(platform="signal", id=1, notify=True)
+    cfg = SimpleNamespace(privacy="redacted")
+    common: dict[str, Any] = {"now": NOW, "today": TODAY, "public_url": "https://bank.example"}
+    (text,) = channels._run_command(db, cfg, link, "stop", "", **common)  # type: ignore[arg-type]
+    assert "Pilote automatique arrêté" in text and "/pause" in text
+    assert autonomy.mandate(db).enabled is False and link.notify is True, "les alertes restent : tu dois savoir"
+    (text,) = channels._run_command(db, cfg, link, "stop", "", **common)  # type: ignore[arg-type]
+    assert "pause" in text and link.notify is False, "pilote déjà arrêté : « stop » met les alertes en pause"
+
+
+def test_api_consumes_the_second_factor_even_when_the_frame_is_refused(auth_client: TestClient, app) -> None:  # type: ignore[no-untyped-def]
+    with app.state.sessionmaker() as s:
+        tok = token(s)
+        secret = pyotp.random_base32()
+        user = s.scalar(select(User))
+        assert user is not None
+        user.totp_secret, user.totp_enabled = secret, True
+        s.commit()
+        tok_id = tok.id
+    code = pyotp.TOTP(secret).now()
+    bad = auth_client.put("/api/autonomy", json=_api_body(tok_id, code=code, days=0))
+    assert bad.status_code == 422
+    assert auth_client.put("/api/autonomy", json=_api_body(tok_id, code=code)).status_code == 403, "code déjà servi"
+
+
+def test_mcp_wakes_the_alerts_only_when_there_is_news(auth_client: TestClient, app) -> None:  # type: ignore[no-untyped-def]
+    with app.state.sessionmaker() as s:
+        tok, raw = issue_agent_token(s, name="hermes", scopes=PRESETS["conseiller"])
+        s.flush()
+        pilot(s, tok, now=utcnow())
+        s.commit()
+    woken: list[int] = []
+    saved = app.state.channels
+    app.state.channels = SimpleNamespace(nudge_threadsafe=lambda: woken.append(1))
+    try:
+        agent = Agent(auth_client, raw)
+        tools = {t["name"]: t for t in agent.rpc("tools/list")["tools"]}
+        assert tools["autonomy_status"]["annotations"]["readOnlyHint"] is False, "le statut fait aussi le ménage"
+        assert (
+            agent.ok("request_autonomous_move", kind="buy", asset="DOGE", amount_eur=5, reason="x")["allowed"] is False
+        )
+        assert woken == [], "un refus ordinaire ne réveille personne"
+        ok = agent.ok("request_autonomous_move", kind="buy", asset="BTC", amount_eur=5, reason="DCA")
+        assert ok["allowed"] is True and woken == [1]
+        agent.ok("report_autonomous_move", ticket=ok["ticket"], status="executed", tx_ref="0xfeed")
+        assert woken == [1, 1]
+    finally:
+        app.state.channels = saved

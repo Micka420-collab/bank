@@ -660,19 +660,20 @@ HELP = (
     "- /demarches : où en sont tes démarches\n"
     "- /nouveau : repartir d'une conversation vierge\n"
     "- /pause ou /reprendre : mes alertes ici\n"
-    "- /pilote : où en est le pilote automatique (/pilote stop : tout arrêter)\n"
+    "- /pilote : où en est le pilote automatique (/pilote stop ou /stop : tout arrêter)\n"
     "- /delier : ne plus me parler depuis ce compte\n\n"
     "Rien ne se valide ici : transmettre, confirmer, régler, c'est dans l'application."
 )
-_BARE_COMMANDS = {"aide", "help", "budget", "missions", "demarches", "pause", "reprendre", "nouveau", "pilote"}
-_PILOT_STOP = {"stop", "off", "arret", "arrete", "arreter", "coupe", "couper"}
+_BARE_COMMANDS = {"aide", "help", "budget", "missions", "demarches", "pause", "reprendre", "nouveau", "pilote", "stop"}
+_PILOT_STOP = {"stop", "off", "arret", "arrete", "arretes", "arreter", "coupe", "coupes", "couper", "desactive"}
+_PILOT_WORDS = {"pilote", "pilot", "autopilot", "autopilote"}
+_FILLERS = {"le", "la", "l", "mon", "ton", "automatique", "auto", "tout", "stp", "svp", "vite", "maintenant"}
 _ALIASES = {
     "help": "aide",
     "start": "aide",
     "menu": "aide",
     "new": "nouveau",
     "reset": "nouveau",
-    "stop": "pause",
     "resume": "reprendre",
     "unlink": "delier",
     "mission": "missions",
@@ -686,12 +687,23 @@ def _fold(word: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", word.lower()) if unicodedata.category(c) != "Mn")
 
 
+def _is_pilot_stop(text: str) -> bool:
+    """« stop pilote », « arrête le pilote ! », « pilote off » : arrêter doit marcher sans connaître la commande.
+    Une question (« si j'arrête le pilote ? ») ou une longue phrase n'arrête rien : on y répond normalement."""
+    if "?" in text or len(text) > 60:
+        return False
+    words = [w for w in re.split(r"[^\w]+", _fold(text)) if w and w not in _FILLERS]
+    return 2 <= len(words) <= 3 and bool(set(words) & _PILOT_WORDS) and bool(set(words) & _PILOT_STOP)
+
+
 def _command(text: str) -> tuple[str, str] | None:
     stripped = text.strip()
     if stripped.startswith("/"):
         head, _, args = stripped[1:].partition(" ")
         name = _fold(head.split("@", 1)[0])
     else:
+        if _is_pilot_stop(stripped):
+            return "pilote", "stop"
         name, args = _fold(stripped.rstrip("!?. ")), ""
         if name not in _BARE_COMMANDS:
             return None
@@ -741,6 +753,15 @@ def _run_command(
             assistant_service.close_conversation(db, conversation_id=link.conversation_id)
             link.conversation_id = None
         return ["C'est reparti d'une page blanche ✨ (ce que j'ai appris de toi reste, si la mémoire est activée)."]
+    if name == "stop":
+        # « stop » dans l'urgence : si le pilote tourne, c'est lui qu'on arrête d'abord ; sinon, les alertes.
+        if autonomy.mandate(db).enabled:
+            autonomy.stop(db, actor=f"canal:{link.platform}", now=now, reason="Arrêté par toi (messagerie)")
+            return [
+                "🛑 Pilote automatique arrêté : plus rien ne bouge sans toi.\n"
+                "Tes alertes restent actives ici ; pour les mettre en pause aussi : /pause."
+            ]
+        name = "pause"
     if name == "pause":
         link.notify = False
         return ["Alertes en pause ici. Écris /reprendre pour les réactiver."]

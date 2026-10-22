@@ -3,18 +3,20 @@ voir le journal, et tout arrêter d'un geste (sans mot de passe : arrêter ne do
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import AuthDep, DbDep, TodayDep, client_ip
-from app.db import utcnow
+from app.db import utcnow, write_lock
 from app.security import audit
 from app.security.auth import verify_password, verify_totp
 from app.services import autonomy
 
 router = APIRouter(prefix="/api/autonomy", tags=["autonomy"])
+log = logging.getLogger("bank.autonomy")
 
 Symbol = Annotated[str, Field(min_length=2, max_length=12)]
 
@@ -68,12 +70,16 @@ def configure(body: ConfigIn, request: Request, ctx: AuthDep, db: DbDep, today: 
         db.commit()
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Mot de passe incorrect")
     if ctx.user.totp_enabled and ctx.user.totp_secret:
-        step = verify_totp(ctx.user.totp_secret, body.code or "", ctx.user.totp_last_step)
+        # Verrou d'écriture puis relecture : deux requêtes avec le même code ne passent pas toutes les deux.
+        write_lock(db)
+        db.refresh(ctx.user)
+        step = verify_totp(ctx.user.totp_secret or "", body.code or "", ctx.user.totp_last_step)
         if step is None:
             audit.record(db, ctx.user.username, "autonomy.denied", why="totp")
             db.commit()
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Code de double authentification requis ou incorrect")
-        ctx.user.totp_last_step = step  # pas de rejeu du même code
+        ctx.user.totp_last_step = step
+        db.commit()  # le code est consommé même si le cadre est ensuite refusé : pas de rejeu
     payload = body.model_dump(exclude={"password", "code"})
     try:
         autonomy.configure(db, payload, actor=ctx.user.username, now=utcnow())
@@ -86,4 +92,10 @@ def configure(body: ConfigIn, request: Request, ctx: AuthDep, db: DbDep, today: 
 @router.post("/stop")
 def stop(ctx: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
     autonomy.stop(db, actor=ctx.user.username, now=utcnow())
-    return autonomy.view(db, now=utcnow(), today=today)
+    db.commit()  # l'arrêt est acquis avant tout le reste : rien après ne peut l'annuler
+    try:
+        return autonomy.view(db, now=utcnow(), today=today)
+    except Exception:
+        log.exception("pilote arrêté, mais la vue n'a pas pu être construite")
+        db.rollback()
+        return {"active": False, "enabled": False, "disabled_reason": "Arrêté par toi"}

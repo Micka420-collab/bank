@@ -15,12 +15,13 @@ Garanties
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Callable
 from dataclasses import asdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Protocol
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
@@ -31,17 +32,20 @@ from app.domain.money import format_eur
 from app.domain.wealth import emergency_fund, net_worth
 from app.models import CryptoHolding, CryptoPrice, CryptoSnapshot, CryptoTaxEvent, CryptoWallet
 from app.security import audit
+from app.security.crypto import CryptoError as KeyringError
 from app.security.crypto import get_keyring
 from app.security.netfetch import FetchError, check_url, get_json, post_json
 from app.services import analytics, autonomy, consents
 from app.services.crypto_value import holdings_value, latest_prices
 from app.services.settings_store import get_setting, set_setting
 
+log = logging.getLogger("bank.crypto")
 CONSENT = "crypto_network"
 PRICE_TTL = timedelta(minutes=10)
 STALE_PRICE = timedelta(hours=24)
 MAX_WALLETS = 20
 MAX_HOLDINGS = 100
+MAX_PRICE_EUR = Decimal(1_000_000_000)
 
 
 class CryptoNet(Protocol):
@@ -67,36 +71,96 @@ NetFactory = Callable[[], CryptoNet]
 
 
 # ------------------------------------------------------------------ réglages
+# Un nœud perso porte souvent une clé d'accès dans son adresse (…/v2/<clé>) : il est chiffré en base, et l'API
+# ne le rend jamais en entier (schéma et hôte seulement).
+_ENDPOINT_CTX = "crypto.endpoint"
+
+
+def _custom_endpoints(db: Session) -> dict[str, str]:
+    out: dict[str, str] = {}
+    keyring = get_keyring()
+    for chain, value in (get_setting(db, "crypto_endpoints") or {}).items():
+        if chain not in dc.DEFAULT_ENDPOINTS:
+            continue
+        if isinstance(value, dict) and isinstance(value.get("enc"), str):
+            try:
+                out[chain] = keyring.decrypt(value["enc"], f"{_ENDPOINT_CTX}:{chain}")
+            except KeyringError:  # clé tournée ou valeur abîmée : retour au nœud public, sans rien afficher d'autre
+                log.warning("nœud perso illisible pour %s : nœud public utilisé", chain)
+        elif isinstance(value, str) and value.startswith("https://"):
+            out[chain] = value  # ancienne valeur en clair : rechiffrée à la prochaine écriture
+    return out
+
+
 def endpoints(db: Session) -> dict[str, str]:
-    custom = get_setting(db, "crypto_endpoints") or {}
-    return {k: str(custom.get(k) or v) for k, v in dc.DEFAULT_ENDPOINTS.items()}
+    """Les adresses complètes, pour la relève seulement (jamais renvoyées par l'API)."""
+    custom = _custom_endpoints(db)
+    return {k: custom.get(k) or v for k, v in dc.DEFAULT_ENDPOINTS.items()}
 
 
-def set_endpoints(db: Session, values: dict[str, str | None], *, actor: str) -> dict[str, str]:
+def mask_endpoint(url: str) -> str:
+    parts = urlsplit(url)
+    shown = f"{parts.scheme}://{parts.hostname or ''}"
+    return shown + ("/…" if (parts.path not in ("", "/") or parts.query) else "")
+
+
+def endpoints_view(db: Session) -> dict[str, dict[str, Any]]:
+    custom = _custom_endpoints(db)
+    return {
+        k: {"custom": k in custom, "shown": mask_endpoint(custom[k]) if k in custom else v}
+        for k, v in dc.DEFAULT_ENDPOINTS.items()
+    }
+
+
+def set_endpoints(db: Session, values: dict[str, str | None], *, actor: str) -> dict[str, dict[str, Any]]:
     """Ton propre nœud (le plus discret) ou celui par défaut (valeur vide)."""
-    custom = dict(get_setting(db, "crypto_endpoints") or {})
+    keyring = get_keyring()
+    stored = {
+        k: {"enc": keyring.encrypt(v, f"{_ENDPOINT_CTX}:{k}")} for k, v in _custom_endpoints(db).items()
+    }  # rechiffre aussi d'anciennes valeurs en clair
     for chain, url in values.items():
         if chain not in dc.DEFAULT_ENDPOINTS:
             raise dc.CryptoError(f"Réseau inconnu : {chain}")
         if not url:
-            custom.pop(chain, None)
+            stored.pop(chain, None)
             continue
         url = url.strip().rstrip("/")
+        if dc.secret_kind(url):
+            raise dc.CryptoError(
+                "Cette adresse contient un secret : ne colle jamais ta phrase de récupération ni ta clé"
+            )
         try:
             check_url(url, resolver=lambda _host: ["93.184.216.34"])  # forme seulement : l'hôte est revérifié à l'appel
         except FetchError as exc:
             raise dc.CryptoError(f"{chain} : {exc}") from None
-        custom[chain] = url
-    set_setting(db, "crypto_endpoints", custom)
-    audit.record(db, actor, "crypto.endpoints", chains=sorted(custom))
-    return endpoints(db)
+        stored[chain] = {"enc": keyring.encrypt(url, f"{_ENDPOINT_CTX}:{chain}")}
+    set_setting(db, "crypto_endpoints", stored)
+    audit.record(db, actor, "crypto.endpoints", chains=sorted(stored))
+    return endpoints_view(db)
 
 
 # ------------------------------------------------------------------ adresses suivies
 def _index(chain: str, address: str) -> str:
-    family = dc.CHAINS[chain].family
-    norm = address.lower() if family == "evm" else address
-    return get_keyring().blind_index(f"{family}:{norm}", "crypto.address")
+    """Une adresse par réseau : la même adresse EVM sur Ethereum et sur Base, ce sont deux soldes distincts."""
+    norm = address.lower() if dc.CHAINS[chain].family == "evm" else address
+    return get_keyring().blind_index(f"{chain}:{norm}", "crypto.address")
+
+
+def upgrade(db: Session) -> int:
+    """Au démarrage : index des adresses recalculés (désormais par réseau) et anciens nœuds perso rechiffrés."""
+    changed = 0
+    for w in db.scalars(select(CryptoWallet)):
+        if w.chain in dc.CHAINS:
+            index = _index(w.chain, w.address)
+            if w.address_index != index:
+                w.address_index, changed = index, changed + 1
+    raw = get_setting(db, "crypto_endpoints") or {}
+    if any(isinstance(v, str) for v in raw.values()):
+        keyring = get_keyring()
+        stored = {k: {"enc": keyring.encrypt(v, f"{_ENDPOINT_CTX}:{k}")} for k, v in _custom_endpoints(db).items()}
+        set_setting(db, "crypto_endpoints", stored)
+        changed += 1
+    return changed
 
 
 def known_addresses(db: Session) -> list[tuple[str, str]]:
@@ -278,7 +342,9 @@ def sync(db: Session, *, net: CryptoNet, now: datetime, actor: str) -> dict[str,
     for wallet in list(db.scalars(select(CryptoWallet).order_by(CryptoWallet.id))):
         try:
             found = _wallet_balances(net, wallet, urls)
-        except (FetchError, ValueError, KeyError, TypeError, IndexError, InvalidOperation) as exc:
+            if any(not q.is_finite() or q < 0 or q > dc.MAX_QUANTITY for q in found.values()):
+                raise ValueError("solde hors de proportion")  # nœud menteur ou abîmé : on garde l'ancien solde
+        except (FetchError, ValueError, KeyError, TypeError, IndexError, AttributeError, InvalidOperation) as exc:
             wallet.sync_error = (str(exc) if isinstance(exc, FetchError) else "Réponse inattendue du nœud")[:200]
             failed += 1
             continue
@@ -337,10 +403,12 @@ def refresh_prices(db: Session, *, net: CryptoNet, now: datetime, force: bool = 
             price = Decimal(str(item["eur"]))
             change = item.get("eur_24h_change")
             change_text = f"{Decimal(str(change)):.2f}" if change is not None else None
-        except (InvalidOperation, ValueError):
+        except (InvalidOperation, ValueError, TypeError):
             continue
-        if not price.is_finite() or price < 0:
-            continue
+        if not price.is_finite() or not 0 <= price <= MAX_PRICE_EUR:
+            continue  # un cours absurde ne gonfle jamais ton patrimoine
+        if change_text is not None and not (Decimal(change_text).is_finite() and abs(Decimal(change_text)) <= 10_000):
+            change_text = None
         row = db.get(CryptoPrice, sym) or CryptoPrice(asset=sym)
         row.eur, row.change_24h, row.fetched_at = format(price, "f"), change_text, now
         db.add(row)
@@ -438,8 +506,13 @@ def view(db: Session, *, today: date, now: datetime) -> dict[str, Any]:
     change = 0
     for a in assets:
         if a["change_24h"] is not None and a["value_cents"]:
-            pct = Decimal(a["change_24h"])
-            before = Decimal(a["value_cents"]) / (1 + pct / 100) if pct > -100 else Decimal(0)
+            try:
+                pct = Decimal(a["change_24h"])
+            except InvalidOperation:
+                continue
+            if not pct.is_finite() or not -100 < pct <= 10_000:
+                continue
+            before = Decimal(a["value_cents"]) / (1 + pct / 100)
             change += int(Decimal(a["value_cents"]) - before)
     manual = [
         {
@@ -476,15 +549,14 @@ def view(db: Session, *, today: date, now: datetime) -> dict[str, Any]:
         "tax": year,
         "guards": _guards(db, today, total),
         "network_consent": consents.granted(db, CONSENT),
-        "endpoints": endpoints(db),
-        "default_endpoints": dc.DEFAULT_ENDPOINTS,
+        "endpoints": endpoints_view(db),
         "chains": [
             {"key": c.key, "label": c.label, "native": c.native, "tokens": [t.symbol for t in c.tokens]}
             for c in dc.CHAINS.values()
         ],
         "catalog": [{"symbol": a.symbol, "name": a.name} for a in dc.ASSETS.values()],
         "in_wealth": bool(get_setting(db, "crypto_in_wealth")),
-        "autopilot": autonomy.summary(db, now),
+        "autopilot": autonomy.summary(db, now, detail=True),
         "resources": list(dc.RESOURCES),
         "disclaimer": "Suivi et repères informatifs. Bank n'est pas un conseiller en investissement ; la crypto peut "
         "perdre une grande partie de sa valeur.",
@@ -617,7 +689,7 @@ def agent_view(db: Session, *, today: date, now: datetime, privacy: str) -> dict
             for k in ("year", "total_price_cents", "exempt", "net_gain_cents", "taxable_cents", "estimated_tax_cents")
         }
         | {"reminders": v["tax"]["reminders"], "rate_note": (v["tax"]["rate"] or {}).get("note")},
-        "autopilot": v["autopilot"],
+        "autopilot": autonomy.summary(db, now),
         "rules": [
             "Lecture seule : Bank ne détient aucune clé et ne déplace rien.",
             "Jamais de promesse de rendement ; rappelle que la crypto peut perdre une grande partie de sa valeur.",

@@ -608,18 +608,20 @@ function Taxes({ initial, currentValue }: { initial: CryptoTax; currentValue: nu
 
 // ------------------------------------------------------------------ réglages
 function Settings({ data, onChange }: { data: CryptoView; onChange: (v: CryptoView) => void }) {
-  const [nodes, setNodes] = useState<Record<string, string>>(() => {
-    const custom: Record<string, string> = {};
-    for (const [k, url] of Object.entries(data.endpoints)) if (url !== data.default_endpoints[k]) custom[k] = url;
-    return custom;
-  });
+  // Un nœud perso n'est jamais renvoyé en entier (il porte souvent une clé d'accès) : on en saisit un nouveau,
+  // on ne réécrit pas l'ancien.
+  const [nodes, setNodes] = useState<Record<string, string>>({});
+  const [password, setPassword] = useState("");
   const [busy, error, run] = useAsyncAction();
   const toast = useToast();
-  const chains = useMemo(() => Object.keys(data.default_endpoints), [data.default_endpoints]);
-  const save = (body: Record<string, unknown>) =>
+  const chains = useMemo(() => Object.keys(data.endpoints), [data.endpoints]);
+  const typed = Object.fromEntries(Object.entries(nodes).filter(([, v]) => v.trim()));
+  const save = (body: Record<string, unknown>, done = "Enregistré.") =>
     run(async () => {
       onChange(await api<CryptoView>("/api/crypto/settings", { method: "PUT", body }));
-      toast("Enregistré.");
+      setNodes({});
+      setPassword("");
+      toast(done);
     });
   return (
     <details className="card cx-details" style={{ marginTop: "1rem" }}>
@@ -628,15 +630,47 @@ function Settings({ data, onChange }: { data: CryptoView; onChange: (v: CryptoVi
         <input type="checkbox" checked={data.in_wealth} onChange={(e) => void save({ in_wealth: e.target.checked })} />
         Compter ma crypto dans mon patrimoine (jamais dans l'argent disponible)
       </label>
-      <p className="muted" style={{ marginTop: "1rem" }}>Ton propre nœud, en https, est le plus discret : personne d'autre ne voit tes adresses. Laisse vide pour le nœud public.</p>
-      <form className="form-grid" onSubmit={(e) => { e.preventDefault(); void save({ endpoints: Object.fromEntries(chains.map((c) => [c, nodes[c] || null])) }); }}>
-        {chains.map((c) => (
-          <Field key={c} label={data.chains.find((x) => x.key === c)?.label ?? c}>
-            <input value={nodes[c] ?? ""} placeholder={data.default_endpoints[c]} onChange={(e) => setNodes({ ...nodes, [c]: e.target.value })} inputMode="url" />
+      <p className="muted" style={{ marginTop: "1rem" }}>
+        Ton propre nœud, en https, est le plus discret : personne d'autre ne voit tes adresses. Son adresse est
+        chiffrée et n'est plus jamais affichée en entier.
+      </p>
+      <form
+        className="form-grid"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (Object.keys(typed).length) void save({ endpoints: typed, password }, "Nœuds enregistrés.");
+        }}
+      >
+        {chains.map((c) => {
+          const now = data.endpoints[c] ?? { custom: false, shown: "" };
+          return (
+            <Field key={c} label={data.chains.find((x) => x.key === c)?.label ?? c} hint={now.custom ? `Ton nœud : ${now.shown}` : undefined}>
+              <div className="cx-node">
+                <input
+                  value={nodes[c] ?? ""}
+                  placeholder={now.custom ? "Remplacer par…" : now.shown}
+                  onChange={(e) => setNodes({ ...nodes, [c]: e.target.value })}
+                  inputMode="url"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                {now.custom && (
+                  <button type="button" className="btn quiet small" disabled={busy}
+                    onClick={() => void save({ endpoints: { [c]: null } }, "Retour au nœud public.")}>
+                    Nœud public
+                  </button>
+                )}
+              </div>
+            </Field>
+          );
+        })}
+        {Object.keys(typed).length > 0 && (
+          <Field label="Ton mot de passe" hint="Envoyer tes adresses à un autre nœud se confirme.">
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
           </Field>
-        ))}
+        )}
         {error && <ErrorNote message={error} />}
-        <button className={`btn quiet${busy ? " is-loading" : ""}`} disabled={busy}>Enregistrer les nœuds</button>
+        <button className={`btn quiet${busy ? " is-loading" : ""}`} disabled={busy || !Object.keys(typed).length}>Enregistrer les nœuds</button>
       </form>
     </details>
   );

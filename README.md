@@ -35,7 +35,7 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
 - **Pilote automatique** (éteint par défaut) : ton agent peut acheter ou envoyer seul, mais seulement dans ton
   cadre — un jeton précis, tes actifs, tes adresses, tes consignes, des plafonds glissants, une perte maximale,
   une durée ; Bank autorise ou refuse chaque mouvement avant qu'il parte et coupe tout à la première anomalie.
-  « Tout arrêter » d'un geste, ou `/pilote stop` depuis ta messagerie.
+  « Tout arrêter » d'un geste, ou `/pilote stop` (voire « stop pilote ») depuis ta messagerie.
 - **Simple et ludique** : cinq destinations (Aujourd'hui, Opérations, Gagner, Papiers, Épargne), des
   missions avec leur récompense, une tirelire qui se remplit avec ce que Bank t'a vraiment fait récupérer.
 - **Une interface de produit fini** : design system « Encre claire » (clair et sombre, choix dans Réglages),
@@ -326,13 +326,15 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 811 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+Qualité au moment de la livraison : 825 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
 aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, scénarios adverses du
-banc d'essai crypto de Minara rejoués contre le pilote automatique, Keccak-256 vérifié contre une implémentation de
-référence, intégration OpenFisca réelle), couverture 92 %, 97 tests front (parcours de première ouverture, coffre,
+banc d'essai crypto de Minara rejoués contre le pilote automatique, demandes simultanées qui ne passent jamais
+ensemble sous un plafond, Keccak-256 vérifié contre une implémentation de
+référence, intégration OpenFisca réelle), couverture 91 %, 98 tests front (parcours de première ouverture, coffre,
 démarches, opportunités, veille, assistant, crypto, pilote, erreurs qui disent quoi faire), mypy strict sans erreur,
-ruff et bandit propres, `pip-audit` et `npm audit` sans vulnérabilité connue, aucune erreur de console ni débordement
+ruff et bandit propres, revue de sécurité indépendante du pilote et de la crypto (ses constats corrigés et
+testés), `pip-audit` et `npm audit` sans vulnérabilité connue, aucune erreur de console ni débordement
 horizontal à 390 px (vérifié par Playwright), et un parcours complet dans Chromium à travers les conteneurs durcis,
 derrière la CSP de production et un frontal TLS : accueil, seize écrans, démarche ouverte, phrase de récupération
 arrêtée dans le navigateur, vérificateur d'arnaques, thème sombre — aucune violation CSP, cookies

@@ -263,7 +263,9 @@ def test_wallets_are_unique_checksummed_and_lookalikes_need_confirmation(db: Ses
     w = svc.add_wallet(db, label="Ledger", chain="ethereum", address=ETH_ADDR.lower(), actor="micka")
     assert w.address == ETH_ADDR, "rangée avec sa somme de contrôle"
     with pytest.raises(dc.CryptoError, match="déjà suivie"):
-        svc.add_wallet(db, label="Encore", chain="base", address=ETH_ADDR, actor="micka")  # même adresse EVM
+        svc.add_wallet(db, label="Encore", chain="ethereum", address=ETH_ADDR.lower(), actor="micka")
+    # La même adresse EVM sur un autre réseau, c'est un autre solde : elle se suit à part.
+    assert svc.add_wallet(db, label="Ledger Base", chain="base", address=ETH_ADDR, actor="micka").chain == "base"
     twin = ETH_ADDR[:6] + ("0" if ETH_ADDR[6] != "0" else "1") + ETH_ADDR[7:]
     twin = dc.eip55(twin.lower())
     with pytest.raises(dc.CryptoError, match="empoisonnement"):
@@ -325,6 +327,59 @@ def test_a_broken_node_keeps_the_last_balances_and_says_so(db: Session) -> None:
     assert eth is not None and eth.quantity == "2"
 
 
+class LyingNet(FakeNet):
+    """Un nœud et une source de cours qui mentent : soldes et cours absurdes, variation infinie."""
+
+    def get_json(self, url: str) -> Any:
+        if "coingecko" in url:
+            return {"ethereum": {"eur": 1e30, "eur_24h_change": 2.5}, "usd-coin": {"eur": 0.95, "eur_24h_change": 1e9}}
+        return super().get_json(url)
+
+    def post_json(self, url: str, payload: Any) -> Any:
+        out = super().post_json(url, payload)
+        for r in out:
+            if isinstance(r, dict) and r.get("id") == 0 and "solana" not in url:
+                r["result"] = "0x" + "f" * 70  # bien plus que tout l'ether qui existe
+        return out
+
+
+def test_a_lying_node_or_price_feed_never_inflates_the_portfolio(db: Session) -> None:
+    _consent(db)
+    w = svc.add_wallet(db, label="Ledger", chain="ethereum", address=ETH_ADDR, actor="micka")
+    svc.sync(db, net=FakeNet(), now=NOW, actor="micka")
+    before = svc.view(db, today=NOW.date(), now=NOW)["total_cents"]
+    out = svc.sync(db, net=LyingNet(), now=NOW + timedelta(hours=1), actor="micka")
+    assert out["wallets_failed"] == 1 and w.sync_error == "Réponse inattendue du nœud"
+    eth = db.scalar(select(CryptoHolding).where(CryptoHolding.wallet_id == w.id, CryptoHolding.asset == "ETH"))
+    assert eth is not None and eth.quantity == "2", "l'ancien solde est gardé"
+    from app.models import CryptoPrice
+
+    eth_price, usdc = db.get(CryptoPrice, "ETH"), db.get(CryptoPrice, "USDC")
+    assert eth_price is not None and eth_price.eur == "3000.5", "un cours absurde est ignoré : le dernier connu reste"
+    assert usdc is not None and usdc.eur == "0.95" and usdc.change_24h is None, "variation absurde écartée"
+    after = svc.view(db, today=NOW.date(), now=NOW + timedelta(hours=1))
+    assert after["total_cents"] <= before * 2
+    # Même une valeur abîmée en base ne déborde jamais : plafonnée.
+    assert dc.value_cents(Decimal("1e15"), Decimal("1e9")) == dc.MAX_VALUE_CENTS
+    assert dc.value_cents(Decimal(1), Decimal("NaN")) == 0
+
+
+def test_startup_upgrade_reindexes_wallets_and_encrypts_old_nodes(db: Session) -> None:
+    w = svc.add_wallet(db, label="Ledger", chain="ethereum", address=ETH_ADDR, actor="micka")
+    w.address_index = "ancien-index-par-famille"
+    set_setting(db, "crypto_endpoints", {"solana": "https://sol.example.org/key/abc123"})
+    db.flush()
+    assert svc.upgrade(db) == 2
+    assert svc.endpoints(db)["solana"] == "https://sol.example.org/key/abc123"
+    from sqlalchemy import text
+
+    raw = " ".join(db.execute(text("SELECT value FROM app_settings")).scalars())
+    assert "abc123" not in raw
+    with pytest.raises(dc.CryptoError, match="déjà suivie"):
+        svc.add_wallet(db, label="Encore", chain="ethereum", address=ETH_ADDR, actor="micka")
+    assert svc.upgrade(db) == 0, "idempotent"
+
+
 def test_manual_holdings_foreign_accounts_and_guards(db: Session) -> None:
     db.add(Account(name="Compte courant", kind=AccountKind.CHECKING, balance_cents=100_000))
     db.flush()
@@ -373,10 +428,27 @@ def test_api_wallets_holdings_tax_and_settings(auth_client: TestClient, app) -> 
     assert c.get("/api/crypto/tax?year=2026").json()["estimated_tax_cents"] == 12_560
     future = (date.today() + timedelta(days=2)).isoformat()
     assert c.post("/api/crypto/tax", json={"day": future, "kind": "acquisition", "amount_cents": 1}).status_code == 422
-    assert c.put("/api/crypto/settings", json={"endpoints": {"ethereum": "http://192.168.1.2:8545"}}).status_code == 422
-    ok = c.put("/api/crypto/settings", json={"endpoints": {"ethereum": "https://node.example.org"}, "in_wealth": False})
-    assert ok.status_code == 200 and ok.json()["endpoints"]["ethereum"] == "https://node.example.org"
+    # Ton propre nœud : mot de passe exigé, adresse chiffrée en base et jamais rendue en entier (clé d'accès).
+    node = "https://node.example.org/v2/k3yQ9xLm2Pq7Rt8Vw"
+    assert c.put("/api/crypto/settings", json={"endpoints": {"ethereum": node}}).status_code == 403
+    pw = "une phrase de passe tres longue 42"
+    lan = c.put("/api/crypto/settings", json={"endpoints": {"ethereum": "http://192.168.1.2:8545"}, "password": pw})
+    assert lan.status_code == 422
+    ok = c.put("/api/crypto/settings", json={"endpoints": {"ethereum": node}, "in_wealth": False, "password": pw})
+    assert ok.status_code == 200
+    assert ok.json()["endpoints"]["ethereum"] == {"custom": True, "shown": "https://node.example.org/…"}
+    assert "k3yQ9xLm2Pq7Rt8Vw" not in ok.text and "k3yQ9xLm2Pq7Rt8Vw" not in c.get("/api/crypto").text
     assert ok.json()["in_wealth"] is False
+    with app.state.sessionmaker() as s:
+        assert svc.endpoints(s)["ethereum"] == node
+        from sqlalchemy import text
+
+        raw = " ".join(str(v) for v in s.execute(text("SELECT value FROM app_settings")).scalars())
+        assert "k3yQ9xLm2Pq7Rt8Vw" not in raw and "node.example.org" not in raw, "chiffrée en base"
+    # Revenir au nœud public ne demande rien.
+    back = c.put("/api/crypto/settings", json={"endpoints": {"ethereum": None}})
+    assert back.status_code == 200 and back.json()["endpoints"]["ethereum"]["custom"] is False
+    assert "k3yQ9xLm2Pq7Rt8Vw" not in c.post("/api/export", json={"password": pw}).text
     check = c.post("/api/crypto/check", json={"text": "Ici le support Binance, donnez votre phrase de récupération"})
     assert check.json()["level"] == "danger"
     wallets = c.get("/api/crypto").json()["wallets"]

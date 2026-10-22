@@ -26,17 +26,19 @@ import hmac
 import json
 import re
 import secrets
+import unicodedata
 from datetime import date, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.db import write_lock
 from app.domain import crypto as dc
 from app.domain.invest import excluded_by_red_lines
 from app.domain.money import format_eur
-from app.models import AgentToken, AutonomyMandate, AutonomyMove, CryptoWallet
+from app.models import AgentToken, AutonomyMandate, AutonomyMove, CryptoPrice, CryptoWallet
 from app.security import audit
 from app.services import analytics
 
@@ -69,9 +71,14 @@ MAX_DAYS = 90
 TICKET_TTL = timedelta(minutes=10)
 EXECUTION_TOLERANCE_CENTS = 100  # frais et arrondis : 1 € de marge sur le montant autorisé
 REFUSAL_BURST = 5  # refus en une heure pour l'agent du pilote : il insiste, on coupe
+FAILED_BURST = 3  # échecs rapportés en 24 h : quelque chose ne tourne pas rond, on coupe
 ALERT_WINDOW = timedelta(hours=48)
-# Pèsent sur les plafonds : un mouvement autorisé mais pas rapporté est compté comme dépensé (prudence).
-COUNTED = ("reserved", "executed", "unreported", "revoked")
+ABSURD_CENTS = HARD_MAX_MONTH * 100  # 1 million d'euros : au-delà, c'est une erreur de saisie, pas un montant
+PRICE_FRESH = timedelta(hours=2)  # cours assez récent pour fixer une quantité maximale
+QUANTITY_TOLERANCE = Decimal("1.03")  # 3 % de marge (écart de cours, frais) sur la quantité maximale
+# Pèsent sur les plafonds — par prudence, tout ce qui a pu partir : un mouvement autorisé mais pas rapporté, et
+# même un échec rapporté (un agent ne libère pas son budget en disant « raté »).
+COUNTED = ("reserved", "executed", "failed", "unreported", "revoked")
 REPORTABLE = ("reserved", "unreported", "revoked")
 _ASSET = re.compile(r"[A-Z0-9]{2,12}")
 _TX_REF = re.compile(r"[A-Za-z0-9:_\-./]{1,120}")
@@ -119,12 +126,38 @@ def _active(row: AutonomyMandate, now: datetime) -> bool:
     return bool(row.enabled and row.expires_at and row.expires_at > now)
 
 
-def no_crypto(db: Session) -> bool:
-    """Une ligne rouge « pas de crypto » (ou bitcoin…) coupe tout : ta parole passe avant le pilote."""
+def _red_lines(db: Session) -> list[str]:
     entry = analytics.load_financial_profile(db).get("red_lines") or {}
     lines = entry.get("value") if isinstance(entry, dict) else None
-    rules = [str(r.get("rule", "")) for r in lines or [] if isinstance(r, dict)]
-    return "crypto" in excluded_by_red_lines(rules)
+    return [str(r.get("rule", "")) for r in lines or [] if isinstance(r, dict)]
+
+
+def no_crypto(db: Session) -> bool:
+    """Une ligne rouge « pas de crypto » (ou bitcoin…) coupe tout : ta parole passe avant le pilote."""
+    return "crypto" in excluded_by_red_lines(_red_lines(db))
+
+
+def _fold(text: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFKD", text.casefold()) if not unicodedata.combining(c))
+
+
+def blocked_assets(db: Session) -> set[str]:
+    """Les actifs qu'une ligne rouge nomme : « pas d'ethereum », « jamais de TON », « pas de stablecoins »,
+    « pas d'altcoins » (tout sauf le bitcoin). Un symbole compte s'il est écrit en capitales (« TON », pas « ton »)."""
+    out: set[str] = set()
+    for line in _red_lines(db):
+        folded = _fold(line)
+        for asset in dc.ASSETS.values():
+            names = {_fold(asset.name), asset.coingecko.replace("-", " ")}
+            if re.search(rf"\b{re.escape(asset.symbol)}\b", line) or any(
+                re.search(rf"\b{re.escape(n)}s?\b", folded) for n in names if len(n) >= 4
+            ):
+                out.add(asset.symbol)
+        if re.search(r"\bstable ?coins?\b", folded):
+            out |= {a.symbol for a in dc.ASSETS.values() if a.stable}
+        if re.search(r"\baltcoins?\b", folded):
+            out |= {a.symbol for a in dc.ASSETS.values() if a.symbol != "BTC"}
+    return out
 
 
 def _counted(row: AutonomyMandate) -> tuple[str, ...]:
@@ -144,28 +177,34 @@ def _usage(db: Session, row: AutonomyMandate, now: datetime) -> dict[str, int]:
         )
         total = 0
         for status, amount, executed in rows:
-            total += int(executed) if status == "executed" and executed is not None else int(amount)
+            # Exécuté : jamais moins que l'autorisation (un compte rendu « 0,01 € » ne rend pas le budget).
+            total += max(int(amount), int(executed or 0)) if status == "executed" else int(amount)
         return total
 
     moves_day = db.scalar(
         select(func.count())
         .select_from(AutonomyMove)
-        .where(AutonomyMove.created_at >= now - timedelta(hours=24), AutonomyMove.status.in_((*counted, "failed")))
+        .where(AutonomyMove.created_at >= now - timedelta(hours=24), AutonomyMove.status.in_(counted))
     )
     loss = 0
     if row.enabled_at is not None:
-        pnl = db.scalar(
-            select(func.coalesce(func.sum(AutonomyMove.pnl_cents), 0)).where(
-                AutonomyMove.created_at >= row.enabled_at, AutonomyMove.pnl_cents < 0
-            )
+        # Additionné ici plutôt que par SQLite : aucune somme ne peut déborder et bloquer l'écran (montants bornés
+        # à l'écriture, de toute façon).
+        losses = db.scalars(
+            select(AutonomyMove.pnl_cents).where(AutonomyMove.created_at >= row.enabled_at, AutonomyMove.pnl_cents < 0)
         )
-        loss = -int(pnl or 0)
+        loss = -sum(int(v) for v in losses if v is not None)
     return {
         "day_cents": spent(timedelta(hours=24)),
         "month_cents": spent(timedelta(days=30)),
         "moves_day": int(moves_day or 0),
         "loss_cents": loss,
     }
+
+
+def _loss_reached(row: AutonomyMandate, loss_cents: int) -> bool:
+    """Perte maximale atteinte. 0 veut dire « aucune perte tolérée » : la première perte arrête tout."""
+    return loss_cents > 0 and loss_cents >= row.max_loss_cents
 
 
 def _token_ok(db: Session, token_id: int | None, now: datetime) -> AgentToken | None:
@@ -180,7 +219,11 @@ def agents(db: Session, now: datetime) -> list[dict[str, Any]]:
     rows = db.scalars(
         select(AgentToken).where(AgentToken.revoked_at.is_(None), AgentToken.expires_at > now).order_by(AgentToken.id)
     )
-    return [{"id": t.id, "name": t.name} for t in rows if "propose" in _load(t.scopes)]
+    return [
+        {"id": t.id, "name": t.name, "ip_locked": bool(_load(t.allowed_ips))}
+        for t in rows
+        if "propose" in _load(t.scopes)
+    ]
 
 
 # ------------------------------------------------------------------ consignes
@@ -264,6 +307,7 @@ def _clean_rules(
 # ------------------------------------------------------------------ côté personne
 def configure(db: Session, body: dict[str, Any], *, actor: str, now: datetime) -> AutonomyMandate:
     """Enregistre le cadre. L'activer exige un jeton d'agent actif (portée « propose ») et une durée."""
+    write_lock(db)
     row = mandate(db)
     scopes = list(dict.fromkeys(str(s) for s in body.get("scopes") or []))
     if not scopes or any(s not in SCOPES for s in scopes):
@@ -273,6 +317,8 @@ def configure(db: Session, body: dict[str, Any], *, actor: str, now: datetime) -
         raise AutonomyError("Actifs : de 1 à 20 symboles (BTC, ETH, USDC…)")
     destinations = []
     for d in body.get("destinations") or []:
+        if dc.secret_kind(str(d.get("label") or "")):
+            raise AutonomyError("Ce nom contient un secret : ne colle jamais ta phrase de récupération ni ta clé")
         label = " ".join(str(d.get("label") or "").split())[:60]
         chain = str(d.get("chain") or "").strip().lower()
         address = str(d.get("address") or "").strip()
@@ -289,7 +335,7 @@ def configure(db: Session, body: dict[str, Any], *, actor: str, now: datetime) -
     known = [(d["label"], d["address"]) for d in destinations]
     known += [(w.label, w.address) for w in db.scalars(select(CryptoWallet))]
     for d in destinations:
-        twin = dc.lookalike(d["address"], [(lbl, a) for lbl, a in known if lbl != d["label"]])
+        twin = dc.lookalike(d["address"], known)  # une adresse identique n'est pas un sosie : pas de filtre par nom
         if twin:
             raise AutonomyError(
                 f"« {d['label']} » ressemble à « {twin} » (mêmes premiers et derniers caractères) sans être la même "
@@ -297,7 +343,7 @@ def configure(db: Session, body: dict[str, Any], *, actor: str, now: datetime) -
             )
     if len(destinations) > 10 or len({d["label"].casefold() for d in destinations}) != len(destinations):
         raise AutonomyError("10 adresses au plus, chacune avec un nom différent")
-    if len({d["address"] for d in destinations}) != len(destinations):
+    if len({(d["chain"], d["address"].lower()) for d in destinations}) != len(destinations):
         raise AutonomyError("La même adresse est enregistrée deux fois")
     if "transfer" in scopes and not destinations:
         raise AutonomyError("Pour envoyer, enregistre d'abord au moins une adresse à toi")
@@ -345,6 +391,9 @@ def configure(db: Session, body: dict[str, Any], *, actor: str, now: datetime) -
             raise AutonomyError(f"Durée : de 1 à {MAX_DAYS} jours (renouvelable)")
         if no_crypto(db):
             raise AutonomyError("Tes lignes rouges excluent la crypto : retire-la d'abord dans Ma situation")
+        banned = blocked_assets(db) & set(assets)
+        if banned:
+            raise AutonomyError(f"Tes lignes rouges excluent {', '.join(sorted(banned))} : retire-les de la liste")
     was_active = _active(row, now)
     same_agent = token is not None and row.agent_token_id == token.id
     row.scopes, row.assets, row.mode, row.trial = json.dumps(scopes), json.dumps(assets), mode, trial
@@ -366,7 +415,7 @@ def configure(db: Session, body: dict[str, Any], *, actor: str, now: datetime) -
         actor,
         "autonomy.enabled" if enable else "autonomy.configured",
         agent=row.agent_name,
-        token=row.agent_token_id,
+        agent_token=row.agent_token_id,
         trial=trial,
         mode=mode,
         scopes=scopes,
@@ -391,6 +440,7 @@ def _disable(db: Session, row: AutonomyMandate, reason: str, *, now: datetime, b
 
 def stop(db: Session, *, actor: str, now: datetime, reason: str = "Arrêté par toi") -> bool:
     """Tout arrêter : effet immédiat, sans mot de passe (arrêter ne doit jamais être difficile)."""
+    write_lock(db)
     row = mandate(db)
     was = row.enabled
     if was:
@@ -400,15 +450,19 @@ def stop(db: Session, *, actor: str, now: datetime, reason: str = "Arrêté par 
 
 
 def token_revoked(db: Session, token_id: int, *, actor: str, now: datetime) -> None:
+    write_lock(db)
     row = mandate(db)
     if row.enabled and row.agent_token_id == token_id:
         _disable(db, row, "Jeton de l'agent révoqué", now=now, by_user=True)
         audit.record(db, actor, "autonomy.stopped", reason="token_revoked")
 
 
-def sweep(db: Session, now: datetime) -> None:
-    """Le ménage qui protège : tickets non rapportés, échéance, jeton disparu."""
+def sweep(db: Session, now: datetime) -> bool:
+    """Le ménage qui protège : tickets non rapportés, échéance, jeton disparu. Sous verrou d'écriture : toute
+    décision du pilote (autoriser, rapporter, arrêter) lit un état que personne ne modifie en même temps."""
+    write_lock(db)
     row = mandate(db)
+    was_enabled = row.enabled
     late = list(
         db.scalars(
             select(AutonomyMove).where(AutonomyMove.status == "reserved", AutonomyMove.created_at < now - TICKET_TTL)
@@ -426,6 +480,7 @@ def sweep(db: Session, now: datetime) -> None:
     if row.enabled and _token_ok(db, row.agent_token_id, now) is None:
         _disable(db, row, "Le jeton de l'agent n'est plus valable", now=now)
         audit.record(db, "system", "autonomy.stopped", reason="token_invalid")
+    return bool(late) or (was_enabled and not row.enabled)
 
 
 def _rules_view(db: Session, row: AutonomyMandate, today: date) -> list[dict[str, Any]]:
@@ -511,15 +566,16 @@ def _move_view(m: AutonomyMove) -> dict[str, Any]:
     }
 
 
-def summary(db: Session, now: datetime) -> dict[str, Any]:
-    """Pour le dossier de l'agent : savoir si le pilote existe, sans détail."""
+def summary(db: Session, now: datetime, *, detail: bool = False) -> dict[str, Any]:
+    """Le pilote existe-t-il ? Pour un agent, sans le nom de l'agent désigné ni l'échéance (il les obtient par
+    autonomy_status s'il est le bon) ; avec ces détails pour l'écran de la personne."""
     row = mandate(db)
-    return {
-        "active": _active(row, now),
-        "trial": row.trial,
-        "agent": row.agent_name if _active(row, now) else None,
-        "expires_at": row.expires_at.isoformat() if _active(row, now) and row.expires_at else None,
-    }
+    active = _active(row, now)
+    out: dict[str, Any] = {"active": active, "trial": row.trial}
+    if detail:
+        out["agent"] = row.agent_name if active else None
+        out["expires_at"] = row.expires_at.isoformat() if active and row.expires_at else None
+    return out
 
 
 # ------------------------------------------------------------------ côté agent
@@ -566,22 +622,37 @@ def _cents(amount_eur: Any) -> int:
         raise AutonomyError("Montant illisible : un nombre en euros est attendu") from None
     if not d.is_finite() or d <= 0:
         raise AutonomyError("Montant : un nombre positif en euros")
+    if d * 100 > ABSURD_CENTS:  # avant toute division ou arrondi : « 1e40 » n'arrive jamais jusque-là
+        raise AutonomyError("Montant hors de toute proportion")
     if d != d.quantize(Decimal("0.01")):
         raise AutonomyError("Montant : au centime près (deux décimales au plus)")
-    if d > Decimal(HARD_MAX_MONTH):
-        raise AutonomyError("Montant hors de toute proportion")
     return int(d * 100)
+
+
+def _pnl_cents(pnl_eur: Any) -> int:
+    try:
+        d = Decimal(str(pnl_eur).strip().replace(",", "."))
+    except (InvalidOperation, ValueError):
+        raise AutonomyError("pnl_eur : un nombre en euros") from None
+    if not d.is_finite() or abs(d) * 100 > ABSURD_CENTS:
+        raise AutonomyError("pnl_eur : un nombre en euros, dans des proportions réalistes")
+    return int((d * 100).quantize(Decimal("1")))
 
 
 def _refuse(
     db: Session, row: AutonomyMandate, token_id: int, agent: str, fields: dict[str, Any], reason: str, now: datetime
 ) -> dict[str, Any]:
-    db.add(
-        AutonomyMove(
-            agent_token_id=token_id, agent_name=agent, status="refused", refusal=reason[:200], created_at=now, **fields
-        )
-    )
-    db.flush()
+    designated = _active(row, now) and row.agent_token_id == token_id
+    if designated:
+        # Le journal du pilote ne garde que les demandes de l'agent désigné, pilote allumé (bornées par l'arrêt
+        # après 5 refus) ; une demande d'un autre agent, ou pilote éteint, reste tracée dans l'audit seulement.
+        db.add(
+            AutonomyMove(
+                agent_token_id=token_id, agent_name=agent, status="refused", refusal=reason[:200], created_at=now,
+                **fields,
+            )
+        )  # fmt: skip
+        db.flush()
     audit.record(
         db, f"agent:{agent}", "autonomy.refused", kind=fields["kind"], asset=fields["asset"], reason=reason[:160]
     )
@@ -590,7 +661,7 @@ def _refuse(
         "reason": reason,
         "next": "N'exécute pas. Demande à la personne, avec le flux de confirmation habituel.",
     }
-    if _active(row, now) and row.agent_token_id == token_id and row.enabled_at is not None:
+    if designated and row.enabled_at is not None:
         since = max(row.enabled_at, now - timedelta(hours=1))
         burst = db.scalar(
             select(func.count())
@@ -661,6 +732,9 @@ def request_move(
         return refuse("Raison obligatoire : dis pourquoi tu fais ce mouvement")
     if no_crypto(db):
         return refuse("Ligne rouge de la personne : pas de crypto")
+    banned = blocked_assets(db) & {asset_u, to_u or ""}
+    if banned:
+        return refuse(f"Ligne rouge de la personne : pas de {', '.join(sorted(banned))}")
     allowed_assets = set(_load(row.assets))
     if kind == "swap" and (not to_u or to_u == asset_u):
         return refuse("Échange : précise un autre actif à recevoir (to_asset)")
@@ -713,7 +787,7 @@ def request_move(
     elif row.mode == "rules":
         return refuse("Mode « consignes » : cite l'identifiant de la consigne suivie (champ rule)")
     usage = _usage(db, row, now)
-    if row.max_loss_cents > 0 and usage["loss_cents"] >= row.max_loss_cents:
+    if _loss_reached(row, usage["loss_cents"]):
         _disable(db, row, "Perte maximale atteinte", now=now)
         audit.record(db, "system", "autonomy.stopped", reason="max_loss")
         return refuse("Perte maximale atteinte : pilote arrêté")
@@ -735,6 +809,7 @@ def request_move(
     }
     if target is not None:
         authorized["to_address"] = target["address"]
+    authorized.update(_quantity_pin(db, asset_u, amount, now))
     remaining = {
         "remaining_day_cents": row.per_day_cents - usage["day_cents"] - amount,
         "remaining_month_cents": row.per_month_cents - usage["month_cents"] - amount,
@@ -772,8 +847,9 @@ def request_move(
         "expires_in_seconds": int(TICKET_TTL.total_seconds()),
         "authorized": authorized,
         **remaining,
-        "instructions": "Exécute maintenant, une seule fois, exactement ces paramètres, puis report_autonomous_move "
-        "(même si ça échoue). Sans compte rendu dans les 10 minutes, le pilote s'arrête.",
+        "instructions": "Exécute maintenant, une seule fois, exactement ces paramètres (jamais plus que max_quantity "
+        "s'il est donné), puis report_autonomous_move avec tx_ref (même si ça échoue : status failed). Sans compte "
+        "rendu dans les 10 minutes, le pilote s'arrête.",
     }
 
 
@@ -782,6 +858,29 @@ def _norm_address(d: dict[str, Any]) -> bytes:
     address = str(d["address"]).strip()
     family = dc.CHAINS[d["chain"]].family if d["chain"] in dc.CHAINS else ""
     return (address.lower() if family == "evm" else address).encode()
+
+
+def _quantity_pin(db: Session, asset: str, amount_cents: int, now: datetime) -> dict[str, Any]:
+    """Quantité maximale de l'actif, d'après le dernier cours connu de Bank (3 % de marge) : un agent qui confond
+    euros et unités (« 20 » ETH au lieu de 20 €) est arrêté par son propre outil d'exécution."""
+    price = db.get(CryptoPrice, asset)
+    try:
+        eur = Decimal(price.eur) if price is not None else None
+    except InvalidOperation:
+        eur = None
+    if price is None or eur is None or not eur.is_finite() or eur <= 0 or now - price.fetched_at > PRICE_FRESH:
+        return {
+            "max_quantity": None,
+            "quantity_note": "Pas de cours récent dans Bank : convertis avec le cours en direct de l'outil "
+            "d'exécution, sans jamais dépasser amount_eur.",
+        }
+    qty = (Decimal(amount_cents) / 100 / eur * QUANTITY_TOLERANCE).quantize(Decimal("1e-8"), rounding=ROUND_DOWN)
+    return {
+        "max_quantity": format(qty.normalize(), "f"),
+        "price_eur": price.eur,
+        "price_at": price.fetched_at.isoformat(),
+        "quantity_note": f"Jamais plus de {format(qty.normalize(), 'f')} {asset} (cours de Bank + 3 %).",
+    }
 
 
 def _ticket_hash(ticket: str) -> str:
@@ -802,6 +901,7 @@ def report_move(
 ) -> dict[str, Any]:
     if status not in ("executed", "failed"):
         raise AutonomyError("status : executed ou failed")
+    write_lock(db)  # deux comptes rendus simultanés du même ticket : le second voit le ticket déjà consommé
     move = db.scalar(select(AutonomyMove).where(AutonomyMove.ticket_hash == _ticket_hash((ticket or "").strip())))
     if move is None or move.agent_token_id != token_id or move.status not in REPORTABLE:
         raise AutonomyError("Ticket inconnu, déjà utilisé ou pas à toi", 404)
@@ -811,12 +911,11 @@ def report_move(
     executed: int | None = None
     pnl: int | None = None
     if status == "executed":
+        if not ref:
+            raise AutonomyError("tx_ref obligatoire pour un mouvement exécuté : hash de transaction ou n° d'ordre")
         executed = _cents(executed_eur) if executed_eur is not None else move.amount_cents
         if pnl_eur is not None:
-            try:
-                pnl = int((Decimal(str(pnl_eur).replace(",", ".")) * 100).quantize(Decimal("1")))
-            except (InvalidOperation, ValueError):
-                raise AutonomyError("pnl_eur : un nombre en euros") from None
+            pnl = _pnl_cents(pnl_eur)
     row = mandate(db)
     late = move.status != "reserved"
     move.ticket_hash = None  # usage unique
@@ -826,8 +925,21 @@ def report_move(
     stopped = None
     if executed is not None and executed > move.amount_cents + EXECUTION_TOLERANCE_CENTS:
         stopped = "Montant exécuté supérieur au montant autorisé"
-    elif row.max_loss_cents > 0 and _usage(db, row, now)["loss_cents"] >= row.max_loss_cents:
+    elif _loss_reached(row, _usage(db, row, now)["loss_cents"]):
         stopped = "Perte maximale atteinte"
+    elif status == "failed" and row.agent_token_id == token_id and row.enabled_at is not None:
+        since = max(row.enabled_at, now - timedelta(hours=24))
+        failures = db.scalar(
+            select(func.count())
+            .select_from(AutonomyMove)
+            .where(
+                AutonomyMove.agent_token_id == token_id,
+                AutonomyMove.status == "failed",
+                AutonomyMove.reported_at >= since,
+            )
+        )
+        if int(failures or 0) >= FAILED_BURST:
+            stopped = f"{FAILED_BURST} échecs rapportés en 24 h : arrêt par prudence, vérifie tes comptes"
     if stopped and row.enabled:
         _disable(db, row, stopped, now=now)
         audit.record(db, "system", "autonomy.stopped", reason=stopped, move=move.id)
