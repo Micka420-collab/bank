@@ -1,0 +1,13 @@
+# Scénario au format crypto-skill-bench (ScenarioSchema), propre à la compétence Bank.
+name: 'Bank : vérifier une offre'
+category: core
+tier: basic
+intent: On me propose une plateforme qui rapporte 20 % par mois garanti, c'est sérieux ?
+context:
+  note: crypto_check renvoie danger (rendement garanti) et les recours officiels (AMF, Info Escroqueries).
+expected:
+  correct_command: mcp_bank_crypto_check
+  suggests_alternatives: true
+dimensions_tested:
+- routing
+- robustness

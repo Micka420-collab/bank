@@ -12,6 +12,8 @@ import { useRoute } from "./router";
 
 // Pages moins fréquentes : chargées à la première visite (l'écran du jour s'ouvre plus vite sur téléphone).
 const Aids = lazy(() => import("./pages/Aids").then((m) => ({ default: m.Aids })));
+const Crypto = lazy(() => import("./pages/Crypto").then((m) => ({ default: m.Crypto })));
+const Pilot = lazy(() => import("./pages/Pilot").then((m) => ({ default: m.Pilot })));
 const Connecteurs = lazy(() => import("./pages/Connecteurs").then((m) => ({ default: m.Connecteurs })));
 const Documents = lazy(() => import("./pages/Documents").then((m) => ({ default: m.Documents })));
 const Memory = lazy(() => import("./pages/Memory").then((m) => ({ default: m.Memory })));
@@ -23,12 +25,15 @@ const Watch = lazy(() => import("./pages/Watch").then((m) => ({ default: m.Watch
 const Wealth = lazy(() => import("./pages/Wealth").then((m) => ({ default: m.Wealth })));
 
 // Cinq destinations, pas une de plus : le reste est rangé dans « Plus » (ou en bas du rail sur grand écran).
-// « Gagner » réunit missions et aides ; « Papiers » réunit documents et démarches.
+// « Gagner » réunit missions et aides ; « Papiers » réunit documents et démarches ; « Épargne » réunit le
+// patrimoine, la crypto et le pilote automatique.
 const HUBS: Record<string, string> = {
   opportunites: "gagner",
   aides: "gagner",
   documents: "papiers",
   demarches: "papiers",
+  crypto: "patrimoine",
+  pilote: "patrimoine",
 };
 const NAV: { page: string; hub: string; label: string; icon: IconName }[] = [
   { page: "aujourdhui", hub: "aujourdhui", label: "Aujourd'hui", icon: "today" },
@@ -52,7 +57,7 @@ const TABS: { page: string; hub: string; short: string; icon: IconName }[] = [
   { page: "documents", hub: "papiers", short: "Papiers", icon: "folder" },
   { page: "plus", hub: "plus", short: "Plus", icon: "more" },
 ];
-const MORE = new Set(["patrimoine", "veille", "situation", "messageries", "connecteurs", "reglages", "memoire", "plus"]);
+const MORE = new Set(["patrimoine", "crypto", "pilote", "veille", "situation", "messageries", "connecteurs", "reglages", "memoire", "plus"]);
 type Badges = { procedures_due: number; procedures_ready: number; confirmations: number; watch_new_relevant: number };
 
 export function hubOf(page: string): string {
@@ -134,6 +139,8 @@ export function App() {
           {page === "operations" ? <Operations openImport={route.params.get("import") === "1"} />
             : page === "aides" ? <Aids />
             : page === "patrimoine" ? <Wealth />
+            : page === "crypto" ? <Crypto />
+            : page === "pilote" ? <Pilot />
             : page === "situation" ? <Situation />
             : page === "connecteurs" ? <Connecteurs bankResult={route.page === "banques" ? route.params.get("result") : null} />
             : page === "plus" ? <More username={me.username} onLogout={() => void logout()} />
@@ -216,15 +223,19 @@ function Rail({ page, username, onLogout, onAsk }: { page: string; username: str
 
 /** Les deux pages d'un pôle, comme deux onglets : « Gagner » (missions, aides), « Papiers » (documents, démarches). */
 export function HubTabs({ page }: { page: string }) {
+  const hub = hubOf(page);
   const tabs =
-    hubOf(page) === "gagner"
+    hub === "gagner"
       ? [{ page: "opportunites", label: "Missions" }, { page: "aides", label: "Aides" }]
-      : hubOf(page) === "papiers"
+      : hub === "papiers"
         ? [{ page: "documents", label: "Documents" }, { page: "demarches", label: "Démarches" }]
-        : [];
+        : hub === "patrimoine"
+          ? [{ page: "patrimoine", label: "Épargne" }, { page: "crypto", label: "Crypto" }, { page: "pilote", label: "Pilote" }]
+          : [];
   if (tabs.length === 0) return null;
+  const names: Record<string, string> = { gagner: "Gagner", papiers: "Papiers", patrimoine: "Épargne" };
   return (
-    <nav className="hub-tabs" aria-label={hubOf(page) === "gagner" ? "Gagner" : "Papiers"}>
+    <nav className="hub-tabs" aria-label={names[hub]}>
       {tabs.map((t) => (
         <a key={t.page} href={`#/${t.page}`} aria-current={page === t.page ? "page" : undefined}>{t.label}</a>
       ))}
@@ -238,6 +249,8 @@ function More({ username, onLogout }: { username: string; onLogout: () => void }
       <div className="page-head"><h1>Plus</h1></div>
       <ul className="more">
         <li><a href="#/patrimoine"><b><Icon name="wealth" /> Épargne</b><span className="faint">Ton patrimoine, ton matelas, où placer</span></a></li>
+        <li><a href="#/crypto"><b><Icon name="crypto" /> Crypto</b><span className="faint">Tes adresses suivies, leur valeur, l'impôt, les arnaques à éviter</span></a></li>
+        <li><a href="#/pilote"><b><Icon name="robot" /> Pilote automatique</b><span className="faint">Ton agent agit seul, dans ton cadre — et tu coupes d'un geste</span></a></li>
         <li><a href="#/situation"><b><Icon name="situation" /> Ma situation</b><span className="faint">Ton profil, tes projets, ce que ton agent peut faire</span></a></li>
         <li><a href="#/veille"><b><Icon name="news" /> Veille</b><span className="faint">Ce qui change dans les sources officielles, pour toi</span></a></li>
         <li><a href="#/messageries"><b><Icon name="chat" /> Messageries</b><span className="faint">Écris à Bank depuis WhatsApp, Telegram, Signal… et reçois ses alertes</span></a></li>

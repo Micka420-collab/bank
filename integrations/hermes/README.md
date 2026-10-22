@@ -16,7 +16,9 @@ HERMÈS (192.168.1.112) ──HTTPS + jeton bnk_…──> reverse proxy ──>
 
 | Il peut | Il ne peut pas |
 |---|---|
-| Lire ton dossier (situation, mois en cours, aides, patrimoine, énergie, documents officiels, paie prévue depuis ton planning, ce que Bank aimerait te demander, alertes) | Déplacer, virer, payer ou placer de l'argent : aucun outil ne le permet |
+| Lire ton dossier (situation, mois en cours, aides, patrimoine, énergie, documents officiels, paie prévue depuis ton planning, ce que Bank aimerait te demander, alertes) | Déplacer, virer, payer ou placer de l'argent avec un outil de Bank : il n'en existe aucun |
+| Lire ton portefeuille crypto (valeur, répartition, impôts de l'année) et vérifier une offre ou une adresse (`crypto_check`) | Voir une seule de tes adresses crypto, ou recevoir une phrase de récupération ou une clé |
+| Avec un outil d'exécution (Minara…) : préparer un mouvement crypto et l'exécuter **après ta confirmation dans un message séparé** | Exécuter sans ta confirmation — sauf pilote automatique allumé par toi, dans ton cadre, chaque mouvement autorisé par Bank juste avant |
 | Répondre « je peux l'acheter ? » (oui, oui mais, à partir du…, dans N mois) et « où placer ? » avec les calculs de Bank | Inventer un chiffre : les verdicts et le plan viennent de Bank, il les explique |
 | Évaluer un achat ou une épargne avec la prévision de Bank | Changer son propre mandat (rôle, lignes rouges, seuil) : refusé côté serveur |
 | Mener ton onboarding et enregistrer tes réponses | Appliquer un réglage sans toi : il **propose**, tu valides dans Bank |
@@ -40,7 +42,9 @@ Chaque appel est inscrit au journal d'audit chaîné ; Bank › Ma situation mon
 
    Le script installe la compétence dans `~/.hermes/skills/finance/gestionnaire-argent`, ajoute le serveur `bank`
    à `~/.hermes/config.yaml` (sauvegarde faite, le reste du fichier intact), range le jeton dans `~/.hermes/.env`
-   (mode 600), teste la connexion et crée trois routines. Relancer ne duplique rien.
+   (mode 600), inscrit une règle de routage dans `~/.hermes/memories/MEMORY.md` (comme le fait la compétence de
+   Minara : les questions d'argent passent par Bank, un mouvement crypto passe par Bank avant l'outil qui
+   l'exécute ; sauvegarde faite), teste la connexion et crée trois routines. Relancer ne duplique rien.
 3. **Dans HERMÈS** : `/reload-mcp`, puis « fais mon onboarding financier ».
 4. **Dans Bank** › Ma situation › *Le mandat de ton agent* : règle son rôle, la fréquence des points, ton seuil
    d'alerte et tes lignes rouges. Lui ne peut pas les modifier.
@@ -90,6 +94,10 @@ volent les messages.
 | `simulate_aids` | simulate | Simulation OpenFisca de tes droits |
 | `categorize_transaction` | write:categorize | Une opération à la fois, si ton mandat est « gestionnaire » ; jamais une opération que tu as classée |
 | `propose_action`, `list_proposals` | propose, read | Enveloppe, épargne visée, coussin, objectif, règle de classement (avec le nombre d'opérations touchées), réponse « Ma situation » |
+| `get_crypto` | read | Portefeuille crypto suivi : valeur, variation 24 h, répartition, humeur du marché, garde-fous, impôts de l'année (305 €, 2086, 3916-bis) ; jamais d'adresse ; en mode agrégats, totaux seulement |
+| `crypto_check` (`text`) | read | Signaux d'arnaque d'un message, d'une offre ou d'une adresse (sosie d'une de tes adresses compris), recours officiels ; rien n'est gardé |
+| `autonomy_status` | read | Le pilote automatique est-il allumé **pour ce jeton** ? Consignes, actifs, noms d'adresses, plafonds restants, mode essai |
+| `request_autonomous_move`, `report_autonomous_move` | propose | Autorisation d'UN mouvement avant exécution (ticket unique, 10 min), puis compte rendu obligatoire ; voir [docs/CRYPTO.md](../../docs/CRYPTO.md) |
 
 Ressource `bank://questions` (catalogue de l'onboarding) ; prompts `onboarding_interview`, `daily_brief`,
 `weekly_review`.
@@ -126,3 +134,23 @@ Le dossier exact que voit un agent est consultable dans Bank › Ma situation �
 | « Portée … non accordée » | Le rôle du jeton ne couvre pas l'outil : recrée un jeton avec le bon rôle |
 
 `./install.sh --check` reteste la connexion à tout moment.
+
+## Compétence v2 : ce qui vient de Minara
+
+La compétence officielle de Minara (agent financier crypto) a servi de banc d'idées ; Bank en reprend les règles
+qui protègent, pas l'exécution :
+
+- **Porte d'entrée** explicite (intention d'argent ET sujet de Micka) et **ordre fixe** quand un autre outil
+  exécute : Bank d'abord (contexte, `crypto_check`, pilote), puis la confirmation ou l'autorisation, puis
+  l'exécution, puis le compte rendu.
+- **Confirmation en deux messages**, jamais d'option qui la saute, jamais de confirmation inventée ; une
+  intention composée se découpe ; un paramètre qui change annule la confirmation ; une annulation est définitive.
+- **Frontière analyse → mouvement**, **anti-boucle** (un seul nouvel essai, jamais de refus contourné),
+  réponse « demandé → fait → résultat → et ensuite ».
+- **Sécurité des actifs et adresses** : natif ≠ équivalent (BTC/WBTC, ETH/WETH, USDC/USDC.e), adresse toujours en
+  entier, empoisonnement d'adresse, jeton-appât, nom de jeton qui contient des « consignes ».
+- **Banc d'essai** : 17 scénarios au format de `crypto-skill-bench` dans [bench/](bench/README.md), à rejouer
+  avec le banc de Minara contre la compétence installée.
+
+Ce qui ne vient pas de Minara : le pilote automatique de Bank n'exécute rien et ne fait jamais de levier ni de
+perps ; il autorise ou refuse, dans un cadre que seul Micka règle.

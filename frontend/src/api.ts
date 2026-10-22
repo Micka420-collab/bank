@@ -1057,3 +1057,164 @@ export type ChannelsView = {
   platforms: ChannelPlatform[];
 };
 export type PairingCode = { code: string; raw: string; expires_at: string };
+
+// ------------------------------------------------------------------ crypto (lecture seule)
+export type CryptoAsset = {
+  asset: string;
+  name: string;
+  quantity: string;
+  value_cents: number;
+  share_percent: number;
+  price_eur: string | null;
+  change_24h: string | null;
+  price_at: string | null;
+  stale: boolean;
+  stable: string | null;
+  sources: { where: string; quantity: string; watched: boolean }[];
+};
+export type CryptoWalletView = {
+  id: number;
+  label: string;
+  chain: string;
+  chain_label: string;
+  address: string;
+  masked: string;
+  synced_at: string | null;
+  error: string | null;
+};
+export type CryptoManual = {
+  id: number;
+  asset: string;
+  quantity: string;
+  platform: string | null;
+  foreign: boolean;
+  coingecko_id: string | null;
+  updated_at: string;
+};
+export type CryptoResource = { label: string; url: string };
+export type CryptoTaxEventView = {
+  id: number;
+  day: string;
+  kind: "acquisition" | "cession";
+  amount_cents: number;
+  fees_cents: number;
+  portfolio_value_cents: number | null;
+  asset: string | null;
+  note: string | null;
+};
+export type CryptoTax = {
+  year: number;
+  error: string | null;
+  total_price_cents: number;
+  threshold_cents: number;
+  exempt: boolean;
+  net_gain_cents: number;
+  taxable_cents: number;
+  estimated_tax_cents: number | null;
+  rate: { total_percent: string | null; social_percent: string | null; status: string; note: string; checked: string } | null;
+  cessions: { id: number; day: string; price_cents: number; fees_cents: number; portfolio_value_cents: number; acquisition_share_cents: number; gain_cents: number }[];
+  acquisition_basis_cents: number;
+  current_value_cents: number;
+  unrealized_cents: number | null;
+  foreign_accounts: string[];
+  reminders: string[];
+  events: CryptoTaxEventView[];
+  sources: CryptoResource[];
+  disclaimer: string;
+};
+export type AutopilotSummary = { active: boolean; trial: boolean; agent: string | null; expires_at: string | null };
+export type CryptoView = {
+  total_cents: number;
+  change_24h_cents: number;
+  assets: CryptoAsset[];
+  wallets: CryptoWalletView[];
+  manual: CryptoManual[];
+  history: { day: string; value_cents: number }[];
+  sentiment: { value: number; label: string; at?: string } | null;
+  tax: CryptoTax;
+  guards: { level: "info" | "warning"; text: string }[];
+  network_consent: boolean;
+  endpoints: Record<string, string>;
+  default_endpoints: Record<string, string>;
+  chains: { key: string; label: string; native: string; tokens: string[] }[];
+  catalog: { symbol: string; name: string }[];
+  in_wealth: boolean;
+  autopilot: AutopilotSummary;
+  resources: CryptoResource[];
+  disclaimer: string;
+};
+export type ScamCheck = {
+  level: "ok" | "warning" | "danger";
+  verdict: string;
+  signals: { key: string; label: string }[];
+  advice: string[];
+  resources: CryptoResource[];
+};
+
+// ------------------------------------------------------------------ pilote automatique
+export type PilotKind = "buy" | "sell" | "swap" | "transfer";
+export type PilotRule = {
+  id?: string;
+  label?: string;
+  kind: PilotKind;
+  asset: string;
+  to_asset: string | null;
+  destination: string | null;
+  amount_cents: number;
+  every: "day" | "week" | "month";
+  done_this_period?: boolean;
+};
+export type PilotDestination = { label: string; chain: string; address: string };
+export type PilotMove = {
+  id: number;
+  agent: string;
+  kind: string;
+  asset: string;
+  to_asset: string | null;
+  chain: string | null;
+  amount_cents: number;
+  executed_cents: number | null;
+  pnl_cents: number | null;
+  destination: string | null;
+  rule: string | null;
+  reason: string;
+  status: "reserved" | "executed" | "failed" | "unreported" | "revoked" | "simulated" | "refused";
+  refusal: string | null;
+  tx_ref: string | null;
+  text: string;
+  created_at: string;
+  reported_at: string | null;
+};
+export type PilotLimits = {
+  per_op_cents: number;
+  per_day_cents: number;
+  per_month_cents: number;
+  max_moves_per_day: number;
+  max_loss_cents: number;
+};
+export type PilotView = {
+  active: boolean;
+  enabled: boolean;
+  trial: boolean;
+  agent_token_id: number | null;
+  agent_name: string | null;
+  mode: "rules" | "free";
+  scopes: ("crypto_spot" | "transfer")[];
+  assets: string[];
+  rules: PilotRule[];
+  destinations: PilotDestination[];
+  limits: PilotLimits;
+  enabled_at: string | null;
+  expires_at: string | null;
+  disabled_at: string | null;
+  disabled_reason: string | null;
+  usage: { day_cents: number; month_cents: number; moves_day: number; loss_cents: number };
+  agents: { id: number; name: string }[];
+  no_crypto: boolean;
+  scope_labels: Record<string, string>;
+  every_labels: Record<string, string>;
+  chains: string[];
+  hard_rules: string[];
+  hard_max: { per_op_cents: number; per_day_cents: number; per_month_cents: number; days: number };
+  journal: PilotMove[];
+};

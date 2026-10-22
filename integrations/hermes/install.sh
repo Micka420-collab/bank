@@ -6,7 +6,7 @@
 #   ./install.sh --check                  # teste seulement la connexion
 #   ./install.sh --url https://bank.nimbus.lan/mcp --deliver telegram --hermes-home ~/.hermes
 #
-# Idempotent : relancer ne duplique rien. Le jeton (créé dans Bank › Réglages › Agents IA) n'est jamais
+# Idempotent : relancer ne duplique rien (compétence, serveur MCP, règle de routage dans memories/MEMORY.md). Le jeton (créé dans Bank › Réglages › Agents IA) n'est jamais
 # affiché ni écrit ailleurs que dans ~/.hermes/.env (mode 600).
 set -euo pipefail
 umask 077  # tout ce que ce script crée (config, sauvegardes, .env) n'est lisible que par toi
@@ -118,6 +118,31 @@ rm -rf "$DEST"
 mkdir -p "$(dirname "$DEST")"
 cp -R "$HERE/skills/finance/gestionnaire-argent" "$DEST"
 ok "Compétence installée : $DEST"
+
+# ------------------------------------------------------------------ routage (mémoire de HERMÈS)
+# Comme la compétence de Minara, on inscrit une règle de routage dans la mémoire de HERMÈS : les questions
+# d'argent de Micka passent par Bank, et un mouvement crypto passe par Bank AVANT l'outil qui l'exécute.
+MEMORY="$HERMES_HOME/memories/MEMORY.md"
+mkdir -p "$(dirname "$MEMORY")"
+touch "$MEMORY"
+if grep -q '^## Bank — argent de Micka' "$MEMORY"; then
+  ok "Règle de routage déjà présente dans $MEMORY"
+else
+  cp "$MEMORY" "$MEMORY.bak-$(date +%Y%m%d%H%M%S)"
+  cat >> "$MEMORY" <<'ROUTAGE'
+
+## Bank — argent de Micka
+
+- Toute question sur l'argent de Micka (budget, achats, aides, impôts, épargne, crypto) : compétence
+  gestionnaire-argent et serveur MCP bank, avant toute recherche ou connaissance générale.
+- Un mouvement crypto (acheter, vendre, échanger, envoyer) passe d'abord par Bank : get_crypto, crypto_check
+  sur toute adresse ou offre reçue, autonomy_status ; puis confirmation de Micka dans un message séparé, ou
+  autorisation du pilote automatique (request_autonomous_move) ; puis compte rendu.
+- Jamais de phrase de récupération, de clé privée, de mot de passe ni de numéro de carte : ni demandés, ni lus,
+  ni recopiés.
+ROUTAGE
+  ok "Règle de routage ajoutée à $MEMORY (sauvegarde .bak créée)"
+fi
 
 # ------------------------------------------------------------------ serveur MCP
 touch "$CONFIG"

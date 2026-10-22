@@ -309,3 +309,24 @@ Bank répond et prévient dans **Telegram, WhatsApp, Signal, Discord, Slack** et
   point du dimanche ; heures calmes, un message par passage, une fois par événement, cible morte mise en pause.
 - **Aucune décision** depuis une messagerie : transmettre, confirmer, régler restent dans l'application.
 
+
+## 15. Crypto et pilote automatique (livrés)
+
+Guide : [CRYPTO.md](CRYPTO.md). Inspiré de la compétence de Minara pour ce qui protège (confirmation en deux
+messages, anti-boucle, empoisonnement d'adresse, jetons-appâts), sans en reprendre l'exécution :
+
+- **Domaine pur** (`app/domain/crypto.py`) : catalogue d'actifs et de contrats vérifiés, adresses vérifiées par
+  somme de contrôle (Keccak-256 et EIP-55 maison, bech32/bech32m, base58check, Solana), secrets repérés (BIP39
+  anglais et français, WIF, xprv, hex, Solana), sosies d'adresses, signaux d'arnaque, fiscalité 150 VH bis avec
+  taux datés et sourcés.
+- **Service** (`app/services/crypto.py`) : adresses suivies chiffrées, avoirs saisis, relève par nœuds publics
+  ou personnels avec accord (`crypto_network`), cours CoinGecko, humeur du marché, point quotidien (upsert :
+  deux écrans ne se disputent plus la ligne du jour — corrigé aussi pour la valeur nette), garde-fous, impôts,
+  vérificateur ; ligne à part dans le patrimoine.
+- **Pilote** (`app/services/autonomy.py`) : mandat lié à un jeton, essai, consignes à cadence, plafonds
+  glissants, ticket unique, arrêts automatiques, journal, alertes urgentes, `/pilote stop`.
+- **MCP** : `get_crypto`, `crypto_check`, `autonomy_status`, `request_autonomous_move`, `report_autonomous_move`.
+- **Écrans** : Épargne · Crypto · Pilote (ruban de répartition, humeur du marché, vérificateur, impôts ; état,
+  jauges, cadre, journal).
+- **HERMÈS** : compétence v2 (porte d'entrée, comportement critique, procédures I à L), règle de routage dans
+  la mémoire d'HERMÈS, 17 scénarios au format `crypto-skill-bench`.

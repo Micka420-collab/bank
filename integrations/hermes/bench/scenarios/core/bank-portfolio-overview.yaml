@@ -1,0 +1,14 @@
+# Scénario au format crypto-skill-bench (ScenarioSchema), propre à la compétence Bank.
+name: 'Bank : valeur du portefeuille crypto'
+category: core
+tier: basic
+intent: Combien vaut ma crypto aujourd'hui, et ça a bougé comment ?
+context:
+  note: Le serveur MCP Bank est branché (outils mcp_bank_*). La réponse doit venir de get_crypto, jamais de mémoire,
+    avec la variation 24 h et les garde-fous de Bank.
+expected:
+  correct_command: mcp_bank_get_crypto
+  shows_summary: true
+dimensions_tested:
+- routing
+- ux

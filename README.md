@@ -28,6 +28,14 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
 - **Bank dans tes messageries** : WhatsApp, Telegram, Signal, Discord, Slack ou ntfy — tu lui écris, il répond
   et te prévient (relances, gains à confirmer, risque de découvert), sans jamais rien valider à ta place.
   Voir [docs/CANAUX.md](docs/CANAUX.md).
+- **Crypto, sous verre** : tes adresses publiques suivies en lecture seule (sommes de contrôle vérifiées, jetons
+  inconnus ignorés), tes avoirs de plateforme, la valeur, la courbe et la répartition, l'impôt de l'année
+  (305 €, 2086, 3916-bis), un vérificateur d'arnaques — et aucune phrase de récupération ni clé acceptée, nulle
+  part. Voir [docs/CRYPTO.md](docs/CRYPTO.md).
+- **Pilote automatique** (éteint par défaut) : ton agent peut acheter ou envoyer seul, mais seulement dans ton
+  cadre — un jeton précis, tes actifs, tes adresses, tes consignes, des plafonds glissants, une perte maximale,
+  une durée ; Bank autorise ou refuse chaque mouvement avant qu'il parte et coupe tout à la première anomalie.
+  « Tout arrêter » d'un geste, ou `/pilote stop` depuis ta messagerie.
 - **Simple et ludique** : cinq destinations (Aujourd'hui, Opérations, Gagner, Papiers, Épargne), des
   missions avec leur récompense, une tirelire qui se remplit avec ce que Bank t'a vraiment fait récupérer.
 - **Une interface de produit fini** : design system « Encre claire » (clair et sombre, choix dans Réglages),
@@ -282,6 +290,18 @@ nouveauté officielle pour toi, point du dimanche soir — regroupées, une seul
 
 Guide pas à pas par messagerie, exposition du webhook WhatsApp et service signal-cli : [docs/CANAUX.md](docs/CANAUX.md).
 
+## Crypto et pilote automatique
+
+Bank › Épargne › **Crypto** : ajoute une adresse publique (celle qu'on te donne pour *recevoir*) ou saisis ce que
+tu as sur une plateforme. Avec ton accord « Suivi de tes adresses crypto », Bank relève les soldes auprès de
+nœuds publics (ou du tien) et les cours chez CoinGecko ; sans, tout marche à la main. La crypto compte dans ton
+patrimoine sur une ligne à part, jamais dans l'argent disponible du budget.
+
+Bank › Épargne › **Pilote** : le cadre dans lequel ton agent peut agir sans te redemander (mot de passe et code
+de double authentification pour le régler), les jauges de ce qui est déjà engagé, et le journal de chaque
+demande, refus compris. Mode essai conseillé pour commencer. Détails, sources fiscales et garanties :
+[docs/CRYPTO.md](docs/CRYPTO.md).
+
 ## Brancher HERMÈS (ton agent IA)
 
 1. Bank › **Ma situation** : confirme ce que Bank a lu dans tes relevés, réponds aux questions les plus utiles.
@@ -289,8 +309,9 @@ Guide pas à pas par messagerie, exposition du webhook WhatsApp et service signa
 3. Sur la machine d'HERMÈS : `integrations/hermes/install.sh --routines`, puis `/reload-mcp`.
 4. Demande-lui « fais mon onboarding financier », puis règle son **mandat** dans Bank (lui ne peut pas).
 
-Il ne peut ni déplacer d'argent, ni changer son mandat, ni appliquer un réglage sans ton clic. Détails, outils et
-dépannage : [integrations/hermes/README.md](integrations/hermes/README.md).
+Il ne peut ni changer son mandat, ni appliquer un réglage sans ton clic, ni bouger d'argent sans ta confirmation —
+sauf, si tu l'as allumé, dans le cadre du pilote automatique. Détails, outils et dépannage :
+[integrations/hermes/README.md](integrations/hermes/README.md).
 
 ## Développement
 
@@ -305,14 +326,18 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 712 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+Qualité au moment de la livraison : 811 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
-aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, intégration OpenFisca
-réelle), couverture 92 %, 86 tests front (parcours de première ouverture, coffre, démarches, opportunités, veille, assistant,
-erreurs qui disent quoi faire), mypy strict sans erreur, ruff et bandit propres, `pip-audit` et `npm audit` sans
-vulnérabilité connue, aucune erreur de console ni débordement horizontal à 390 px (vérifié par Playwright), et un
-parcours complet dans Chromium à travers les conteneurs durcis, derrière la CSP de production et un frontal TLS :
-accueil, quatorze écrans, démarche ouverte, thème sombre — aucune violation CSP, cookies `Secure`/`HttpOnly`/`Strict`.
+aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, scénarios adverses du
+banc d'essai crypto de Minara rejoués contre le pilote automatique, Keccak-256 vérifié contre une implémentation de
+référence, intégration OpenFisca réelle), couverture 92 %, 97 tests front (parcours de première ouverture, coffre,
+démarches, opportunités, veille, assistant, crypto, pilote, erreurs qui disent quoi faire), mypy strict sans erreur,
+ruff et bandit propres, `pip-audit` et `npm audit` sans vulnérabilité connue, aucune erreur de console ni débordement
+horizontal à 390 px (vérifié par Playwright), et un parcours complet dans Chromium à travers les conteneurs durcis,
+derrière la CSP de production et un frontal TLS : accueil, seize écrans, démarche ouverte, phrase de récupération
+arrêtée dans le navigateur, vérificateur d'arnaques, thème sombre — aucune violation CSP, cookies
+`Secure`/`HttpOnly`/`Strict`. La relève crypto a aussi été essayée contre les vrais nœuds publics (mempool.space,
+PublicNode, CoinGecko, alternative.me).
 
 ## Sauvegarde
 

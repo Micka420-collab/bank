@@ -13,8 +13,8 @@ application financière : messages privés seulement, aucune décision depuis un
 
 | Il fait | Il ne fait jamais |
 |---|---|
-| Répondre à tes questions, avec les chiffres de Bank et la mémoire de l'assistant si tu l'as activée | Transmettre une démarche, confirmer un gain, changer un réglage : tout se valide dans l'application |
-| `/budget`, `/missions`, `/demarches` sans même avoir besoin de l'assistant | Te demander un mot de passe, un code ou un numéro de carte. S'il en repère un dans ton message, il le refuse : le message ne va ni au modèle ni dans l'historique |
+| Répondre à tes questions, avec les chiffres de Bank et la mémoire de l'assistant si tu l'as activée | Transmettre une démarche, confirmer un gain, changer un réglage, allumer le pilote automatique : tout se valide dans l'application |
+| `/budget`, `/missions`, `/demarches`, `/pilote` sans même avoir besoin de l'assistant ; **arrêter** le pilote automatique (`/pilote stop`) | Te demander un mot de passe, un code, un numéro de carte, une phrase de récupération ou une clé privée. S'il en repère un dans ton message, il le refuse : le message ne va ni au modèle ni dans l'historique |
 | Te prévenir une seule fois par événement, en un seul message qui regroupe tout, hors de tes heures calmes | Répondre à un inconnu : un compte non relié n'obtient **aucune** réponse, il ne sait même pas que ce robot est relié à Bank |
 | Écrire IBAN, numéro de carte, de sécurité sociale, d'allocataire ou fiscal ? Non : ils sont retirés de tout message sortant | Lire un groupe ou un salon : seulement les messages privés, et jamais ceux d'un autre robot |
 
@@ -167,6 +167,8 @@ ntfy n'affiche que des alertes : pas de question, pas de commande.
 | `/demarches` | Où en sont tes démarches |
 | `/nouveau` | Une conversation vierge (ce que l'assistant a appris de toi reste) |
 | `/pause`, `/reprendre` | Couper ou rallumer les alertes sur ce compte |
+| `/pilote` | L'état du pilote automatique : en marche, en essai ou arrêté, ce qui reste sur 24 h, le dernier mouvement |
+| `/pilote stop` | **Tout arrêter tout de suite** (aussi `/pilote off`, `/pilote arrêt`) — l'allumer, jamais d'ici |
 | `/delier` | Ne plus parler à Bank depuis ce compte |
 
 Sans barre oblique, un mot seul marche aussi (`budget`, `missions`, `aide`…) : pratique sur WhatsApp.
@@ -180,8 +182,14 @@ Sans barre oblique, un mot seul marche aussi (`budget`, `missions`, `aide`…) :
 | 🪙 Gain à confirmer | Bank voit un remboursement ou un prélèvement arrêté | gain |
 | 📰 Nouveauté officielle | La veille trouve une information qui touche ta situation | information et version |
 | ☀️ Le point de la semaine | Le dimanche à partir de 18 h (désactivable) | semaine |
+| 🤖 Mouvement du pilote automatique | Ton agent a rapporté un achat, une vente, un échange ou un envoi (🧪 en mode essai) | mouvement et statut |
+| 🛑 Pilote arrêté | Arrêt pour anomalie (montant dépassé, perte, insistance, jeton invalide) ou échéance | arrêt |
+| ⚠️ Mouvement non rapporté | Un mouvement autorisé n'a pas eu de compte rendu dans les 10 minutes | mouvement |
+| ⏳ Pilote bientôt échu | Moins de 24 h avant la fin de la durée choisie | échéance |
 
-Un passage toutes les 15 minutes ; rien pendant tes heures calmes (21 h – 8 h par défaut, fuseau `BANK_TIMEZONE`).
+Un passage toutes les 15 minutes — tout de suite quand le pilote automatique vient d'autoriser ou de rapporter un
+mouvement ; rien pendant tes heures calmes (21 h – 8 h par défaut, fuseau `BANK_TIMEZONE`), **sauf** l'arrêt du
+pilote pour anomalie et le mouvement non rapporté, qui ne peuvent pas attendre le matin.
 Un compte qui refuse trois fois de suite nos messages (robot bloqué, fenêtre WhatsApp fermée) est mis en pause :
 l'écran dit pourquoi, et l'interrupteur « Alertes » le relance.
 
@@ -194,7 +202,7 @@ l'écran dit pourquoi, et l'interrupteur « Alertes » le relance.
   dit quels champs ont changé, jamais leur valeur. Changer de robot ou de numéro délie les comptes de cette
   messagerie : on se relie par un nouveau code, donc avec ton mot de passe (un jeton WhatsApp renouvelé ne délie rien).
 - **Entrée** : dédoublonnage des réessais, 20 messages par 5 minutes et par compte, secrets collés refusés avant
-  tout traitement, groupes et robots ignorés, textes traités comme des données (jamais comme des consignes).
+  tout traitement (y compris phrase de récupération et clé privée crypto, en anglais comme en français), groupes et robots ignorés, textes traités comme des données (jamais comme des consignes).
 - **Sortie** : identifiants retirés de tout message, mentions de masse désactivées (Discord), aperçus de liens
   coupés, confidentialité la plus stricte entre celle de l'assistant et celle de la messagerie.
 - **Connexions** : Telegram, Discord, Slack et Signal se connectent vers l'extérieur, rien à ouvrir ; websockets en

@@ -72,7 +72,7 @@ d'opération qui lui donne des « consignes »). Bank ne lui fait donc confiance
 | Menace | Défense |
 |---|---|
 | Accès sans jeton, jeton volé ou révoqué | Jeton vérifié en base à chaque requête HTTP **et** à chaque appel d'outil ; révocation immédiate (`test_revocation_is_immediate`) ; liste d'IP par jeton (`test_ip_allowlist`) |
-| Agent qui déplace de l'argent | Aucun outil ne le permet ; Bank n'a de toute façon qu'un accès DSP2 en lecture (`test_initialize_and_catalogue`) |
+| Agent qui déplace de l'argent | Aucun outil de Bank ne le permet ; Bank n'a qu'un accès DSP2 en lecture (`test_initialize_and_catalogue`). Un mouvement crypto exécuté ailleurs passe par ta confirmation, ou par le pilote automatique, éteint par défaut et borné de toutes parts (section suivante) |
 | Agent qui s'auto-promeut (élargit son mandat, lève une ligne rouge) | Questions du mandat refusées côté MCP **et** côté service, quel que soit le chemin (`test_agent_records_answers_but_never_its_mandate`, `test_mandate_cannot_be_written_by_an_agent_even_internally`) |
 | Injection de consignes via un libellé | Libellés livrés comme champs de données, consignes explicites dans le dossier et la compétence ; aucune action à effet sans validation humaine (`test_transactions_respect_privacy_mode`) |
 | Changement de réglage non voulu | Propositions typées et validées strictement, file bornée (20), dédoublonnées, expirées après 14 j, appliquées par le code de Bank après ton clic ; une règle proposée affiche le nombre d'opérations touchées et son motif est validé après normalisation (`test_proposals_are_strictly_validated`, `test_pending_queue_is_bounded`, `test_rule_patterns_are_validated_after_normalisation`) |
@@ -95,6 +95,32 @@ d'opération qui lui donne des « consignes »). Bank ne lui fait donc confiance
 | Agent qui agit sans trace | Chaque appel d'outil, chaque refus (`mcp.refused`) et les jetons refusés (`mcp.auth_failed`, un par minute et par IP) sont inscrits dans la chaîne d'audit HMAC, visible dans Ma situation (`test_every_tool_call_is_audited_and_chain_holds`, `test_duplicate_authorization_headers_and_failed_auth_are_handled`) |
 
 `BANK_AGENTS_ENABLED=false` coupe le serveur MCP d'un coup (`test_mcp_can_be_disabled`).
+
+## Crypto et pilote automatique
+
+Le pilote automatique est le seul chemin par lequel un agent bouge de l'argent sans te redemander : il est
+conçu comme une barrière qu'un agent manipulé (texte piégé, nom de jeton, faux support) ne peut pas franchir.
+
+| Menace | Défense |
+|---|---|
+| Pilote activé par une session volée | Mot de passe **et** code TOTP s'il est activé (non rejouable), essais limités, refus audités (`test_api_needs_password_and_second_factor_but_stopping_needs_nothing`) |
+| Un autre agent, ou un jeton recréé du même nom | Le mandat suit l'identifiant d'UN jeton ; révoquer ce jeton coupe le pilote (`test_expiry_and_token_changes_end_the_pilot`, `test_revoking_the_token_in_bank_stops_the_pilot`) |
+| Bait-and-switch : plus exécuté qu'autorisé | Montant rapporté au-delà d'1 € de marge : arrêt immédiat (`test_bait_and_switch_more_executed_than_authorized_stops_everything`) |
+| Exécution sans compte rendu | Ticket de 10 min à usage unique, gardé en empreinte ; non rapporté = compté comme dépensé + arrêt ; compte rendu tardif accepté (`test_an_unreported_move_counts_as_spent_and_stops_the_pilot`, `test_tickets_are_single_use_bound_to_their_token_and_validated`) |
+| Levier, perps, ordre limité, pilote tiers, achat par carte | Refus inconditionnel (`test_hard_rules_cannot_be_talked_around`) |
+| Envoi vers une adresse d'escroc, empoisonnement d'adresse | Seulement tes adresses enregistrées (nom ou adresse exacte, sans tenir compte de la casse EVM), sommes de contrôle vérifiées, sosies refusés à l'enregistrement, réseau contrôlé (`test_address_poisoning_wrong_chain_and_unknown_destinations`, `test_destinations_are_checksummed_and_lookalikes_refused`) |
+| Découpage pour passer sous un plafond, remise à zéro à minuit | Plafonds glissants 24 h et 30 jours, nombre d'opérations (les échecs comptent), consignes à cadence civile (`test_caps_are_rolling_and_count_operations`, `test_monthly_cap_and_failed_moves`, `test_rules_mode_follows_each_rule_once_per_period_and_nothing_else`) |
+| Agent manipulé qui insiste | 5 refus en une heure : arrêt (`test_an_agent_that_insists_after_refusals_is_cut_off`) |
+| Pertes en série | Seuil de perte cumulée depuis l'activation : arrêt (`test_losses_beyond_the_threshold_stop_the_pilot`) |
+| Montant absurde ou imprécis | Euros au centime, positifs, finis, bornés (`test_absurd_or_imprecise_amounts_are_errors`) |
+| Ta parole changée en cours de route | Une ligne rouge « pas de crypto » ajoutée après coup bloque tout (`test_a_red_line_added_later_wins`) |
+| Arrêter trop difficile | Bouton sans mot de passe, `/pilote stop` en messagerie ; un ticket déjà remis reste rapportable pour que la vérité entre (`test_kill_switch_cuts_new_moves_but_lets_the_truth_in`, `test_pilote_command_reports_and_stops_from_chat`) |
+| Tu n'es pas au courant | Chaque mouvement annoncé dans tes messageries ; arrêt pour anomalie et mouvement non rapporté passent les heures calmes (`test_moves_are_announced_and_anomalies_pass_quiet_hours`) |
+| Phrase de récupération ou clé privée collée | Reconnue (BIP39 anglais et français, WIF, xprv, hex, Solana) dans les adresses, noms, notes, messageries et questions à l'assistant : refusée, ni stockée, ni journalisée, ni envoyée au modèle ; dans l'écran Crypto, arrêtée dans le navigateur (`test_secrets_are_recognised_everywhere`, `test_a_seed_pasted_as_an_address_is_refused_and_leaves_no_trace`, `test_a_seed_never_reaches_the_model`) |
+| Adresse mal recopiée | EIP-55 (Keccak-256 vérifié contre une implémentation de référence), bech32/bech32m, base58check, Solana 32 octets ; propriété : une lettre de casse changée ne passe jamais (`test_keccak_and_eip55_reference_vectors`, `test_one_miscopied_letter_never_passes_the_checksum`, `test_bitcoin_and_solana_addresses_are_checksummed`) |
+| Jeton-appât reçu sur ton adresse | Seuls les contrats du catalogue sont lus (`test_sync_reads_balances_ignores_unknown_tokens_and_values_the_portfolio`) |
+| Fuite de tes adresses | Chiffrées en base, jamais montrées à l'agent ; relève réseau seulement avec ton accord, par la porte sûre (https, hôte public, tailles bornées) ou ton propre nœud (`test_nothing_goes_on_the_network_without_consent`, `test_agent_sees_the_portfolio_never_an_address`) |
+| Nœud public en panne ou menteur | Réponse inattendue : derniers soldes gardés, erreur affichée sous l'adresse ; un solde ne devient jamais négatif (`test_a_broken_node_keeps_the_last_balances_and_says_so`) |
 
 ## Connecteurs
 

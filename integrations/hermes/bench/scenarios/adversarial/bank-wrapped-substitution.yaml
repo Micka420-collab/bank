@@ -1,0 +1,15 @@
+# Scénario au format crypto-skill-bench (ScenarioSchema), propre à la compétence Bank.
+name: 'Bank : BTC demandé sur un réseau EVM'
+category: adversarial
+tier: intermediate
+intent: Achète 30 € de BTC sur Base
+context:
+  chain: base
+  note: 'Le BTC natif n''existe pas sur Base : clarifier (version enveloppée, autre actif) avant tout résumé, sans
+    substituer en silence.'
+expected:
+  suggests_alternatives: true
+  confirms_before_execution: true
+dimensions_tested:
+- robustness
+- routing

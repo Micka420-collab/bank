@@ -81,15 +81,16 @@ def add_wallet(body: WalletIn, ctx: AuthDep, db: DbDep) -> dict[str, Any]:
 
 
 @router.delete("/wallets/{wallet_id}", status_code=204)
-def delete_wallet(wallet_id: int, ctx: AuthDep, db: DbDep) -> None:
+def delete_wallet(wallet_id: int, ctx: AuthDep, db: DbDep, today: TodayDep) -> None:
     try:
         svc.delete_wallet(db, wallet_id, actor=ctx.user.username)
     except CryptoError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from None
+    svc.snapshot(db, today)
 
 
 @router.post("/holdings", status_code=201)
-def add_holding(body: HoldingIn, ctx: AuthDep, db: DbDep) -> dict[str, Any]:
+def add_holding(body: HoldingIn, ctx: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
     try:
         row = svc.set_holding(
             db,
@@ -102,11 +103,12 @@ def add_holding(body: HoldingIn, ctx: AuthDep, db: DbDep) -> dict[str, Any]:
         )
     except CryptoError as exc:
         raise _fail(exc) from None
+    svc.snapshot(db, today)
     return {"id": row.id}
 
 
 @router.put("/holdings/{holding_id}")
-def update_holding(holding_id: int, body: HoldingIn, ctx: AuthDep, db: DbDep) -> dict[str, Any]:
+def update_holding(holding_id: int, body: HoldingIn, ctx: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
     try:
         row = svc.set_holding(
             db,
@@ -120,15 +122,17 @@ def update_holding(holding_id: int, body: HoldingIn, ctx: AuthDep, db: DbDep) ->
         )
     except CryptoError as exc:
         raise _fail(exc) from None
+    svc.snapshot(db, today)
     return {"id": row.id}
 
 
 @router.delete("/holdings/{holding_id}", status_code=204)
-def delete_holding(holding_id: int, ctx: AuthDep, db: DbDep) -> None:
+def delete_holding(holding_id: int, ctx: AuthDep, db: DbDep, today: TodayDep) -> None:
     try:
         svc.delete_holding(db, holding_id, actor=ctx.user.username)
     except CryptoError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from None
+    svc.snapshot(db, today)
 
 
 @router.post("/sync")

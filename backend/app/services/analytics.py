@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.db import upsert
 from app.domain.aids import AidPayment, AidsSummary, summarize_aids
 from app.domain.forecast import (
     CategoryInfo,
@@ -253,16 +254,9 @@ def monthly_essentials(db: Session, today: date) -> int:
 
 
 def snapshot_wealth(db: Session, today: date, assets: int, liabilities: int) -> None:
-    snap = db.scalar(select(WealthSnapshot).where(WealthSnapshot.day == today))
-    if snap is None:
-        db.add(
-            WealthSnapshot(
-                day=today, assets_cents=assets, liabilities_cents=liabilities, net_cents=assets - liabilities
-            )
-        )
-    else:
-        snap.assets_cents, snap.liabilities_cents, snap.net_cents = assets, liabilities, assets - liabilities
-    db.flush()
+    # Upsert : l'écran Patrimoine ouvert deux fois à la même seconde ne lève plus de conflit sur la ligne du jour.
+    values = {"day": today, "assets_cents": assets, "liabilities_cents": liabilities, "net_cents": assets - liabilities}
+    upsert(db, WealthSnapshot, values, ["day"])
 
 
 def wealth_history(db: Session, today: date, days: int = 730) -> list[tuple[date, int]]:

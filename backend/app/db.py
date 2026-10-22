@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import DateTime, Engine, MetaData, Text, create_engine, event, inspect, literal, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.types import TypeDecorator
@@ -77,6 +79,15 @@ def make_engine(url: str) -> Engine:
             cur.close()
 
     return engine
+
+
+def upsert(db: Session, model: type[Base], values: dict[str, Any], keys: list[str]) -> None:
+    """INSERT … ON CONFLICT DO UPDATE : deux requêtes simultanées (un écran ouvert deux fois, la boucle de fond) ne
+    se marchent plus dessus sur une ligne « une par jour »."""
+    dialect = db.get_bind().dialect.name
+    stmt = (pg_insert if dialect == "postgresql" else sqlite_insert)(model).values(**values)
+    update = {k: v for k, v in values.items() if k not in keys}
+    db.execute(stmt.on_conflict_do_update(index_elements=keys, set_=update))
 
 
 def make_sessionmaker(engine: Engine) -> sessionmaker[Session]:

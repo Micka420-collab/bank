@@ -54,6 +54,7 @@ const PATHS: Record<string, string> = {
   folder: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18",
   chat: "M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H10l-5 4v-4H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1ZM8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01",
   bell: "M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15ZM10 21a2 2 0 0 0 4 0",
+  crypto: "M12 2.5 20.5 7.5v9L12 21.5 3.5 16.5v-9ZM9.5 8.5h3.5a2 2 0 0 1 0 4H9.5M9.5 12.5h4a2 2 0 0 1 0 4h-4M9.5 8.5v8M11 7v1.5M11 16.5V18",
 };
 
 export type IconName = keyof typeof PATHS;

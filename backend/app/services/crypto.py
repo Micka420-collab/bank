@@ -25,7 +25,7 @@ from urllib.parse import urlencode
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.db import utcnow
+from app.db import upsert, utcnow
 from app.domain import crypto as dc
 from app.domain.money import format_eur
 from app.domain.wealth import emergency_fund, net_worth
@@ -298,6 +298,7 @@ def sync(db: Session, *, net: CryptoNet, now: datetime, actor: str) -> dict[str,
     db.flush()
     priced = refresh_prices(db, net=net, now=now, force=True)
     mood = refresh_sentiment(db, net=net, now=now)
+    snapshot(db, now.date())
     audit.record(db, actor, "crypto.sync", wallets=synced, failed=failed, priced=priced)
     return {"wallets_synced": synced, "wallets_failed": failed, "prices": priced, "sentiment": mood}
 
@@ -360,13 +361,10 @@ def refresh_sentiment(db: Session, *, net: CryptoNet, now: datetime) -> dict[str
 
 # ------------------------------------------------------------------ vue
 def snapshot(db: Session, today: date) -> int:
+    """Le point du jour de la courbe : écrit à la relève et quand tu changes tes avoirs — jamais à la simple
+    lecture de l'écran (deux onglets ouverts ne se disputent pas la ligne du jour)."""
     value = int(sum(int(v["value_cents"]) for v in holdings_value(db).values()))
-    row = db.get(CryptoSnapshot, today)
-    if row is None:
-        db.add(CryptoSnapshot(day=today, value_cents=value))
-    else:
-        row.value_cents = value
-    db.flush()
+    upsert(db, CryptoSnapshot, {"day": today, "value_cents": value}, ["day"])
     return value
 
 
@@ -417,7 +415,6 @@ def wallets_view(db: Session) -> list[dict[str, Any]]:
 def view(db: Session, *, today: date, now: datetime) -> dict[str, Any]:
     values = holdings_value(db)
     total = sum(v["value_cents"] for v in values.values())
-    snapshot(db, today)
     prices = latest_prices(db)
     assets = []
     for sym, v in sorted(values.items(), key=lambda kv: -kv[1]["value_cents"]):
@@ -459,9 +456,13 @@ def view(db: Session, *, today: date, now: datetime) -> dict[str, Any]:
     history = [
         {"day": s.day.isoformat(), "value_cents": s.value_cents}
         for s in db.scalars(
-            select(CryptoSnapshot).where(CryptoSnapshot.day >= today - timedelta(days=365)).order_by(CryptoSnapshot.day)
+            select(CryptoSnapshot)
+            .where(CryptoSnapshot.day >= today - timedelta(days=365), CryptoSnapshot.day < today)
+            .order_by(CryptoSnapshot.day)
         )
     ]
+    if total or history:
+        history.append({"day": today.isoformat(), "value_cents": total})  # aujourd'hui : la valeur du moment
     year = tax_view(db, year=today.year, today=today)
     mood = get_setting(db, "crypto_sentiment")
     return {

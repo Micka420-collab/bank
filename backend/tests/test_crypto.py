@@ -412,3 +412,85 @@ def test_a_seed_never_reaches_the_model(world: TestClient) -> None:
 
     assert FakeLlm.calls == []
     assert "phrase de récupération" in (chat_secret_kind(SEED_FR) or "")
+
+
+def test_two_screens_at_once_never_fight_over_the_daily_point(app, client) -> None:  # type: ignore[no-untyped-def]
+    # Deux sessions ouvertes en même temps écrivent la même journée : la seconde met à jour, sans conflit.
+    with app.state.sessionmaker() as a, app.state.sessionmaker() as b:
+        svc.set_holding(a, actor="micka", asset="BTC", quantity="1")
+        a.commit()
+        from app.models import CryptoSnapshot
+
+        assert b.get(CryptoSnapshot, TODAY) is None  # les deux voient « pas encore de point aujourd'hui »
+        assert svc.snapshot(a, TODAY) == 0
+        a.commit()
+        assert svc.snapshot(b, TODAY) == 0  # un INSERT simple lèverait ici une violation d'unicité
+        b.commit()
+    with app.state.sessionmaker() as s:
+        from app.models import CryptoSnapshot
+
+        assert len(list(s.scalars(select(CryptoSnapshot)))) == 1
+        analytics.snapshot_wealth(s, TODAY, 100, 0)
+        analytics.snapshot_wealth(s, TODAY, 200, 50)
+        s.commit()
+
+
+# ------------------------------------------------------------------ porte réseau (JSON-RPC)
+def _rpc_client(handler: Any) -> Any:
+    import httpx
+
+    return httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=False)
+
+
+def _streamed(status: int, body: bytes = b"", headers: dict[str, str] | None = None) -> Any:
+    import httpx
+
+    from tests.test_watch import Chunks
+
+    return httpx.Response(status, stream=Chunks(body), headers=headers or {})
+
+
+def test_post_json_is_pinned_bounded_and_never_redirected() -> None:
+    import httpx
+
+    from app.security import netfetch
+
+    seen: list[httpx.Request] = []
+
+    def ok(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return _streamed(200, json.dumps([{"jsonrpc": "2.0", "id": 0, "result": "0x1"}]).encode())
+
+    out = netfetch.post_json(
+        "https://node.example.org/rpc",
+        [{"id": 0}],
+        http=_rpc_client(ok),
+        resolver=lambda h: ["93.184.216.34"],
+        pin=True,
+    )
+    assert out == [{"jsonrpc": "2.0", "id": 0, "result": "0x1"}]
+    req = seen[0]
+    assert req.method == "POST" and req.url.host == "93.184.216.34" and req.headers["host"] == "node.example.org"
+    assert req.extensions["sni_hostname"] == "node.example.org" and json.loads(req.content) == [{"id": 0}]
+    bad = {
+        "redirige": lambda r: _streamed(307, headers={"location": "https://10.0.0.1/"}),
+        "géante": lambda r: _streamed(200, b"[]", {"content-length": "9999999"}),
+        "illisible": lambda r: _streamed(200, b"<html>"),
+        "coupée": lambda r: (_ for _ in ()).throw(httpx.ConnectError("x")),
+    }
+    for name, handler in bad.items():
+        with pytest.raises(netfetch.FetchError):
+            netfetch.post_json(
+                "https://node.example.org/rpc", [], http=_rpc_client(handler), resolver=lambda h: ["93.184.216.34"]
+            )
+        assert name
+    with pytest.raises(netfetch.FetchError):  # le réseau du serveur n'est jamais visé
+        netfetch.post_json(
+            "https://node.example.org/rpc", [], http=_rpc_client(ok), resolver=lambda h: ["192.168.1.10"]
+        )
+    got = netfetch.get_json("https://api.example.org/x", http=_rpc_client(lambda r: _streamed(200, b'{"a": 1}')),
+                            resolver=lambda h: ["93.184.216.34"])  # fmt: skip
+    assert got == {"a": 1}
+    with pytest.raises(netfetch.FetchError, match="JSON"):
+        netfetch.get_json("https://api.example.org/x", http=_rpc_client(lambda r: _streamed(200, b"<")),
+                          resolver=lambda h: ["93.184.216.34"])  # fmt: skip

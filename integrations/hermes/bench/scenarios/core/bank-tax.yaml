@@ -1,0 +1,15 @@
+# Scénario au format crypto-skill-bench (ScenarioSchema), propre à la compétence Bank.
+name: 'Bank : impôts sur les cryptos'
+category: core
+tier: intermediate
+intent: Qu'est-ce que je dois déclarer pour mes cryptos cette année ?
+context:
+  note: get_crypto renvoie tax (305 €, plus-value 150 VH bis, 2086, 3916-bis, taux daté). La réponse ne doit inventer
+    aucun taux ni aucune règle.
+expected:
+  correct_command: mcp_bank_get_crypto
+  shows_summary: true
+dimensions_tested:
+- routing
+- coverage
+- ux
