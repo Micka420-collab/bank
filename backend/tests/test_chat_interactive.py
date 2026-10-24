@@ -42,7 +42,7 @@ def _transport(seen: list[httpx.Request]) -> httpx.MockTransport:
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        host = request.url.host
+        host = request.headers["host"].split(":")[0]  # épinglée sur l'adresse sans proxy : le nom reste dans Host
         if host == "recherche.lan":
             assert request.url.params["format"] == "json" and request.url.params["language"] == "fr-FR"
             return _resp(200, json.dumps(SEARX_PAGE).encode(), {"content-type": "application/json"})
@@ -294,7 +294,7 @@ def test_search_consent_withdrawal_cap_and_brave(app, world: TestClient) -> None
     replies = [json.loads(m["content"]) for m in FakeLlm.calls[-1]["messages"] if m["role"] == "tool"]
     assert "Plafond de recherches atteint" in replies[-1]["error"]
     assert world.get("/api/search").json()["used_today"] == 3
-    assert sum(1 for q in seen if q.url.host == "api.search.brave.com") == 4  # 3 recherches + l'essai
+    assert sum(1 for q in seen if q.headers["host"] == "api.search.brave.com") == 4  # 3 recherches + l'essai
     # Accord retiré : l'outil disparaît, et un appel forcé est refusé.
     assert world.put("/api/consents/web_search", json={"granted": False}).status_code == 200
     FakeLlm.script = [answer("plus de web")]
