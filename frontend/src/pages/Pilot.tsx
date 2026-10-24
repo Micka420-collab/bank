@@ -6,6 +6,7 @@
 import { useState, type FormEvent } from "react";
 import { api, useApi, type Me, type PilotDestination, type PilotKind, type PilotMove, type PilotRule, type PilotView } from "../api";
 import { Icon } from "../components/Icon";
+import { PilotTrack } from "../components/PilotTrack";
 import { Segmented } from "../components/Segmented";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
@@ -16,6 +17,7 @@ const KINDS: { value: PilotKind; label: string }[] = [
   { value: "swap", label: "Échanger" },
   { value: "transfer", label: "Envoyer" },
 ];
+const WEEKDAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
 const STATUS: Record<PilotMove["status"], { label: string; tone: string }> = {
   reserved: { label: "autorisé, en cours", tone: "" },
   executed: { label: "exécuté", tone: "ok" },
@@ -49,7 +51,7 @@ function draftOf(v: PilotView): Draft {
     trial: v.enabled ? v.trial : true,
     scopes: v.scopes,
     assets: v.assets,
-    rules: v.rules.map(({ kind, asset, to_asset, destination, amount_cents, every }) => ({ kind, asset, to_asset, destination, amount_cents, every })),
+    rules: v.rules.map(({ kind, asset, to_asset, destination, amount_cents, every, on }) => ({ kind, asset, to_asset, destination, amount_cents, every, on: on ?? null })),
     destinations: v.destinations,
     per_op_cents: v.limits.per_op_cents,
     per_day_cents: v.limits.per_day_cents,
@@ -65,6 +67,8 @@ export function ruleText(r: PilotRule, every: Record<string, string>): string {
   let t = `${verb} ${money(r.amount_cents)} de ${r.asset}`;
   if (r.kind === "swap" && r.to_asset) t += ` contre ${r.to_asset}`;
   if (r.kind === "transfer" && r.destination) t += ` vers « ${r.destination} »`;
+  if (r.on && r.every === "week") return `${t} chaque ${WEEKDAYS[r.on - 1] ?? ""}`;
+  if (r.on && r.every === "month") return `${t} le ${r.on === 1 ? "1er" : r.on} de chaque mois`;
   return `${t} ${every[r.every] ?? r.every}`;
 }
 
@@ -135,6 +139,8 @@ export function Pilot() {
       </section>
 
       <Frame view={data} totp={me.data?.totp_enabled ?? false} onSaved={(nv) => { setView(nv); toast(nv.active ? "Pilote en route, dans ton cadre." : "Cadre enregistré."); }} />
+
+      <PilotTrack />
 
       <Journal moves={data.journal} />
     </>
@@ -264,7 +270,7 @@ function Frame({ view, totp, onSaved }: { view: PilotView; totp: boolean; onSave
 }
 
 function Rules({ draft, set, every }: { draft: Draft; set: (p: Partial<Draft>) => void; every: Record<string, string> }) {
-  const [r, setR] = useState<PilotRule>({ kind: "buy", asset: draft.assets[0] ?? "BTC", to_asset: null, destination: null, amount_cents: 2000, every: "week" });
+  const [r, setR] = useState<PilotRule>({ kind: "buy", asset: draft.assets[0] ?? "BTC", to_asset: null, destination: null, amount_cents: 2000, every: "week", on: null });
   const add = () => {
     set({ rules: [...draft.rules, { ...r, asset: r.asset.toUpperCase(), to_asset: r.kind === "swap" ? r.to_asset?.toUpperCase() ?? null : null, destination: r.kind === "transfer" ? r.destination : null }] });
   };
@@ -299,10 +305,20 @@ function Rules({ draft, set, every }: { draft: Draft; set: (p: Partial<Draft>) =
           </Field>
         )}
         <Field label="Rythme">
-          <select value={r.every} onChange={(e) => setR({ ...r, every: e.target.value as PilotRule["every"] })}>
+          <select value={r.every} onChange={(e) => setR({ ...r, every: e.target.value as PilotRule["every"], on: null })}>
             {Object.entries(every).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
           </select>
         </Field>
+        {r.every !== "day" && (
+          <Field label="Jour prévu" hint="Pour le suivi « pilote vs consigne » ; un 31 tombe le dernier jour des mois courts">
+            <select value={r.on ?? ""} onChange={(e) => setR({ ...r, on: Number(e.target.value) || null })}>
+              <option value="">{r.every === "week" ? "N'importe quel jour" : "N'importe quand dans le mois"}</option>
+              {r.every === "week"
+                ? WEEKDAYS.map((d, i) => <option key={d} value={i + 1}>{d}</option>)
+                : Array.from({ length: 31 }, (_, i) => <option key={i} value={i + 1}>le {i === 0 ? "1er" : i + 1}</option>)}
+            </select>
+          </Field>
+        )}
         <button type="button" className="btn quiet" onClick={add} disabled={!r.amount_cents}><Icon name="plus" /> Ajouter la consigne</button>
       </div>
     </div>

@@ -16,9 +16,16 @@ let calls: Call[];
 let root: Root;
 let host: HTMLDivElement;
 
-const NO_EXCHANGES = { keys: [], platforms: [], network_consent: true, max_keys: 10 };  // plateformes reliées : testées à part
 
-function mockApi(handlers: Record<string, (init?: RequestInit) => unknown>) {
+const NO_EXCHANGES = { keys: [], platforms: [], network_consent: true, max_keys: 10 };  // plateformes reliées : testées à part
+// Les cartes « Alertes de cours » et « Pilote vs consigne » chargent leurs propres données : vides par défaut.
+const QUIET: Record<string, () => unknown> = {
+  "/api/crypto/alerts": () => ({ alerts: [], assets: [], kinds: { above: "Seuil haut", below: "Seuil bas", change: "Variation sur 24 h" }, max: 20, bounds: { change_min: "2", change_max: "90", margin_percent: "1" } }),
+  "/api/autonomy/track": () => ({ rules: [], outside: [], since: "2026-07-21" }),
+};
+
+function mockApi(given: Record<string, (init?: RequestInit) => unknown>) {
+  const handlers = { ...QUIET, ...given };
   calls = [];
   const all: Record<string, (init?: RequestInit) => unknown> = { "/api/crypto/exchanges": () => NO_EXCHANGES, ...handlers };
   vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {

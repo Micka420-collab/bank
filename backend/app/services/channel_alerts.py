@@ -19,7 +19,16 @@ from app.domain import procedures as dp
 from app.domain import watch as dw
 from app.domain.money import format_eur
 from app.models import ChannelConfig, ChannelLink, ChannelNotice, Procedure, WatchItem, WatchSource
-from app.services import analytics, autonomy, correlations, obligations, opportunities, procedures, yearahead
+from app.services import (
+    analytics,
+    autonomy,
+    correlations,
+    obligations,
+    opportunities,
+    price_alerts,
+    procedures,
+    yearahead,
+)
 from app.services import backup as backup_service
 from app.services import watch as watch_service
 from app.services.settings_store import get_setting
@@ -90,6 +99,13 @@ def collect(
     out += [
         Notice(key, text, urgent)
         for key, text, urgent in correlations.alerts(db, today=today, privacy=privacy, public_url=public_url)
+    ]
+    # Alertes de cours que tu as fixées : un constat par franchissement, jamais un conseil.
+    out += [
+        Notice(key, text, urgent)
+        for key, text, urgent in price_alerts.alerts(
+            db, now=now, privacy=privacy, public_url=public_url, tz=local.tzinfo or UTC
+        )
     ]
     # Sauvegardes : un échec ou deux jours sans copie — la seule alerte qui parle du serveur, pas de l'argent.
     out += [

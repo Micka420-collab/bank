@@ -1793,6 +1793,7 @@ export type PilotRule = {
   destination: string | null;
   amount_cents: number;
   every: "day" | "week" | "month";
+  on?: number | null; // jour prévu : 1 = lundi … 7 = dimanche, ou jour du mois (1 … 31)
   done_this_period?: boolean;
 };
 export type PilotDestination = { label: string; chain: string; address: string };
@@ -1848,4 +1849,63 @@ export type PilotView = {
   hard_rules: string[];
   hard_max: { per_op_cents: number; per_day_cents: number; per_month_cents: number; days: number };
   journal: PilotMove[];
+};
+
+// ------------------------------------------------------------------ alertes de cours
+export type PriceAlertKind = "above" | "below" | "change";
+export type PriceAlert = {
+  id: number;
+  asset: string;
+  kind: PriceAlertKind;
+  threshold: string;
+  threshold_text: string;
+  label: string | null;
+  state: "armed" | "triggered";
+  fires: number;
+  triggered_at: string | null;
+  triggered_price: string | null;
+  price_eur: string | null;
+  change_24h: string | null;
+  created_at: string;
+};
+export type PriceAlertsView = {
+  alerts: PriceAlert[];
+  assets: string[];
+  kinds: Record<PriceAlertKind, string>;
+  max: number;
+  bounds: { change_min: string; change_max: string; margin_percent: string };
+};
+
+// ------------------------------------------------------------------ pilote vs consigne
+export type PilotSlotStatus = "on_time" | "late" | "missed" | "waiting" | "in_progress" | "off";
+export type PilotSlot = {
+  period: string;
+  start: string;
+  end: string;
+  due: string;
+  status: PilotSlotStatus;
+  move_id: number | null;
+  done_on: string | null;
+  delay_days: number;
+  amount_cents: number | null;
+  gap_cents: number;
+  gap_percent: number;
+  amount_differs: boolean;
+  trial: boolean;
+  note: string | null;
+  refusals: string[];
+};
+export type PilotRuleTrack = {
+  id: string;
+  label: string;
+  every: "day" | "week" | "month";
+  on: number | null;
+  amount_cents: number;
+  slots: PilotSlot[];
+  totals: { due: number; on_time: number; late: number; missed: number; different: number; expected_cents: number; done_cents: number; gap_cents: number };
+};
+export type PilotTrack = {
+  rules: PilotRuleTrack[];
+  outside: { move_id: number; text: string; status: PilotMove["status"]; amount_cents: number; created_at: string; why: string }[];
+  since: string;
 };

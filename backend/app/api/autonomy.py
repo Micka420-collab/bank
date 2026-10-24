@@ -5,15 +5,16 @@ from __future__ import annotations
 
 import logging
 from typing import Annotated, Any, Literal
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from app.api.deps import AuthDep, DbDep, TodayDep, client_ip
+from app.api.deps import AuthDep, DbDep, SettingsDep, TodayDep, client_ip
 from app.db import utcnow, write_lock
 from app.security import audit
 from app.security.auth import verify_password, verify_totp
-from app.services import autonomy
+from app.services import autonomy, pilot_track
 
 router = APIRouter(prefix="/api/autonomy", tags=["autonomy"])
 log = logging.getLogger("bank.autonomy")
@@ -34,6 +35,7 @@ class RuleIn(BaseModel):
     destination: str | None = Field(default=None, max_length=60)
     amount_cents: int = Field(ge=100, le=autonomy.HARD_MAX_OP)
     every: Literal["day", "week", "month"]
+    on: int | None = Field(default=None, ge=1, le=31)  # jour prévu : 1 = lundi … 7 = dimanche, ou jour du mois
 
 
 class ConfigIn(BaseModel):
@@ -99,3 +101,9 @@ def stop(ctx: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
         log.exception("pilote arrêté, mais la vue n'a pas pu être construite")
         db.rollback()
         return {"active": False, "enabled": False, "disabled_reason": "Arrêté par toi"}
+
+
+@router.get("/track")
+def track(_: AuthDep, db: DbDep, settings: SettingsDep) -> dict[str, Any]:
+    """Pilote vs consigne : chaque rendez-vous prévu, et ce que l'agent a réellement rapporté."""
+    return pilot_track.view(db, now=utcnow(), tz=ZoneInfo(settings.timezone))
