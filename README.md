@@ -677,7 +677,7 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 1057 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+Qualité au moment de la livraison : 1101 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
 aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, scénarios adverses du
 banc d'essai crypto de Minara rejoués contre le pilote automatique, demandes simultanées qui ne passent jamais
