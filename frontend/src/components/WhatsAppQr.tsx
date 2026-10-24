@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, type WhatsAppQrCode, type WhatsAppQrStatus } from "../api";
 import { Icon } from "./Icon";
-import { useAsyncAction, useToast } from "./ui";
+import { useAsyncAction, useCelebrate, useToast } from "./ui";
 
 const STATUS_EVERY = 3000;
 
@@ -27,6 +27,7 @@ export function WhatsAppQr({ onLinked }: { onLinked: () => void }) {
   const [password, setPassword] = useState("");
   const [busy, error, run] = useAsyncAction();
   const toast = useToast();
+  const celebrate = useCelebrate();
   const wasLinked = useRef<boolean | null>(null);
 
   const refresh = useCallback(async () => {
@@ -81,11 +82,11 @@ export function WhatsAppQr({ onLinked }: { onLinked: () => void }) {
     if (st === null) return;
     const linked = st.paired && st.linked;
     if (wasLinked.current === false && linked) {
-      toast("C'est relié 🎉 Écris-toi un message dans ta conversation « Moi » : Bank répond là.");
+      celebrate("done", "C'est relié ! Écris-toi un message dans ta conversation « Moi » : Bank répond là.");
       onLinked();
     }
     wasLinked.current = linked;
-  }, [st, toast, onLinked]);
+  }, [st, celebrate, onLinked]);
 
   const openWindow = (e: FormEvent) => {
     e.preventDefault();
