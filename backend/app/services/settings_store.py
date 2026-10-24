@@ -52,6 +52,9 @@ DEFAULTS: dict[str, Any] = {
     "bank_setup_check": {},
     # Barèmes relus aux sources publiques : ce que la dernière relève n'a pas pu changer, dit en clair.
     "baremes_notes": [],
+    # Démarrer avec Bank (#44) : où en est le parcours et la liste « Bien démarrer » — des dates et des clés
+    # d'étape seulement (services/start.py).
+    "start_journey": None,
 }
 
 

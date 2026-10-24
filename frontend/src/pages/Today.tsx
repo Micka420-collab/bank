@@ -13,6 +13,7 @@ import { Icon } from "../components/Icon";
 import { Initiatives } from "../components/Initiatives";
 import { MonthChart } from "../components/MonthChart";
 import { Segmented } from "../components/Segmented";
+import { StartChecklist } from "../components/StartChecklist";
 import { Amount, ErrorNote, Loading, useToast } from "../components/ui";
 import { Welcome } from "../components/Welcome";
 import { YearAhead } from "../components/YearAhead";
@@ -108,6 +109,8 @@ export function Today({ name }: { name?: string } = {}) {
           </div>
         )}
       </section>
+
+      <StartChecklist />
 
       <Initiatives onChanged={reload} title="La prochaine chose à faire" />
 

@@ -49,7 +49,11 @@ def center(_: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
 
 @router.get("/top")
 def top(_: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
-    return {"opportunities": opportunities.top(db, today), "value": opportunities.value_summary(db)}
+    return {
+        "opportunities": opportunities.top(db, today),
+        "value": opportunities.value_summary(db),
+        "priorities": opportunities.priorities(db),  # l'étape « Tes priorités » du parcours part de ton choix
+    }
 
 
 @router.post("/start", status_code=201)

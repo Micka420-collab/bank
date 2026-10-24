@@ -1,9 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useReducer, useState, type ReactNode } from "react";
-import { api, ApiError, useApi, type Me } from "./api";
+import { api, ApiError, useApi, type Me, type StartView } from "./api";
 import { Assistant } from "./components/Assistant";
 import { Icon, type IconName } from "./components/Icon";
 import { InstallHint, OfflineStrip, useScrollingDown } from "./components/mobile";
-import { Onboarding, onboardingWanted } from "./components/Onboarding";
+import { Onboarding } from "./components/Onboarding";
 import { ErrorNote, Loading, ToastProvider } from "./components/ui";
 import { Login } from "./pages/Auth";
 import { Operations } from "./pages/Operations";
@@ -12,6 +12,8 @@ import { Today } from "./pages/Today";
 import { useRoute } from "./router";
 
 // Pages moins fréquentes : chargées à la première visite (l'écran du jour s'ouvre plus vite sur téléphone).
+// Le parcours de démarrage : ouvert une fois, chargé à la demande.
+const Journey = lazy(() => import("./components/Journey").then((m) => ({ default: m.Journey })));
 const Aids = lazy(() => import("./pages/Aids").then((m) => ({ default: m.Aids })));
 const Crypto = lazy(() => import("./pages/Crypto").then((m) => ({ default: m.Crypto })));
 const Pilot = lazy(() => import("./pages/Pilot").then((m) => ({ default: m.Pilot })));
@@ -73,6 +75,8 @@ export function App() {
   const [offline, setOffline] = useState(OFFLINE);
   const [me, setMe] = useState<Me | null>(null);
   const [askOpen, setAskOpen] = useState(false);
+  // Où en est le parcours « Démarrer avec Bank » : lu au serveur (vrai sur chaque appareil), jamais en local.
+  const [journey, setJourney] = useState<StartView["journey"] | null>(null);
   // Fin de l'accueil déjà sur #/aujourdhui : le hash ne change pas, aucun « hashchange » — on redessine nous-mêmes.
   const [, redraw] = useReducer((n: number) => n + 1, 0);
   const route = useRoute();
@@ -83,6 +87,7 @@ export function App() {
       const { needs_setup } = await api<{ needs_setup: boolean }>("/api/setup/status");
       if (needs_setup) return setPhase("setup");
       setMe(await api<Me>("/api/auth/me"));
+      setJourney(await api<StartView>("/api/start").then((v) => v.journey).catch(() => null));
       setPhase("ready");
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) return setPhase("login");
@@ -110,18 +115,30 @@ export function App() {
       </main>
     );
   }
-  if (phase === "setup") return <Onboarding stage="intro" onAccess={() => void refresh()} />;
+  if (phase === "setup") return <Onboarding onAccess={() => void refresh()} />;
   if (phase === "login" || !me) return <Login onDone={() => void refresh()} />;
 
-  // L'onboarding continue après la création de l'accès (et au retour de la banque) tant qu'il n'est pas terminé.
-  // Le retour de Powens va droit à Connecteurs : l'étape « Connecte ta banque » ne connaît qu'Enable Banking.
+  // Le parcours s'ouvre seul une seule fois (compte neuf) ; ensuite il se reprend depuis « Bien démarrer ».
+  // Le retour de la banque y revient si on l'avait quitté pour elle ; celui de Powens va droit à Connecteurs.
   const bankProvider = route.page === "banques" ? route.params.get("provider") : null;
   const bankReturn = route.page === "banques" && bankProvider !== "powens";
-  if (route.page === "bienvenue" || (onboardingWanted() && (bankReturn || route.page === "aujourdhui" || route.page === ""))) {
+  const home = route.page === "aujourdhui" || route.page === "";
+  const inJourney = route.page === "bienvenue"
+    || (journey?.status === "new" && home)
+    || (bankReturn && journey?.status === "in_progress" && journey.current === "banque");
+  const leaveJourney = () => {
+    window.location.hash = "#/aujourdhui";
+    setJourney((j) => (j ? { ...j, status: j.status === "new" ? "in_progress" : j.status } : j));
+    void api<StartView>("/api/start").then((v) => setJourney(v.journey)).catch(() => undefined);
+    redraw();
+  };
+  if (inJourney) {
     return (
       <ToastProvider>
-        <Onboarding stage="bank" bankResult={route.page === "banques" ? route.params.get("result") : null}
-                    onDone={() => { window.location.hash = "#/aujourdhui"; redraw(); }} />
+        <Suspense fallback={<main className="auth"><Loading what="Ton parcours" /></main>}>
+          <Journey stepKey={route.page === "bienvenue" ? route.rest[0] ?? null : bankReturn ? "banque" : null}
+                   bankResult={bankReturn ? route.params.get("result") : null} onExit={leaveJourney} />
+        </Suspense>
       </ToastProvider>
     );
   }
@@ -280,15 +297,15 @@ function More({ username, onLogout }: { username: string; onLogout: () => void }
     <>
       <div className="page-head"><h1>Plus</h1></div>
       <ul className="more">
-        <li><a href="#/patrimoine"><b><Icon name="wealth" /> Épargne</b><span className="faint">Ton patrimoine, ton matelas, où placer</span></a></li>
-        <li><a href="#/crypto"><b><Icon name="crypto" /> Crypto</b><span className="faint">Tes adresses suivies, leur valeur, l'impôt, les arnaques à éviter</span></a></li>
-        <li><a href="#/pilote"><b><Icon name="robot" /> Pilote automatique</b><span className="faint">Ton agent agit seul, dans ton cadre — et tu coupes d'un geste</span></a></li>
-        <li><a href="#/situation"><b><Icon name="situation" /> Ma situation</b><span className="faint">Ton profil, tes projets, ce que ton agent peut faire</span></a></li>
-        <li><a href="#/veille"><b><Icon name="news" /> Veille</b><span className="faint">Ce qui change dans les sources officielles, pour toi</span></a></li>
-        <li><a href="#/messageries"><b><Icon name="chat" /> Messageries</b><span className="faint">Écris à Bank depuis WhatsApp, Telegram, Signal… et reçois ses alertes</span></a></li>
-        <li><a href="#/connecteurs"><b><Icon name="connectors" /> Connecteurs</b><span className="faint">Banques, planning de travail, Linky, documents de l'État, agents IA</span></a></li>
-        <li><a href="#/memoire"><b><Icon name="memory" /> Mémoire de l'assistant</b><span className="faint">Ce qu'il retient de toi, vos conversations</span></a></li>
-        <li><a href="#/reglages"><b><Icon name="settings" /> Réglages</b><span className="faint">Comptes, budget, confidentialité, sécurité, journal</span></a></li>
+        <li><a href="#/patrimoine"><b><Icon name="wealth" /> Épargne</b><span className="faint">Patrimoine, matelas, où placer</span></a></li>
+        <li><a href="#/crypto"><b><Icon name="crypto" /> Crypto</b><span className="faint">Tes adresses, leur valeur, l'impôt</span></a></li>
+        <li><a href="#/pilote"><b><Icon name="robot" /> Pilote automatique</b><span className="faint">Ton agent agit, dans ton cadre</span></a></li>
+        <li><a href="#/situation"><b><Icon name="situation" /> Ma situation</b><span className="faint">Ton profil, tes projets, ton agent</span></a></li>
+        <li><a href="#/veille"><b><Icon name="news" /> Veille</b><span className="faint">Ce qui change pour toi</span></a></li>
+        <li><a href="#/messageries"><b><Icon name="chat" /> Messageries</b><span className="faint">Écris à Bank sur WhatsApp, Signal…</span></a></li>
+        <li><a href="#/connecteurs"><b><Icon name="connectors" /> Connecteurs</b><span className="faint">Banques, Linky, État, IA</span></a></li>
+        <li><a href="#/memoire"><b><Icon name="memory" /> Mémoire de l'assistant</b><span className="faint">Ce qu'il retient, vos conversations</span></a></li>
+        <li><a href="#/reglages"><b><Icon name="settings" /> Réglages</b><span className="faint">Comptes, accords, sécurité, journal</span></a></li>
       </ul>
       <p className="muted" style={{ marginTop: "2rem" }}>{username} · <button className="btn link" onClick={onLogout}>Se déconnecter</button></p>
     </>

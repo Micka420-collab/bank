@@ -105,7 +105,7 @@ describe("Bank te demande", () => {
     await flush();
     expect(host.querySelectorAll(".ask")).toHaveLength(1);
     expect(host.textContent).toContain("Ton salaire net, c'est bien 2 150 € par mois ?");
-    expect(host.textContent).toContain("2 autres — voir");
+    expect(host.textContent).toContain("Voir les 2 autres");
     expect(host.textContent).not.toContain("C'est la base de tout calcul");
     await click("Pourquoi ?");
     expect(host.textContent).toContain("C'est la base de tout calcul");

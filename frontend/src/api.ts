@@ -1447,6 +1447,40 @@ export type ConsentView = {
   decided: boolean;
   updated_at: string | null;
   default: boolean;
+  /** Groupe d'affichage (ce qui part) et la ligne « Envoie : … » (DESIGN.md § 3.10). */
+  group?: ConsentGroup;
+  sends?: string;
+};
+export type ConsentGroup = "public" | "zone" | "adresse" | "contenus";
+
+// ------------------------------------------------------------------ démarrer avec Bank (#44)
+export type StartStepKey = "banque" | "foyer" | "accords" | "papier" | "priorites" | "prevenir" | "visite";
+export type StartStep = { key: StartStepKey; title: string; done: boolean; skipped: boolean; minutes: number; href: string };
+export type StartItem = {
+  key: string;
+  title: string;
+  why: string;
+  minutes: number;
+  done: boolean;
+  group: "essentiel" | "plus";
+  href: string;
+  value_cents: number | null;
+};
+export type PublicConsent = { purpose: string; group: ConsentGroup; title: string; sends: string; text: string; granted: boolean; decided: boolean };
+export type StartView = {
+  journey: { status: "new" | "in_progress" | "finished"; current: StartStepKey | null; steps: StartStep[] };
+  checklist: {
+    visible: boolean;
+    collapsed: boolean;
+    dismissed: boolean;
+    done: number;
+    total: number;
+    completed_at: string | null;
+    just_completed: boolean;
+    items: StartItem[];
+  };
+  public_consents: PublicConsent[];
+  connectors: { key: string; title: string; linked: boolean; section: string }[];
 };
 export type AssistantHints = { suggested: number; merchants: number; hints: Record<string, string> };
 

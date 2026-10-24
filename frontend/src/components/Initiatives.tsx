@@ -52,7 +52,7 @@ export function Initiatives({ onChanged, limit = 5, compact = false, title }: { 
       </div>
       {rest.length > 0 && (
         <button type="button" className="btn quiet sm asks-more" aria-expanded={expanded} onClick={() => setExpanded((e) => !e)}>
-          {expanded ? "Une seule à la fois" : `${rest.length === 1 ? "Encore une" : `${data.total - 1} autres`} — voir`}
+          {expanded ? "Une seule à la fois" : rest.length === 1 && data.total === 2 ? "Voir l'autre" : `Voir les ${data.total - 1} autres`}
         </button>
       )}
     </section>

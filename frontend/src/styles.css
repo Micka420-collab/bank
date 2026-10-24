@@ -2418,7 +2418,6 @@ input[aria-invalid="true"] {
   justify-content: space-between;
   gap: 1rem;
   animation: reveal var(--d-slow) var(--ease-out) both;
-  animation-delay: calc(var(--i, 0) * 180ms);
 }
 .sync-steps {
   list-style: none;
@@ -2461,6 +2460,698 @@ input[aria-invalid="true"] {
   background: var(--positive);
   border-color: var(--positive);
   color: #fff;
+}
+
+/* Intro et retour de la banque : ce qui était en style en ligne (CSP, § 3.8) devient des classes. */
+.intro-actions {
+  margin-top: 1.5rem;
+}
+.intro-art .mini-card:nth-child(2) {
+  animation-delay: 180ms;
+}
+.intro-art .mini-card:nth-child(3) {
+  animation-delay: 360ms;
+}
+.intro-art .mini-card:nth-child(4) {
+  animation-delay: 540ms;
+}
+.intro-ask {
+  animation-delay: 200ms;
+}
+.sync-error {
+  margin-top: 1rem;
+}
+.connected-name {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* ------------------------------------------------------------------ démarrer avec Bank (§ 3.10) */
+/* Le parcours : plein écran, sans rail ni île. En haut la marque, « Étape 2 sur 7 », « Quitter » ; dessous une barre
+   de sept segments (des liens : on revient à une étape d'un geste) ; au centre une carte de verre. */
+.journey {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+}
+.journey-top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem clamp(1rem, 4vw, 2.5rem) 0.25rem;
+}
+.journey-top .brand {
+  margin-right: auto;
+}
+.journey-count {
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.journey-quit {
+  min-height: 2.75rem;
+}
+.journey-progress {
+  list-style: none;
+  margin: 0 auto;
+  padding: 0 clamp(1rem, 4vw, 2.5rem);
+  width: min(100%, 46rem);
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+.journey-progress a {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem; /* la cible fait 44 px, le segment dessiné 8 px */
+  border-radius: var(--r-pill);
+}
+.journey-seg {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 0.5rem;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--line-strong) 40%, var(--line));
+  color: var(--on-accent);
+  transition:
+    background-color var(--d-base) var(--ease-out),
+    height var(--d-base) var(--ease-out);
+}
+.journey-progress .is-skipped .journey-seg {
+  background: repeating-linear-gradient(90deg, var(--line-strong) 0 0.35rem, transparent 0.35rem 0.6rem);
+}
+.journey-progress .is-done .journey-seg {
+  height: 1rem;
+  background: var(--positive);
+}
+.journey-progress .is-done .journey-seg .icon {
+  width: 0.75rem;
+  height: 0.75rem;
+  color: var(--surface);
+  stroke-dasharray: 30;
+  animation: check-draw 400ms var(--ease-out) both;
+}
+.journey-progress [aria-current="step"] .journey-seg {
+  height: 1rem;
+  background: var(--accent-grad);
+  box-shadow: 0 4px 12px -6px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+.journey-body {
+  width: min(100%, 46rem);
+  margin: 0 auto;
+  padding: 0.75rem clamp(1rem, 4vw, 2.5rem) 2.5rem;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  animation: journey-in var(--d-base) var(--ease-out);
+}
+@keyframes journey-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.journey-card {
+  padding: clamp(1.25rem, 4vw, 2rem);
+  display: grid;
+  gap: 0.5rem;
+}
+.journey-card h1 {
+  font-size: clamp(1.75rem, 6vw, 2.5rem);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.journey-card h1:focus,
+.journey-card h1:focus-visible {
+  outline: none; /* le focus y est posé par script pour les lecteurs d'écran ; le titre n'est pas une commande */
+}
+.journey-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--accent-ink);
+  font-size: var(--t-sm);
+  font-weight: 650;
+}
+.journey-goal {
+  color: var(--ink-2);
+  font-size: var(--t-lg);
+  line-height: 1.4;
+  max-width: 40ch;
+  margin-bottom: 0.75rem;
+}
+.journey-stack {
+  gap: 1.25rem;
+}
+.journey-lead {
+  margin-top: 0.5rem;
+}
+.journey-note {
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  max-width: 60ch;
+}
+.journey-note.faint {
+  color: var(--ink-3);
+}
+.journey-actions {
+  margin-top: 0.25rem;
+}
+.journey-skip {
+  display: flex;
+  justify-content: center;
+}
+.journey-skip .btn {
+  min-height: 2.75rem;
+}
+.journey-panel {
+  display: grid;
+  gap: 0.5rem;
+}
+/* Dans la carte du parcours, les trois chemins s'empilent tant qu'il n'y a pas la place de trois colonnes. */
+.journey-card .paths-grid {
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  margin-top: 0;
+}
+.journey-card .path {
+  min-height: 0;
+}
+.journey-bank {
+  display: grid;
+  gap: 1rem;
+}
+.journey-form {
+  max-width: 34rem;
+}
+.journey-field {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+.journey-field legend {
+  font-weight: 600;
+  margin-bottom: 0.45rem;
+  padding: 0;
+}
+.journey-field .chip {
+  min-height: 2.75rem;
+}
+.journey-field select,
+.journey-field input {
+  min-height: 2.75rem;
+}
+.journey-extra {
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+}
+.journey-extra summary,
+.consent-more summary,
+.start-more summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--accent-ink);
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.journey-extra[open] summary {
+  margin-bottom: 0.5rem;
+}
+.journey-drop {
+  margin: 0;
+  padding: 1.75rem 1rem;
+  gap: 0.6rem;
+}
+.journey-drop > .icon {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+.journey-ideas {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+}
+.journey-ideas .tag {
+  font-size: var(--t-sm);
+  padding: 0.25rem 0.75rem;
+  color: var(--ink-2);
+}
+.journey-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+}
+.journey-choice {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+}
+.journey-choice h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--t-lg);
+}
+.journey-choice h2 .icon {
+  color: var(--accent);
+}
+@media (max-width: 760px) {
+  .journey-top .brand {
+    font-size: var(--t-md);
+  }
+  /* Dans le parcours, la zone reste au téléphone : elle porte les idées de papiers (le bouton fait le dépôt). */
+  .vault-drop.journey-drop {
+    display: grid;
+  }
+  /* Au téléphone, l'action principale prend toute la largeur. */
+  .journey-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .journey-actions > .btn {
+    width: 100%;
+  }
+}
+
+/* Accords groupés par ce qui part : un titre par groupe, la ligne « Envoie : … », le texte complet replié. */
+.consent-groups {
+  display: grid;
+  gap: 1.25rem;
+}
+.consent-group h3 {
+  font-size: var(--t-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  margin-bottom: 0.25rem;
+}
+.consent-sends {
+  color: var(--ink);
+}
+.consent-sends > span,
+.journey-choice .consent-sends > span {
+  font-weight: 650;
+  color: var(--accent-ink);
+}
+.consent-list .consent-more summary {
+  font-size: var(--t-sm);
+  min-height: 2.25rem;
+}
+.consent-list li > div {
+  min-width: 0;
+}
+
+/* La visite : un aperçu en formes (pas de capture), une phrase, l'île d'onglets dessinée. */
+.tour {
+  display: grid;
+  gap: 1rem;
+}
+.tour-screen {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: start;
+  animation: journey-in var(--d-base) var(--ease-out);
+}
+.tour-title {
+  font-size: var(--t-xl);
+}
+.tour-title:focus,
+.tour-title:focus-visible {
+  outline: none;
+}
+.tour-text {
+  font-size: var(--t-lg);
+  line-height: 1.4;
+  max-width: 34ch;
+}
+.tour-ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.tour-preview {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: 8.5rem;
+  border-radius: var(--r-card);
+  background: var(--accent-wash), var(--surface);
+  border: 1px solid var(--line);
+  padding: 1rem;
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+  overflow: hidden;
+}
+.tour-preview i {
+  display: block;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--ink-3) 22%, transparent);
+}
+.tour-preview .tp-label {
+  width: 30%;
+  height: 0.6rem;
+}
+.tour-preview .tp-figure {
+  width: 45%;
+  height: 2.5rem;
+  border-radius: 12px;
+  background: var(--accent-grad);
+}
+.tour-preview .tp-line {
+  width: 70%;
+  height: 0.5rem;
+}
+.tour-preview .tp-card,
+.tour-preview .tp-row {
+  height: 1.5rem;
+  border-radius: 10px;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+}
+.tour-preview .tp-card.is-short {
+  width: 60%;
+}
+.tour-preview.is-gagner {
+  grid-template-columns: 3rem 1fr;
+}
+.tour-preview .tp-coin {
+  grid-row: span 2;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: var(--coin);
+  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--coin-ink) 35%, transparent);
+}
+.tour-preview.is-papiers {
+  grid-template-columns: repeat(3, 1fr);
+  align-items: end;
+}
+.tour-preview .tp-doc {
+  height: 5.5rem;
+  border-radius: 10px;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+}
+.tour-preview .tp-doc:nth-child(2) {
+  height: 6.25rem;
+  border-color: var(--accent);
+}
+.tour-preview.is-plus {
+  grid-template-columns: repeat(2, 1fr);
+}
+.tour-preview .tp-tile {
+  height: 2.75rem;
+  border-radius: 12px;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+}
+.tour-preview .tp-fab {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: var(--accent-grad);
+  z-index: 1;
+}
+.tour-island {
+  width: min(100%, 22rem);
+  height: auto;
+  margin-top: 0.5rem;
+}
+.tour-island-plate {
+  fill: var(--surface);
+  stroke: var(--line);
+}
+.tour-island-bubble {
+  transition: x var(--d-slow) var(--ease-out);
+}
+.tour-island-dot {
+  fill: var(--ink-3);
+}
+.tour-island-label {
+  fill: var(--ink-2);
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 600;
+}
+.tour-island .is-on .tour-island-dot,
+.tour-island .is-on .tour-island-label {
+  fill: var(--on-accent);
+}
+.tour-dots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 0.15rem;
+}
+.tour-dots button {
+  all: unset;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.tour-dots button:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.tour-dots button span {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--line-strong) 60%, transparent);
+  transition:
+    width var(--d-base) var(--ease-out),
+    background-color var(--d-base);
+}
+.tour-dots [aria-current="step"] button span {
+  width: 1.5rem;
+  border-radius: var(--r-pill);
+  background: var(--accent-grad);
+}
+
+/* « Bien démarrer » sur Aujourd'hui : l'anneau à gauche, les trois prochains éléments, chacun un lien. */
+.start-card,
+.start-pill {
+  margin-top: 1rem;
+}
+.start-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+.start-head .ring {
+  width: 3rem;
+  height: 3rem;
+}
+.start-head .ring-value {
+  font-size: var(--t-sm);
+}
+.start-intro {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.start-intro h2 {
+  font-size: var(--t-lg);
+}
+.start-resume {
+  flex: none;
+}
+.start-items {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+}
+.start-items li + li {
+  border-top: 1px solid var(--line);
+}
+.start-items a {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.25rem;
+  padding: 0.55rem 0.25rem;
+  color: var(--ink);
+  text-decoration: none;
+  border-radius: var(--r-control);
+  transition: background-color var(--d-fast);
+}
+.start-items a:hover {
+  background: var(--accent-soft);
+}
+.start-items a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.start-icon {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.start-text {
+  display: grid;
+  gap: 0.1rem;
+}
+.start-text span {
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+}
+.start-time {
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.start-items .is-done .start-icon {
+  background: var(--positive-soft);
+  color: var(--positive);
+}
+.start-items .is-done b,
+.start-items .is-done .start-time {
+  color: var(--ink-2);
+}
+.start-items .is-done .start-time {
+  color: var(--positive);
+}
+.start-toggle {
+  margin-top: 0.75rem;
+}
+.start-more {
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.25rem;
+}
+.start-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+.start-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  color: var(--ink-2);
+}
+.start-pill {
+  padding: 0.35rem 1.25rem;
+  border-radius: var(--r-pill);
+}
+.start-pill[open] {
+  border-radius: var(--r-card);
+  padding-bottom: 1rem;
+}
+.start-pill summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+.start-pill summary .icon {
+  color: var(--positive);
+}
+.start-settings .start-actions {
+  margin-top: 0;
+}
+@media (min-width: 900px) {
+  .start-card .start-head .ring {
+    width: 4rem;
+    height: 4rem;
+  }
+  .start-card .start-head .ring-value {
+    font-size: var(--t-md);
+  }
+}
+
+/* Connecteurs : une pastille « relié / à faire » par section dans le sommaire, les sections pas reliées sur une ligne. */
+.secnav-state {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: var(--r-pill);
+  font-size: var(--t-xs);
+  font-weight: 650;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+.secnav-state.is-on {
+  background: var(--positive-soft);
+  color: var(--positive);
+}
+.secnav button[aria-current="true"] .secnav-state {
+  background: color-mix(in srgb, var(--on-accent) 85%, transparent);
+  color: var(--accent-ink);
+}
+.conn-fold {
+  margin-top: 1.25rem;
+}
+.conn-fold-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.conn-fold-row h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--t-md);
+  margin: 0;
+}
+.conn-fold-row h2 .tag {
+  vertical-align: 0.1em;
+  margin-left: 0.25rem;
+}
+.conn-fold-row h2 .icon {
+  color: var(--accent);
+}
+.conn-fold-row .btn {
+  flex: none;
+}
+.conn-fold > .faint {
+  margin-top: 0.25rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journey-body,
+  .tour-screen,
+  .journey-progress .is-done .journey-seg .icon {
+    animation: none;
+  }
+  .journey-seg,
+  .tour-dots button span,
+  .tour-island-bubble,
+  .start-items a {
+    transition: none;
+  }
 }
 
 /* ------------------------------------------------------------------ connexion bancaire */

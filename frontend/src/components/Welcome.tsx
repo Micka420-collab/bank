@@ -6,8 +6,38 @@ import { parseEuros } from "../format";
 import { navigate } from "../router";
 import { useAsyncAction } from "./ui";
 
+export type StartPath = "bank" | "import" | "figures";
+
+/** Les trois chemins, en cartes : Aujourd'hui (budget vide) et l'étape « Ta banque » du parcours les partagent. */
+export function StartPaths({ chosen, onChoose }: { chosen: StartPath | null; onChoose: (p: StartPath) => void }) {
+  return (
+    <div className="paths-grid" role="group" aria-label="Par quoi commencer">
+      <button type="button" className="path" aria-pressed={chosen === "bank"} onClick={() => onChoose("bank")}>
+        <b>Connecter ma banque</b>
+        <span>Mise à jour automatique, sans rien saisir. Bank reconnaît ton salaire, ton loyer, tes abonnements.</span>
+        <small>Recommandé · 5 minutes, une seule fois</small>
+      </button>
+      <button type="button" className="path" aria-pressed={chosen === "import"} onClick={() => onChoose("import")}>
+        <b>Importer un relevé</b>
+        <span>CSV ou OFX depuis ton espace bancaire, toutes banques. Rien ne sort de chez toi.</span>
+        <small>3 minutes</small>
+      </button>
+      <button type="button" className="path" aria-pressed={chosen === "figures"} onClick={() => onChoose("figures")}>
+        <b>Juste trois chiffres</b>
+        <span>Ton solde, ton revenu, ton loyer : un premier budget tout de suite, le reste plus tard.</span>
+        <small>30 secondes</small>
+      </button>
+    </div>
+  );
+}
+
 export function Welcome({ onStarted }: { onStarted: () => void }) {
-  const [path, setPath] = useState<"none" | "figures">("none");
+  const [path, setPath] = useState<StartPath | null>(null);
+  const choose = (p: StartPath) => {
+    if (p === "bank") navigate("bienvenue/banque");
+    else if (p === "import") navigate("operations?import=1");
+    else setPath(p);
+  };
   return (
     <div className="welcome">
       <p className="welcome-kicker">Bienvenue dans ton cahier de comptes</p>
@@ -16,29 +46,13 @@ export function Welcome({ onStarted }: { onStarted: () => void }) {
         Bank calcule ce que tu peux dépenser chaque jour, prévoit tes échéances, suit tes aides et ton patrimoine.
         Plus il te connaît, plus il est utile — et il te demandera une chose à la fois, en disant pourquoi.
       </p>
-      <div className="paths-grid">
-        <button type="button" className="path" onClick={() => navigate("connecteurs")}>
-          <b>Connecter ma banque</b>
-          <span>Mise à jour automatique, sans rien saisir. Bank reconnaît ton salaire, ton loyer, tes abonnements.</span>
-          <small>Recommandé · 2 minutes</small>
-        </button>
-        <button type="button" className="path" onClick={() => navigate("operations?import=1")}>
-          <b>Importer un relevé</b>
-          <span>CSV ou OFX depuis ton espace bancaire, toutes banques. Rien ne sort de chez toi.</span>
-          <small>3 minutes</small>
-        </button>
-        <button type="button" className="path" aria-pressed={path === "figures"} onClick={() => setPath("figures")}>
-          <b>Juste trois chiffres</b>
-          <span>Ton solde, ton revenu, ton loyer : un premier budget tout de suite, le reste plus tard.</span>
-          <small>30 secondes</small>
-        </button>
-      </div>
+      <StartPaths chosen={path} onChoose={choose} />
       {path === "figures" && <ThreeFigures onDone={onStarted} />}
     </div>
   );
 }
 
-function ThreeFigures({ onDone }: { onDone: () => void }) {
+export function ThreeFigures({ onDone, submitLabel = "Voir mon budget" }: { onDone: () => void; submitLabel?: string }) {
   const [balance, setBalance] = useState("");
   const [income, setIncome] = useState("");
   const [housing, setHousing] = useState("");
@@ -92,7 +106,7 @@ function ThreeFigures({ onDone }: { onDone: () => void }) {
       {invalid && <p className="error" role="alert">{invalid}</p>}
       {error && <p className="error" role="alert">{error}</p>}
       <div className="actions">
-        <button className="btn" disabled={busy}>Voir mon budget</button>
+        <button className={`btn${busy ? " is-loading" : ""}`} disabled={busy}>{submitLabel}</button>
         <span className="faint">Tu pourras connecter ta banque ensuite : Bank affinera tout seul.</span>
       </div>
     </form>
