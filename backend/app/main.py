@@ -241,27 +241,31 @@ async def _housekeeping_loop(app: FastAPI) -> None:
             log.exception("entretien en échec")
 
 
+def _sync_once(app: FastAPI, today: date) -> None:
+    """Un tour de synchronisation. Les clients sont relus à chaque tour : l'assistant de connexion peut les avoir
+    changés (ou créés) depuis le démarrage."""
+    client = app.state.enablebanking
+    if client is not None:
+        try:
+            report = sync_all(app.state.sessionmaker, client, today)
+            log.info("sync auto : %s comptes, %s nouvelles opérations", report.accounts, report.inserted)
+        except Exception:
+            log.exception("sync auto en échec")
+    powens = app.state.powens
+    if powens is not None:  # Powens (sur contrat), même rythme
+        try:
+            report = powens_service.sync_all(app.state.sessionmaker, powens, today)
+            log.info("sync Powens : %s comptes, %s nouvelles opérations", report.accounts, report.inserted)
+        except Exception:
+            log.exception("sync Powens en échec")
+
+
 async def _sync_loop(app: FastAPI) -> None:
     hours = app.state.settings.sync_interval_hours
     while True:
         # Gigue aléatoire : pas de rafale toujours à la même minute côté banque.
         await asyncio.sleep(hours * 3600 + random.uniform(0, 600))  # noqa: S311  # nosec B311
-        client = app.state.enablebanking  # relu à chaque tour : l'assistant de connexion peut l'avoir changé
-        today = date.today()  # noqa: DTZ011 - date locale du serveur
-        if client is not None:
-            try:
-                report = await asyncio.to_thread(sync_all, app.state.sessionmaker, client, today)
-                log.info("sync auto : %s comptes, %s nouvelles opérations", report.accounts, report.inserted)
-            except Exception:
-                log.exception("sync auto en échec")
-        if app.state.powens is not None:  # Powens (sur contrat), même rythme
-            try:
-                report = await asyncio.to_thread(
-                    powens_service.sync_all, app.state.sessionmaker, app.state.powens, today
-                )
-                log.info("sync Powens : %s comptes, %s nouvelles opérations", report.accounts, report.inserted)
-            except Exception:
-                log.exception("sync Powens en échec")
+        await asyncio.to_thread(_sync_once, app, date.today())  # noqa: DTZ011 - date locale du serveur
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

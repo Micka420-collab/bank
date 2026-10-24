@@ -12,6 +12,7 @@ crypto, seule la valorisation totale sert de solde quand Powens n'en donne pas. 
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import re
 import secrets
@@ -28,7 +29,7 @@ from app.providers.powens import REAUTH_STATES, STATE_MESSAGES, PowensAccount, P
 from app.security import audit, netfetch
 from app.security.crypto import get_keyring, sha256_hex
 from app.services.bank_setup import SetupError
-from app.services.bank_sync import SyncReport
+from app.services.bank_sync import SyncReport, held_elsewhere
 from app.services.ingest import ingest
 from app.services.settings_store import get_setting, set_setting
 
@@ -38,7 +39,10 @@ CALLBACK_PATH = "/api/banks/powens/callback"
 CONSOLE_URL = "https://console.powens.com"
 STATE_TTL = timedelta(minutes=30)  # le code temporaire de la webview vit 30 minutes
 FIRST_SYNC_DAYS = 365
-OVERLAP_DAYS = 7
+# Recouvrement large : min_date filtre sur la date d'application ; une opération « à venir » plus d'une semaine
+# (carte à débit différé, correction tardive) ne passe en comptabilisée qu'après. Le dédoublonnage rend ce recouvrement
+# sans effet sur les opérations déjà là.
+OVERLAP_DAYS = 45
 CLIENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{4,64}$")
 SECRET_RE = re.compile(r"^[\x21-\x7e]{16,256}$")  # imprimable, sans espace
 BLOCKING = frozenset({"bad_key", "unreachable"})
@@ -150,14 +154,40 @@ def client_from_db(
     return make_client(row.domain, row.client_id, row.secret, row.user_token, http=http, resolver=resolver)
 
 
-def enroll(client: PowensClient, row: ProviderCredential | None) -> str | None:
-    """Obtient le jeton permanent : même domaine et même client qu'avant → jeton renouvelé pour l'utilisateur existant
-    (les connexions restent) ; sinon un nouvel utilisateur Powens. Rend l'identifiant de l'utilisateur."""
-    if row is not None and row.user_ref and row.domain == client.domain and row.client_id == client.client_id:
-        client.renew_token(row.user_ref)
-        return row.user_ref
+def renews(row: ProviderCredential | None, domain: str, client_id: str) -> bool:
+    """Même domaine, même client et utilisateur Powens connu : on renouvelle son jeton, ses connexions restent."""
+    return row is not None and bool(row.user_ref) and row.domain == domain and row.client_id == client_id
+
+
+def enroll(client: PowensClient, row: ProviderCredential | None, *, may_replace: bool) -> tuple[str | None, bool]:
+    """Obtient le jeton permanent : jeton renouvelé pour l'utilisateur existant quand c'est possible, sinon un nouvel
+    utilisateur Powens. Un utilisateur effacé chez Powens (404 au renouvellement) est remplacé si aucune banque n'y est
+    reliée. Rend l'identifiant de l'utilisateur et si l'ancien est remplacé (à effacer chez Powens)."""
+    if row is not None and row.user_ref and renews(row, client.domain, client.client_id):
+        try:
+            client.renew_token(row.user_ref)
+            return row.user_ref, False
+        except PowensError as exc:
+            if not (may_replace and exc.status == 404):
+                raise
     _, user_ref = client.init_user()
-    return user_ref
+    return user_ref, row is not None
+
+
+def retire_user(db: Session, old: PowensClient | None) -> None:
+    """L'ancien utilisateur Powens est remplacé : effacé chez Powens au mieux (RGPD : identifiants bancaires et
+    données), et ses connexions, qui ne reviendront pas, coupées dans Bank."""
+    if old is not None:
+        with contextlib.suppress(PowensError):
+            old.delete_user()
+    alive = select(BankConnection).where(
+        BankConnection.provider == PROVIDER, BankConnection.status != ConnectionStatus.REVOKED
+    )
+    for conn in db.scalars(alive):
+        conn.status = ConnectionStatus.REVOKED
+        conn.session_id = None
+        conn.state_hash = None
+        conn.state_expires_at = None
 
 
 def refusal(exc: PowensError) -> bool:
@@ -333,28 +363,50 @@ def complete_connection(db: Session, client: PowensClient, state: str, connectio
     conn.state_hash = None  # usage unique
     conn.state_expires_at = None
     if expired:
-        if conn.status == ConnectionStatus.PENDING:
-            conn.status = ConnectionStatus.ERROR
-            conn.last_error = "Autorisation expirée"
+        _drop_attempt(db, conn, "expired")
         raise PowensFlowError("Autorisation expirée, recommence la connexion")
-    if conn.status == ConnectionStatus.PENDING:
+    fresh = conn.status == ConnectionStatus.PENDING
+    if fresh:
         if not connection_id or not connection_id.isdigit() or len(connection_id) > 18:
-            conn.status = ConnectionStatus.ERROR
-            conn.last_error = "Retour de Powens sans connexion"
+            _drop_attempt(db, conn, "no_connection")
             raise PowensFlowError("Retour de Powens sans connexion")
         same = next((c for c in connections(db) if c.session_id == connection_id), None)
         if same is not None:  # la même banque ajoutée deux fois : on garde la ligne d'origine et ses comptes
             db.delete(conn)
-            conn = same
+            conn, fresh = same, False
         conn.session_id = connection_id
-    remote = client.get_connection(conn.session_id or "")
-    conn.aspsp_name = (remote.bank_name or conn.aspsp_name)[:120]
+    try:
+        remote = client.get_connection(conn.session_id or "")
+        conn.aspsp_name = (remote.bank_name or conn.aspsp_name)[:120]
+        accounts = client.list_accounts(conn.session_id or "")
+    except PowensError:
+        if fresh:
+            # La connexion existe chez Powens (avec ton accès bancaire) : supprimée au mieux, sinon gardée en erreur,
+            # visible et coupable dans Bank.
+            try:
+                client.delete_connection(connection_id or "")
+            except PowensError:
+                conn.status = ConnectionStatus.ERROR
+                conn.last_error = "Connexion inachevée chez Powens : coupe-la puis recommence."
+            else:
+                _drop_attempt(db, conn, "unreadable")
+        raise
     conn.status = ConnectionStatus.ACTIVE
     conn.last_error = None
-    for acc in client.list_accounts(conn.session_id or ""):
-        link_account(db, conn, acc)
+    skipped = [name for name in (_link_or_skip(db, conn, acc) for acc in accounts) if name]
+    if skipped:
+        conn.last_error = _elsewhere(skipped)
     audit.record(db, "user", "bank.connect.done", connection=conn.id, provider=PROVIDER, accounts=len(conn.accounts))
     return conn
+
+
+def _drop_attempt(db: Session, conn: BankConnection, reason: str) -> None:
+    """Une tentative de connexion sans suite (annulée, expirée, illisible) : rien ne reste chez Powens, la ligne en
+    attente disparaît (seule la trace du journal reste). Une connexion déjà établie garde sa ligne."""
+    if conn.status != ConnectionStatus.PENDING:
+        return
+    audit.record(db, "user", "bank.connect.failed", connection=conn.id, provider=PROVIDER, reason=reason)
+    db.delete(conn)
 
 
 def fail_connection(db: Session, state: str, error: str) -> None:
@@ -368,14 +420,24 @@ def fail_connection(db: Session, state: str, error: str) -> None:
         return
     conn.state_hash = None
     conn.state_expires_at = None
-    if conn.status == ConnectionStatus.PENDING:
-        conn.status = ConnectionStatus.ERROR
-        conn.last_error = "Connexion annulée" if error in ("access_denied", "tos_declined") else "Connexion échouée"
+    _drop_attempt(db, conn, "cancelled" if error in ("access_denied", "tos_declined") else "failed")
+
+
+def _elsewhere(names: list[str]) -> str:
+    return f"Déjà suivi via Enable Banking, laissé de côté ici : {', '.join(names)}."[:300]
+
+
+def _link_or_skip(db: Session, conn: BankConnection, remote: PowensAccount) -> str | None:
+    """Rattache le compte ; rend son nom s'il est laissé de côté parce qu'Enable Banking le suit déjà."""
+    if remote.type in IGNORED_TYPES:
+        return None
+    return (remote.name or "compte") if link_account(db, conn, remote) is None else None
 
 
 def link_account(db: Session, conn: BankConnection, remote: PowensAccount) -> Account | None:
     """Rattache un compte Powens : retrouvé par son identifiant Powens, sinon par l'IBAN (un compte importé ou relié
-    par Enable Banking garde son historique), sinon créé avec le type qui correspond."""
+    par Enable Banking garde son historique), sinon créé avec le type qui correspond. Un compte qu'une connexion Enable
+    Banking vivante suit déjà n'est pas repris : deux agrégateurs sur un même compte doubleraient ses opérations."""
     if remote.type in IGNORED_TYPES:
         return None
     kr = get_keyring()
@@ -385,6 +447,8 @@ def link_account(db: Session, conn: BankConnection, remote: PowensAccount) -> Ac
     acc = db.scalar(select(Account).where(Account.provider_uid_bidx == uid_idx))
     if acc is None and iban_idx:
         acc = db.scalar(select(Account).where(Account.iban_bidx == iban_idx))
+        if acc is not None and held_elsewhere(acc, conn, Provider.POWENS):
+            return None
     if acc is None:
         suffix = f" ••{remote.iban[-4:]}" if remote.iban else ""
         acc = Account(
@@ -435,22 +499,27 @@ def sync_connection(db: Session, client: PowensClient, conn: BankConnection, tod
             audit.record(db, "system", "bank.sync", connection=conn.id, provider=PROVIDER, state=remote.state)
             return report
         warning = STATE_MESSAGES.get(remote.state, PASSING) if remote.state else None  # passager : on lit quand même
+        skipped: list[str] = []
         for ra in client.list_accounts(conn.session_id):
             if ra.deleted:
                 continue
             acc = link_account(db, conn, ra)
+            if acc is None and ra.type not in IGNORED_TYPES:
+                skipped.append(ra.name or "compte")
             if acc is None or acc.archived:
                 continue
             cents = _balance(client, acc, ra)
             if cents is not None:
                 acc.balance_cents, acc.balance_at = cents, utcnow()
-            booked = [t for t in client.iter_transactions(ra.id, since) if t.status == "booked"]
+            booked = [t for t in client.iter_transactions(ra.id, since, acc.currency) if t.status == "booked"]
             r = ingest(db, acc, booked, provider=PROVIDER)
             report.accounts += 1
             report.inserted += r.inserted
             report.duplicates += r.duplicates
             report.reconciled += r.reconciled
         conn.last_sync_at = utcnow()
+        if skipped:
+            warning = " ".join(filter(None, [warning, _elsewhere(skipped)]))[:300]
         conn.last_error = warning
         if warning:
             report.errors.append(warning)

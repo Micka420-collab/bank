@@ -30,6 +30,7 @@ export const ACTIONS: Record<string, string> = {
   "goal.delete": "Objectif supprimé",
   "bank.connect.start": "Connexion bancaire demandée",
   "bank.connect.done": "Banque connectée",
+  "bank.connect.failed": "Connexion bancaire abandonnée (annulée, expirée ou échouée)",
   "bank.sync": "Synchronisation bancaire",
   "bank.revoke": "Accès bancaire coupé",
   "bank.setup.saved": "Agrégateur bancaire enregistré (Enable Banking ou Powens, identifiants chiffrés)",

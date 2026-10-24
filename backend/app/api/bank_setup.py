@@ -38,7 +38,10 @@ def _limit(request: Request) -> None:
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Trop de tentatives : réessaie dans quelques minutes")
 
 
-def _password(ctx: Any, db: Any, password: str) -> None:
+def _password(request: Request, ctx: Any, db: Any, password: str) -> None:
+    # Même budget que la connexion et l'export : pas de réserve d'essais de mot de passe en plus.
+    if not request.app.state.limiters["login"].hit(client_ip(request)):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Trop de tentatives : réessaie dans quelques minutes")
     ok, _ = verify_password(ctx.user.password_hash, password)
     if not ok:
         audit.record(db, ctx.user.username, "bank.setup.denied")
@@ -63,7 +66,7 @@ def get_status(request: Request, _: AuthDep, db: DbDep) -> dict[str, Any]:
 @router.put("")
 def save(body: CredentialsIn, request: Request, ctx: AuthDep, db: DbDep, settings: SettingsDep) -> dict[str, Any]:
     _limit(request)
-    _password(ctx, db, body.password)
+    _password(request, ctx, db, body.password)
     if settings.enablebanking_enabled:
         raise HTTPException(status.HTTP_409_CONFLICT, SERVER_MANAGED)
     try:
@@ -71,6 +74,10 @@ def save(body: CredentialsIn, request: Request, ctx: AuthDep, db: DbDep, setting
         pem = svc.clean_key(body.private_key)
     except svc.SetupError as exc:
         raise HTTPException(exc.status, str(exc)) from None
+    row = svc.stored(db)
+    if row is not None and row.client_id != app_id and svc.active_connections(db):
+        # Les sessions Enable Banking appartiennent à l'application qui les a ouvertes.
+        raise HTTPException(status.HTTP_409_CONFLICT, svc.OTHER_APP)
     candidate = _build(request, app_id, pem)
     result = svc.check(candidate, settings, utcnow())
     codes = [i["code"] for i in result["issues"]]
@@ -108,7 +115,7 @@ def run_check(request: Request, ctx: AuthDep, db: DbDep, settings: SettingsDep) 
 @router.delete("")
 def remove(body: PasswordIn, request: Request, ctx: AuthDep, db: DbDep, settings: SettingsDep) -> dict[str, Any]:
     _limit(request)
-    _password(ctx, db, body.password)
+    _password(request, ctx, db, body.password)
     if settings.enablebanking_enabled:
         raise HTTPException(status.HTTP_409_CONFLICT, SERVER_MANAGED)
     if not svc.remove(db):

@@ -294,12 +294,12 @@ class PowensClient:
         data = self._request("GET", f"/users/me/accounts/{_id(account_id)}/investments")
         return _cents(data.get("valuation")) if isinstance(data, dict) else None
 
-    def iter_transactions(self, account_id: str, min_date: date) -> Iterator[ParsedTransaction]:
+    def iter_transactions(self, account_id: str, min_date: date, currency: str = "EUR") -> Iterator[ParsedTransaction]:
         params = {"min_date": min_date.isoformat(), "limit": str(PAGE_LIMIT)}
         data = self._request("GET", f"/users/me/accounts/{_id(account_id)}/transactions", params=params)
         for _ in range(MAX_PAGES):
             for raw in data.get("transactions", []) if isinstance(data, dict) else []:
-                parsed = map_transaction(raw) if isinstance(raw, dict) else None
+                parsed = map_transaction(raw, currency) if isinstance(raw, dict) else None
                 if parsed is not None:
                     yield parsed
             href = self._next(data)
@@ -343,10 +343,19 @@ def _cents(value: Any) -> int | None:
 
 
 def _code(value: Any) -> str:
-    """Le type de compte ou la devise : une chaîne, ou un objet (``{"name": …}`` / ``{"id": …}``) selon la page."""
+    """Le type de compte : une chaîne, ou un objet (``{"name": …}`` / ``{"id": …}``) selon la page."""
     if isinstance(value, dict):
         value = value.get("name") or value.get("id") or value.get("code")
     return str(value or "").strip()
+
+
+def _currency(value: Any, default: str = "EUR") -> str:
+    """La devise : un code ISO, ou l'objet ``{"id": "EUR", "symbol": "€", "name": "Euro"}`` (le code est ``id``,
+    jamais le nom affiché)."""
+    if isinstance(value, dict):
+        value = value.get("id") or value.get("code")
+    code = str(value or "").strip().upper()
+    return code if re.fullmatch(r"[A-Z]{3}", code) else default
 
 
 def _account(a: dict[str, Any]) -> PowensAccount | None:
@@ -357,7 +366,7 @@ def _account(a: dict[str, Any]) -> PowensAccount | None:
         id=str(a["id"]),
         name=(str(a.get("name") or a.get("original_name") or "") or None),
         iban=str(iban).replace(" ", "") if iban else None,
-        currency=(_code(a.get("currency")) or "EUR")[:3].upper(),
+        currency=_currency(a.get("currency")),
         type=_code(a.get("type")) or "unknown",
         balance_cents=_cents(a.get("balance")),
         deleted=bool(a.get("deleted")) or bool(a.get("disabled")),
@@ -385,10 +394,10 @@ def _parse_date(value: Any) -> date | None:
         return None
 
 
-def map_transaction(raw: dict[str, Any]) -> ParsedTransaction | None:
-    """Une opération Powens vers notre modèle : montant signé (``value``), date de comptabilisation (``date``), libellé
-    de la banque (``original_wording``). Les opérations à venir (``coming``) sont marquées en attente, les opérations
-    effacées par la banque (``deleted``) ignorées."""
+def map_transaction(raw: dict[str, Any], currency: str = "EUR") -> ParsedTransaction | None:
+    """Une opération Powens vers notre modèle : montant signé (``value``) dans la devise du compte, date de
+    comptabilisation (``date``), libellé de la banque (``original_wording``). Les opérations à venir (``coming``) sont
+    marquées en attente, les opérations effacées par la banque (``deleted``) ignorées."""
     if raw.get("deleted"):
         return None
     cents = _cents(raw.get("value"))
@@ -405,6 +414,6 @@ def map_transaction(raw: dict[str, Any]) -> ParsedTransaction | None:
         label=(label or "(sans libellé)")[:500],
         value_date=_parse_date(raw.get("vdate")) or _parse_date(raw.get("rdate")),
         external_id=str(ext)[:128] if ext is not None else None,
-        currency="EUR",
+        currency=currency,  # ``value`` est dans la devise du compte (``original_value`` dans celle d'origine)
         status="pending" if raw.get("coming") else "booked",
     )

@@ -240,6 +240,21 @@ def test_remove_needs_password_and_stops_the_client(app, auth_client: TestClient
     assert "bank.setup.removed" in _audit(app)
 
 
+def test_changing_application_with_live_connections_is_refused(app, auth_client: TestClient, eb) -> None:  # type: ignore[no-untyped-def]
+    from app.models import BankConnection
+
+    c = auth_client
+    assert _put(c).status_code == 200
+    with app.state.sessionmaker() as db:
+        db.add(BankConnection(aspsp_name="Ma banque", aspsp_country="FR", status="active", session_id="s-1"))
+        db.commit()
+    assert c.get("/api/banks/setup").json()["connections"] == 1
+    # Les sessions appartiennent à l'application qui les a ouvertes : une autre application les casserait toutes.
+    r = _put(c, app_id="0a0b0c0d-1111-2222-3333-444455556666")
+    assert r.status_code == 409 and "coupe-les" in r.json()["detail"]
+    assert _put(c).status_code == 200  # même application (clé redéposée) : gardé
+
+
 def test_saved_credentials_survive_a_restart(settings: Settings, app, auth_client: TestClient, eb) -> None:  # type: ignore[no-untyped-def]
     assert _put(auth_client).status_code == 200
     again = create_app(settings)

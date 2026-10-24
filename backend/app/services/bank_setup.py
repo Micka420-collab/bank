@@ -36,6 +36,10 @@ MIN_BITS, MAX_BITS = 2048, 8192
 APP_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{7,63}$")
 # Problèmes qui empêchent de choisir sa banque ; « sandbox » n'est qu'un avertissement.
 BLOCKING = frozenset({"bad_key", "unreachable", "redirect", "inactive"})
+OTHER_APP = (
+    "Tes banques sont reliées à l'application actuelle : coupe-les avant de changer d'application ; changer seulement "
+    "la clé de la même application les garde."
+)
 
 
 class SetupError(ValueError):
@@ -241,9 +245,7 @@ def status(db: Session, settings: Settings, *, enabled: bool) -> dict[str, Any]:
         source, app_hint, fp = "app", row.client_hint, short_fingerprint(row.secret_fingerprint)
     else:
         source = app_hint = fp = None
-    active = db.scalars(
-        select(BankConnection.id).where(BankConnection.status == ConnectionStatus.ACTIVE, enablebanking_only())
-    ).all()
+    active = active_connections(db)
     return {
         "configured": source is not None and enabled,
         "source": source,
@@ -253,8 +255,17 @@ def status(db: Session, settings: Settings, *, enabled: bool) -> dict[str, Any]:
         "redirect_url": redirect_url(settings),
         "console_url": CONSOLE_URL,
         "check": last_check(db) if source is not None else None,
-        "connections": len(active),
+        "connections": active,
     }
+
+
+def active_connections(db: Session) -> int:
+    """Les connexions Enable Banking vivantes, liées à l'application en place."""
+    return len(
+        db.scalars(
+            select(BankConnection.id).where(BankConnection.status == ConnectionStatus.ACTIVE, enablebanking_only())
+        ).all()
+    )
 
 
 def save(db: Session, *, app_id: str, pem: bytes, now: datetime) -> ProviderCredential:

@@ -10,7 +10,7 @@ account.create account.update agent.token.create agent.token.denied agent.token.
 assistant.configure assistant.conversation_deleted assistant.denied assistant.failed assistant.feedback assistant.hints
 assistant.read_page assistant.remove assistant.secret_refused assistant.test assistant.update assistant.web_search
 assistant.web_search_failed autonomy.allowed autonomy.denied autonomy.simulated autonomy.stopped backup.failed
-backup.verify_done backup.verify_failed bank.connect.done bank.connect.start bank.revoke bank.setup.check bank.setup.denied
+backup.verify_done backup.verify_failed bank.connect.done bank.connect.failed bank.connect.start bank.revoke bank.setup.check bank.setup.denied
 bank.setup.refused bank.setup.removed bank.setup.saved bank.sync budget.settings
 category.update channel.link_updated channel.linked channel.links_reset channel.pairing_cancelled channel.pairing_denied
 channel.pairing_failed channel.pairing_started channel.preferences channel.removed channel.secret_refused

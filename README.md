@@ -181,7 +181,9 @@ dans Connecteurs → Banques, un assistant en six étapes te guide.
 6. **Ta banque** : choisis-la, donne ton accord chez elle, reviens dans Bank.
 
 Le client est remplacé à chaud : ni redémarrage, ni attente, la synchronisation automatique prend la nouvelle clé.
-« Changer de clé » et « Retirer » (mot de passe exigé) restent sous l'assistant.
+« Changer de clé » et « Retirer » (mot de passe exigé) restent sous l'assistant. Tes banques sont liées à
+l'application qui les a connectées : changer seulement la clé les garde, changer d'application demande de les couper
+d'abord.
 
 Configuration par le serveur, toujours possible : `BANK_ENABLEBANKING_APP_ID=<id>` dans `.env` et la clé dans
 `secrets/enablebanking.pem` (`chmod 640`, groupe 10010, `BANK_ENABLEBANKING_KEY_FILE` décommenté). Elle **prime** sur
@@ -208,12 +210,15 @@ la banque de démonstration. Le connecteur est donc **prêt à brancher** : Conn
    comptes à suivre ; Bank ne voit jamais tes identifiants bancaires.
 
 Synchronisation au même rythme qu'Enable Banking : comptes et soldes, opérations dédoublonnées (identifiant Powens,
-puis empreinte), compte déjà importé retrouvé par son IBAN. Les cartes à débit différé sont ignorées (leurs opérations
+puis empreinte), compte déjà importé retrouvé par son IBAN, opérations relues sur 45 jours (une opération longtemps « à
+venir » n'est pas perdue). Un compte déjà suivi par Enable Banking n'est pas repris par Powens (et inversement) : ses
+opérations n'arrivent pas deux fois. Les cartes à débit différé sont ignorées (leurs opérations
 arrivent sur le compte courant) ; un crédit devient un compte « crédit » à solde négatif, à relier à un prêt dans
 Crédits (l'échéancier Powens n'est pas importé) ; pour l'assurance-vie et le PEA, Bank garde le solde (ou la
 valorisation totale des supports), pas le détail ligne à ligne. Quand ta banque redemande l'authentification forte
 (`SCARequired`, `decoupled`, mot de passe expiré…), la connexion passe « à reconnecter » et une carte te le rappelle :
-« Reconnecter » rouvre la webview sur la même connexion.
+« Reconnecter » rouvre la webview sur la même connexion. Une tentative annulée ne laisse rien ; changer d'application
+Powens efface l'ancien utilisateur chez Powens (jamais d'utilisateur orphelin avec tes accès bancaires).
 
 **NON VÉRIFIÉ** contre l'API réelle (ni production ni bac à sable, faute de contrat) : écrit d'après docs.powens.com
 et testé contre un faux Powens fidèle aux charges documentées. Les points à confirmer sont listés dans SECURITY.md.

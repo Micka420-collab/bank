@@ -24,7 +24,7 @@ import { MailSettings } from "./MailSettings";
 import { SearchSettings } from "./SearchSettings";
 import { Planning } from "./Planning";
 
-export function Connecteurs({ bankResult }: { bankResult: string | null }) {
+export function Connecteurs({ bankResult, bankProvider = null }: { bankResult: string | null; bankProvider?: string | null }) {
   return (
     <>
       <div className="page-head">
@@ -33,7 +33,7 @@ export function Connecteurs({ bankResult }: { bankResult: string | null }) {
           <p className="muted">Branche tes sources en quelques clics : plus Bank en sait, plus ses conseils sont justes.</p>
         </div>
       </div>
-      <Banks result={bankResult} />
+      <Banks result={bankResult} provider={bankProvider} />
       <Planning />
       <Linky />
       <Etat />
@@ -55,7 +55,7 @@ export function Connecteurs({ bankResult }: { bankResult: string | null }) {
 // ------------------------------------------------------------------ banques (DSP2) en un clic
 const CONNECTION_LABELS: Record<string, string> = { active: "active", expired: "à renouveler", revoked: "coupée", error: "erreur", pending: "en attente" };
 
-export function Banks({ result }: { result: string | null }) {
+export function Banks({ result, provider = null }: { result: string | null; provider?: string | null }) {
   const status = useApi<{ enabled: boolean; connections: Connection[] }>("/api/banks");
   const [aspsps, setAspsps] = useState<string[] | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
@@ -69,14 +69,17 @@ export function Banks({ result }: { result: string | null }) {
   const celebrate = useCelebrate();
 
   useEffect(() => {
-    if (result === "connected") celebrate("done", "Banque connectée. Lance une synchronisation pour récupérer tes opérations.");
-    if (result === "refused") toast("Connexion annulée côté banque.");
-    if (result === "error") toast("La connexion a échoué ou a expiré : recommence.");
+    // le retour de Powens a ses propres messages, dans sa section
+    if (provider !== "powens") {
+      if (result === "connected") celebrate("done", "Banque connectée. Lance une synchronisation pour récupérer tes opérations.");
+      if (result === "refused") toast("Connexion annulée côté banque.");
+      if (result === "error") toast("La connexion a échoué ou a expiré : recommence.");
+    }
     // Le retour de la banque ne se fête qu'une fois : sans ce paramètre, ni un rechargement ni « Retour » ne le rejouent.
     if (result && window.location.hash.includes("?")) {
       window.history.replaceState(null, "", window.location.pathname + window.location.search + window.location.hash.split("?")[0]);
     }
-  }, [result, toast, celebrate]);
+  }, [result, provider, toast, celebrate]);
 
   const connections = status.data?.connections ?? [];
   const enabled = status.data?.enabled ?? false;
@@ -195,7 +198,7 @@ export function Banks({ result }: { result: string | null }) {
         </div>
       )}
       {error && <p className="error" role="alert" style={{ marginTop: "0.75rem" }}>{error}</p>}
-      <PowensSetup />
+      <PowensSetup result={provider === "powens" ? result : null} />
     </section>
   );
 }

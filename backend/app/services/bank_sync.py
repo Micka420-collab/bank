@@ -32,6 +32,18 @@ def enablebanking_only() -> ColumnElement[bool]:
     return or_(BankConnection.provider.is_(None), BankConnection.provider == Provider.ENABLEBANKING.value)
 
 
+def held_elsewhere(acc: Account, conn: BankConnection, own: Provider) -> bool:
+    """Le compte est suivi par l'autre agrégateur, sur une connexion vivante : ne pas le lui reprendre (les libellés et
+    identifiants diffèrent d'un agrégateur à l'autre, ses opérations arriveraient deux fois)."""
+    other = acc.connection
+    return (
+        other is not None
+        and other is not conn
+        and acc.provider != own
+        and other.status in (ConnectionStatus.ACTIVE, ConnectionStatus.EXPIRED)
+    )
+
+
 def start_connection(db: Session, client: EnableBankingClient, aspsp_name: str, country: str, redirect_url: str) -> str:
     state = secrets.token_urlsafe(32)
     conn = BankConnection(
@@ -62,22 +74,26 @@ def complete_connection(db: Session, client: EnableBankingClient, code: str, sta
     conn.valid_until = info.valid_until
     conn.state_hash = None  # usage unique
     conn.state_expires_at = None
-    for remote in info.accounts:
-        link_account(db, conn, remote)
+    skipped = [r.name or "compte" for r in info.accounts if link_account(db, conn, r) is None]
+    if skipped:
+        conn.last_error = f"Déjà suivi via Powens, laissé de côté ici : {', '.join(skipped)}."[:300]
     audit.record(db, "user", "bank.connect.done", connection=conn.id, accounts=len(info.accounts))
     return conn
 
 
-def link_account(db: Session, conn: BankConnection, remote: RemoteAccount) -> Account:
+def link_account(db: Session, conn: BankConnection, remote: RemoteAccount) -> Account | None:
     """Rattache un compte distant. Les uid Enable Banking changent à chaque nouveau consentement,
     pas l'IBAN : on retrouve donc le compte (y compris un compte créé par import CSV) par l'index
-    aveugle de l'IBAN — l'historique est conservé, rien n'est dupliqué."""
+    aveugle de l'IBAN — l'historique est conservé, rien n'est dupliqué. Un compte que Powens suit
+    déjà sur une connexion vivante n'est pas repris (None)."""
     kr = get_keyring()
     uid_idx = kr.blind_index(remote.uid, "account.provider_uid")
     iban_idx = kr.blind_index(remote.iban, "account.iban") if remote.iban else None
     acc = db.scalar(select(Account).where(Account.provider_uid_bidx == uid_idx))
     if acc is None and iban_idx:
         acc = db.scalar(select(Account).where(Account.iban_bidx == iban_idx))
+        if acc is not None and held_elsewhere(acc, conn, Provider.ENABLEBANKING):
+            return None
     if acc is None:
         suffix = f" ••{remote.iban[-4:]}" if remote.iban else ""
         acc = Account(

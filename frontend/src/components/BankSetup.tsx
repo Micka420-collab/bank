@@ -136,6 +136,7 @@ export function BankSetup({ chooser, onChange }: {
         {current === 2 && (
           <KeyForm
             source={st.source}
+            connections={st.connections}
             onBack={() => setManual(st.configured ? null : 1)}
             onSaved={(next) => {
               setSt(next);
@@ -222,8 +223,9 @@ function Issues({ issues }: { issues: BankSetupIssue[] }) {
   );
 }
 
-function KeyForm({ source, onBack, onSaved }: {
+function KeyForm({ source, connections = 0, onBack, onSaved }: {
   source: BankSetupStatus["source"];
+  connections?: number;
   onBack: () => void;
   onSaved: (st: BankSetupStatus) => void;
 }) {
@@ -283,6 +285,15 @@ function KeyForm({ source, onBack, onSaved }: {
       <p className="muted">
         La clé permet à Bank de signer ses demandes à Enable Banking. Elle est chiffrée dans Bank et ne sera plus jamais affichée.
       </p>
+      {connections > 0 && (
+        <p className="notice warn">
+          <Icon name="alert" />
+          <span>
+            Tes banques sont reliées à l'application actuelle : changer seulement sa clé les garde ; pour une autre
+            application, coupe-les d'abord.
+          </span>
+        </p>
+      )}
       <label
         className={`drop${over ? " is-over" : ""}`}
         onDragOver={(e) => { e.preventDefault(); setOver(true); }}

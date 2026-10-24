@@ -4,6 +4,7 @@ reconnexion, synchronisation, coupure. Le client est reconstruit à chaud, comme
 from __future__ import annotations
 
 import contextlib
+import threading
 from typing import Any
 from urllib.parse import urlencode
 
@@ -21,6 +22,9 @@ from app.services import powens as svc
 from app.services.bank_setup import SetupError
 
 router = APIRouter(prefix="/api/banks/powens", tags=["banks"])
+# Un seul enregistrement ou retrait à la fois : le jeton renouvelé par l'un (revoke_previous) révoquerait celui de
+# l'autre, et la base pourrait garder un jeton mort.
+_SETUP_LOCK = threading.Lock()
 
 
 class CredentialsIn(BaseModel):
@@ -39,7 +43,10 @@ def _limit(request: Request) -> None:
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Trop de tentatives : réessaie dans quelques minutes")
 
 
-def _password(ctx: Any, db: Any, password: str) -> None:
+def _password(request: Request, ctx: Any, db: Any, password: str) -> None:
+    # Même budget que la connexion et l'export : pas de réserve d'essais de mot de passe en plus.
+    if not request.app.state.limiters["login"].hit(client_ip(request)):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Trop de tentatives : réessaie dans quelques minutes")
     ok, _ = verify_password(ctx.user.password_hash, password)
     if not ok:
         audit.record(db, ctx.user.username, "bank.setup.denied", provider=svc.PROVIDER)
@@ -77,37 +84,50 @@ def get_status(request: Request, _: AuthDep, db: DbDep) -> dict[str, Any]:
 @router.put("/setup")
 def save(body: CredentialsIn, request: Request, ctx: AuthDep, db: DbDep) -> dict[str, Any]:
     _limit(request)
-    _password(ctx, db, body.password)
+    _password(request, ctx, db, body.password)
     try:
         domain = svc.clean_domain(body.domain)
         client_id = svc.clean_client_id(body.client_id)
         secret = svc.clean_secret(body.client_secret)
     except SetupError as exc:
         raise HTTPException(exc.status, str(exc)) from None
-    row = svc.stored(db)
-    if row is not None and (row.domain != domain or row.client_id != client_id) and svc.has_live_connections(db):
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            "Tes banques sont reliées à l'application Powens actuelle : coupe-les avant de changer de domaine ou de "
-            "client_id (changer seulement le secret garde tes connexions).",
-        )
     st = request.app.state
-    candidate = svc.make_client(domain, client_id, secret, http=st.powens_http, resolver=st.powens_resolver)
-    try:
-        user_ref = svc.enroll(candidate, row)
-    except PowensError as exc:
-        if svc.refusal(exc):  # un secret que Powens refuse n'est jamais gardé
-            audit.record(db, ctx.user.username, "bank.setup.refused", provider=svc.PROVIDER)
-            db.commit()
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, svc.BAD_KEY) from None
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, svc.UNREACHABLE) from None
-    result = svc.check(candidate, utcnow())
-    svc.save(db, candidate, secret=secret, user_ref=user_ref, now=utcnow())
-    svc.remember_check(db, result)
-    codes = [i["code"] for i in result["issues"]]
-    audit.record(db, ctx.user.username, "bank.setup.saved", provider=svc.PROVIDER, ok=result["ok"], issues=codes)
-    db.commit()  # gardé avant de servir : le client en service correspond toujours à la base
-    st.powens = candidate
+    with _SETUP_LOCK:
+        db.expire_all()  # relu sous le verrou : l'enregistrement d'à côté vient peut-être de finir
+        row = svc.stored(db)
+        live = svc.has_live_connections(db)
+        if row is not None and not svc.renews(row, domain, client_id) and live:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Tes banques sont reliées à l'application Powens actuelle : coupe-les avant de changer de domaine ou "
+                "de client_id (changer seulement le secret garde tes connexions).",
+            )
+        candidate = svc.make_client(domain, client_id, secret, http=st.powens_http, resolver=st.powens_resolver)
+        try:
+            user_ref, replaced = svc.enroll(candidate, row, may_replace=not live)
+        except PowensError as exc:
+            if svc.refusal(exc):  # un secret que Powens refuse n'est jamais gardé
+                audit.record(db, ctx.user.username, "bank.setup.refused", provider=svc.PROVIDER)
+                db.commit()
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, svc.BAD_KEY) from None
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, svc.UNREACHABLE) from None
+        if replaced:  # nouvel utilisateur Powens : l'ancien est effacé chez Powens, pas laissé orphelin
+            svc.retire_user(db, svc.client_from_db(db, http=st.powens_http, resolver=st.powens_resolver))
+        result = svc.check(candidate, utcnow())
+        svc.save(db, candidate, secret=secret, user_ref=user_ref, now=utcnow())
+        svc.remember_check(db, result)
+        codes = [i["code"] for i in result["issues"]]
+        audit.record(
+            db,
+            ctx.user.username,
+            "bank.setup.saved",
+            provider=svc.PROVIDER,
+            ok=result["ok"],
+            issues=codes,
+            replaced_user=replaced,
+        )
+        db.commit()  # gardé avant de servir : le client en service correspond toujours à la base
+        st.powens = candidate
     return _view(request, db)
 
 
@@ -133,17 +153,18 @@ def run_check(request: Request, ctx: AuthDep, db: DbDep) -> dict[str, Any]:
 @router.delete("/setup")
 def remove(body: PasswordIn, request: Request, ctx: AuthDep, db: DbDep) -> dict[str, Any]:
     _limit(request)
-    _password(ctx, db, body.password)
-    client: PowensClient | None = request.app.state.powens
-    if client is not None:
-        # Effacement chez Powens au mieux (RGPD : utilisateur, connexions, opérations) ; localement on coupe toujours.
-        with contextlib.suppress(PowensError):
-            client.delete_user()
-    if not svc.remove(db):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Aucune application Powens enregistrée")
-    audit.record(db, ctx.user.username, "bank.setup.removed", provider=svc.PROVIDER)
-    db.commit()
-    request.app.state.powens = None
+    _password(request, ctx, db, body.password)
+    with _SETUP_LOCK:
+        client: PowensClient | None = request.app.state.powens
+        if client is not None:
+            # Effacement chez Powens au mieux (RGPD : utilisateur, connexions, opérations) ; ici on coupe toujours.
+            with contextlib.suppress(PowensError):
+                client.delete_user()
+        if not svc.remove(db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Aucune application Powens enregistrée")
+        audit.record(db, ctx.user.username, "bank.setup.removed", provider=svc.PROVIDER)
+        db.commit()
+        request.app.state.powens = None
     return _view(request, db)
 
 

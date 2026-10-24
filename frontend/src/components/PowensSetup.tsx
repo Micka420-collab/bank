@@ -2,7 +2,7 @@
 // identifiants (chiffrés côté serveur, plus jamais affichés), la vérification, puis tes banques via la webview Powens.
 // Bank ne voit jamais tes identifiants bancaires : tu les saisis dans la page de Powens.
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api, useApi, type PowensConnection, type PowensIssue, type PowensStatus } from "../api";
 import { shortDate } from "../format";
 import { BankMark } from "./BankConnect";
@@ -33,7 +33,7 @@ function openWebview(raw: string) {
 /** La navigation vers la webview (remplaçable en test : jsdom ne navigue pas). */
 export const navigation = { go: (url: string) => window.location.assign(url) };
 
-export function PowensSetup() {
+export function PowensSetup({ result = null }: { result?: string | null }) {
   const st = useApi<PowensStatus>("/api/banks/powens");
   const [open, setOpen] = useState(false);
   const [manual, setManual] = useState<number | null>(null);
@@ -42,6 +42,17 @@ export function PowensSetup() {
   const toast = useToast();
 
   const data = current ?? st.data;
+  // Retour de la webview Powens : son message, et la section Powens sous les yeux.
+  useEffect(() => {
+    if (!result) return;
+    if (result === "connected") toast("Banque connectée via Powens : clique Synchroniser pour récupérer tes opérations.");
+    if (result === "refused") toast("Connexion annulée dans la page de Powens.");
+    if (result === "error") toast("La connexion Powens a échoué ou a expiré : recommence.");
+  }, [result, toast]);
+  const loaded = !!data;
+  useEffect(() => {
+    if (result && loaded) document.getElementById("powens-title")?.scrollIntoView?.({ block: "start" });
+  }, [result, loaded]);
   const show = (next: PowensStatus) => { setCurrent(next); setManual(null); };
   const check = () => void run(async () => show(await api<PowensStatus>("/api/banks/powens/setup/check", { method: "POST" })));
   const connect = (path: string) =>
@@ -196,13 +207,13 @@ export function PowensSetup() {
                         </div>
                         {c.last_error && <div className="error">{c.last_error}</div>}
                       </div>
-                      {(c.status === "active" || c.status === "expired") && (
+                      {(c.status === "active" || c.status === "expired" || c.status === "error") && (
                         <span className="actions" style={{ marginTop: 0 }}>
                           {c.status === "active" ? (
                             <button className={`btn quiet sm${busy ? " is-loading" : ""}`} disabled={busy} onClick={() => sync(c.id)}>Synchroniser</button>
-                          ) : (
+                          ) : c.status === "expired" ? (
                             <button className="btn sm" disabled={busy} onClick={() => connect(`/api/banks/powens/${c.id}/reconnect`)}>Reconnecter</button>
-                          )}
+                          ) : null}
                           <button className="btn ghost sm" disabled={busy} onClick={() => revoke(c.id)}>Couper</button>
                         </span>
                       )}

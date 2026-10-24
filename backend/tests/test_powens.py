@@ -40,6 +40,9 @@ class FakePowens:
         self.deleted: list[str] = []
         self.calls: list[httpx.Request] = []
         self.next_href: str | None = None  # remplace le lien de page suivante (test d'hôte étranger)
+        self.gone = False  # utilisateur effacé chez Powens : /auth/renew répond 404
+        self.broken = False  # la connexion 7 ne se lit pas (403)
+        self.undeletable = False  # la connexion 7 ne se supprime pas (403)
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         resp = self._handle(request)
@@ -57,6 +60,8 @@ class FakePowens:
             if body.get("client_id") != CLIENT_ID or body.get("client_secret") != self.secret:
                 return httpx.Response(401, json={"code": "invalidClient", "description": f"bad {body}"})
             if path == "/auth/renew":
+                if self.gone:
+                    return httpx.Response(404, json={"code": "userNotFound"})
                 assert body["grant_type"] == "client_credentials" and body["id_user"] == 42
                 return httpx.Response(200, json={"access_token": self.token, "token_type": "Bearer"})
             self.users += 1
@@ -73,10 +78,14 @@ class FakePowens:
             assert q["type"] == ["singleAccess"]
             return httpx.Response(200, json={"code": "code-temp-1", "type": "temporary", "access": "single"})
         if path == "/users/me/connections/7":
+            if request.method == "DELETE" and self.undeletable:
+                return httpx.Response(403, json={"code": "forbidden"})
             if request.method == "DELETE":
                 self.deleted.append("connection:7")
                 return httpx.Response(204)
             assert q["expand"] == ["connector"]
+            if self.broken:
+                return httpx.Response(403, json={"code": "forbidden"})
             return httpx.Response(
                 200,
                 json={
@@ -112,7 +121,7 @@ def _acc(id_: int, name: str, type_: Any, balance: Any, **kw: Any) -> dict[str, 
         "original_name": name.upper(),
         "balance": balance,
         "coming": None,
-        "currency": {"id": "EUR", "symbol": "€"},
+        "currency": kw.get("currency", {"id": "EUR", "symbol": "€", "name": "Euro", "precision": 2}),
         "type": type_,
         "deleted": None,
         "disabled": None,
@@ -127,6 +136,7 @@ ACCOUNTS = [
     _acc(103, "Assurance vie", "lifeinsurance", None),  # solde absent : valorisation des supports
     _acc(104, "Prêt immo", "loan", 150000, loan={"total_amount": 200000, "rate": 1.2, "duration": 240}),
     _acc(105, "Carte différée", "card", -230.4),  # ignorée : déjà dans le compte courant
+    _acc(106, "Compte dollars", "checking", 50, currency={"id": "USD", "symbol": "$", "name": "US Dollar"}),
 ]
 PAGE1 = [
     {"id": 9001, "id_account": 101, "date": "2026-10-20", "rdate": "2026-10-19", "value": -42.5,
@@ -228,6 +238,7 @@ def test_setup_connect_and_sync_end_to_end(app, auth_client: TestClient, pw: Fak
         assert accounts["Livret A"].balance_cents == 800000 and not accounts["Livret A"].include_in_budget
         assert accounts["Assurance vie"].balance_cents == 1523450
         assert accounts["Prêt immo"].balance_cents == -15000000
+        assert cheque.currency == "EUR" and accounts["Compte dollars"].currency == "USD"  # le code, pas le nom
         labels = sorted(t.raw_label for t in db.scalars(select(Transaction)))
         assert len(labels) == 3 and "CB CARREFOUR 19/10" in labels
     # Deuxième synchronisation : tout est déjà là.
@@ -327,8 +338,28 @@ def test_webview_error_and_unknown_state(app, auth_client: TestClient, pw: FakeP
     assert "result=refused" in _callback(c)
     q = _connect(c)
     assert "result=error" in _callback(c, state=q["state"][0], connection_id="7/../../users")
-    with app.state.sessionmaker() as db:
-        assert {x.status for x in db.scalars(select(BankConnection))} == {"error"}
+    with app.state.sessionmaker() as db:  # tentatives sans suite : aucune ligne « Powens · erreur » ne reste
+        assert list(db.scalars(select(BankConnection))) == []
+    assert "bank.connect.failed" in _audit(app) and c.get("/api/banks/powens").json()["connections"] == []
+
+
+def test_unreadable_connection_is_deleted_or_revocable(app, auth_client: TestClient, pw: FakePowens) -> None:  # type: ignore[no-untyped-def]
+    c = auth_client
+    assert _put(c).status_code == 200
+    pw.broken = True
+    q = _connect(c)
+    assert "result=error" in _callback(c, connection_id="7", state=q["state"][0])
+    assert pw.deleted == ["connection:7"]  # supprimée chez Powens : rien d'invisible n'y reste
+    assert c.get("/api/banks/powens").json()["connections"] == []
+    # Suppression impossible : la connexion reste listée, en erreur, et se coupe.
+    pw.undeletable = True
+    q = _connect(c)
+    assert "result=error" in _callback(c, connection_id="7", state=q["state"][0])
+    (conn,) = c.get("/api/banks/powens").json()["connections"]
+    assert conn["status"] == "error" and "coupe-la" in conn["last_error"]
+    pw.undeletable = False
+    assert c.delete(f"/api/banks/powens/{conn['id']}").status_code == 204
+    assert pw.deleted == ["connection:7", "connection:7"]
 
 
 def test_pagination_link_to_another_host_is_refused(auth_client: TestClient, pw: FakePowens) -> None:
@@ -367,6 +398,82 @@ def test_changing_only_the_secret_keeps_the_user(app, auth_client: TestClient, p
     # Changer de domaine avec des banques reliées : refusé tant qu'elles ne sont pas coupées.
     r = _put(c, secret=pw.secret, domain="autreappli")
     assert r.status_code == 409
+    # Sans identifiant d'utilisateur connu, un nouvel utilisateur orphelinerait les banques reliées : refusé aussi.
+    with app.state.sessionmaker() as db:
+        row = db.scalar(select(ProviderCredential))
+        assert row is not None
+        row.user_ref = None
+        db.commit()
+    assert _put(c, secret=pw.secret).status_code == 409 and pw.users == 1
+
+
+def test_user_deleted_at_powens_is_replaced_and_never_orphaned(app, auth_client: TestClient, pw: FakePowens) -> None:  # type: ignore[no-untyped-def]
+    c = auth_client
+    assert _put(c).status_code == 200
+    pw.gone = True  # effacé depuis la console : le renouvellement répond 404
+    r = _put(c)
+    assert r.status_code == 200 and r.json()["check"]["ok"] is True
+    assert pw.users == 2 and pw.deleted == ["user"]  # l'ancien est effacé au mieux, pas laissé chez Powens
+    assert "replaced_user" in _audit(app)
+
+
+def test_password_checks_share_the_login_budget(app, auth_client: TestClient, pw: FakePowens) -> None:  # type: ignore[no-untyped-def]
+    c = auth_client
+    codes = [_put(c, password="pas le bon").status_code for _ in range(10)]
+    assert codes[-1] == 429 and set(codes) == {403, 429}
+    # Le budget épuisé ici l'est aussi pour l'export (même limiteur que la connexion).
+    assert c.post("/api/export", json={"password": PASSWORD}).status_code == 429
+    r = c.request("DELETE", "/api/banks/setup", json={"password": PASSWORD})
+    assert r.status_code == 429
+
+
+def test_account_followed_by_enable_banking_is_not_taken_over(app, auth_client: TestClient, pw: FakePowens) -> None:  # type: ignore[no-untyped-def]
+    from app.security.crypto import get_keyring
+
+    iban = "FR7630006000011234567890189"
+    with app.state.sessionmaker() as db:
+        eb = BankConnection(aspsp_name="Ma banque", aspsp_country="FR", status="active", session_id="s-1")
+        acc = Account(name="Courant EB", kind="checking", provider="enablebanking", provider_uid="eb-uid", iban=iban)
+        acc.iban_bidx = get_keyring().blind_index(iban, "account.iban")
+        acc.connection = eb
+        db.add_all([eb, acc])
+        db.commit()
+        eb_id = eb.id
+    c = auth_client
+    _linked(c, pw)
+    (conn,) = c.get("/api/banks/powens").json()["connections"]
+    assert "Enable Banking" in conn["last_error"] and "Compte chèque" in conn["last_error"]
+    r = c.post(f"/api/banks/powens/{conn['id']}/sync").json()
+    assert r["inserted"] == 0 and any("Enable Banking" in e for e in r["errors"])
+    with app.state.sessionmaker() as db:
+        kept = db.scalar(select(Account).where(Account.name == "Courant EB"))
+        assert kept is not None and kept.provider == "enablebanking" and kept.connection_id == eb_id
+
+
+def test_automatic_sync_uses_clients_saved_after_startup(app, auth_client: TestClient, pw: FakePowens) -> None:  # type: ignore[no-untyped-def]
+    from app.main import _sync_once
+    from tests.test_bank_setup import PEM, FakeEnableBanking
+
+    fake_eb = FakeEnableBanking()
+    app.state.enablebanking_http = httpx.Client(transport=httpx.MockTransport(fake_eb))
+    app.state.enablebanking_resolver = lambda host: ["93.184.216.34"]
+    assert app.state.enablebanking is None and app.state.powens is None  # rien au démarrage
+    r = auth_client.put(
+        "/api/banks/setup", json={"password": PASSWORD, "app_id": fake_eb.app["kid"], "private_key": PEM}
+    )
+    assert r.status_code == 200, r.text
+    _linked(auth_client, pw)
+    with app.state.sessionmaker() as db:
+        eb = BankConnection(aspsp_name="Ma banque", aspsp_country="FR", status="active", session_id="s-1")
+        acc = Account(name="Courant EB", kind="checking", provider="enablebanking", provider_uid="eb-uid")
+        acc.connection = eb
+        db.add_all([eb, acc])
+        db.commit()
+    fake_eb.calls.clear()
+    pw.calls.clear()
+    _sync_once(app, date(2026, 10, 24))
+    assert any("/accounts/eb-uid/" in str(call.url) for call in fake_eb.calls)
+    assert any(call.url.path.endswith("/transactions") for call in pw.calls)
 
 
 def test_credentials_survive_a_restart(settings, app, auth_client: TestClient, pw: FakePowens) -> None:  # type: ignore[no-untyped-def]

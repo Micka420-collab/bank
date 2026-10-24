@@ -150,6 +150,17 @@ describe("Powens (sur contrat)", () => {
     expect(assigned[0]).toContain("https://webview.powens.com/fr/reconnect");
   });
 
+  it("greets the return from the Powens webview and lets you cut an unfinished connection", async () => {
+    mockApi({ st: { ...READY, connections: [conn("error", "Connexion inachevée chez Powens : coupe-la puis recommence.")] } });
+    await act(async () => root.render(<ToastProvider><PowensSetup result="connected" /></ToastProvider>));
+    await settle();
+    expect(text()).toContain("Banque connectée via Powens");
+    expect(text()).toContain("inachevée");
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await click("Couper");
+    expect(calls.some((c) => c.url === "/api/banks/powens/3" && c.init?.method === "DELETE")).toBe(true);
+  });
+
   it("removes Powens with the Bank password", async () => {
     mockApi({ st: READY });
     await mount();
