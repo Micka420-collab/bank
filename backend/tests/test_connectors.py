@@ -14,6 +14,7 @@ from starlette.testclient import TestClient
 
 from app.api import deps
 from app.domain.energy import DailyReading
+from app.domain.energy_signals import MaxPower
 from app.importers.base import ParsedTransaction
 from app.models import AuditLog, EnergyConnection, EnergyReading, OfficialFact
 from app.providers.conso_api import ConsoApiError
@@ -45,6 +46,10 @@ class FakeConso:
         return [
             DailyReading(start + timedelta(days=i), FakeConso.wh_per_day) for i in range((end_exclusive - start).days)
         ]
+
+    def daily_max_power(self, prm: str, start: date, end_exclusive: date) -> list[MaxPower]:
+        assert prm == PRM
+        return []  # la puissance maximale a ses propres tests (test_energy_signals)
 
 
 @pytest.fixture

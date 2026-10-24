@@ -372,7 +372,19 @@ déclare pas. Rien n'est envoyé : tu déclares sur le site de l'organisme. Règ
   open source), colle le jeton reçu et ton PRM (14 chiffres, sur la facture). Bank récupère 400 jours, puis se met à
   jour chaque nuit ; le jeton et le PRM sont chiffrés en base ; révocable ici ou chez Enedis. Enedis a changé son
   API fin 2026 : Bank lit l'ancien format et toute structure (date, valeur, unité) du nouveau ; en cas de format
-  inconnu il le dit au lieu d'inventer.
+  inconnu il le dit au lieu d'inventer. Avec le même jeton, il relève aussi la **puissance maximale** de chaque jour
+  (`puissance_conso_max_quotidienne`) : indique ton option et tes kVA, et si sur 12 mois le maximum reste au moins
+  1 kVA sous une puissance plus basse, Bank chiffre l'économie annuelle sur la grille de la CRE (sinon, il dit combien
+  de mois il a). Avec l'accord « Couleur Tempo », la carte montre la couleur du jour et de demain
+  (api-couleur-tempo.fr, relais gratuit de RTE) et, en option Tempo, une alerte part la veille d'un jour rouge.
+  La carte chiffre aussi **Base, Heures creuses et Tempo** sur tes 12 derniers mois aux prix de la grille de la CRE,
+  abonnement compris : estimation écrite avec ses hypothèses (35 % en heures creuses, jour Tempo de minuit à minuit)
+  et le seuil de bascule, calcul exact jour par jour avec l'accord « Courbe de charge Linky » (pas de 30 min, à
+  activer aussi chez Enedis) et tes heures creuses. Avec l'accord « Météo de ta commune », Bank compare ta
+  consommation d'une année sur l'autre **à climat égal** (degrés-jours base 18 °C, archive Open-Meteo, coordonnées
+  arrondies à 10 km) et ne signale qu'une dérive de plus de 10 % sur trois mois. Si tu paies du gaz, la grille du **prix
+  repère** de la CRE (abonnement et kWh par type de foyer, zone GRDF, datée dans `rates.json` d'après les données
+  ouvertes de la CRE) s'affiche à côté, à comparer avec ta facture.
 - **Planning de travail** : colle l'adresse privée iCal de ton agenda (Google Agenda › « Adresse secrète au
   format iCal », Outlook › « Publier ») ou dépose un .ics. Bank garde les journées et les titres (chiffrés),
   relit l'adresse chaque nuit, et calcule la prochaine paie : part fixe (la paie habituelle lue dans tes relevés)
@@ -665,7 +677,7 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 1057 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+Qualité au moment de la livraison : 1101 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
 aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, scénarios adverses du
 banc d'essai crypto de Minara rejoués contre le pilote automatique, demandes simultanées qui ne passent jamais

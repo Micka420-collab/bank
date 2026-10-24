@@ -95,5 +95,34 @@
       "equilibre": 50,
       "dynamique": 75
     }
+  },
+  "gas_reference": {
+    "source": "Prix repère de vente de gaz de la CRE, grille de la zone GRDF (données ouvertes de la CRE, relues le 24/10/2026)",
+    "source_url": "https://www.cre.fr/consommateurs/prix-reperes-et-references/prix-repere-de-vente-de-gaz-naturel-a-destination-des-clients-residentiels.html",
+    "data_url": "https://www.cre.fr/fileadmin/Documents/Open_data/Marches_de_detail/OPEN_DATA_GRDF.xlsx",
+    "published": "2026-10-12",
+    "unit": "€/MWh TTC pour le prix moyen (abonnement compris, tous consommateurs confondus) ; €/an et €/kWh TTC pour la grille",
+    "profiles": {
+      "chauffage": {"label": "chauffage au gaz", "reference_mwh": "11.37"},
+      "cuisson": {"label": "cuisson et eau chaude", "reference_mwh": "1.56"}
+    },
+    "prices": [
+      {
+        "from": "2026-10-01",
+        "eur_per_mwh_ttc": "182.88",
+        "grid": {
+          "chauffage": {"abonnement_ttc": "360.79", "kwh_ttc": "0.14557", "kwh_low_ttc": "0.13594", "kwh_high_ttc": "0.16436"},
+          "cuisson": {"abonnement_ttc": "152.46", "kwh_ttc": "0.17832", "kwh_low_ttc": "0.17365", "kwh_high_ttc": "0.18804"}
+        }
+      },
+      {
+        "from": "2026-11-01",
+        "eur_per_mwh_ttc": "194.90",
+        "grid": {
+          "chauffage": {"abonnement_ttc": "360.79", "kwh_ttc": "0.15760", "kwh_low_ttc": "0.14798", "kwh_high_ttc": "0.17639"},
+          "cuisson": {"abonnement_ttc": "152.46", "kwh_ttc": "0.19027", "kwh_low_ttc": "0.18560", "kwh_high_ttc": "0.19999"}
+        }
+      }
+    ]
   }
 }

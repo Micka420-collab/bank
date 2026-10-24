@@ -4,6 +4,7 @@ Retirer un accord a un effet immédiat ; le texte auquel tu as dit oui est versi
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -147,6 +148,41 @@ PURPOSES: dict[str, dict[str, Any]] = {
         "default": False,
         "version": 1,
     },
+    "tempo": {
+        "title": "Couleur Tempo",
+        "text": (
+            "Pour montrer la couleur Tempo du jour et du lendemain, et te prévenir la veille d'un jour rouge si ton "
+            "contrat est en option Tempo, Bank demande ces couleurs à api-couleur-tempo.fr (service gratuit et "
+            "indépendant qui relaie la publication de RTE). Ce serveur voit les dates demandées et l'adresse de ton "
+            "serveur ; rien te concernant. Sans ton accord, rien ne part."
+        ),
+        "default": False,
+        "version": 1,
+    },
+    "meteo": {
+        "title": "Météo de ta commune",
+        "text": (
+            "Pour comparer ta consommation d'électricité d'une année sur l'autre à climat égal, Bank demande la "
+            "température moyenne de chaque jour à l'archive météo d'Open-Meteo (archive-api.open-meteo.com). Il "
+            "envoie les coordonnées de ton adresse arrondies au dixième de degré (environ 10 km), jamais l'adresse "
+            "elle-même. Ce serveur voit ces coordonnées et l'adresse de ton serveur. Les températures sont effacées "
+            "avec ton adresse. Sans ton accord, rien ne part."
+        ),
+        "default": False,
+        "version": 1,
+    },
+    "linky_curve": {
+        "title": "Courbe de charge Linky (toutes les 30 min)",
+        "text": (
+            "Pour chiffrer exactement les options Heures creuses et Tempo, Bank peut lire ta consommation de chaque "
+            "demi-heure par Conso API, avec le jeton Linky déjà enregistré. Cette courbe dit à quelles heures tu "
+            "es chez toi : elle est gardée chiffrée ici et n'est envoyée nulle part. Il faut aussi activer son "
+            "enregistrement dans ton espace client Enedis ; l'historique commence à cette date. Sans ton accord, "
+            "Bank se contente des relevés quotidiens et le dit."
+        ),
+        "default": False,
+        "version": 1,
+    },
     "home_value": {
         "title": "Valeur de ton logement (ventes DVF)",
         "text": (
@@ -159,6 +195,22 @@ PURPOSES: dict[str, dict[str, Any]] = {
         "version": 1,
     },
 }
+
+
+# Effacements à faire quand un accord est retiré : la donnée gardée grâce à lui n'a plus de raison de rester
+# (courbe de charge, températures de ta commune). Chaque module inscrit le sien à l'import.
+_ON_REVOKE: dict[str, list[Callable[[Session], None]]] = {}
+
+
+def on_revoke(purpose: str) -> Callable[[Callable[[Session], None]], Callable[[Session], None]]:
+    if purpose not in PURPOSES:
+        raise KeyError(purpose)
+
+    def register(fn: Callable[[Session], None]) -> Callable[[Session], None]:
+        _ON_REVOKE.setdefault(purpose, []).append(fn)
+        return fn
+
+    return register
 
 
 class ConsentError(Exception):
@@ -205,6 +257,10 @@ def set_consent(db: Session, purpose: str, value: bool, *, actor: str) -> dict[s
         row.wording_version = version
     db.flush()
     audit.record(db, actor, "consent.grant" if value else "consent.revoke", purpose=purpose, version=version)
+    if not value:
+        for forget in _ON_REVOKE.get(purpose, ()):
+            forget(db)
+        db.flush()
     return _view(db, purpose)
 
 
