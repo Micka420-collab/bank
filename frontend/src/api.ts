@@ -1363,6 +1363,16 @@ export type VaultListing = {
   total_bytes: number;
 };
 export type VaultUpload = { documents: VaultSummary[]; skipped: { filename: string; reason: string; document_id?: number }[] };
+export type VaultShareState = "active" | "used" | "revoked" | "expired";
+export type VaultShare = {
+  id: number;
+  recipient: string;
+  created_at: string;
+  expires_at: string;
+  used_at: string | null;
+  revoked_at: string | null;
+  state: VaultShareState;
+};
 
 // ------------------------------------------------------------------ opportunités
 export type OpportunityCategory = "recuperer" | "reduire" | "revenus" | "epargne" | "anticiper";

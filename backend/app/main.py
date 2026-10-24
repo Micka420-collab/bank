@@ -50,6 +50,7 @@ from app.api import (
     push,
     retirement,
     search,
+    shares,
     system,
     transactions,
     vault,
@@ -77,6 +78,7 @@ from app.services import exchange_keys as exchange_keys_service
 from app.services import mail as mail_service
 from app.services import obligations as obligations_service
 from app.services import planning as planning_service
+from app.services import shares as shares_service
 from app.services import vault as vault_service
 from app.services import watch as watch_service
 from app.services.bank_sync import sync_all
@@ -193,6 +195,7 @@ def _housekeeping_once(app: FastAPI, today: date) -> dict[str, int]:
         db.commit()
     with app.state.sessionmaker() as db:
         report.update(vault_service.housekeeping(db))
+        report.update(shares_service.housekeeping(db, now=utcnow()))  # copies des liens expirés effacées
         db.commit()
     with app.state.sessionmaker() as db:  # veille : sources dues seulement, chacune bornée en taille et en durée
         report.update(watch_service.housekeeping(db, now=utcnow(), fetcher=app.state.watch_fetcher))
@@ -315,6 +318,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "mail_scan": SlidingWindowLimiter(6, 3600),  # lectures de la boîte mail à la demande
         "exchange_sync": SlidingWindowLimiter(6, 3600),  # relève d'une clé de plateforme à la demande
         "crypto": SlidingWindowLimiter(6, 600),  # relèves crypto à la demande (nœuds publics : on reste poli)
+        "share": SlidingWindowLimiter(10, 300),  # ouvertures de liens de partage (route publique) par adresse
     }
     app.state.enablebanking = _build_enablebanking(settings)
     app.state.fiscal_client = FiscalClient(settings.fiscal_engine_url, settings.fiscal_token_value)
@@ -366,6 +370,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         mail,
         retirement,
         exchange_keys,
+        shares,
         system,
     )
     for r in routers:

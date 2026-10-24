@@ -10,6 +10,10 @@ de la classe d'exception est écrit sur la sortie d'erreur (jamais le contenu du
 Mode ``images`` (``python -I pdf_text.py images``) : pour un PDF scanné (sans texte), la plus grande image de
 chacune des 5 premières pages, à reconnaître ensuite par OCR ; sortie ``b"PIM1"`` + nombre d'images + pour chacune
 sa longueur (4 octets gros-boutiste) et ses octets.
+
+Mode ``stamp`` (``python -I pdf_text.py stamp``) : filigrane d'un papier partagé. Entrée ``b"STP1"`` + longueur du
+texte (4 octets gros-boutiste) + texte UTF-8 + document (PDF, ou image JPEG/PNG/WebP mise en page d'abord) ; sortie :
+le PDF filigrané (texte en diagonale sur chaque page, rappel en pied de page).
 """
 
 from __future__ import annotations
@@ -31,6 +35,9 @@ IMAGES_MAGIC = b"PIM1"
 MAX_IMAGE_PAGES = 5
 MAX_IMAGES_BYTES = 40_000_000
 IMAGES_ADDRESS_SPACE_BYTES = 768 * 1024 * 1024  # une page scannée décodée pèse ~30 Mo : plus de marge qu'en texte
+STAMP_MAGIC = b"STP1"
+MAX_STAMP_PAGES = 60
+MAX_STAMP_CHARS = 200
 
 # Plafonds pypdf (les valeurs par défaut visent des documents de 75 Mo ; un avis d'impôt pèse quelques centaines
 # de Ko). Toute limite dépassée lève LimitReachedError -> « illisible ».
@@ -179,13 +186,118 @@ def unpack_images(payload: bytes) -> list[bytes]:
     return out
 
 
+def pack_stamp(text: str, document: bytes) -> bytes:
+    raw = text.encode("utf-8")
+    return STAMP_MAGIC + struct.pack(">I", len(raw)) + raw + document
+
+
+def unpack_stamp(payload: bytes) -> tuple[str, bytes]:
+    if not payload.startswith(STAMP_MAGIC) or len(payload) < 8:
+        raise ValueError("demande invalide")
+    (size,) = struct.unpack(">I", payload[4:8])
+    if size > MAX_STAMP_CHARS * 4:
+        raise ValueError("texte trop long")
+    return payload[8 : 8 + size].decode("utf-8")[:MAX_STAMP_CHARS], payload[8 + size :]
+
+
+def _image_to_pdf(raw: bytes) -> bytes:
+    """Une photo devient une page PDF (le filigrane s'y pose comme sur un PDF) ; aucune métadonnée reprise."""
+    from PIL import Image
+
+    Image.MAX_IMAGE_PIXELS = 50_000_000
+    with Image.open(io.BytesIO(raw)) as img:
+        if img.format not in ("JPEG", "PNG", "WEBP"):
+            raise ValueError("format refusé")
+        rgb = img.convert("RGB")
+    out = io.BytesIO()
+    rgb.save(out, "PDF", resolution=150.0)
+    return out.getvalue()
+
+
+def _hex(text: str) -> bytes:
+    # Chaîne hexadécimale : aucune séquence d'échappement à gérer, quel que soit le nom saisi.
+    return b"<" + text.encode("cp1252", errors="replace").hex().encode() + b">"
+
+
+def _overlay(width: float, height: float, x0: float, y0: float, text: str) -> Any:
+    import math
+
+    from pypdf import PageObject
+    from pypdf.generic import ContentStream, DictionaryObject, FloatObject, NameObject
+
+    diagonal = math.hypot(width, height)
+    size = max(8.0, min(34.0, diagonal * 0.8 / (0.52 * max(len(text), 1))))  # largeur moyenne d'Helvetica ~0,52 em
+    cos, sin = width / diagonal, height / diagonal
+    half = 0.26 * size * len(text)
+    tx, ty = x0 + width / 2 - cos * half, y0 + height / 2 - sin * half
+    hexed = _hex(text)
+    matrix = f"{cos:.4f} {sin:.4f} {-sin:.4f} {cos:.4f} {tx:.2f} {ty:.2f}"
+    ops = f"q /BkG gs 0.75 0.1 0.1 rg BT /BkF {size:.2f} Tf {matrix} Tm ".encode()
+    ops += hexed + b" Tj ET Q\n"
+    ops += f"q 0.25 g BT /BkF 8 Tf 1 0 0 1 {x0 + 18:.2f} {y0 + 12:.2f} Tm ".encode() + hexed + b" Tj ET Q\n"
+    page = PageObject.create_blank_page(width=width, height=height)
+    font = DictionaryObject(
+        {
+            NameObject("/Type"): NameObject("/Font"),
+            NameObject("/Subtype"): NameObject("/Type1"),
+            NameObject("/BaseFont"): NameObject("/Helvetica"),
+            NameObject("/Encoding"): NameObject("/WinAnsiEncoding"),
+        }
+    )
+    state = DictionaryObject({NameObject("/Type"): NameObject("/ExtGState"), NameObject("/ca"): FloatObject(0.35)})
+    page[NameObject("/Resources")] = DictionaryObject(
+        {
+            NameObject("/Font"): DictionaryObject({NameObject("/BkF"): font}),
+            NameObject("/ExtGState"): DictionaryObject({NameObject("/BkG"): state}),
+        }
+    )
+    stream = ContentStream(None, None)
+    stream.set_data(ops)
+    page.replace_contents(stream)
+    return page
+
+
+def stamp(document: bytes, text: str) -> bytes:
+    """Le document en PDF, chaque page marquée du texte : en diagonale, translucide, et en pied de page."""
+    import pypdf
+
+    pdf = document if document.startswith(b"%PDF-") else _image_to_pdf(document)
+    with pypdf.apply_configuration(pypdf.get_configuration().with_overwrites(**IMAGE_LIMITS)):
+        reader = _open(pdf)
+        if len(reader.pages) > MAX_STAMP_PAGES:
+            raise ValueError("trop de pages")
+        writer = pypdf.PdfWriter()
+        writer.append(reader, import_outline=False)
+        for page in writer.pages:
+            page.transfer_rotation_to_content()  # page tournée : le filigrane suit ce que l'on voit
+            box = page.mediabox
+            page.merge_page(_overlay(float(box.width), float(box.height), float(box.left), float(box.bottom), text))
+        writer.add_metadata({"/Producer": "Bank"})
+        out = io.BytesIO()
+        writer.write(out)
+    return out.getvalue()
+
+
 def main() -> int:
-    images_mode = sys.argv[1:] == ["images"]
-    if images_mode:
+    mode = sys.argv[1:2]
+    images_mode = mode == ["images"]
+    if images_mode or mode == ["stamp"]:
         _confine(IMAGES_ADDRESS_SPACE_BYTES)
     else:
         _confine()
     data = sys.stdin.buffer.read()
+    if mode == ["stamp"]:
+        try:
+            text, document = unpack_stamp(data)
+            payload = stamp(document, text)
+        except PermissionError:
+            return EXIT_ENCRYPTED
+        except Exception as exc:
+            sys.stderr.write(type(exc).__name__)
+            return EXIT_UNREADABLE
+        sys.stdout.buffer.write(payload)
+        sys.stdout.buffer.flush()
+        return EXIT_OK
     if images_mode:
         try:
             payload = pack_images(page_images(data))

@@ -689,6 +689,23 @@ class VaultField(Base):
     document: Mapped[VaultDocument] = relationship(back_populates="fields")
 
 
+class VaultShare(Base):
+    """Un papier transmis par lien : jeton connu par son empreinte seulement, destinataire chiffré, copie filigranée
+    chiffrée (effacée dès le téléchargement, l'expiration ou la révocation). La ligne reste : c'est le journal."""
+
+    __tablename__ = "vault_shares"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("vault_documents.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    recipient: Mapped[str] = mapped_column(EncryptedText("vault.share_recipient"))
+    payload: Mapped[bytes | None] = mapped_column(LargeBinary)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), index=True)
+    used_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
 # ---------------------------------------------------------------------------- démarches
 class Procedure(Base):
     """Une démarche suivie de bout en bout. Le contenu (champs, pièces, revue) est chiffré ; l'étape est en clair

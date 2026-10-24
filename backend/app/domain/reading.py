@@ -124,6 +124,14 @@ def pdf_images(raw: bytes) -> list[bytes]:
         raise ReadingError("Lecture des pages scannées impossible") from exc
 
 
+def stamp_pdf(raw: bytes, text: str) -> bytes:
+    """PDF filigrané (le document, ou la photo mise en page) : lu et réécrit dans l'enfant confiné."""
+    out = _run([str(_PDF_CHILD), "stamp"], pdf_text.pack_stamp(text, raw), PDF_SECONDS, "filigrane du document")
+    if not out.startswith(b"%PDF-"):
+        raise ReadingError("Filigrane impossible")
+    return out
+
+
 @functools.cache
 def tesseract_path() -> str | None:
     path = shutil.which("tesseract")

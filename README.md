@@ -431,6 +431,11 @@ scans, reconnaissance de texte (Tesseract, en français), le tout dans des proce
   coffre sans ce geste ; à l'import la pièce est relue dans la boîte, vérifiée par son empreinte, déposée puis lue
   par le lecteur confiné habituel. Accord dédié « Boîte mail en lecture seule », révocable ; le texte des mails n'est
   jamais lu ni gardé, les identifiants ne sortent ni dans l'API, ni dans le journal, ni dans une erreur.
+- **Partager un papier** : « Partager » sur un document donne un lien à usage unique, valable 1 h, 24 h ou 48 h,
+  créé avec ton mot de passe. Le destinataire reçoit un PDF marqué « Transmis à … le … par Bank — usage unique » ;
+  le lien ne dit rien du document, et le journal montre qui l'a téléchargé et quand — révocable tant qu'il n'a pas
+  servi. Pour un destinataire hors de chez toi, ton reverse proxy n'a à ouvrir que `/`, `/assets/` et
+  `/api/share/open` (voir [SECURITY.md](SECURITY.md#partage-dun-papier-par-lien)).
 
 ## Opportunités : ce que tu pourrais gagner, chiffré honnêtement
 
@@ -560,9 +565,9 @@ direct recomposée fragment par fragment, Web Push vérifié au bit près contre
 par un faux navigateur, amortissement vérifié sur un cas de référence public, plan B contre un moteur fiscal
 simulé qui réagit au revenu, sauvegarde chiffrée altérée, tronquée ou rallongée refusée, boîte mail contre un faux
 serveur IMAP qui journalise chaque commande, retraite vérifiée sur le cas de référence de service-public et contre
-les paliers de la LFSS 2026, clés de plateforme face à de fausses plateformes qui vérifient chaque signature et
+les paliers de la LFSS 2026, lien de partage ouvert deux fois en même temps, clés de plateforme face à de fausses plateformes qui vérifient chaque signature et
 refusent les droits trop larges), couverture 91 %, 146 tests front (parcours de première ouverture,
-coffre, démarches, opportunités, veille, assistant, chat interactif et réponse en direct, notifications sur
+coffre et partage d'un papier, démarches, opportunités, veille, assistant, chat interactif et réponse en direct, notifications sur
 l'appareil, plan B, crédits, retraite, sauvegardes, boîte mail, crypto et plateformes reliées, pilote, déclarations, corrélations, année qui vient,
 passkeys, erreurs qui disent quoi faire),
 mypy strict sans erreur,
