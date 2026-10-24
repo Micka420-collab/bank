@@ -560,7 +560,7 @@ par un faux navigateur, amortissement vérifié sur un cas de référence public
 simulé qui réagit au revenu, sauvegarde chiffrée altérée, tronquée ou rallongée refusée, boîte mail contre un faux
 serveur IMAP qui journalise chaque commande, retraite vérifiée sur le cas de référence de service-public et contre
 les paliers de la LFSS 2026, clés de plateforme face à de fausses plateformes qui vérifient chaque signature et
-refusent les droits trop larges), couverture 91 %, 142 tests front (parcours de première ouverture,
+refusent les droits trop larges), couverture 91 %, 144 tests front (parcours de première ouverture,
 coffre, démarches, opportunités, veille, assistant, chat interactif et réponse en direct, notifications sur
 l'appareil, plan B, crédits, retraite, sauvegardes, boîte mail, crypto et plateformes reliées, pilote, déclarations, corrélations, année qui vient,
 passkeys, erreurs qui disent quoi faire),
