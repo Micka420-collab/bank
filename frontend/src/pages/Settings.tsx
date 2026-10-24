@@ -3,6 +3,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { api, useApi, type Account, type AccountKind, type BackupRun, type BackupStatus, type BudgetResponse, type ConsentView, type Me } from "../api";
+import { labelAction } from "../audit-labels";
 import { Icon } from "../components/Icon";
 import { Segmented } from "../components/Segmented";
 import { EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
@@ -604,75 +605,6 @@ function Passkeys({ onChange }: { onChange: () => void }) {
 }
 
 // ------------------------------------------------------------------ journal
-const ACTIONS: Record<string, string> = {
-  "setup.done": "Création de l'accès",
-  "setup.denied": "Installation refusée (jeton invalide)",
-  "login.success": "Connexion",
-  "login.failed": "Mot de passe refusé",
-  "login.mfa_failed": "Code de vérification refusé",
-  "login.locked": "Tentative sur compte verrouillé",
-  logout: "Déconnexion",
-  "mfa.enabled": "Double authentification activée",
-  "passkey.added": "Passkey ajoutée",
-  "passkey.removed": "Passkey retirée",
-  "passkey.denied": "Passkey : refus (mot de passe ou réponse invalide)",
-  "login.passkey_failed": "Connexion par passkey refusée",
-  "login.passkey_unknown": "Passkey inconnue présentée",
-  "password.changed": "Mot de passe changé",
-  "password.change_denied": "Changement de mot de passe refusé",
-  "account.create": "Compte ajouté",
-  "account.update": "Compte modifié",
-  "import.file": "Relevé importé",
-  "transaction.update": "Opération recatégorisée",
-  "category.update": "Enveloppe modifiée",
-  "rule.create": "Règle de classement créée",
-  "budget.settings": "Réglages du budget modifiés",
-  "profile.update": "Profil du foyer modifié",
-  "aids.simulate": "Simulation des aides",
-  "goal.create": "Objectif ajouté",
-  "goal.delete": "Objectif supprimé",
-  "bank.connect.start": "Connexion bancaire demandée",
-  "bank.connect.done": "Banque connectée",
-  "bank.sync": "Synchronisation bancaire",
-  "bank.revoke": "Accès bancaire coupé",
-  "export.done": "Données exportées",
-  "export.denied": "Export refusé (mot de passe)",
-  "agent.token.create": "Jeton d'agent IA créé",
-  "agent.token.revoke": "Jeton d'agent IA révoqué",
-  "onboarding.answer": "Réponse « Ma situation » enregistrée",
-  "onboarding.clear": "Réponse « Ma situation » effacée",
-  "proposal.create": "Proposition de l'agent reçue",
-  "proposal.approve": "Proposition de l'agent appliquée",
-  "proposal.reject": "Proposition de l'agent refusée",
-  "mcp.denied": "Accès refusé à un agent (portée)",
-  "energy.connect": "Compteur Linky connecté",
-  "energy.disconnect": "Compteur Linky déconnecté",
-  "energy.sync": "Synchronisation Linky",
-  "energy.sync_manual": "Synchronisation Linky demandée",
-  "energy.sync_failed": "Synchronisation Linky en échec",
-  "energy.tariff": "Tarif électricité modifié",
-  "document.apply": "Document officiel enregistré",
-  "document.delete": "Document officiel supprimé",
-  "decision.purchase": "Question « je peux l'acheter ? »",
-  "mcp.refused": "Action refusée à un agent",
-  "mcp.auth_failed": "Jeton d'agent refusé",
-  "agent.token.denied": "Création de jeton refusée (mot de passe)",
-  "initiative.act": "Réponse à une carte « Bank te demande »",
-  "planning.connect": "Agenda de travail relié",
-  "planning.disconnect": "Agenda de travail retiré",
-  "planning.model": "Règles de paie modifiées",
-  "planning.sync_manual": "Relecture de l'agenda demandée",
-  "planning.sync_failed": "Relecture de l'agenda en échec",
-  "assistant.configure": "Clé OpenRouter enregistrée",
-  "assistant.update": "Réglages de l'assistant modifiés",
-  "assistant.remove": "Clé OpenRouter retirée",
-  "assistant.denied": "Clé OpenRouter refusée (mot de passe)",
-  "assistant.test": "Test de l'assistant",
-  "assistant.ask": "Question à l'assistant",
-  "assistant.hints": "Catégories proposées par l'assistant",
-  "assistant.failed": "Appel à OpenRouter en échec",
-};
-
 function Audit() {
   const log = useApi<{ chain: { ok: boolean; entries: number; broken_at: number | null; reason: string | null };
     entries: { id: number; ts: string; actor: string; action: string }[] }>("/api/audit?limit=30");
@@ -689,12 +621,12 @@ function Audit() {
             : `Altération détectée à l'entrée ${chain.broken_at} (${chain.reason}). Quelqu'un a modifié la base hors de l'application.`}
         </span>
       </div>
-      <div className="table-scroll" tabIndex={0} role="region" aria-label="Journal, défile de côté" style={{ marginTop: "1rem" }}><table className="plain">
+      <div className="table-scroll" tabIndex={0} role="region" aria-label="Journal, défile de côté" style={{ marginTop: "1rem" }}><table className="plain audit-table">
         <tbody>
           {entries.map((e) => (
             <tr key={e.id}>
-              <td style={{ whiteSpace: "nowrap" }}>{new Date(e.ts).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</td>
-              <td>{ACTIONS[e.action] ?? (e.action.startsWith("mcp.") ? `Agent : ${e.action.slice(4).replaceAll("_", " ")}` : e.action)}</td>
+              <td>{new Date(e.ts).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</td>
+              <td>{labelAction(e.action)}</td>
               <td className="muted">{e.actor}</td>
             </tr>
           ))}
