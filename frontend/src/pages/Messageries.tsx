@@ -1,4 +1,5 @@
-// Messageries : parler à Bank depuis WhatsApp, Telegram, Signal, Discord ou Slack, et y recevoir ses alertes.
+// Messageries : parler à Bank depuis WhatsApp (API officielle ou ton numéro par QR code), Telegram, Signal, Discord ou
+// Slack, et y recevoir ses alertes.
 // Une messagerie se configure en trois gestes (jeton, enregistrer, relier ton compte par un code), la confidentialité
 // se choisit par messagerie, et rien ne se valide depuis une messagerie : on y lit, on y demande, on revient ici
 // pour décider.
@@ -15,12 +16,14 @@ import {
   type PrivacyMode,
 } from "../api";
 import { Icon } from "../components/Icon";
+import { WhatsAppQr, WhatsAppQrRisk } from "../components/WhatsAppQr";
 import { ErrorNote, Field, Loading, useAsyncAction, useCelebrate, useToast } from "../components/ui";
 import { safeHref, shortDate } from "../format";
 
 const BLURB: Record<string, string> = {
   telegram: "Le plus simple : ton robot en deux minutes, rien à exposer sur internet.",
   whatsapp: "L'API officielle de Meta. Demande d'ouvrir une seule adresse au web.",
+  whatsapp_qr: "Ton numéro, relié par QR code comme WhatsApp Web. Bank ne lit que ta conversation « Moi ».",
   signal: "Chiffré de bout en bout : personne d'autre ne lit tes chiffres.",
   discord: "Ton robot en message privé, sans rien à exposer.",
   slack: "Pour qui vit dans Slack : un message privé à l'app Bank.",
@@ -38,6 +41,12 @@ const GUIDE: Record<string, string[]> = {
     "Dans WhatsApp › Configuration de l'API : note l'identifiant du numéro et crée un jeton d'accès permanent (utilisateur système).",
     "Dans Paramètres de l'application › Général : copie la clé secrète.",
     "Enregistre ici, puis dans WhatsApp › Configuration, colle l'URL de rappel et le jeton de vérification affichés plus bas et abonne-toi au champ « messages ».",
+  ],
+  whatsapp_qr: [
+    "Lance la passerelle à côté de Bank : « docker compose --profile whatsapp up -d » (ou son binaire, lié à 127.0.0.1 : voir le README).",
+    "Indique son adresse (http://whatsapp-bridge:3000), son mot de passe et le secret du webhook, puis enregistre.",
+    "Confirme ton mot de passe et scanne le QR code depuis WhatsApp › Appareils connectés.",
+    "Écris-toi un message dans ta conversation « Moi » : Bank répond là.",
   ],
   signal: [
     "Fais tourner signal-cli en service HTTP à côté de Bank, avec un numéro réservé à Bank (le guide CANAUX.md donne la commande).",
@@ -229,6 +238,7 @@ function PlatformPanel({ p, consent, reload }: { p: ChannelPlatform; consent: bo
       {p.last_error && p.status === "error" && <p className="notice danger" role="alert">{p.last_error}</p>}
       <ol className="steps ch-guide">{GUIDE[p.key]?.map((step) => <li key={step}>{step}</li>)}</ol>
       {p.key === "whatsapp" && <WhatsAppSetup p={p} />}
+      {p.key === "whatsapp_qr" && <WhatsAppQrRisk />}
       <form className="stack" onSubmit={save} aria-label={`Réglages ${p.label}`}>
         <div className="form-grid">
           {p.fields.map((f) => (
@@ -264,7 +274,9 @@ function PlatformPanel({ p, consent, reload }: { p: ChannelPlatform; consent: bo
         {!consent && <p className="faint">Donne d'abord ton accord ci-dessus.</p>}
       </form>
       {p.key === "ntfy" && p.extra.subscribe_url && <NtfySubscribe url={p.extra.subscribe_url} />}
-      {p.inbound && p.configured && p.enabled && consent && <Pairing p={p} reload={reload} />}
+      {p.inbound && p.configured && p.enabled && consent && (
+        p.key === "whatsapp_qr" ? <WhatsAppQr onLinked={reload} /> : <Pairing p={p} reload={reload} />
+      )}
       <Links p={p} reload={reload} />
     </section>
   );
@@ -462,7 +474,7 @@ function Links({ p, reload }: { p: ChannelPlatform; reload: () => void }) {
                 <input type="checkbox" checked={l.notify} disabled={busy} onChange={() => toggle(l)} /> Alertes
               </label>
               {p.status === "online" && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => essai(l)}>Envoyer un essai</button>}
-              {p.inbound && <button type="button" className="btn ghost sm" disabled={busy} onClick={() => unlink(l)}>Délier</button>}
+              {p.inbound && p.key !== "whatsapp_qr" && <button type="button" className="btn ghost sm" disabled={busy} onClick={() => unlink(l)}>Délier</button>}
             </div>
           </li>
         ))}

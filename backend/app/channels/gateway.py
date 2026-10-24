@@ -38,6 +38,7 @@ from app.channels.telegram import TelegramAdapter
 from app.channels.text import LIMITS, measure_for, scrub, split_message
 from app.channels.webpush import WebPushAdapter
 from app.channels.whatsapp import WhatsAppAdapter
+from app.channels.whatsapp_qr import SELF_LABEL, WhatsAppQrAdapter
 from app.config import Settings
 from app.db import utcnow
 from app.models import ChannelConfig, ChannelLink
@@ -82,6 +83,14 @@ def build_adapter(
             secrets["access_token"],
             secrets["app_secret"],
             str(options.get("verify_token") or ""),
+            http,
+        )
+    if platform == "whatsapp_qr":
+        return WhatsAppQrAdapter(
+            str(options["url"]),
+            str(options.get("username") or "bank"),
+            secrets["password"],
+            secrets["webhook_secret"],
             http,
         )
     if platform == "signal":
@@ -162,6 +171,8 @@ class Gateway:
         # Réveil des alertes : un mouvement du pilote automatique ne doit pas attendre le prochain quart d'heure.
         self._wake = asyncio.Event()
         self._event_loop: asyncio.AbstractEventLoop | None = None
+        # Adaptateurs « de service » (QR code WhatsApp tant que la messagerie ne tourne pas) : un par réglage.
+        self._spare: dict[str, tuple[str, Adapter]] = {}
 
     async def _run(self, fn: Callable[..., T], *args: Any) -> T:
         return await asyncio.get_running_loop().run_in_executor(self._executor, partial(fn, *args))
@@ -479,6 +490,9 @@ class Gateway:
     def _record_check(self, platform: str, info: dict[str, Any]) -> None:
         with self._db() as db:
             channels.record_check(db, platform, info, now=self._clock())
+            if platform == "whatsapp_qr" and info.get("account"):
+                # Le téléphone vient d'être scanné : relié à Bank si la fenêtre ouverte avec ton mot de passe court.
+                channels.qr_paired(db, str(info["account"]), SELF_LABEL, now=self._clock())
             db.commit()
 
     async def _cursor_saver(self, platform: str, cursor: int) -> None:
@@ -491,9 +505,7 @@ class Gateway:
                 row.cursor = str(cursor)
                 db.commit()
 
-    async def test(self, platform: str) -> dict[str, Any]:
-        """« Tester » dans l'écran Messageries : vérifie les identifiants enregistrés sans rien démarrer."""
-        assert self._http is not None  # noqa: S101  # nosec B101
+    def _configured(self, platform: str) -> tuple[str, dict[str, str], dict[str, Any]]:
         with self._db() as db:
             row = db.get(ChannelConfig, platform)
             if row is None:
@@ -501,7 +513,31 @@ class Gateway:
             missing = channels.missing_fields(row, platform)
             if missing:
                 raise channels.ChannelError("Il manque : " + ", ".join(missing))
-            sec, opt = channels.secrets_of(row), channels.options_of(row)
+            return fingerprint(platform, row), channels.secrets_of(row), channels.options_of(row)
+
+    async def adapter_for(self, platform: str) -> Adapter:
+        """L'adaptateur qui tourne, sinon un adaptateur de service bâti sur les réglages enregistrés (gardé tant
+        qu'ils ne changent pas : le QR code WhatsApp y reste en cache)."""
+        assert self._http is not None  # noqa: S101  # nosec B101
+        fp, sec, opt = await self._run(self._configured, platform)
+        running = self.adapters.get(platform)
+        if running is not None and self._fingerprints.get(platform) == fp:
+            return running
+        spare = self._spare.get(platform)
+        if spare is None or spare[0] != fp:
+            adapter = self._adapter_factory(platform, sec, opt, self._http, public_url=self._settings.public_url)
+            spare = self._spare[platform] = (fp, adapter)
+        return spare[1]
+
+    async def restart(self, platform: str) -> None:
+        """Reconnexion immédiate (téléphone qui vient d'être relié ou délié) : le superviseur relance au prochain
+        tour, sans attendre la fin de sa pause après un échec."""
+        await self._stop_platform(platform)
+
+    async def test(self, platform: str) -> dict[str, Any]:
+        """« Tester » dans l'écran Messageries : vérifie les identifiants enregistrés sans rien démarrer."""
+        assert self._http is not None  # noqa: S101  # nosec B101
+        _, sec, opt = await self._run(self._configured, platform)
         adapter = self._adapter_factory(platform, sec, opt, self._http, public_url=self._settings.public_url)
         try:
             info = await adapter.check()

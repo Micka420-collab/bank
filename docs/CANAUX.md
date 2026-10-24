@@ -115,6 +115,22 @@ est authentique et ne traite qu'une fois chaque message.
 Au-delà, l'alerte est refusée (code 131047) et l'écran le dit : écris n'importe quoi au robot pour rouvrir la
 fenêtre, ou choisis une autre messagerie pour les alertes.
 
+## WhatsApp par QR code (ton numéro, appareil lié)
+
+Comme WhatsApp Web : ton numéro personnel, relié par QR code à une passerelle qui tourne à côté de Bank (GOWA,
+`docker compose --profile whatsapp up -d`, ou son binaire lié à 127.0.0.1 — commandes dans le README).
+
+1. Lance la passerelle avec un mot de passe (`--basic-auth` / `APP_BASIC_AUTH`) et un secret de webhook
+   (`--webhook-secret` / `WHATSAPP_WEBHOOK_SECRET`). Elle n'a aucun port publié ; Bank la joint en interne.
+2. Bank › Messageries › **WhatsApp (QR, ton numéro)** : son adresse, ce mot de passe, ce secret, puis Enregistrer.
+3. Confirme ton mot de passe : le QR code s'affiche (10 minutes, renouvelé tout seul). Sur ton téléphone :
+   WhatsApp › Appareils connectés › Connecter un appareil.
+4. Écris-toi un message dans ta conversation « Moi » : Bank répond là.
+
+Bank ne lit **que** cette conversation ; tes autres conversations sont écartées sans être lues ni gardées, et ses
+propres réponses ne sont jamais relues. « Délier » (mot de passe) déconnecte l'appareil. Client non officiel :
+WhatsApp peut suspendre le compte, et la passerelle garde son propre historique dans son volume `storages`.
+
 ## Signal
 
 Bank parle à [signal-cli](https://github.com/AsamK/signal-cli) en mode service HTTP (flux d'événements + JSON-RPC),

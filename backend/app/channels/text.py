@@ -17,6 +17,7 @@ LIMITS: dict[str, int] = {
     "discord": 2000,
     "slack": 3900,
     "whatsapp": 4096,
+    "whatsapp_qr": 4096,
     "signal": 6000,
     "ntfy": 3800,
 }
@@ -181,6 +182,7 @@ FORMATTERS: dict[str, Callable[[str], str]] = {
     "discord": to_discord,
     "slack": to_slack,
     "whatsapp": to_whatsapp,
+    "whatsapp_qr": to_whatsapp,
     "signal": to_plain,
     "ntfy": to_plain,
 }

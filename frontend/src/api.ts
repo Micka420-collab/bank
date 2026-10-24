@@ -1661,6 +1661,16 @@ export type ChannelsView = {
   platforms: ChannelPlatform[];
 };
 export type PairingCode = { code: string; raw: string; expires_at: string };
+// WhatsApp par QR code (appareil lié) : état lu à la passerelle, QR servi en data URI par Bank.
+export type WhatsAppQrStatus = {
+  bridge: boolean;
+  error: string | null;
+  paired: boolean;
+  phone: string | null;
+  linked: boolean;
+  window: boolean;
+};
+export type WhatsAppQrCode = { paired: boolean; qr: string | null; refresh_in: number | null };
 
 // ------------------------------------------------------------------ crypto (lecture seule)
 export type CryptoAsset = {
