@@ -68,7 +68,384 @@ Demande de Micka : « une app simple et ludique, facilement utilisable, avec un 
   « Je peux m'acheter… ? » ; tout le reste (solde, répartition, échéances, enveloppes, dernières opérations) se
   déplie d'un geste (« Tout le détail », état retenu dans le navigateur).
 
-## 3. Architecture des composants
+## 3. Verre lumineux (octobre 2026)
+
+Demande de Micka : « un vrai design moderne pensé expérience utilisateur, plus amusant pour une personne qui
+n'aime pas faire ses comptes et ses papiers ; friendly, amusant, stylé, beau, moderne ; boutons arrondis, effets
+de lumière, un peu de transparence ». Les sections 1 et 2 restent comme historique : « Verre lumineux » garde la
+typographie, l'espace, les icônes, l'écriture et la tirelire d'« Encre claire » et de « Simple et ludique », et
+remplace la couleur, les surfaces, les boutons et le mouvement.
+
+### 3.1 Audit UX : ce qui pèse à quelqu'un qui n'aime pas ses comptes
+
+Audit fait à la lecture du code (`App.tsx`, `styles.css`, pages) : les captures « avant » n'ont pas pu être
+prises, le Chromium sans tête de Playwright n'a pas ses bibliothèques système (`libatk-1.0.so.0` manquante) —
+à refaire dès qu'elles seront installées.
+
+| Où | Ce qui ressemble à une corvée, ou qui inquiète | Ce qui manque |
+|---|---|---|
+| Partout | Cartes blanches à plat les unes sous les autres, une seule couleur d'accent, boutons à 10 px de rayon : l'écran a l'air d'un formulaire administratif | Un fond vivant, de la profondeur, une couleur qui change avec l'humeur du mois |
+| Partout | Les avertissements (`.notice.warn`) s'empilent en bandeaux jaunes : « à relancer », « en retard », « dérape » — on lit des reproches | Une seule alerte à la fois, formulée comme une prochaine étape, et la récompense à côté |
+| Partout | Un succès n'est qu'un texte dans un toast de 4,5 s, identique à une erreur (« Résultat enregistré. ») | Un retour à la hauteur : coche qui se trace, pièce qui tombe, halo qui s'allume |
+| Aujourd'hui | Le chiffre du jour est bien le héros, mais « Découvert prévu le… » s'affiche dans la même carte, en rouge, sans issue ; ensuite Initiatives, Copilote, mois, année, « Je peux m'acheter » : six blocs avant la fin du premier écran de téléphone | Le chiffre d'abord, une phrase rassurante, puis **une** chose à faire ; la mauvaise nouvelle avec son « que faire » |
+| Opérations | Jusqu'à 100 lignes identiques, un `<select>` par ligne ; « à classer » est une corvée sans fin visible (aucun compteur qui descend) | Un compteur « encore 7 à classer » qui fond, un mode tri rapide, un « Tout est rangé » qui fait plaisir |
+| Gagner | La tirelire est le seul moment joyeux de l'app ; les missions sont une longue liste de textes, « chance » en trois points peu lisible | Missions comme des cartes à collectionner, récompense en pièce lumineuse, gain confirmé célébré |
+| Papiers · Documents | Paragraphe d'en-tête de trois lignes sur téléphone ; le dépôt de fichier ne se voit pas comme l'action principale | Une grande zone de dépôt « Prends en photo » lumineuse ; « 12 papiers rangés » comme une collection |
+| Papiers · Démarches | Tableau en colonnes (à préparer, prêt, envoyé, terminé) empilées sur téléphone ; les démarches « à relancer » en bandeaux jaunes | Une barre de progression par dossier, la prochaine étape en gros, une fête quand le dossier est validé ou obtenu |
+| Aides, Épargne, Crypto, Pilote | Pages denses en chiffres et en tableaux, vocabulaire financier | Une phrase en tête qui dit « ce que ça veut dire pour toi », les détails repliés |
+| Réglages, Connecteurs | Longs formulaires plats | Groupes en cartes, états « relié » qui brillent en vert |
+| Téléphone | La barre d'onglets n'a **pas** les pastilles de compte que le rail montre (gains à confirmer, démarches à traiter) ; Épargne est une destination principale au bureau mais cachée dans « Plus » au téléphone ; onglets de pôle (`.hub-tabs`) en simples liens ; le bouton flottant recouvre la fin des listes | Pastilles sur les onglets, onglet actif allumé, onglets de pôle en segments, marge basse pour le bouton flottant |
+| Accessibilité | `.faint` (`--ink-3`) posé sur le fond nu et dans les bandeaux ; aucun repli pour `prefers-reduced-transparency` (déjà du `backdrop-filter` sur la barre d'onglets) | Règles de contraste sur verre, replis opaques |
+
+### 3.2 Principes
+
+1. **Amusant mais calme.** La lumière fait sourire, elle ne clignote pas. Le fond respire, les surfaces sont
+   posées dessus comme du verre dépoli ; le mouvement ne répond qu'à un geste (exception : l'ouverture du jour).
+2. **L'argent comme une progression, jamais comme une faute.** On montre ce qui avance (tirelire, papiers
+   rangés, opérations classées, dossiers prêts) avant ce qui manque. Une dépense n'est jamais rouge par
+   principe : le rouge est réservé à ce qui demande une action (découvert prévu, échéance ratée), et il vient
+   toujours avec la phrase « ce que tu peux faire ».
+3. **Une chose à la fois.** Chaque écran a une action principale (le bouton lumineux) ; les autres sont
+   discrètes. Une seule alerte en tête de page, les suivantes repliées (« 2 autres points »).
+4. **Fêter ce qui est fait.** Chaque fin de corvée a son petit moment (§ 3.6), court, une fois, coupé par
+   `prefers-reduced-motion`. On ne fête jamais une estimation, seulement ce qui est constaté ou validé par toi.
+5. **Le verre sert la lecture.** Plus il y a de texte, plus la surface est opaque. Le flou est réservé à
+   quelques grandes surfaces ; une liste de cent lignes n'en porte jamais.
+
+### 3.3 Jetons
+
+Les noms existants (`--bg`, `--surface`, `--ink`, `--accent`, `--positive`…) et leurs alias historiques sont
+gardés : les composants actuels changent d'apparence sans changer de classe. Les nouveaux jetons s'ajoutent.
+Les trois blocs habituels sont tenus à jour ensemble : `:root` (clair), `@media (prefers-color-scheme: dark)
+:root:not([data-theme="light"])`, et `:root[data-theme="dark"]` (choix de `theme.ts`, qui peint aussi
+`meta[name="theme-color"]` : `#f4f3fb` / `#0c0b1d`).
+
+#### Fond et halos
+
+| Jeton | Clair | Sombre | Rôle |
+|---|---|---|---|
+| `--bg` | `#F4F3FB` | `#0C0B1D` | Fond de page (lavande très pâle / nuit violette) |
+| `--halo-1` (violet) | `#8B7CFF` à 40 % | `#6D5CFF` à 35 % | Haut gauche, derrière le rail et le chiffre du jour |
+| `--halo-2` (rose) | `#FF8FB8` à 40 % | `#FF5FA2` à 30 % | Haut droit |
+| `--halo-3` (menthe) | `#5EE0C0` à 40 % | `#22C9A0` à 28 % | Bas gauche ; teinte « tout va bien » |
+| `--halo-4` (soleil) | `#FFC65C` à 40 % | `#F7B73B` à 24 % | Bas droit ; teinte « pièce », allumée par les gains |
+
+Les halos sont quatre `radial-gradient` (rayon 38–48 vmax, transparent au bord) sur un calque
+`body::before` en `position: fixed; inset: 0; z-index: -1; pointer-events: none` : aucune image, aucun script,
+rien à recalculer au défilement. Pas d'animation continue. Sur téléphone, deux halos seulement (violet en haut,
+menthe en bas) pour garder le fond calme sous le pouce.
+
+#### Verre
+
+| Jeton | Clair | Sombre | Usage |
+|---|---|---|---|
+| `--glass` | `rgba(255,255,255,.74)` | `rgba(26,24,56,.70)` | Grandes surfaces : héros (posé sur son halo, sans flou), rail, toasts, feuille de l'assistant |
+| `--glass-strong` | `rgba(255,255,255,.88)` | `rgba(26,24,56,.86)` | Cartes ordinaires, listes, formulaires, tableaux (beaucoup de texte) |
+| `--glass-blur` | `blur(20px) saturate(160%)` | `blur(24px) saturate(140%)` | **Seulement** ce qui est fixe ou collant : rail, barre d'onglets (flou 28 px, verre à 90 %), toasts, assistant, modales. Pas le héros : il défile, le flou s'y recalculerait à chaque image pour un effet invisible |
+| `--glass-edge` | `rgba(255,255,255,.70)` | `rgba(255,255,255,.10)` | Bordure 1 px |
+| `--glass-shine` | `inset 0 1px 0 rgba(255,255,255,.90)` | `inset 0 1px 0 rgba(255,255,255,.08)` | Reflet du haut, comme une arête de verre |
+| `--glass-shadow` | `0 12px 32px -14px rgba(52,40,120,.28), 0 2px 6px -2px rgba(52,40,120,.10)` | `0 20px 40px -20px rgba(0,0,0,.70)` | Élévation |
+| `--surface` (opaque) | `#FFFFFF` | `#17152F` | Repli sans transparence, champs de saisie, menus |
+| `--surface-2` | `#F0EEFA` | `#201D40` | Creux (pistes de jauge, segments) |
+| `--line` / `--line-strong` | `#E4E1F3` / `#8C89B0` | `#2C2858` / `#6F6B9E` | Traits ; `--line-strong` borde les champs (3,3:1 / 3,5:1, ≥ 3:1 exigé) |
+
+Pourquoi les cartes ordinaires n'ont pas de flou : les halos sont déjà des dégradés très doux, un `backdrop-filter`
+derrière une carte n'y changerait presque rien à l'œil mais coûterait une couche de composition par carte. Elles
+prennent `--glass-strong` sans flou ; l'effet « verre » vient de la bordure claire, du reflet et de la teinte qui
+transparaît.
+
+#### Accent, lumière, formes
+
+| Jeton | Clair | Sombre |
+|---|---|---|
+| `--accent` (liens, anneau de focus, icônes actives) | `#4B3BEA` | `#A99DFF` |
+| `--accent-grad` (bouton principal, onglet actif, anneau de progression) | `linear-gradient(135deg, #5B4BFF, #9B3FD8)` | `linear-gradient(135deg, #8C7CFF, #D07BFF)` |
+| `--on-accent` | `#FFFFFF` | `#0C0B1D` |
+| `--accent-soft` / texte dessus `--accent-ink` | `#EBE8FF` / `#3F32C8` | `#2A2560` / `#C9C1FF` |
+| `--glow` (survol, focus des boutons principaux) | `0 0 0 4px rgba(91,75,255,.18), 0 10px 28px -8px rgba(123,69,236,.60)` | `0 0 0 4px rgba(169,157,255,.22), 0 10px 32px -6px rgba(208,123,255,.55)` |
+| `--glow-coin` (gain) | `0 0 0 4px rgba(233,164,0,.22), 0 10px 28px -8px rgba(233,164,0,.65)` | `0 0 0 4px rgba(247,197,72,.22), 0 10px 32px -6px rgba(247,197,72,.50)` |
+| `--r-pill` | `999px` | |
+| `--r-card` / `--r-hero` / `--r-control` | `22px` / `32px` / `14px` | |
+
+Le rayon passe de 16 à 22 px pour les cartes, 32 px pour le héros ; boutons, pastilles, segments, recherche
+et barre d'onglets en pilule (`--r-pill`) ; champs de saisie à 14 px (un champ en pilule se lit mal sur
+plusieurs lignes). `--r-s`, `--r-m`, `--r-l` deviennent des alias de `--r-control`, `--r-card`, `--r-hero`.
+
+#### Couleurs de sens
+
+| Jeton | Clair | Sombre | Pastille (`-soft`) clair / sombre |
+|---|---|---|---|
+| `--positive` (argent arrivé, fait, relié) | `#127A4C` | `#5AD39B` | `#DDF5EA` / `#163A2C` |
+| `--negative` (action requise : découvert, échéance ratée) | `#C42B4E` | `#FF8597` | `#FDE6EC` / `#3F1A28` |
+| `--warning` (à surveiller) | `#8F5407` | `#F2B65B` | `#FDF0D9` / `#3A2C14` |
+| `--coin` (ce qu'on peut gagner ; remplissage seulement) | `#E9A400` | `#F7C548` | `#FFF1C7` / `#3B2F10` |
+| `--coin-ink` (texte « pièce ») | `#7A4D00` | `#F9D77E` | |
+| `--ink` / `--ink-2` / `--ink-3` | `#17163A` / `#4A4870` / `#5B5980` | `#F1EFFF` / `#BDB9E0` / `#A29ECB` | |
+
+#### Contrastes vérifiés (WCAG 2.2, texte ≥ 4,5:1, éléments d'interface ≥ 3:1)
+
+Calculés sur le fond **réel** : verre composé au-dessus du pic du halo le plus défavorable (violet en clair,
+menthe en sombre), avec les opacités ci-dessus. Script de calcul : luminance relative sRGB, composition alpha.
+
+| Texte | sur `--glass` clair (pire : `#F1F0FE`) | sur `--glass-strong` clair (`#F9F8FF`) | sur `--glass` sombre (pire : `#18243B`) | sur `--glass-strong` sombre (`#191E39`) |
+|---|---|---|---|---|
+| `--ink` | 15,3 | 16,4 | 13,7 | 14,5 |
+| `--ink-2` | 7,6 | 8,1 | 8,3 | 8,7 |
+| `--ink-3` | 5,8 | 6,2 | 6,1 | 6,5 |
+| `--accent` | 6,0 | 6,4 | 6,6 | 7,0 |
+| `--positive` | 4,8 | 5,1 | 8,3 | 8,8 |
+| `--negative` | 4,9 | 5,2 | 6,7 | 7,1 |
+| `--warning` | 5,4 | 5,8 | 8,6 | 9,1 |
+| `--coin-ink` | 6,4 | 6,9 | 11,1 | 11,7 |
+
+| Paire | Ratio |
+|---|---|
+| `#FFFFFF` sur `--accent-grad` clair (début `#5B4BFF` / milieu `#7B45EC` / fin `#9B3FD8`) | 5,4 / 5,4 / 5,1 |
+| `#0C0B1D` sur `--accent-grad` sombre (début `#8C7CFF` / milieu / fin `#D07BFF`) | 6,0 / 6,6 / 7,4 |
+| `#FFFFFF` sur `--negative` clair (bouton danger plein) · `#0C0B1D` sur `#FF8597` sombre | 5,5 · 8,4 |
+| Pastilles : positive 4,7 · negative 4,7 · warning 5,4 · coin 6,5 · accent 7,0 (clair) ; 6,7 · 6,5 · 7,5 · 9,4 · 8,2 (sombre) | ✓ |
+| Toast `#FFFFFF` sur `#17163A` (clair) · `#17163A` sur `#F1EFFF` (sombre) | 17,3 · 15,3 |
+| Repli opaque : `--ink-3` sur `#FFFFFF` · sur `#17152F` | 6,6 · 7,0 |
+| Anneau de focus `--accent` sur `--bg` | 6,1 (clair) · 8,3 (sombre) |
+| Bordure de champ `--line-strong` sur `--surface` | 3,3 (clair) · 3,5 (sombre) |
+| Arc de progression `#5B4BFF` sur verre clair · `#8C7CFF` sur verre sombre | 4,8 · 4,8 |
+
+**Héros** : son halo est peint **sous** le verre (`linear-gradient(var(--glass))` par-dessus un radial
+`--hero-halo` par-dessus `--bg`), donc voilé lui aussi. Pire coin (en haut à droite, halo à pleine force) :
+clair `--ink-3` 5,5 · `--accent` 5,6 · `--negative` 4,6 · `--positive` 4,47 ; sombre `--ink-2` 7,3 · `--ink-3` 5,4
+· `--accent` 5,8. `--positive` clair frôle 4,5 : **tout texte coloré d'un héros va sur une pastille `-soft`
+opaque** (verdict, delta), jamais à nu. Le halo du héros suit les replis : 50 % en transparence réduite ou sans
+`backdrop-filter`, retiré en contraste renforcé (`--hero-halo-mix`).
+
+**Règle du fond nu** : directement sur `--bg` + halos (titres de page, en-têtes de section hors carte), seuls
+`--ink` (≥ 10) et `--ink-2` (≥ 5,2) sont permis. `--ink-3` y tombe à 4,0 en clair, les couleurs de sens à
+3,3–3,7 : tout texte `.faint`, `.muted` coloré, montant signé ou `.notice` va **dans** une surface de verre.
+`--coin` (`#E9A400`, 1,9:1 sur verre) ne porte jamais de sens seul : il remplit, et le chiffre ou le contour en
+`--coin-ink` porte l'information.
+
+### 3.4 Composants
+
+**Boutons** (tous `min-height: 44px`, `border-radius: var(--r-pill)`, `padding: .6rem 1.25rem`, graisse 650) :
+
+| Variante | Classe (inchangée) | Repos | Survol / focus clavier | Appui |
+|---|---|---|---|---|
+| Principal | `.btn` | `--accent-grad`, texte `--on-accent`, `--glass-shine` | `--glow` + soulèvement de 1 px ; le dégradé glisse (`background-size: 200%`, `background-position` 0 → 100 %) | `scale(.97)`, lueur retirée |
+| Secondaire | `.btn.quiet` | `--glass-strong`, bord `--glass-edge`, texte `--ink` | bord `--accent`, halo doux `0 0 0 4px var(--accent-soft)` | `scale(.97)` |
+| Discret | `.btn.ghost` | transparent, texte `--accent` | fond `--accent-soft` | `scale(.97)` |
+| Danger | `.btn.danger` | transparent, bord et texte `--negative` | fond `--negative-soft` ; jamais de lueur | `scale(.97)` |
+| Gain | `.btn.coin` (nouveau) | fond `--coin-soft`, texte `--coin-ink`, pièce à gauche | `--glow-coin` | `scale(.97)` |
+| Lien | `.btn.link` | inchangé, souligné | couleur `--accent` | — |
+
+`.sm` garde 44 px au téléphone (règle existante) ; `.lg` 52 px. `.is-loading` : le texte reste, une petite
+orbite tourne à gauche (coupée en mouvement réduit, remplacée par « … »). Un seul `.btn` principal visible par
+carte.
+
+**Pastilles et puces** : `.chip`, `.pill`, `.tag`, `.chip-count` en pilule. `.chip` au repos en verre fort
+(bord `--glass-edge`) ; `[aria-pressed="true"]` en `--accent-grad` avec `--on-accent`. `.tag` reste petit (texte
+12 px graisse 650) sur la pastille `-soft` de sa couleur de sens, avec un point de couleur devant ; la
+pastille « pièce » (`.coin-chip`, `+13,49 € par mois`) brille d'un `--glow-coin` réduit de moitié.
+
+**Cartes** : `.card`, `.panel`, `.chart-wrap` → `--glass-strong`, bord `--glass-edge`, `--glass-shine` +
+`--glass-shadow`, `--r-card`. `.card-quiet` → `--surface-2` à 70 % sans ombre. `.card-hero` → `--glass` posé
+sur son propre halo (radial, couleur selon l'état, voir chiffre du jour), sans flou, `--r-hero`. Deux cartes de
+verre consécutives gardent 1rem d'écart. Le ton d'une carte arrondie (bandeau, demande, mission, veille) est une
+barre de 4 px en pilule **posée à l'intérieur**, retirée de l'arrondi (`--stripe`), jamais une bordure gauche
+épaisse qui se courberait en croissant.
+Les listes à l'intérieur (`.ledger`, `.opp-list`, `.proc-card`…) n'ont **ni** flou **ni** ombre par ligne : un
+séparateur 1 px `--line` et, au survol, `--accent-soft` à 50 %.
+
+**Chiffre du jour** (`.today-figure`) : 92 % de chasse, graisse 750 (inchangé), couleur `--ink` ; derrière, le
+halo du héros prend la couleur de l'état du mois : menthe (`ok`), soleil (`tight`), rose (`risk`) — jamais de
+rouge vif. Le verdict passe en pastille sous le chiffre (`.verdict[data-status]`, pastille `-soft`) et, en cas de
+découvert prévu, porte un lien « Que faire ? » vers « Je peux m'acheter… ? » / l'assistant.
+
+**Rail** (bureau) : `--glass` + `--glass-blur`, détaché du bord (`margin: 12px`, `--r-hero`, hauteur
+`calc(100dvh - 24px)`). `.nav-link` en pilule ; actif : fond `--accent-grad` à 14 % d'opacité + texte
+`--accent-ink` + icône `--accent`, et un point lumineux de 6 px à gauche. `.nav-badge` en `--accent-grad`.
+
+**Barre d'onglets** (téléphone, `.tabbar`) : île flottante en pilule (`inset: auto 12px calc(10px +
+env(safe-area-inset-bottom)) 12px`), `--glass` + `--glass-blur`, `--glass-shadow`. Cinq cibles ≥ 48 × 52 px.
+Onglet actif : une bulle `--accent-grad` derrière l'icône (40 × 32 px, texte `--on-accent` pour l'icône,
+libellé dessous en `--accent-ink`) qui glisse d'un onglet à l'autre (`transform`, 280 ms). **Pastilles de
+compte** sur Gagner (gains à confirmer) et Papiers (démarches à traiter), les mêmes que le rail. La page garde
+une marge basse de `calc(9.5rem + env(safe-area-inset-bottom))` pour que ni l'île ni le bouton flottant ne
+cachent la dernière ligne.
+
+**Onglets de pôle** (`.hub-tabs`) et **segments** (`.segmented`) : piste en pilule, segment actif en
+`--accent-grad` avec texte `--on-accent` (comme pastilles, sommaire et onglets : ce qui est choisi s'allume),
+44 px. Un segment « de verre enfoncé » ne se distinguait de sa piste qu'à 1,1:1 (WCAG 1.4.11). Les liens
+`aria-current="page"` gardent leur sémantique.
+
+**Champs** (`.field input`, `.input`, `select`, `textarea`) : `--surface` opaque (le texte saisi ne se lit
+jamais sur du flou), bord `--line-strong`, `--r-control`, 44 px ; focus : bord `--accent` + `0 0 0 4px
+var(--accent-soft)`. Recherche (`.search`) en pilule avec loupe. Erreur : bord `--negative` + message sous le
+champ avec icône, jamais la couleur seule.
+
+**Focus visible** : double anneau lisible sur verre comme sur halo — `outline: 3px solid var(--accent);
+outline-offset: 2px` + `box-shadow: 0 0 0 2px var(--bg)` côté intérieur pour les boutons en dégradé.
+
+**Toasts** (`.toast`) : pilule en bas au centre (au-dessus de l'île sur téléphone), `--glass` + flou, icône à
+gauche. Variantes par classe : neutre, `.is-success` (coche verte qui se trace), `.is-coin` (pièce +
+`--glow-coin`), `.is-error` (reste 8 s et garde un bouton « Réessayer » quand il y en a un). `useToast(msg,
+kind?)` garde sa signature actuelle (le second argument est facultatif). Région `aria-live="polite"` inchangée.
+
+**Bandeaux** (`.notice`) : verre fort, une barre de 4 px à gauche dans la couleur de sens, icône dans une
+pastille ronde `-soft`. Une page n'affiche qu'**un** bandeau d'alerte déplié ; les suivants se regroupent
+(« 2 autres points à voir »).
+
+**États vides** (`.empty`, `.empty-inline`) : petite illustration au trait des icônes (SVG inline, 96 px :
+bocal, dossier, soleil, coche), une phrase qui félicite ou invite, un bouton. Exemples (le texte existant est
+gardé quand il existe) : plus rien « à classer » → « Tout est rangé. » ; plus de mission → texte actuel + soleil ;
+aucun document → « Prends un papier en photo : Bank le lit pour toi. »
+
+**Progression** :
+- **Anneau** (`.ring`, nouveau, SVG inline 48–96 px) : piste `--surface-2`, arc en `--accent-grad` (dégradé SVG
+  `<linearGradient>` dans le JSX, pas d'URL externe), bout rond, valeur en texte au centre et `role="img"` +
+  `aria-label` (« 5 papiers sur 7 à jour »). Sert à : opérations classées sur le mois, papiers à jour, dossier
+  de démarche.
+- **Barre** (`.meter`, `.piggy-bar`) : 10 px de haut, pilule, remplissage `--accent-grad` (ou `--coin` pour la
+  tirelire, `--negative` seulement au-delà de 100 %), repère « rythme attendu » gardé.
+- **Étapes** (`.proc-phases`) : pastilles reliées par un trait qui se remplit ; étape faite = coche sur
+  `--positive-soft`, étape en cours = `--accent-grad` avec `--glow`.
+
+### 3.5 Pages : ce qui change pour l'expérience
+
+- **Aujourd'hui** : salutation selon l'heure au-dessus du chiffre (« Bonjour Micka » / « Bonsoir Micka »), le
+  chiffre, le verdict en pastille, puis **une** carte « La prochaine chose à faire » (la première initiative ou
+  mission) ; le reste comme aujourd'hui, replié derrière « Tout le détail » (pilule).
+- **Opérations** : en tête, l'anneau « classé ce mois » et un bouton « Classer les 7 restantes » qui ouvre un
+  mode tri rapide (une opération à la fois, catégories en grosses pastilles, « Passer ») ; la fin du tri déclenche
+  le moment « Tout est rangé ». La liste garde son `<select>` (accessibilité, tests).
+- **Gagner** : la tirelire en carte héros (verre + halo soleil) ; missions en cartes avec la pièce lumineuse en
+  coin, chance en jauge à trois crans colorés plutôt qu'en points.
+- **Papiers** : Documents s'ouvre sur une grande zone de dépôt lumineuse (bord en pointillé `--accent`, icône
+  appareil photo, « Prends en photo ou dépose un PDF ») et la collection « N papiers rangés » ; Démarches montre
+  chaque dossier comme une carte avec sa barre d'étapes et « Prochaine étape : … » en gros, les colonnes
+  deviennent des filtres en pastilles au téléphone.
+- **Épargne, Aides, Crypto, Pilote** : une phrase « ce que ça veut dire pour toi » en tête de page, chiffres clés
+  en pastilles, tableaux repliés.
+- **Plus** (téléphone) : tuiles en verre fort avec l'icône dans une pastille de couleur (violet, rose, menthe,
+  soleil en alternance), Épargne en premier.
+- **Réglages, Connecteurs** : groupes en cartes ; un service relié porte une pastille `--positive` qui
+  s'allume (`--glow` vert) au moment où la liaison réussit.
+
+### 3.6 Moments de fête : exactement quand
+
+Un moment ne se déclenche **que** sur une action de l'utilisateur qui vient de réussir (réponse 2xx du
+serveur), **une fois** par événement, jamais au chargement d'une page, jamais pour une estimation, jamais pour
+une dépense. Il dure moins d'une seconde, n'empêche aucun clic et annonce son texte par le toast (`aria-live`).
+
+| Événement (déclencheur dans le code) | Moment | Toast |
+|---|---|---|
+| Gain confirmé (`ConfirmGain` → confirmation acceptée) | La pièce tombe dans le bocal (existant) + 8 petites pièces jaillissent du bouton (CSS, 700 ms) + halo soleil du fond s'allume 1,2 s | `.is-coin` « +X dans ta tirelire ! » (texte existant) |
+| Palier de tirelire franchi par ce gain (25, 50, 100 €…) | Le badge du palier apparaît en « pop » (échelle .6 → 1, ressort) | `.is-coin` « Palier de X atteint » |
+| Résultat de démarche « obtenu » avec montant | Comme un gain confirmé | Texte existant, en `.is-coin` |
+| Dossier validé (`Review` → « Dossier validé : tu peux le transmettre. ») | L'étape « Valider » se coche (coche qui se trace, 400 ms) et la barre d'étapes avance | `.is-success`, texte existant |
+| Document déposé et lu | La vignette arrive dans la collection, coche verte qui se trace, le compteur « N papiers rangés » monte de 1 | `.is-success` |
+| Dernière opération « à classer » de la page classée | L'anneau se ferme, une étincelle tourne une fois autour, l'état vide « Tout est rangé. » remplace la bannière | `.is-success` |
+| Banque, messagerie ou agenda relié avec succès | La pastille de l'élément passe au vert avec `--glow` vert 1 s | `.is-success`, textes existants |
+
+Rien d'autre ne célèbre. Les confettis plein écran, les sons et les vibrations sont exclus.
+
+### 3.7 Mouvement
+
+| Jeton | Valeur | Usage |
+|---|---|---|
+| `--ease-out` | `cubic-bezier(.2,.8,.2,1)` (inchangé) | Entrées, états |
+| `--ease-spring` | `cubic-bezier(.34,1.3,.64,1)` (inchangé) | Bulle de l'onglet actif, « pop » d'un badge |
+| `--d-fast` / `--d-base` / `--d-slow` | 120 / 200 / 320 ms (inchangés) | Retour bouton / état / page |
+| `--d-glow` | 240 ms | Allumage de la lueur au survol et au focus |
+| `--d-party` | 700–1 200 ms | Moments de fête, jamais plus |
+
+On n'anime que `transform`, `opacity`, `background-position` et `box-shadow` d'un seul élément à la fois. Pas
+d'animation infinie (les halos sont fixes ; seule l'orbite de chargement tourne tant que le bouton attend).
+L'ouverture du jour (chiffre qui se compte, cartes qui montent avec 45 ms d'écart) reste la seule séquence non
+demandée. `prefers-reduced-motion: reduce` coupe tout (règle globale existante) : les moments de fête se
+réduisent à l'état final (badge visible, coche pleine) et au toast.
+
+### 3.8 Replis et accessibilité
+
+- `@media (prefers-reduced-transparency: reduce)` **et** `@supports not ((backdrop-filter: blur(1px)) or
+  (-webkit-backdrop-filter: blur(1px)))` : `--glass` et `--glass-strong` deviennent `--surface` (opaque),
+  `backdrop-filter: none` ; les halos restent mais à 50 % de leur opacité. Écrire `-webkit-backdrop-filter`
+  à côté de `backdrop-filter` (Safari).
+- `@media (prefers-contrast: more)` : halos retirés (fond **et** héros), bordures en `--line-strong`, `--ink-3` remplacé par
+  `--ink-2`, pas de lueur.
+- `@media (forced-colors: active)` : fonds et dégradés ignorés par le navigateur ; on garde des bordures
+  `1px solid CanvasText` sur cartes et boutons, l'onglet actif en `Highlight`, le focus en `outline` (jamais
+  seulement `box-shadow`).
+- Cibles ≥ 44 px au téléphone (onglets ≥ 48) : pastilles, `.btn.sm`, sommaire, cases et segments compris ; au
+  bureau (pointeur fin) les petites variantes gardent 36 px (WCAG 2.5.8 : ≥ 24). Le focus suit l'arrondi de
+  l'élément (pas de `border-radius` imposé par `:focus-visible`), montants jamais distingués par la couleur
+  seule (signe + / −, icône de tendance), `aria-live` existant conservé.
+- 390 px : aucun débordement horizontal — île d'onglets en `grid-template-columns: repeat(5, minmax(0, 1fr))`,
+  halos en `position: fixed` dans un calque qui ne peut pas élargir la page (`inset: 0`, `overflow: hidden`).
+- CSP stricte : aucun `<style>` ni `style=""` statique ajouté (les seules variables posées en `style` restent
+  celles qui portent une donnée : `--i`, `--level`, largeurs de jauge) ; pas de police ni d'image externe :
+  halos en dégradés CSS, illustrations et anneaux en SVG inline.
+- Performance : `backdrop-filter` seulement sur ce qui est fixe ou collant (rail ou île, toast, assistant,
+  modale) ; jamais sur une ligne de liste, une pastille ou une carte ordinaire ; `will-change` interdit en
+  permanence.
+
+### 3.9 Ordre de réalisation
+
+**Fondations** (jetons et surfaces globales — sans toucher au JSX sauf mention)
+
+1. Jetons clair et sombre (trois blocs), alias `--r-s/m/l`, `--ink-3` relevé, `theme-color` dans `theme.ts`.
+2. Fond : calque `body::before` à quatre halos (deux au téléphone).
+3. Surfaces : `.card` / `.panel` / `.chart-wrap` en `--glass-strong`, `.card-hero` en `--glass` + flou,
+   `.card-quiet`, listes sans flou.
+4. Boutons en pilule : `.btn`, `.quiet`, `.ghost`, `.danger`, `.link`, nouveau `.coin`, `.is-loading` ; focus
+   double anneau.
+5. Champs, recherche, `.segmented`, `.hub-tabs`, `.chip` / `.pill` / `.tag` / `.chip-count`, `.notice`.
+6. Rail en verre détaché ; barre d'onglets en île flottante avec bulle active et pastilles de compte (JSX
+   `App.tsx` : réutiliser `badges` du rail).
+7. Toasts en pilule de verre + variantes (`useToast(msg, kind?)` dans `ui.tsx`, compatible).
+8. Replis : transparence réduite, sans `backdrop-filter`, contraste renforcé, couleurs forcées, mouvement
+   réduit ; vérification 390 px clair/sombre et suite Vitest.
+
+*Fondations réalisées (octobre 2026).* Écarts assumés par rapport au § 3.4 :
+- `.hub-tabs` : piste en verre fort (une piste `--surface-2` disparaît sur le fond lavande) et onglet actif en
+  `--accent-grad`, comme la bulle de l'île ; `.segmented` aussi depuis la relecture (le verre enfoncé était
+  illisible en sombre).
+- La bulle de l'île glisse par `left` (un seul petit élément) : `transform` en pourcentage se rapporte à la bulle,
+  pas à la barre. L'index vient de `data-active` posé par `App.tsx`.
+- Le toast neutre porte une petite étincelle ; `useToast(msg, kind?)` accepte `"success" | "coin" | "error"`.
+- Les pastilles de compte du rail et de l'île viennent d'un seul appel (`useNavBadges`).
+- Les cartes à liseré gauche coloré (missions, bandeaux) gardent leur liseré, courbé par le rayon de 22 px.
+
+**Expérience** (pages, plaisir et clarté)
+
+1. Aujourd'hui : salutation, halo du héros selon l'état, verdict en pastille avec « Que faire ? », carte « La
+   prochaine chose à faire ».
+2. Système de fête : utilitaire `celebrate(kind)` + classes CSS (pièces, coche, étincelle, pop), branché sur les
+   sept déclencheurs du § 3.6 et rien d'autre.
+3. Gagner : tirelire en héros soleil, missions en cartes avec pièce lumineuse, jauge de chance à trois crans.
+4. Opérations : anneau « classé ce mois », mode tri rapide, état « Tout est rangé ».
+5. Papiers : zone de dépôt lumineuse et collection dans Documents ; cartes de démarche avec barre d'étapes et
+   « Prochaine étape », colonnes → filtres au téléphone.
+6. Une seule alerte dépliée par page (regroupement des `.notice.warn`), formulée en prochaine étape.
+7. États vides illustrés (SVG inline) et encourageants.
+8. Plus, Réglages, Connecteurs : tuiles colorées, groupes en cartes, pastille « relié » qui s'allume ;
+   Épargne, Aides, Crypto, Pilote : phrase « ce que ça veut dire pour toi » et détails repliés.
+
+*Expérience, premier passage (octobre 2026).* Fait : salutation et halo d'humeur du héros, verdict en pastille
+avec « Que faire ? » (vers « Je peux m'acheter… ? ») quand le mois se resserre, titre visible « La prochaine chose
+à faire » ; `useCelebrate()` (ui.tsx) + `Celebration.tsx` (gerbe CSS de 10 pièces ou étincelles derrière le toast,
+halo du fond 1,2 s, `aria-hidden`, le toast `aria-live` dit le texte ; retirée en mouvement réduit et en couleurs
+forcées), branchée sur : gain confirmé, résultat « obtenu » avec montant, dossier validé, document vérifié,
+dernière opération « à classer » de la page rangée, banque / messagerie / agenda / boîte mail reliés. Palier de
+tirelire : badge en « pop » (sans second toast, pour ne pas couvrir le gain) et « Palier de X atteint » annoncé
+par sa propre région `role="status"`. « Tout est rangé » ne se fête que sans filtre et quand le serveur ne compte
+plus rien à classer dans le mois de l'anneau ; « Banque connectée » une seule fois (le paramètre de retour est
+retiré de l'adresse). La couche de fête est démontée 1,3 s après, sans attendre la fin du toast. Anneau `Ring.tsx` (« classé ce mois »
+dans Opérations, « N papiers rangés » dans Documents), barre d'étapes sur les cartes de démarche, tirelire en
+héros soleil, pièce lumineuse sur les récompenses, chance en trois crans, zone de dépôt lumineuse, états vides
+illustrés (`EmptyState.tsx`), action principale pleine largeur au téléphone. Pas d'objectif d'épargne « atteint »
+côté serveur : rien n'est fêté là. Reste : mode tri rapide, filtres en pastilles des colonnes de démarches, une seule
+alerte dépliée par page, phrases « ce que ça veut dire pour toi », tuiles colorées de Plus.
+
+## 4. Architecture des composants
 
 ```
 src/
@@ -105,7 +482,7 @@ feuille a `min-width: 0` (un contenu large ne peut pas élargir la page) ; toute
 Thème : `:root` clair par défaut, sombre via `prefers-color-scheme` **ou** `data-theme="dark"` posé par
 `theme.ts` (choix dans Réglages → Apparence, mémorisé dans `localStorage`, appliqué avant le premier rendu).
 
-## 4. Parcours de première ouverture
+## 5. Parcours de première ouverture
 
 1. Intro animée (3 écrans, 8 s au total, passables) : « Combien tu peux dépenser aujourd'hui » (le chiffre se
    compte), « Tes aides et ta paie, prévues » (la courbe se trace), « Ton agent, gouverné » (une carte qui se
@@ -121,7 +498,7 @@ Thème : `:root` clair par défaut, sombre via `prefers-color-scheme` **ou** `da
 Les logos officiels ne sont pas embarqués (ce sont des marques déposées) : chaque tuile montre une pastille aux
 couleurs de la banque ; déposer `frontend/public/banks/<id>.svg` affiche le logo à la place.
 
-## 5. Graphiques
+## 6. Graphiques
 
 Un seul composant de tendance (`TrendChart`) sert le tableau de bord (solde) et le patrimoine (valeur nette) :
 SVG responsive, aire sous la courbe, grille discrète, repère du jour, infobulle au survol/toucher et au clavier
@@ -141,7 +518,7 @@ Libellés : les marchands arrivent en capitales de la banque (`CARREFOUR MARKET 
 écrit comme on les lit (`Carrefour Market Orleans`, `EDF Clients Particuliers`, `CAF du Loiret APL`) et laisse
 le libellé brut en dessous.
 
-## 6. Qualité
+## 7. Qualité
 
 Chaque composant a ses états (chargement, vide, erreur, déconnecté) ; cibles tactiles ≥ 44 px ; focus visible ;
 `aria-live` sur ce qui change ; tests Vitest sur les parcours (`design.test.tsx` : intro → accès → banque →

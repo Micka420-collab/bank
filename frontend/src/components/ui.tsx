@@ -1,29 +1,65 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { money } from "../format";
+import { Celebration, type CelebrationKind } from "./Celebration";
+import { Icon, type IconName } from "./Icon";
 
 // ------------------------------------------------------------------ toast
-const ToastCtx = createContext<(msg: string) => void>(() => undefined);
+/** Neutre par défaut ; « success » (coche qui se trace), « coin » (un gain), « error » (reste plus longtemps). */
+export type ToastKind = "info" | "success" | "coin" | "error";
+type Toast = { msg: string; kind: ToastKind; n: number };
+const TOAST_ICON: Record<ToastKind, IconName> = { info: "spark", success: "check", coin: "coin", error: "alert" };
+type Show = (msg: string, kind?: ToastKind, party?: CelebrationKind) => void;
+const ToastCtx = createContext<Show>(() => undefined);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [msg, setMsg] = useState<string | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const [party, setParty] = useState<{ kind: CelebrationKind; n: number } | null>(null);
   const timer = useRef<number | undefined>(undefined);
-  const show = useCallback((m: string) => {
-    setMsg(m);
+  const partyTimer = useRef<number | undefined>(undefined);
+  const count = useRef(0);
+  const show = useCallback<Show>((msg, kind = "info", party) => {
+    const n = ++count.current;
+    setToast({ msg, kind, n });
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setMsg(null), 4500);
+    timer.current = window.setTimeout(() => setToast(null), kind === "error" ? 8000 : 4500);
+    // La fête dure à peine plus que son animation (1,2 s) : la couche plein écran ne reste pas montée avec le toast.
+    window.clearTimeout(partyTimer.current);
+    setParty(party ? { kind: party, n } : null);
+    if (party) partyTimer.current = window.setTimeout(() => setParty(null), 1300);
   }, []);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
+  useEffect(() => () => {
+    window.clearTimeout(timer.current);
+    window.clearTimeout(partyTimer.current);
+  }, []);
   return (
     <ToastCtx.Provider value={show}>
       {children}
       <div aria-live="polite" role="status">
-        {msg && <div className="toast">{msg}</div>}
+        {toast && (
+          // La clé relance l'animation (coche, lueur) quand un deuxième message suit le premier.
+          <div key={toast.n} className={`toast${toast.kind === "info" ? "" : ` is-${toast.kind}`}`}>
+            <Icon name={TOAST_ICON[toast.kind]} />
+            {toast.msg}
+          </div>
+        )}
       </div>
+      {/* Hors de la région annoncée : la fête se voit, le texte du toast suffit à la dire. */}
+      {party && <Celebration key={party.n} kind={party.kind} />}
     </ToastCtx.Provider>
   );
 }
 
 export const useToast = () => useContext(ToastCtx);
+
+/**
+ * Un petit moment de fête (§ 3.6 de DESIGN.md) : le toast annonce le texte, quelques pièces ou étincelles
+ * jaillissent de lui et un halo s'allume au fond, moins d'une seconde. À n'appeler qu'après une réponse 2xx du
+ * serveur à un geste de l'utilisateur — jamais au chargement, jamais pour une estimation.
+ */
+export function useCelebrate(): (kind: CelebrationKind, msg: string) => void {
+  const toast = useToast();
+  return useCallback((kind: CelebrationKind, msg: string) => toast(msg, kind === "coin" ? "coin" : "success", kind), [toast]);
+}
 
 // ------------------------------------------------------------------ petits composants
 export function Amount({ cents, whole = false }: { cents: number; whole?: boolean }) {

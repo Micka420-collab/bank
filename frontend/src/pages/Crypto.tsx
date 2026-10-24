@@ -18,6 +18,7 @@ import {
 } from "../api";
 import { TrendChart } from "../components/charts/TrendChart";
 import { CountUp } from "../components/CountUp";
+import { EmptyState } from "../components/EmptyState";
 import { ExchangeKeys } from "../components/ExchangeKeys";
 import { Icon } from "../components/Icon";
 import { PriceAlerts } from "../components/PriceAlerts";
@@ -137,14 +138,34 @@ export function Crypto() {
 function Vault({ data }: { data: CryptoView }) {
   const delta = data.change_24h_cents;
   const history = data.history;
+  // Rien de suivi : pas de « 0 € » géant en héros, une invitation calme vers l'ajout d'une adresse.
+  const toWallets = () => {
+    const el = document.querySelector<HTMLElement>("[aria-labelledby='cx-wallets']");
+    if (!el) return;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+    el.querySelector<HTMLElement>("input, select, textarea, button")?.focus({ preventScroll: true });
+  };
+  if (data.assets.length === 0) {
+    return (
+      <div className="card reveal">
+        <EmptyState art="sun" title="Ta crypto aujourd'hui : rien de suivi pour l'instant"
+                    actions={<button type="button" className="btn" onClick={toWallets}><Icon name="plus" /> Ajouter une adresse</button>}>
+          <p className="muted">
+            Ajoute une adresse publique (ton Ledger, MetaMask, Phantom…) ou saisis ce que tu as sur une plateforme : Bank calcule
+            la valeur, la courbe et ce qu'il y aura à déclarer.
+          </p>
+        </EmptyState>
+      </div>
+    );
+  }
   return (
     <section className="card card-hero cx-vault reveal" aria-labelledby="cx-value">
       <p className="today-lead" id="cx-value">Ta crypto aujourd'hui</p>
       <p className="today-figure cx-figure">
         <CountUp value={Math.round(data.total_cents / 100)} format={(n) => amountOnly(n * 100)} /> €
       </p>
-      {data.assets.length > 0 ? (
-        <>
+      <>
           <p className="muted cx-sub">
             {delta !== 0 && (
               <span className={`cx-delta ${delta > 0 ? "up" : "down"}`}>
@@ -159,13 +180,7 @@ function Vault({ data }: { data: CryptoView }) {
               <TrendChart points={history.map((p) => ({ date: p.day, value: p.value_cents }))} label="Valeur de la crypto" baseline="auto" />
             </div>
           )}
-        </>
-      ) : (
-        <p className="muted">
-          Rien de suivi pour l'instant. Ajoute une adresse publique (ton Ledger, MetaMask, Phantom…) ou saisis ce que tu as sur une
-          plateforme : Bank calcule la valeur, la courbe et ce qu'il y aura à déclarer.
-        </p>
-      )}
+      </>
     </section>
   );
 }

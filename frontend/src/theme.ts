@@ -27,7 +27,7 @@ export function applyTheme(pref: ThemePref): void {
   // La barre d'état du navigateur suit la couleur de fond effective.
   const dark = pref === "dark" || (pref === "auto" && window.matchMedia?.("(prefers-color-scheme: dark)").matches);
   for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
-    meta.content = dark ? "#0b0f1f" : "#f5f6fa";
+    meta.content = dark ? "#0c0b1d" : "#f4f3fb";
   }
 }
 

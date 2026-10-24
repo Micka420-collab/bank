@@ -15,8 +15,8 @@ import {
   type ProcedureView,
 } from "../api";
 import { Icon, type IconName } from "../components/Icon";
-import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
-import { money, plural, shortDate } from "../format";
+import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useCelebrate, useToast } from "../components/ui";
+import { money, perPeriod, plural, shortDate } from "../format";
 import { editValue, fullDate } from "./Documents";
 import { Sources } from "./Opportunities";
 
@@ -80,7 +80,7 @@ function Board({ wantNew }: { wantNew: boolean }) {
           {COLUMNS.map((col) => {
             const items = rows.filter((r) => col.stages.includes(r.stage));
             return (
-              <section key={col.key} className={`proc-col is-${col.key}`} aria-labelledby={`col-${col.key}`}>
+              <section key={col.key} className={`proc-col is-${col.key}${items.length === 0 ? " is-empty" : ""}`} aria-labelledby={`col-${col.key}`}>
                 <h2 id={`col-${col.key}`}>{col.title} <span className="chip-count">{items.length}</span></h2>
                 <p className="faint">{col.hint}</p>
                 <ul>{items.map((r) => <ProcCard key={r.id} row={r} />)}</ul>
@@ -93,12 +93,24 @@ function Board({ wantNew }: { wantNew: boolean }) {
   );
 }
 
+/** Étape d'une démarche vue de la liste (sans savoir si le dossier prêt est déjà validé). */
+export function rowPhase(stage: ProcedureRow["stage"]): number {
+  return ({ verify: 0, documents: 1, ready: 2, sent: 4, waiting: 4 } as Record<string, number>)[stage] ?? 5;
+}
+
 function ProcCard({ row }: { row: ProcedureRow }) {
+  const step = rowPhase(row.stage);
+  const done = row.stage === "done";
   return (
     <li className={`proc-card${row.due ? " is-due" : ""}`}>
       <a href={`#/demarches/${row.id}`}>
         <b>{row.title}</b>
-        <span className="faint">{row.stage_label}</span>
+        <span className="faint">{row.stage_label}{row.stage !== "abandoned" && !done ? ` · étape ${step + 1}/${PHASES.length}` : ""}</span>
+        {row.stage !== "abandoned" && (
+          <span className="proc-progress" role="img" aria-label={done ? "Dossier terminé" : `Étape ${step + 1} sur ${PHASES.length} : ${PHASES[step]}`}>
+            {PHASES.map((label, i) => <i key={label} className={i < step || done ? "is-done" : i === step ? "is-active" : undefined} />)}
+          </span>
+        )}
         {row.next_check && row.stage === "waiting" && (
           <span className={`tag ${row.due ? "warn" : ""}`}><Icon name="clock" size={12} /> {row.due ? "à relancer" : `point le ${shortDate(row.next_check)}`}</span>
         )}
@@ -399,13 +411,13 @@ function Letter({ view }: { view: ProcedureView }) {
 function Review({ view, onView }: { view: ProcedureView; onView: (v: ProcedureView) => void }) {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [busy, error, run] = useAsyncAction();
-  const toast = useToast();
+  const celebrate = useCelebrate();
   const decls = view.template.declarations;
   const all = decls.every((d) => checked.has(d.key));
   const approve = () =>
     void run(async () => {
       onView(await api<ProcedureView>(`/api/procedures/${view.id}/approve`, { method: "POST", body: { hash: view.hash, declarations: [...checked] } }));
-      toast("Dossier validé : tu peux le transmettre.");
+      celebrate("done", "Dossier validé : tu peux le transmettre.");
     });
   const filled = view.fields.filter((f) => f.active && f.value !== null && f.value !== "");
   const attached = view.pieces.flatMap((p) => p.attached.map((d) => ({ piece: p.label, doc: d })));
@@ -492,6 +504,7 @@ function FollowUp({ view, onView }: { view: ProcedureView; onView: (v: Procedure
   const [note, setNote] = useState("");
   const [busy, error, run] = useAsyncAction();
   const toast = useToast();
+  const celebrate = useCelebrate();
   const waiting = view.stage === "waiting" || view.stage === "sent";
   const snooze = (days: number) =>
     void run(async () => {
@@ -505,7 +518,9 @@ function FollowUp({ view, onView }: { view: ProcedureView; onView: (v: Procedure
         method: "POST",
         body: { outcome, amount_cents: outcome === "obtenu" ? amount : null, period, note: note || null },
       }));
-      toast(outcome === "obtenu" && amount ? "Résultat enregistré : compté comme obtenu." : "Résultat enregistré.");
+      // Un résultat obtenu avec son montant se fête comme un gain confirmé ; le reste est simplement noté.
+      if (outcome === "obtenu" && amount) celebrate("coin", `+${perPeriod(amount, period)} obtenus, bravo ! C'est compté dans ta tirelire.`);
+      else toast("Résultat enregistré.");
     });
   };
   return (

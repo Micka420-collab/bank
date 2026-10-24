@@ -13,7 +13,7 @@ import {
 } from "../api";
 import { BankConnect, BankMark } from "../components/BankConnect";
 import { Icon } from "../components/Icon";
-import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
+import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useCelebrate, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
 import { AgentTokens } from "./Agents";
 import { AssistantSettings } from "./AssistantSettings";
@@ -61,12 +61,17 @@ export function Banks({ result }: { result: string | null }) {
   const [busy, error, run] = useAsyncAction();
   const [listError, setListError] = useState<string | null>(null);
   const toast = useToast();
+  const celebrate = useCelebrate();
 
   useEffect(() => {
-    if (result === "connected") toast("Banque connectée. Lance une synchronisation pour récupérer tes opérations.");
+    if (result === "connected") celebrate("done", "Banque connectée. Lance une synchronisation pour récupérer tes opérations.");
     if (result === "refused") toast("Connexion annulée côté banque.");
     if (result === "error") toast("La connexion a échoué ou a expiré : recommence.");
-  }, [result, toast]);
+    // Le retour de la banque ne se fête qu'une fois : sans ce paramètre, ni un rechargement ni « Retour » ne le rejouent.
+    if (result && window.location.hash.includes("?")) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search + window.location.hash.split("?")[0]);
+    }
+  }, [result, toast, celebrate]);
 
   const connections = status.data?.connections ?? [];
   const enabled = status.data?.enabled ?? false;

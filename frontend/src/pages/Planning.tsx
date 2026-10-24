@@ -4,7 +4,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, useApi, type PayModel, type PayRule, type PlanningStatus } from "../api";
 import { Icon } from "../components/Icon";
-import { ErrorNote, Field, Loading, useAsyncAction, useToast } from "../components/ui";
+import { ErrorNote, Field, Loading, useAsyncAction, useCelebrate, useToast } from "../components/ui";
 import { money, parseEuros, shortDate } from "../format";
 
 const UNIT_LABEL: Record<PayRule["unit"], string> = { per_event: "par événement", per_day: "par jour", per_hour: "par heure" };
@@ -62,13 +62,14 @@ function ConnectForms({ onConnected }: { onConnected: () => void }) {
   const [url, setUrl] = useState("");
   const [busy, error, run] = useAsyncAction();
   const toast = useToast();
+  const celebrate = useCelebrate();
 
   const connectUrl = (e: FormEvent) => {
     e.preventDefault();
     void run(async () => {
       const r = await api<PlanningStatus>("/api/planning/url", { method: "POST", body: { url: url.trim() } });
       setUrl("");
-      toast(`Agenda relié : ${r.imported ?? 0} journées lues. Il sera relu chaque nuit.`);
+      celebrate("done", `Agenda relié : ${r.imported ?? 0} journées lues. Il sera relu chaque nuit.`);
       onConnected();
     });
   };

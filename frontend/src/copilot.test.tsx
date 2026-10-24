@@ -151,6 +151,8 @@ describe("centre d'opportunités", () => {
     expect(body(sent("/api/opportunities/confirm", "POST")[0]!)).toMatchObject({ key: "fees:2026-10", amount_cents: 1_790, period: "once", procedure_id: 7 });
     expect(host.textContent).not.toContain("De l'argent est arrivé");
     expect(host.querySelector(".jar-coin.is-dropping")).not.toBeNull(); // la pièce tombe dans la tirelire
+    expect(host.querySelector(".toast.is-coin")?.textContent).toContain("dans ta tirelire !"); // le gain confirmé se fête…
+    expect(host.querySelector(".celebrate.is-coin")?.getAttribute("aria-hidden")).toBe("true"); // …une gerbe de pièces, muette
     await click("Modifier");
     await typeInto(host.querySelector<HTMLInputElement>("#tv")!, "20");
     await act(async () => { host.querySelector<HTMLInputElement>("#tv")!.dispatchEvent(new Event("blur", { bubbles: true })); host.querySelector<HTMLInputElement>("#tv")!.blur(); });

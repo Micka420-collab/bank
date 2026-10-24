@@ -17,6 +17,7 @@ import {
   type Suggestion,
 } from "../api";
 import { Correlations } from "../components/Correlations";
+import { EmptyState } from "../components/EmptyState";
 import { Initiatives } from "../components/Initiatives";
 import { Markdown } from "../components/Markdown";
 import { ErrorNote, EuroInput, Loading, useAsyncAction, useToast } from "../components/ui";
@@ -89,6 +90,21 @@ export function Situation() {
         </div>
       </div>
 
+      {data.answered === 0 ? (
+        // Rien de su encore : pas de jauge vide en héros, une invitation à la première question.
+        <div className="card reveal">
+          <EmptyState art="sun" title="Faisons connaissance"
+                      actions={<button type="button" className="btn" onClick={() => {
+                        const el = document.querySelector<HTMLElement>("[aria-labelledby='q-title']");
+                        if (!el) return;
+                        const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+                        el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+                        el.querySelector<HTMLElement>("input, select, textarea, button")?.focus({ preventScroll: true });
+                      }}>Répondre à la première question</button>}>
+            <p className="muted">Aucune réponse pour l'instant. Bank te demande une question à la fois, en disant pourquoi ; tu peux aussi répondre en discutant avec HERMÈS.</p>
+          </EmptyState>
+        </div>
+      ) : (
       <section className="card card-hero knowledge reveal" style={{ ["--i" as string]: 0 }} aria-labelledby="gauge-title">
         <p className="today-lead" id="gauge-title">Ce que Bank sait de toi</p>
         <div className="gauge" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={data.percent}
@@ -104,6 +120,7 @@ export function Situation() {
           {data.risk_profile.capacity_limited && ` — capacité limitée : ${data.risk_profile.reason.toLowerCase()}`}.
         </p>
       </section>
+      )}
 
       <Knowledge data={data} onEdit={(s) => setSection(s)} />
 

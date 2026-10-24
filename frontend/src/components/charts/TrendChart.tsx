@@ -9,7 +9,7 @@ export type TrendPoint = { date: string; value: number };
 
 const W = 720;
 const H = 220;
-const PAD = { top: 16, right: 12, bottom: 28, left: 12 };
+const PAD = { top: 16, right: 12, bottom: 8, left: 12 };
 
 /** Échelle verticale : « zero » garde le zéro visible (un solde, où le découvert est la référence) ;
  * « auto » cadre les valeurs elles-mêmes (une valeur nette, dont les variations comptent plus que la distance à zéro). */
@@ -90,9 +90,6 @@ export function TrendChart({ points, label, format = (v) => money(v, { whole: tr
           const i = points.findIndex((p) => p.date === m.date);
           return i >= 0 ? <line key={m.date} className="today-mark" x1={x(i)} x2={x(i)} y1={PAD.top} y2={H - PAD.bottom} /> : null;
         })}
-        {ticks.map((i) => (
-          <text key={i} x={x(i)} y={H - 8} textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"}>{shortDate(points[i]!.date)}</text>
-        ))}
         {h && hover !== null && (
           <>
             <line className="cursor" x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={H - PAD.bottom} />
@@ -100,6 +97,10 @@ export function TrendChart({ points, label, format = (v) => money(v, { whole: tr
           </>
         )}
       </svg>
+      {/* Les dates de l'axe en HTML, sous le dessin : elles gardent leur taille quand le SVG rétrécit au téléphone. */}
+      <div className="chart-ticks" aria-hidden="true">
+        {ticks.map((i) => <span key={i}>{shortDate(points[i]!.date)}</span>)}
+      </div>
       {h && hover !== null && hostRect && (
         <div className="chart-tip" role="status" style={{ left: `${(x(hover) / W) * 100}%`, top: `${(y(h.value) / H) * 100}%` }}>
           {longDate(h.date)}

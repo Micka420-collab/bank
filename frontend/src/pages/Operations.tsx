@@ -1,7 +1,9 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { api, useApi, type Account, type AssistantHints, type AssistantStatus, type Category, type ImportResult, type Transaction } from "../api";
+import { EmptyState } from "../components/EmptyState";
 import { Icon } from "../components/Icon";
-import { Amount, ErrorNote, Field, Loading, useAsyncAction, useToast } from "../components/ui";
+import { Ring } from "../components/Ring";
+import { Amount, ErrorNote, Field, Loading, useAsyncAction, useCelebrate, useToast } from "../components/ui";
 import { dayNumber, merchantCase, money, monthLabel, plural, shortDate } from "../format";
 
 const MONTHS_LONG = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
@@ -11,6 +13,9 @@ function monthTitle(key: string): string {
 }
 
 type Page = { items: Transaction[]; total: number };
+
+/** Une opération qui attend sa catégorie (les virements internes n'en ont pas besoin). */
+export const toSort = (t: Transaction) => (t.category ?? "a_categoriser") === "a_categoriser" && !t.is_transfer;
 const PAGE = 100;
 
 export function Operations({ openImport = false }: { openImport?: boolean }) {
@@ -84,6 +89,8 @@ export function Operations({ openImport = false }: { openImport?: boolean }) {
         )}
       </form>
 
+      {list.data && !filtered && items.length > 0 && <SortProgress items={items} />}
+
       <HintsBanner items={items} configured={assistant.data?.configured === true} hints={hints.data ?? {}}
                    onSuggested={() => { hints.reload(); }} />
 
@@ -94,13 +101,13 @@ export function Operations({ openImport = false }: { openImport?: boolean }) {
           filtered ? (
             <p className="muted">Aucune opération ne correspond.</p>
           ) : (
-            <div className="empty-inline">
-              <p className="muted">Aucune opération pour l'instant.</p>
-              <div className="actions" style={{ marginTop: "0.5rem" }}>
-                <button className="btn" onClick={() => setShowImport(true)}><Icon name="upload" /> Importer un relevé</button>
-                <a className="btn quiet" href="#/connecteurs"><Icon name="bank" /> Connecter ma banque</a>
-              </div>
-            </div>
+            <EmptyState art="jar" title="Aucune opération pour l'instant" className="empty-inline"
+                        actions={<>
+                          <button className="btn" onClick={() => setShowImport(true)}><Icon name="upload" /> Importer un relevé</button>
+                          <a className="btn quiet" href="#/connecteurs"><Icon name="bank" /> Connecter ma banque</a>
+                        </>}>
+              <p className="muted">Relie ta banque ou dépose un relevé : Bank range tout seul ce qu'il reconnaît.</p>
+            </EmptyState>
           )
         )}
         {list.data && list.data.total > 0 && (
@@ -109,7 +116,7 @@ export function Operations({ openImport = false }: { openImport?: boolean }) {
               <span><b>{plural(list.data.total, "opération", "opérations")}</b>{filtered ? " trouvées" : ""}</span>
               <span className="faint">sur les {items.length} affichées : <b className="amount in">+{money(sumIn, { whole: true })}</b> · <b>{money(sumOut, { whole: true })}</b></span>
             </div>
-            <TransactionLedger items={items} categories={categories.data ?? []} hints={hints.data ?? {}}
+            <TransactionLedger items={items} categories={categories.data ?? []} hints={hints.data ?? {}} filtered={filtered}
                                onChanged={() => { list.reload(); hints.reload(); }} />
             {items.length < list.data.total && (
               <div className="actions" style={{ justifyContent: "center" }}>
@@ -122,6 +129,28 @@ export function Operations({ openImport = false }: { openImport?: boolean }) {
         )}
       </section>
     </>
+  );
+}
+
+/** L'anneau « classé ce mois » : ce qui avance d'abord, ce qui reste ensuite, et « Tout est rangé. » à la fin. */
+function SortProgress({ items }: { items: Transaction[] }) {
+  const month = items.reduce((m, t) => (t.booking_date > m ? t.booking_date : m), "").slice(0, 7);
+  const mine = items.filter((t) => t.booking_date.startsWith(month) && !t.is_transfer);
+  if (mine.length === 0) return null;
+  const left = mine.filter(toSort).length;
+  const done = mine.length - left;
+  return (
+    <section className={`card sort-progress${left === 0 ? " is-done" : ""}`} aria-labelledby="sort-title">
+      <Ring value={done} max={mine.length} size="md" label={`${done} sur ${plural(mine.length, "opération classée", "opérations classées")} en ${monthTitle(month)}`} />
+      <div>
+        <h2 id="sort-title">{left === 0 ? "Tout est rangé." : `Encore ${plural(left, "opération", "opérations")} à classer`}</h2>
+        <p className="muted">
+          {left === 0
+            ? `Chaque opération de ${monthTitle(month)} a sa catégorie.`
+            : `${plural(done, "déjà classée", "déjà classées")} en ${monthTitle(month)}. Choisis une catégorie sur la ligne : Bank retient pour les suivantes.`}
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -160,8 +189,9 @@ function HintsBanner({ items, configured, hints, onSuggested }: { items: Transac
   );
 }
 
-function TransactionLedger({ items, categories, hints, onChanged }: { items: Transaction[]; categories: Category[]; hints: Record<string, string>; onChanged: () => void }) {
+function TransactionLedger({ items, categories, hints, filtered, onChanged }: { items: Transaction[]; categories: Category[]; hints: Record<string, string>; filtered: boolean; onChanged: () => void }) {
   const toast = useToast();
+  const celebrate = useCelebrate();
   const days = useMemo(() => {
     const map = new Map<string, Transaction[]>();
     for (const t of items) map.set(t.booking_date, [...(map.get(t.booking_date) ?? []), t]);
@@ -175,9 +205,19 @@ function TransactionLedger({ items, categories, hints, onChanged }: { items: Tra
         body: { category: slug, learn: true },
       });
       const name = categories.find((c) => c.slug === slug)?.name ?? slug;
-      toast(r.propagated > 0
+      const said = r.propagated > 0
         ? `Classé en ${name}. Appris pour ${t.merchant} : ${plural(r.propagated, "autre opération", "autres opérations")} mises à jour.`
-        : `Classé en ${name}. Les prochaines opérations ${t.merchant} suivront.`);
+        : `Classé en ${name}. Les prochaines opérations ${t.merchant} suivront.`;
+      // La fête seulement quand le mois de l'anneau (SortProgress) est vraiment rangé : sans filtre, et compté par le
+      // serveur sur tout le mois, pas sur les seules lignes chargées.
+      let allSorted = false;
+      if (!filtered && toSort(t) && slug !== "a_categoriser") {
+        const month = items.reduce((m, x) => (x.booking_date > m ? x.booking_date : m), "").slice(0, 7);
+        const page = await api<Page>(`/api/transactions?from=${month}-01&limit=500`);
+        allSorted = page.items.filter((x) => x.booking_date.startsWith(month) && toSort(x)).length === 0;
+      }
+      if (allSorted) celebrate("done", `${said} Tout est rangé.`);
+      else toast(said);
       onChanged();
     } catch (e) {
       toast((e as Error).message);
