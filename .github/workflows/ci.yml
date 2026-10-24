@@ -78,7 +78,7 @@ jobs:
       - run: docker compose build
         env: { DOCKER_BUILDKIT: "1" }
       - name: Scan des images (Trivy)
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
         with:
           scan-type: image
           image-ref: bank-api:latest
@@ -86,7 +86,7 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
       - name: Scan de l'image web (Trivy)
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
         with:
           scan-type: image
           image-ref: bank-web:latest
@@ -102,14 +102,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: "Nomenclature des composants (CycloneDX : backend, front, moteur fiscal)"
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
         with:
           scan-type: fs
           scan-ref: .
           format: cyclonedx
           output: sbom.cdx.json
       - name: "Vulnérabilités connues dans la nomenclature (CI rouge au moindre CRITICAL/HIGH corrigeable)"
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
         with:
           scan-type: sbom
           scan-ref: sbom.cdx.json
