@@ -29,6 +29,7 @@ budget) ; « Réglages du suivi » permet de l'en retirer.
 |---|---|---|
 | Adresses publiques suivies (Bitcoin, Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche, BNB Chain, Solana) | l'adresse demandée et l'adresse IP de ton serveur | avec ton accord « Suivi de tes adresses crypto », toutes les 30 minutes environ, ou « Relever maintenant » (6 fois / 10 min) |
 | Saisie à la main (plateforme, portefeuille papier…) | rien, ça ne sort pas | quand tu la modifies |
+| Plateforme reliée par clé d'API en lecture seule (Kraken, Binance, Coinbase) | la plateforme voit ta clé et l'adresse IP de ton serveur ; Bank ne lit que les soldes | avec le même accord, à la relève, ou « Relever » sous la clé (6 fois / heure) |
 | Cours en euros (CoinGecko) | la liste des actifs, jamais tes montants | avec la relève |
 | Humeur du marché (alternative.me) | rien de toi | avec la relève |
 
@@ -46,6 +47,31 @@ d'euros, variation absurde) est écarté : les dernières valeurs connues resten
 Seuls les jetons du catalogue sont lus, avec leurs contrats officiels : USDC et EURC (pages de Circle, relevées
 le 21 octobre 2026), USDT, WBTC et WETH (contrats de leurs émetteurs). Un jeton inconnu arrivé sur ton adresse
 — souvent un appât pour te faire « réclamer » quelque chose — n'apparaît jamais comme une valeur.
+
+### Plateformes reliées : une clé qui ne peut que lire
+
+Crée la clé sur la plateforme avec les seuls droits de lecture (Kraken : « Query Funds » ; Binance : « Activer la
+lecture », idéalement restreinte à l'adresse IP de ton serveur ; Coinbase : clé CDP avec la permission « View »,
+dont le secret est une clé privée EC au format PEM). Colle-la dans Crypto › « Plateformes reliées » avec ton mot
+de passe Bank. **Avant de garder quoi que ce soit**, Bank vérifie les droits :
+
+- Binance renvoie les restrictions de la clé (`GET /sapi/v1/account/apiRestrictions`) et Coinbase ses permissions
+  (`GET /api/v3/brokerage/key_permissions`) : tout droit de trading, de retrait ou de transfert refuse la clé.
+- Kraken ne les renvoie pas : Bank demande une **validation d'ordre** (`AddOrder` avec `validate=true` et un volume
+  nul, qui ne soumet rien et serait rejetée même soumise) et une **information de retrait** vers une adresse de
+  retrait inexistante (`WithdrawInfo`, montant nul). Une clé de lecture répond « Permission denied » aux deux ;
+  toute autre réponse prouve un droit de trop, et la clé est refusée. Bank n'appelle jamais `Withdraw` ni un
+  `AddOrder` sans `validate`.
+
+La clé refusée n'est pas gardée (le journal note le refus, sans la clé). La clé acceptée est chiffrée en base ;
+l'écran n'en montre que les quatre derniers caractères ; l'API, l'export RGPD et le journal ne la contiennent pas ;
+un message d'erreur de plateforme n'en cite rien. Les signatures (HMAC-SHA512 pour Kraken, HMAC-SHA256 pour
+Binance, JWT ES256 pour Coinbase) se font dans Bank, par la porte sûre (https, hôte officiel vérifié, aucune
+redirection suivie, réponses bornées). Les soldes relevés deviennent des lignes « plateforme » du portefeuille :
+jamais modifiées à la main, remises à zéro quand un actif disparaît, gardées telles quelles (avec l'erreur sous la
+clé) quand la plateforme ne répond pas. Les noms Kraken (`XXBT`, `ETH.F`, `SOL.S`) et Binance (`LDBTC`) sont ramenés
+au symbole usuel ; les devises (EUR, USD…) ne sont pas des avoirs crypto. Retirer la clé supprime ses lignes ;
+supprime-la aussi côté plateforme. Dix clés au plus. Un compte tenu hors de France se coche pour le 3916-bis.
 
 ## Ce que Bank refuse
 

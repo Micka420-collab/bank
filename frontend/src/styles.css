@@ -6626,6 +6626,66 @@ details.card.cx-details > summary {
   color: var(--ink-2);
 }
 
+/* ------------------------------------------------------------------ crypto : plateformes reliées (clés en lecture seule) */
+.xk .card-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.xk-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+.xk-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--r-s);
+  background: var(--surface-2);
+}
+.xk-text {
+  min-width: 0;
+  flex: 1 1 16rem;
+}
+.xk-text p {
+  margin: 0.25rem 0 0;
+}
+.xk-text .muted svg {
+  vertical-align: -2px;
+}
+.xk-hint {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.82rem;
+}
+.xk-do {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.xk-form {
+  margin-top: 1rem;
+  max-width: 44rem;
+}
+.xk-form textarea {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.82rem;
+}
+.xk-help {
+  grid-column: 1 / -1;
+  margin: 0;
+  max-width: 72ch;
+}
+.xk-form .check,
+.xk-form .notice {
+  grid-column: 1 / -1;
+}
+
 /* ------------------------------------------------------------------ réglages : sauvegardes */
 .backup-actions {
   display: flex;

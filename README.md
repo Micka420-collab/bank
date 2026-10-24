@@ -64,7 +64,8 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
   et te prévient (relances, gains à confirmer, risque de découvert), sans jamais rien valider à ta place.
   Voir [docs/CANAUX.md](docs/CANAUX.md).
 - **Crypto, sous verre** : tes adresses publiques suivies en lecture seule (sommes de contrôle vérifiées, jetons
-  inconnus ignorés), tes avoirs de plateforme, la valeur, la courbe et la répartition, l'impôt de l'année
+  inconnus ignorés), tes avoirs de plateforme (saisis, ou relevés par une clé d'API en lecture seule dont les
+  droits sont vérifiés à la connexion), la valeur, la courbe et la répartition, l'impôt de l'année
   (305 €, 2086, 3916-bis), un vérificateur d'arnaques — et aucune phrase de récupération ni clé acceptée, nulle
   part. Voir [docs/CRYPTO.md](docs/CRYPTO.md).
 - **Pilote automatique** (éteint par défaut) : ton agent peut acheter ou envoyer seul, mais seulement dans ton
@@ -498,6 +499,17 @@ tu as sur une plateforme. Avec ton accord « Suivi de tes adresses crypto », Ba
 nœuds publics (ou du tien) et les cours chez CoinGecko ; sans, tout marche à la main. La crypto compte dans ton
 patrimoine sur une ligne à part, jamais dans l'argent disponible du budget.
 
+**Plateformes reliées** (Kraken, Binance, Coinbase) : une clé d'API **en lecture seule** par compte, et Bank relève
+les soldes de la plateforme avec tes adresses. Avant de garder quoi que ce soit, Bank vérifie les droits de la clé :
+ceux que la plateforme renvoie (Binance `apiRestrictions`, Coinbase `key_permissions`) ou, quand elle n'en renvoie
+pas (Kraken), deux opérations inoffensives qui doivent échouer — une validation d'ordre à volume nul, jamais
+soumise, et une demande d'information de retrait vers une adresse de retrait inexistante. Une clé qui peut retirer
+ou passer un ordre est refusée et jamais gardée ; une phrase de récupération ou une clé de portefeuille collée là
+est arrêtée avant de partir. La clé gardée est chiffrée, l'écran n'en montre que la fin, ni l'API, ni l'export, ni
+le journal ne la contiennent ; mot de passe Bank exigé pour relier ; révocation en un geste (pense à supprimer la
+clé sur la plateforme aussi). Les lignes relevées ne se modifient pas à la main et se relèvent avec « Relever
+maintenant » et au passage automatique ; un compte tenu hors de France se coche pour le 3916-bis.
+
 Bank › Épargne › **Pilote** : le cadre dans lequel ton agent peut agir sans te redemander (mot de passe et code
 de double authentification pour le régler), les jauges de ce qui est déjà engagé, et le journal de chaque
 demande, refus compris. Mode essai conseillé pour commencer. Détails, sources fiscales et garanties :
@@ -534,7 +546,7 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 928 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+Qualité au moment de la livraison : 933 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
 aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, scénarios adverses du
 banc d'essai crypto de Minara rejoués contre le pilote automatique, demandes simultanées qui ne passent jamais
@@ -545,9 +557,10 @@ direct recomposée fragment par fragment, Web Push vérifié au bit près contre
 par un faux navigateur, amortissement vérifié sur un cas de référence public, plan B contre un moteur fiscal
 simulé qui réagit au revenu, sauvegarde chiffrée altérée, tronquée ou rallongée refusée, boîte mail contre un faux
 serveur IMAP qui journalise chaque commande, retraite vérifiée sur le cas de référence de service-public et contre
-les paliers de la LFSS 2026), couverture 91 %, 137 tests front (parcours de première ouverture,
+les paliers de la LFSS 2026, clés de plateforme face à de fausses plateformes qui vérifient chaque signature et
+refusent les droits trop larges), couverture 91 %, 142 tests front (parcours de première ouverture,
 coffre, démarches, opportunités, veille, assistant, chat interactif et réponse en direct, notifications sur
-l'appareil, plan B, crédits, retraite, sauvegardes, boîte mail, crypto, pilote, déclarations, corrélations, année qui vient,
+l'appareil, plan B, crédits, retraite, sauvegardes, boîte mail, crypto et plateformes reliées, pilote, déclarations, corrélations, année qui vient,
 passkeys, erreurs qui disent quoi faire),
 mypy strict sans erreur,
 ruff et bandit propres, revue de sécurité indépendante du pilote et de la crypto (ses constats corrigés et

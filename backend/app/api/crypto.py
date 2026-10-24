@@ -14,7 +14,7 @@ from app.db import utcnow
 from app.domain.crypto import CryptoError
 from app.security import audit
 from app.security.auth import verify_password
-from app.services import consents
+from app.services import consents, exchange_keys
 from app.services import crypto as svc
 from app.services.settings_store import set_setting
 
@@ -147,6 +147,11 @@ def sync(request: Request, ctx: AuthDep, db: DbDep, today: TodayDep) -> dict[str
         result = svc.sync(db, net=request.app.state.crypto_net(), now=utcnow(), actor=ctx.user.username)
     except consents.ConsentError as exc:
         raise _fail(exc) from None
+    result.update(  # clés de plateforme en lecture seule (#11) : relevées avec les adresses
+        exchange_keys.sync_all(
+            db, transport=request.app.state.exchange_transport(), now=utcnow(), actor=ctx.user.username
+        )
+    )
     return {"result": result, "view": svc.view(db, today=today, now=utcnow())}
 
 

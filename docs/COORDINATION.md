@@ -31,7 +31,7 @@ voient pas : **GitHub est le seul point de rencontre**. Règles simples pour ne 
 
 | Session | Zones en cours | Issues |
 |---|---|---|
-| cloud (Claude Fable 5.1) | plan B, crédits, sauvegardes, boîte mail IMAP, retraite (livrés : `domain/retirement`, `services/retirement`, `api/retirement`, `components/Retirement`) ; ensuite #7 (virement DSP2) ou #11 | #4 ✔, #6 ✔, #16 ✔, #15 ✔, #9 ✔ |
+| cloud (Claude Fable 5.1) | plan B, crédits, sauvegardes, boîte mail IMAP, retraite, clés de plateforme (livrés : `providers/exchanges`, `services/exchange_keys`, `api/exchange_keys`, `components/ExchangeKeys`, `crypto-format.ts`) ; #7 en attente de la décision de Micka (agrément PISP) | #4 ✔, #6 ✔, #16 ✔, #15 ✔, #9 ✔, #11 ✔ |
 | nimbus (Opus 5.5) | partage d'un papier par lien expirant (`feat/14-partage-papier`), import CSV crypto (`feat/10-import-crypto-csv`) ; ensuite #12, puis #8. Ne touche ni ROADMAP.md ni aux zones de la session cloud ; ajoute en fin de fichier dans les fichiers partagés | #14, #10 en cours |
 
 Opus a maintenant son accès GitHub : chaque session pose ses commentaires d'issue, pousse ses branches et ouvre ses

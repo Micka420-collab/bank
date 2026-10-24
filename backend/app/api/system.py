@@ -46,6 +46,7 @@ from app.models import (
 )
 from app.security import audit
 from app.security.auth import verify_password
+from app.services import exchange_keys as exchange_keys_service
 from app.services import obligations as obligations_service
 from app.services import retirement as retirement_service
 
@@ -373,6 +374,7 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
                 }
                 for e in db.scalars(select(CryptoTaxEvent).order_by(CryptoTaxEvent.day))
             ],
+            "exchanges": exchange_keys_service.export(db),  # plateformes reliées : jamais la clé ni le secret
         },
     }
     audit.record(db, ctx.user.username, "export.done", transactions=len(payload["transactions"]))

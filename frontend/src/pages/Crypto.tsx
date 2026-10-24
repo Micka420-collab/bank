@@ -15,6 +15,7 @@ import {
 } from "../api";
 import { TrendChart } from "../components/charts/TrendChart";
 import { CountUp } from "../components/CountUp";
+import { ExchangeKeys } from "../components/ExchangeKeys";
 import { Icon } from "../components/Icon";
 import { Segmented } from "../components/Segmented";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
@@ -22,44 +23,9 @@ import { amountOnly, money, safeHref, shortDate } from "../format";
 
 const SWATCH = 6; // nombre de teintes du ruban (--c1 … --c6), réutilisées dans l'ordre
 
-/** Écriture française d'une quantité exacte (texte décimal du serveur) : « 0,00012345 », « 1 250,5 ».
- * Pour la lecture, les décimales sont bornées selon la taille (8 sous 1, 6 jusqu'à 1 000, 2 au-delà) ; la
- * valeur exacte reste dans l'infobulle. */
-export function qty(text: string, exact = false): string {
-  const [int = "0", dec = ""] = text.split(".");
-  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, "\u202f");
-  const keep = exact ? dec.length : int.length >= 4 ? 2 : int !== "0" ? 6 : 8;
-  const shown = dec.slice(0, keep).replace(/0+$/, "");
-  return shown ? `${grouped},${shown}` : grouped;
-}
+import { guessChain, looksSecret, price, qty } from "../crypto-format";
 
-export function price(eur: string | null): string {
-  if (eur === null) return "—";
-  const n = Number(eur);
-  return n.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: n < 1 ? 4 : 2, minimumFractionDigits: n < 1 ? 2 : 2 });
-}
-
-/** Ce qui ressemble à un secret : on l'arrête dans le navigateur, il ne part même pas au serveur.
- * `words` : dans un champ « adresse » ou « nom », douze mots ou plus ne peuvent être qu'une phrase de récupération
- * (dans un message à vérifier, c'est le serveur qui tranche avec les listes BIP39). */
-export function looksSecret(text: string, { words = true }: { words?: boolean } = {}): string | null {
-  const t = text.trim();
-  if (/\b[xyzt]prv[1-9A-HJ-NP-Za-km-z]{100,}/.test(t)) return "une clé privée étendue (xprv)";
-  if (/^(0x)?[0-9a-fA-F]{64}$/.test(t)) return "une clé privée";
-  if (/^[5KL][1-9A-HJ-NP-Za-km-z]{50,51}$/.test(t)) return "une clé privée (WIF)";
-  if (/^\[\s*(\d{1,3}\s*,\s*){63}\d{1,3}\s*\]$/.test(t)) return "une clé privée";
-  if (words && (t.match(/\p{L}{3,}/gu) ?? []).length >= 12) return "une phrase de récupération";
-  return null;
-}
-
-/** Réseau probable d'une adresse collée : pour préremplir, jamais pour décider (le serveur vérifie la somme). */
-export function guessChain(address: string): string | null {
-  const a = address.trim();
-  if (/^0x[0-9a-fA-F]{40}$/.test(a)) return "ethereum";
-  if (/^(bc1|BC1)[0-9a-zA-Z]{11,71}$/.test(a) || /^[13][1-9A-HJ-NP-Za-km-z]{25,34}$/.test(a)) return "bitcoin";
-  if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a)) return "solana";
-  return null;
-}
+export { guessChain, looksSecret, price, qty };
 
 function change(pct: string | null): { text: string; tone: string } | null {
   if (pct === null) return null;
@@ -96,7 +62,7 @@ export function Crypto() {
           <h1>Crypto</h1>
           <p className="muted">Suivie en lecture seule : Bank ne détient aucune clé et ne peut rien envoyer.</p>
         </div>
-        {data.network_consent && (data.wallets.length > 0 || data.manual.length > 0) && (
+        {data.network_consent && (data.wallets.length > 0 || data.manual.length > 0 || data.assets.length > 0) && (
           <button type="button" className={`btn quiet${busy ? " is-loading" : ""}`} disabled={busy} onClick={() => void sync()}>
             <Icon name="undo" /> Relever maintenant
           </button>
@@ -120,6 +86,8 @@ export function Crypto() {
         <Wallets data={data} onChange={reload} />
         <Manual data={data} onChange={reload} />
       </div>
+
+      <ExchangeKeys consent={data.network_consent} onChange={reload} />
 
       <div className="split cx-split" style={{ marginTop: "1rem" }}>
         <Mood sentiment={data.sentiment} />

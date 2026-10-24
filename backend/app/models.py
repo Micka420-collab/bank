@@ -1037,6 +1037,9 @@ class CryptoHolding(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     wallet_id: Mapped[int | None] = mapped_column(ForeignKey("crypto_wallets.id", ondelete="CASCADE"), index=True)
+    exchange_key_id: Mapped[int | None] = mapped_column(
+        ForeignKey("crypto_exchange_keys.id", ondelete="CASCADE"), index=True
+    )  # relevé par une clé d'API de plateforme (lecture seule) : jamais modifié à la main
     platform: Mapped[str | None] = mapped_column(String(60))  # Coinbase, Kraken, Ledger… (saisie manuelle)
     foreign: Mapped[bool] = mapped_column(Boolean, default=False)  # compte hors de France : 3916-bis
     asset: Mapped[str] = mapped_column(String(16))
@@ -1120,3 +1123,25 @@ class ObligationDone(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
     obligation: Mapped[Obligation] = relationship(back_populates="done")
+
+
+# ---------------------------------------------------------------------------- clés d'API de plateforme (crypto)
+class ExchangeKey(Base):
+    """Une clé d'API de plateforme d'échange, en lecture seule — droits vérifiés à la connexion et gardés tels que
+    la plateforme (ou les sondes) les ont dits. Clé et secret chiffrés ; l'API n'en rend qu'un indice (fin de
+    l'identifiant), jamais le secret ; ni l'export ni le journal ne les contiennent."""
+
+    __tablename__ = "crypto_exchange_keys"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    platform: Mapped[str] = mapped_column(String(16), index=True)  # kraken | binance | coinbase
+    label: Mapped[str] = mapped_column(String(60))
+    api_key: Mapped[str] = mapped_column(EncryptedText("crypto.exchange_key"))
+    api_secret: Mapped[str] = mapped_column(EncryptedText("crypto.exchange_secret"))
+    key_hint: Mapped[str] = mapped_column(String(16))  # « …a9F2 » : reconnaître la clé sans la montrer
+    foreign: Mapped[bool] = mapped_column(Boolean, default=True)  # compte tenu hors de France : 3916-bis
+    rights: Mapped[str] = mapped_column(String(200), default="{}")  # JSON : read, trade, withdraw, source, ip
+    verified_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    synced_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    sync_error: Mapped[str | None] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)

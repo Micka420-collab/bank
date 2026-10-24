@@ -16,13 +16,16 @@ let calls: Call[];
 let root: Root;
 let host: HTMLDivElement;
 
+const NO_EXCHANGES = { keys: [], platforms: [], network_consent: true, max_keys: 10 };  // plateformes reliées : testées à part
+
 function mockApi(handlers: Record<string, (init?: RequestInit) => unknown>) {
   calls = [];
+  const all: Record<string, (init?: RequestInit) => unknown> = { "/api/crypto/exchanges": () => NO_EXCHANGES, ...handlers };
   vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
     calls.push({ url, init });
-    const key = Object.keys(handlers).sort((a, b) => b.length - a.length).find((k) => url.startsWith(k));
+    const key = Object.keys(all).sort((a, b) => b.length - a.length).find((k) => url.startsWith(k));
     if (!key) return Promise.resolve(new Response("{}", { status: 404 }));
-    const out = handlers[key]!(init);
+    const out = all[key]!(init);
     if (out instanceof Response) return Promise.resolve(out);
     if (out === undefined) return Promise.resolve(new Response(null, { status: 204 }));
     return Promise.resolve(new Response(JSON.stringify(out), { status: 200, headers: { "content-type": "application/json" } }));

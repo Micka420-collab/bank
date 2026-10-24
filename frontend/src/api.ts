@@ -1699,6 +1699,44 @@ export type CryptoView = {
   resources: CryptoResource[];
   disclaimer: string;
 };
+// ------------------------------------------------------------------ clés d'API de plateforme (lecture seule)
+export type ExchangePlatformKey = "kraken" | "binance" | "coinbase";
+export type ExchangePlatform = {
+  key: ExchangePlatformKey;
+  label: string;
+  help: string;
+  url: string;
+  key_label: string;
+  secret_label: string;
+};
+export type ExchangeRights = {
+  read?: boolean;
+  trade?: boolean;
+  withdraw?: boolean;
+  source?: "permissions" | "probes";
+  ip_restricted?: boolean | null;
+};
+export type ExchangeKeyView = {
+  id: number;
+  platform: ExchangePlatformKey;
+  platform_label: string;
+  label: string;
+  key_hint: string;
+  foreign: boolean;
+  rights: ExchangeRights;
+  verified_at: string;
+  synced_at: string | null;
+  error: string | null;
+  assets: { asset: string; quantity: string }[];
+};
+export type ExchangeKeysView = {
+  keys: ExchangeKeyView[];
+  platforms: ExchangePlatform[];
+  network_consent: boolean;
+  max_keys: number;
+  created_id?: number;
+  view?: CryptoView;
+};
 export type ScamCheck = {
   level: "ok" | "warning" | "danger";
   verdict: string;

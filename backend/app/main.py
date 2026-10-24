@@ -34,6 +34,7 @@ from app.api import (
     deps,
     documents,
     energy,
+    exchange_keys,
     imports,
     initiatives,
     insights,
@@ -61,6 +62,7 @@ from app.db import Base, make_engine, make_sessionmaker, upgrade_schema, utcnow
 from app.fiscal.client import FiscalClient
 from app.mcp_server import AgentGate, McpDispatch, McpMount, build_mcp, mcp_asgi, silence_sdk_logs
 from app.models import CryptoHolding, CryptoWallet
+from app.providers import exchanges as exchanges_provider
 from app.providers.enablebanking import EnableBankingClient
 from app.security.auth import SlidingWindowLimiter
 from app.security.crypto import Keyring, install_keyring
@@ -71,6 +73,7 @@ from app.services import backup as backup_service
 from app.services import consents as consent_service
 from app.services import crypto as crypto_service
 from app.services import energy as energy_service
+from app.services import exchange_keys as exchange_keys_service
 from app.services import mail as mail_service
 from app.services import obligations as obligations_service
 from app.services import planning as planning_service
@@ -123,9 +126,13 @@ def _crypto_sync_once(app: FastAPI) -> int:
         ):
             return 0
         result = crypto_service.sync(db, net=app.state.crypto_net(), now=utcnow(), actor="system")
+        # Les clés de plateforme (lecture seule) se relèvent au même rythme, par la porte sûre.
+        keys = exchange_keys_service.sync_all(
+            db, transport=app.state.exchange_transport(), now=utcnow(), actor="system"
+        )
         crypto_service.snapshot(db, date.today())  # noqa: DTZ011 - date locale du serveur
         db.commit()
-        return int(result["wallets_synced"]) + int(result["prices"])
+        return int(result["wallets_synced"]) + int(result["prices"]) + int(keys["exchanges_synced"])
 
 
 def _autonomy_sweep_once(app: FastAPI) -> bool:
@@ -305,6 +312,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "channel": SlidingWindowLimiter(20, 300),  # messages par compte relié (messageries), avant « doucement »
         "backups": SlidingWindowLimiter(6, 3600),  # sauvegardes et restaurations d'essai à la demande
         "mail_scan": SlidingWindowLimiter(6, 3600),  # lectures de la boîte mail à la demande
+        "exchange_sync": SlidingWindowLimiter(6, 3600),  # relève d'une clé de plateforme à la demande
         "crypto": SlidingWindowLimiter(6, 600),  # relèves crypto à la demande (nœuds publics : on reste poli)
     }
     app.state.enablebanking = _build_enablebanking(settings)
@@ -318,6 +326,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.watch_resolver = None  # résolution DNS réelle (remplaçable en test)
     app.state.channels = None
     app.state.crypto_net = crypto_service.default_net  # réseau réel (remplaçable en test)
+    app.state.exchange_transport = exchanges_provider.default_transport  # plateformes, par la porte sûre
     app.state.channels_options = {}  # surcharges de la passerelle (tests : fabrique d'adaptateurs, horloge…)
 
     routers = (
@@ -355,6 +364,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         backups,
         mail,
         retirement,
+        exchange_keys,
         system,
     )
     for r in routers:

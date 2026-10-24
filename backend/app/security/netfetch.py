@@ -216,20 +216,18 @@ class PostResult:
     body: bytes
 
 
-def post_bytes(
+def _request_bytes(
+    method: str,
     url: str,
-    body: bytes,
+    body: bytes | None,
     *,
     headers: dict[str, str],
-    http: httpx.Client | None = None,
-    resolver: Resolver | None = None,
-    max_bytes: int = 64_000,
-    seconds: float = 20.0,
-    pin: bool | None = None,
+    http: httpx.Client | None,
+    resolver: Resolver | None,
+    max_bytes: int,
+    seconds: float,
+    pin: bool | None,
 ) -> PostResult:
-    """POST d'un corps brut vers une adresse publique (service de notification Web Push) : mêmes garde-fous que
-    fetch, aucune redirection suivie, réponse courte ; le code HTTP est rendu tel quel (201 = accepté, 404/410 =
-    abonnement mort), à l'appelant de juger."""
     pin = (not _proxy_configured()) if pin is None else pin
     client = http or httpx.Client(timeout=httpx.Timeout(seconds, connect=10.0), follow_redirects=False)
     started = time.monotonic()
@@ -244,7 +242,7 @@ def post_bytes(
             target = urlunsplit((parts.scheme, netloc, parts.path or "/", parts.query, ""))
             sent["Host"] = host
             extensions = {"sni_hostname": host}
-        with client.stream("POST", target, headers=sent, content=body, extensions=extensions) as resp:
+        with client.stream(method, target, headers=sent, content=body, extensions=extensions) as resp:
             raw = _read(resp, max_bytes, started, seconds)
             return PostResult(resp.status_code, raw)
     except httpx.HTTPError as exc:
@@ -252,6 +250,42 @@ def post_bytes(
     finally:
         if http is None:
             client.close()
+
+
+def post_bytes(
+    url: str,
+    body: bytes,
+    *,
+    headers: dict[str, str],
+    http: httpx.Client | None = None,
+    resolver: Resolver | None = None,
+    max_bytes: int = 64_000,
+    seconds: float = 20.0,
+    pin: bool | None = None,
+) -> PostResult:
+    """POST d'un corps brut vers une adresse publique (service de notification Web Push, API signée d'une
+    plateforme) : mêmes garde-fous que fetch, aucune redirection suivie, réponse bornée ; le code HTTP est rendu
+    tel quel (201 = accepté, 404/410 = abonnement mort), à l'appelant de juger."""
+    return _request_bytes(
+        "POST", url, body, headers=headers, http=http, resolver=resolver, max_bytes=max_bytes, seconds=seconds, pin=pin
+    )
+
+
+def get_bytes(
+    url: str,
+    *,
+    headers: dict[str, str],
+    http: httpx.Client | None = None,
+    resolver: Resolver | None = None,
+    max_bytes: int = 64_000,
+    seconds: float = 20.0,
+    pin: bool | None = None,
+) -> PostResult:
+    """GET signé (clé d'API d'une plateforme dans les en-têtes) : mêmes garde-fous, aucune redirection suivie — un
+    en-tête d'authentification ne doit jamais suivre vers un autre hôte —, code HTTP rendu tel quel."""
+    return _request_bytes(
+        "GET", url, None, headers=headers, http=http, resolver=resolver, max_bytes=max_bytes, seconds=seconds, pin=pin
+    )
 
 
 def get_json(url: str, **kw: Any) -> Any:

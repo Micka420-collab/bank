@@ -228,12 +228,17 @@ def set_holding(
     place = " ".join((platform or "").split())[:60] or None
     if holding_id is not None:
         row = db.get(CryptoHolding, holding_id)
-        if row is None or row.wallet_id is not None:
-            raise dc.CryptoError("Avoir introuvable (ceux d'une adresse suivie se relèvent seuls)")
+        if row is None or row.wallet_id is not None or row.exchange_key_id is not None:
+            raise dc.CryptoError("Avoir introuvable (ceux d'une adresse suivie ou d'une plateforme se relèvent seuls)")
     else:
         same_place = CryptoHolding.platform.is_(None) if place is None else CryptoHolding.platform == place
         row = db.scalar(
-            select(CryptoHolding).where(CryptoHolding.wallet_id.is_(None), CryptoHolding.asset == sym, same_place)
+            select(CryptoHolding).where(
+                CryptoHolding.wallet_id.is_(None),
+                CryptoHolding.exchange_key_id.is_(None),
+                CryptoHolding.asset == sym,
+                same_place,
+            )
         )
         if row is None:
             if (db.scalar(select(func.count()).select_from(CryptoHolding)) or 0) >= MAX_HOLDINGS:
@@ -250,7 +255,7 @@ def set_holding(
 
 def delete_holding(db: Session, holding_id: int, *, actor: str) -> None:
     row = db.get(CryptoHolding, holding_id)
-    if row is None or row.wallet_id is not None:
+    if row is None or row.wallet_id is not None or row.exchange_key_id is not None:
         raise dc.CryptoError("Avoir introuvable")
     db.delete(row)
     audit.record(db, actor, "crypto.holding.delete", holding=holding_id)
@@ -524,7 +529,11 @@ def view(db: Session, *, today: date, now: datetime) -> dict[str, Any]:
             "coingecko_id": h.coingecko_id,
             "updated_at": h.updated_at.isoformat(),
         }
-        for h in db.scalars(select(CryptoHolding).where(CryptoHolding.wallet_id.is_(None)).order_by(CryptoHolding.id))
+        for h in db.scalars(
+            select(CryptoHolding)
+            .where(CryptoHolding.wallet_id.is_(None), CryptoHolding.exchange_key_id.is_(None))
+            .order_by(CryptoHolding.id)
+        )
     ]
     history = [
         {"day": s.day.isoformat(), "value_cents": s.value_cents}

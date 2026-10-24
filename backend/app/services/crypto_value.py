@@ -42,7 +42,8 @@ def holdings_value(db: Session) -> dict[str, dict[str, Any]]:
             entry["value_cents"] + (value_cents(qty, eur) if eur is not None else 0), MAX_VALUE_CENTS
         )
         where = labels.get(h.wallet_id, "?") if h.wallet_id is not None else (h.platform or "Saisie")
-        entry["sources"].append({"where": where, "quantity": qty_text(qty), "watched": h.wallet_id is not None})
+        auto = h.wallet_id is not None or h.exchange_key_id is not None  # adresse suivie ou clé de plateforme
+        entry["sources"].append({"where": where, "quantity": qty_text(qty), "watched": auto})
     for entry in out.values():
         entry["quantity"] = qty_text(entry.pop("qty"))
     return out
