@@ -30,6 +30,7 @@ from app.models import (
     EnergyLoadCurve,
     EnergyMaxPower,
     EnergyReading,
+    HousingSource,
     InitiativeState,
     LlmUsage,
     Loan,
@@ -237,6 +238,16 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
                 for c in db.scalars(select(PublicCalendar).order_by(PublicCalendar.key))
             ],
         },
+        # Logement (#34) : les DPE de ton immeuble, celui que tu as reconnu, la carte des loyers de ta commune.
+        "housing": [
+            {
+                "key": h.key,
+                "data": json.loads(h.data) if h.data else None,
+                "source_url": h.source_url,
+                "fetched_at": h.fetched_at.isoformat() if h.fetched_at else None,
+            }
+            for h in db.scalars(select(HousingSource).order_by(HousingSource.key))
+        ],
         # Documents à récupérer (#32) : objet du mail d'avis et document attendu.
         "document_tasks": [
             {

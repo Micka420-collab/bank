@@ -18,6 +18,7 @@ import {
 } from "../api";
 import { Correlations } from "../components/Correlations";
 import { EmptyState } from "../components/EmptyState";
+import { Housing } from "../components/Housing";
 import { Initiatives } from "../components/Initiatives";
 import { Markdown } from "../components/Markdown";
 import { ErrorNote, EuroInput, Loading, useAsyncAction, useToast } from "../components/ui";
@@ -127,6 +128,8 @@ export function Situation() {
       <Initiatives onChanged={refresh} />
 
       <Correlations />
+
+      <Housing />
 
       {proposals.data && proposals.data.length > 0 && (
         <ProposalsInbox items={proposals.data} questions={data.questions} onDecided={refresh} />

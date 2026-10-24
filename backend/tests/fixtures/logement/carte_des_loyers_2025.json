@@ -1,0 +1,58 @@
+{
+ "id": "693aa2feed1bf4da603faa49",
+ "title": "\"Carte des loyers\" - Indicateurs de loyers d'annonce par commune en 2025",
+ "slug": "carte-des-loyers-indicateurs-de-loyers-dannonce-par-commune-en-2025",
+ "license": "lov2",
+ "last_update": "2025-12-11T14:58:19.899000+00:00",
+ "page": "https://www.data.gouv.fr/datasets/carte-des-loyers-indicateurs-de-loyers-dannonce-par-commune-en-2025",
+ "resources": [
+  {
+   "id": "0264d1fe-d5d2-45eb-9cf1-a2b706867441",
+   "title": "Note méthodologique",
+   "format": "pdf",
+   "filesize": 1387581,
+   "url": "https://static.data.gouv.fr/resources/carte-des-loyers-indicateurs-de-loyers-dannonce-par-commune-en-2025/20251211-145128/note-methodologique.pdf",
+   "last_modified": "2025-12-11T14:51:28.678000+00:00"
+  },
+  {
+   "id": "8623fa1b-6575-4122-ab7a-bc241d610851",
+   "title": "Guide d'utilisation des données - Dictionnaire de variables",
+   "format": "pdf",
+   "filesize": 203461,
+   "url": "https://static.data.gouv.fr/resources/carte-des-loyers-indicateurs-de-loyers-dannonce-par-commune-en-2025/20251211-145105/guide-dutilisation-des-donnees.pdf",
+   "last_modified": "2025-12-11T14:51:12.998000+00:00"
+  },
+  {
+   "id": "55b34088-0964-415f-9df7-d87dd98a09be",
+   "title": "Indicateurs de loyer appartement",
+   "format": "csv",
+   "filesize": 4774352,
+   "url": "https://static.data.gouv.fr/resources/carte-des-loyers-indicateurs-de-loyers-dannonce-par-commune-en-2025/20251211-145010/pred-app-mef-dhup.csv",
+   "last_modified": "2025-12-11T14:50:11.018000+00:00"
+  },
+  {
+   "id": "14a1fe11-b2d1-49b3-9f6b-83d12df9482c",
+   "title": "Indicateur de loyer appartement de 1 ou 2 pièces",
+   "format": "csv",
+   "filesize": 4754556,
+   "url": "https://static.data.gouv.fr/resources/carte-des-loyers-indicateurs-de-loyers-dannonce-par-commune-en-2025/20251211-144934/pred-app12-mef-dhup.csv",
+   "last_modified": "2025-12-11T14:58:19.899000+00:00"
+  },
+  {
+   "id": "5e3b28a4-cf56-43a3-ae79-43cceeb27f8c",
+   "title": "Indicateur de loyer appartement de 3 pièces ou plus",
+   "format": "csv",
+   "filesize": 4757613,
+   "url": "https://static.data.gouv.fr/resources/carte-des-loyers-indicateurs-de-loyers-dannonce-par-commune-en-2025/20251211-144951/pred-app3-mef-dhup.csv",
+   "last_modified": "2025-12-11T14:49:52.555000+00:00"
+  },
+  {
+   "id": "129f764d-b613-44e4-952c-5ff50a8c9b73",
+   "title": "Indicateurs de loyer maison",
+   "format": "csv",
+   "filesize": 4763456,
+   "url": "https://static.data.gouv.fr/resources/carte-des-loyers-indicateurs-de-loyers-dannonce-par-commune-en-2025/20251211-145039/pred-mai-mef-dhup.csv",
+   "last_modified": "2025-12-11T14:50:40.313000+00:00"
+  }
+ ]
+}

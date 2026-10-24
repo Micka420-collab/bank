@@ -25,6 +25,7 @@ from typing import Any
 from app.domain import contracts
 from app.domain.energy_analysis import ClimateCheck
 from app.domain.energy_signals import OPTIONS, PowerCheck, kva_label
+from app.domain import housing as hz
 from app.domain.money import format_eur
 from app.domain.recurring import add_months
 
@@ -91,6 +92,17 @@ class EnergyLink:
 
 
 @dataclass(frozen=True)
+class HousingLink:
+    """Ton logement face aux données publiques (#34), tel que Bank l'a gardé : rien n'est relu ici."""
+
+    dpe: hz.Dpe | None = None  # le DPE de l'ADEME que tu as reconnu comme le tien
+    depcode: str | None = None  # département : la règle F/G ne date pas du même jour outre-mer
+    market: hz.Market | None = None  # ta commune dans la carte des loyers de l'ANIL
+    surface_m2: float | None = None
+    surface_source: str | None = None  # « ta description du logement » | « le DPE que tu as reconnu »
+
+
+@dataclass(frozen=True)
 class Inputs:
     today: date
     series: Sequence[Series] = ()
@@ -106,6 +118,7 @@ class Inputs:
     daily_variable_spend: Mapping[date, int] = field(default_factory=dict)  # dépenses variables par jour
     paydays: Sequence[date] = ()
     category_names: Mapping[str, str] = field(default_factory=dict)
+    housing: HousingLink | None = None
 
 
 # ------------------------------------------------------------------ sorties
@@ -976,6 +989,218 @@ def payday_concentration(
     ]
 
 
+# ------------------------------------------------------------------ logement : DPE et carte des loyers (#34)
+def _lease(docs: Sequence[Doc]) -> Doc | None:
+    return next((d for d in docs if d.kind == "lease" and d.fields.get("loyer")), None)
+
+
+def _dpe_frozen(
+    link: HousingLink, lease: Doc | None, rent: Series | None, today: date, notes: list[str]
+) -> list[Finding]:
+    """Une révision de loyer appliquée à un logement classé F ou G alors que le bail tombe sous la règle : la somme
+    payée en plus, mois par mois depuis cette révision. Seulement quand tout est connu : la classe (DPE reconnu, ou
+    lue dans le bail), la date du bail, le département et la révision vue dans les prélèvements."""
+    floor: date | None = None
+    if link.dpe is not None:
+        letter = link.dpe.letter
+        dpe_label = f"DPE n° {link.dpe.number} du {link.dpe.established:%d/%m/%Y}, base de l'ADEME"
+        dpe_ev = Evidence(
+            "DPE", f"classe {letter}, n° {link.dpe.number} du {link.dpe.established:%d/%m/%Y}", f"url:{hz.DPE_PAGE}"
+        )
+        floor = link.dpe.established  # une révision antérieure au DPE n'est pas comptée : la classe d'alors manque
+    elif lease is not None and str(lease.fields.get("classe_dpe") or "") in hz.LETTERS:
+        letter = str(lease.fields["classe_dpe"])
+        dpe_label = "classe énergie lue dans ton bail"
+        dpe_ev = Evidence("Bail", f"classe énergie {letter}", f"doc:{lease.id}")
+    else:
+        notes.append(
+            "Classe énergie du logement inconnue : reconnais ton DPE parmi ceux de ton adresse, ou dépose ton bail "
+            "dans Papiers (la classe y est souvent écrite)."
+        )
+        return []
+    if letter not in hz.FROZEN_LETTERS:
+        notes.append(f"Logement classé {letter} : le gel des loyers des logements classés F ou G ne s'applique pas.")
+        return []
+    start = lease.fields.get("date_debut") if lease is not None else None
+    if lease is None or not start:
+        notes.append(
+            "Logement classé F ou G, mais la date de prise d'effet du bail est inconnue : dépose ton bail dans "
+            "Papiers ou complète-la."
+        )
+        return []
+    if rent is None or len(rent.history) < 2:
+        notes.append("Logement classé F ou G, mais le loyer n'est pas encore reconnu dans tes prélèvements.")
+        return []
+    depcode = link.depcode or (link.dpe.depcode if link.dpe else None)
+    if depcode is None:
+        notes.append(
+            "Logement classé F ou G, mais le département est inconnu (la règle ne date pas du même jour outre-mer) : "
+            "situe ton adresse dans Réglages."
+        )
+        return []
+    lease_start = date.fromisoformat(str(start))
+    furnished = {"oui": True, "non": False}.get(str(lease.fields.get("meuble") or ""))
+    covered, exact = hz.covered_from(lease_start, furnished, depcode)
+    rule_day = hz.rule_start(depcode)
+    if covered > today:
+        notes.append(
+            f"Ton bail tombera sous le gel des loyers F et G {'le' if exact else 'au plus tard le'} "
+            f"{covered:%d/%m/%Y} (reconduction) : une révision avant cette date reste possible."
+        )
+        return []
+    frozen_from = max(covered, floor) if floor else covered
+    steps = hz.anniversary_steps(rent.history, lease_start)
+    found = hz.overpaid(rent.history, steps, frozen_from, today)
+    if found is None:
+        late = hz.frozen_steps(steps, frozen_from)
+        notes.append(
+            f"La révision du {late[0].day:%d/%m/%Y} date de plus de trois ans : Service-Public (F1311) indique que le "
+            "juge se saisit dans les 3 ans qui suivent la révision."
+            if late
+            else f"Aucune révision vue dans tes prélèvements depuis le {frozen_from:%d/%m/%Y} : rien à réclamer sur "
+            "ce point."
+        )
+        return []
+    first = found.first
+    if lease_start >= rule_day:
+        when = f"a pris effet le {lease_start:%d/%m/%Y}, après le {rule_day:%d/%m/%Y}"
+    else:
+        when = (
+            f"a été reconduit {'le' if exact else 'au plus tard le'} {covered:%d/%m/%Y}, après le {rule_day:%d/%m/%Y}"
+        )
+    rise = first.after - first.before
+    charges_note = (
+        " Si une partie de la hausse vient de la provision pour charges, cette partie reste due : l'avis du bailleur "
+        "le dit."
+        if int(lease.fields.get("charges") or 0)
+        else ""
+    )
+    return [
+        Finding(
+            key=f"rent_dpe_frozen:{lease.id}:{first.day.isoformat()}",  # stable : écarté ou démarche, ça tient
+            kind="rent_dpe_frozen",
+            level="danger",
+            topic="logement",
+            title=f"Loyer révisé alors que le logement est classé {letter}",
+            body=(
+                f"Ton logement est classé {letter} ({dpe_label}) et ton bail {when} : la révision du "
+                f"{first.day:%d/%m/%Y} (+{format_eur(rise)} par mois) n'est pas due (Service-Public, fiche F1311). "
+                f"Payé en plus : {format_eur(found.total_cents)} sur {found.months} mois depuis le "
+                f"{found.since:%d/%m/%Y}, et {format_eur(found.monthly_cents)} par mois tant que le loyer n'est pas "
+                f"revenu à {format_eur(first.before)}. Le juge se saisit dans les 3 ans qui suivent la révision "
+                f"(Service-Public, F1311).{charges_note}"
+            ),
+            evidence=(
+                dpe_ev,
+                Evidence("Bail", f"prise d'effet le {lease_start:%d/%m/%Y}", f"doc:{lease.id}"),
+                Evidence(
+                    rent.merchant,
+                    f"{format_eur(first.before)} puis {format_eur(first.after)} le {first.day:%d/%m/%Y}",
+                    f"series:{rent.key}",
+                ),
+                Evidence("Règle", f"{hz.RULE_SOURCE}, relue le {hz.RULE_CHECKED_ON}", f"url:{hz.RULE_URL}"),
+            ),
+            yearly_cents=found.monthly_cents * 12,
+            action={
+                "template": "revision_loyer_dpe",
+                "label": "Préparer la lettre au bailleur",
+                "title": f"Révision de loyer non due (classe {letter})",
+                "initial": {
+                    "bailleur": lease.fields.get("bailleur"),
+                    "classe": letter,
+                    "numero_dpe": link.dpe.number if link.dpe else None,
+                    "date_revision": first.day.isoformat(),
+                    "loyer_avant": first.before,
+                    "hausse": rise,
+                    "montant": found.total_cents,
+                    "periode": f"du {found.since:%m/%Y} au {rent.history[-1][0]:%m/%Y}",
+                },
+            },
+            confidence=0.8 if link.dpe else 0.7,
+        )
+    ]
+
+
+def _rent_market(link: HousingLink, lease: Doc | None, rent: Series | None, notes: list[str]) -> list[Finding]:
+    """Ton loyer au m² face à l'intervalle des annonces de ta commune : seulement si l'indicateur est fiable selon
+    la règle de l'ANIL (R² ajusté ≥ 0,5 et au moins 30 annonces dans la commune). Une position, jamais un jugement."""
+    m = link.market
+    if m is None:
+        notes.append("Carte des loyers : ta commune n'est pas encore lue.")
+        return []
+    if not m.reliable:
+        notes.append(
+            f"Carte des loyers : indicateur trop fragile pour {m.commune} (R² {hz.fr2(m.r2)}, {m.obs} annonces dans "
+            f"la commune ; l'ANIL demande un R² d'au moins 0,5 et au moins {hz.MIN_OBS} annonces) : pas de "
+            "comparaison."
+        )
+        return []
+    if lease is not None and str(lease.fields.get("meuble") or "") == "oui":
+        notes.append("Ton bail est meublé : la carte des loyers ne porte que sur des logements loués vides.")
+        return []
+    if not link.surface_m2:
+        notes.append("Surface habitable inconnue : décris ton logement dans Patrimoine, ou reconnais ton DPE.")
+        return []
+    if rent is not None and rent.history:
+        last_day, paid = rent.history[-1]
+        paid_ev = Evidence(rent.merchant, f"{format_eur(paid)} le {last_day:%d/%m/%Y}", f"series:{rent.key}")
+    elif lease is not None:
+        paid = int(lease.fields["loyer"]) + int(lease.fields.get("charges") or 0)
+        paid_ev = Evidence("Bail", f"loyer et charges : {format_eur(paid)}", f"doc:{lease.id}")
+    else:
+        notes.append("Loyer inconnu : ni bail dans Papiers, ni loyer reconnu dans tes prélèvements.")
+        return []
+    rent_m2 = paid / 100 / link.surface_m2
+    _prefix, label, ref_m2 = hz.MARKET_FILES[m.file]
+    verdict = {
+        "above": "au-dessus de l'intervalle des annonces",
+        "within": "dans l'intervalle des annonces",
+        "below": "sous l'intervalle des annonces",
+    }[hz.position(rent_m2, m)]
+    nearby = (
+        " L'indicateur de ta commune est estimé avec des communes voisines semblables." if m.level == "maille" else ""
+    )
+    surface = f"{link.surface_m2:g}".replace(".", ",")
+    return [
+        Finding(
+            key=f"rent_market:{m.code}:{m.file}:{m.year}:{paid}",
+            kind="rent_market",
+            level="info",
+            topic="logement",
+            title=f"Ton loyer face aux annonces de {m.commune}",
+            body=(
+                f"{hz.fr2(rent_m2)} €/m² charges comprises ({format_eur(paid)} pour {surface} m²) : {verdict} de "
+                f"{m.commune}, de {hz.fr2(m.low)} à {hz.fr2(m.high)} €/m² (loyer prédit {hz.fr2(m.m2)} €/m², "
+                f"{label} loué vide, bien type de {ref_m2} m²). Un repère tiré des annonces, pas un loyer de "
+                f"référence : la taille, l'état et l'emplacement du logement comptent.{nearby}"
+            ),
+            evidence=(
+                paid_ev,
+                Evidence("Surface", f"{surface} m² ({link.surface_source or 'source inconnue'})", None),
+                Evidence(
+                    f"Carte des loyers {m.year}",
+                    f"{hz.fr2(m.low)} à {hz.fr2(m.high)} €/m², R² {hz.fr2(m.r2)}, {m.obs} annonces "
+                    f"({hz.MARKET_CREDIT})",
+                    f"url:{hz.MARKET_PAGE.format(year=m.year)}",
+                ),
+            ),
+            confidence=0.6,
+        )
+    ]
+
+
+def housing_checks(inputs: Inputs) -> tuple[list[Finding], list[str]]:
+    """(constats, ce qui manque pour en dire plus) : chaque manque est dit, rien n'est deviné."""
+    link = inputs.housing
+    if link is None:
+        return [], []
+    notes: list[str] = []
+    lease, rent = _lease(inputs.docs), _rent_series(inputs.series)
+    out = _dpe_frozen(link, lease, rent, inputs.today, notes)
+    out += _rent_market(link, lease, rent, notes)
+    return out, notes
+
+
 # ------------------------------------------------------------------ orchestration
 LEVEL_ORDER = {"danger": 0, "warning": 1, "info": 2}
 
@@ -993,6 +1218,11 @@ def analyse(inputs: Inputs) -> list[Finding]:
     out += climate_findings(inputs.climate)
     out += statistical_links(inputs.monthly_spend, inputs.monthly_income, inputs.category_names)
     out += payday_concentration(inputs.daily_variable_spend, inputs.paydays, inputs.category_names)
+    housing, _notes = housing_checks(inputs)
+    if any(f.kind == "rent_dpe_frozen" for f in housing):
+        # « révisé dans la limite de l'IRL » rassurerait à tort : la révision elle-même n'était pas due.
+        out = [f for f in out if f.kind != "rent_revised"]
+    out += housing
     seen: set[str] = set()
     unique = []
     for f in out:

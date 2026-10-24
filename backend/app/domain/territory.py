@@ -64,6 +64,7 @@ ACADEMY_ALIASES = {"La Réunion": "Réunion", "Polynésie Française": "Polynés
 _CITYCODE = re.compile(r"(?:\d{5}|2[AB]\d{3})")
 _DEPCODE = re.compile(r"(?:\d{2,3}|2[AB])")
 _NAME = re.compile(r"[^\W\d_][\w'’ .()-]{0,59}")
+_BAN_ID = re.compile(r"(?:\d{5}|2[AB]\d{3})_[0-9a-z]{4,5}_\d{5}(?:_[0-9a-z]{1,6})?", re.I)
 
 
 class TerritoryError(ValueError):
@@ -81,6 +82,9 @@ class Place:
     lon: float
     score: float  # 0 à 1 : confiance du géocodeur
     precision: str  # housenumber | street | locality | municipality
+    # Identifiant de l'adresse dans la Base adresse nationale (« 31555_2468_00014 ») : seulement au numéro près. Il
+    # retrouve le DPE de ton immeuble dans la base de l'ADEME (#34).
+    ban_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -138,6 +142,8 @@ def parse_geocode(body: bytes) -> Place | None:
     if not (-180 <= lon <= 180 and -90 <= lat <= 90 and 0 <= score <= 1):
         raise TerritoryError("Géoplateforme : coordonnées hors bornes")
     postcode = str(props.get("postcode") or "")
+    precision = _text(props.get("type"), 20) or "inconnue"
+    ban_id = str(props.get("id") or "")
     return Place(
         label=_text(props.get("label"), 200),
         citycode=citycode,
@@ -147,7 +153,8 @@ def parse_geocode(body: bytes) -> Place | None:
         lat=round(lat, 6),
         lon=round(lon, 6),
         score=round(score, 3),
-        precision=_text(props.get("type"), 20) or "inconnue",
+        precision=precision,
+        ban_id=ban_id if precision == "housenumber" and _BAN_ID.fullmatch(ban_id) else None,
     )
 
 

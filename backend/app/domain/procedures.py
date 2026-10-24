@@ -191,7 +191,57 @@ def _cancel_letter(v: dict[str, Any], today: date | None) -> str:
     return "\n".join(lines)
 
 
+def _rent_dpe_letter(v: dict[str, Any], today: date | None) -> str:
+    """Révision de loyer sur un logement classé F ou G (#34) : la règle citée telle que Service-Public l'écrit."""
+    revised = v.get("date_revision")
+    when = _fr_date(date.fromisoformat(str(revised))) if revised else "[date de la révision]"
+    dpe = f" (DPE n° {v['numero_dpe']})" if v.get("numero_dpe") else ""
+    before, rise = v.get("loyer_avant"), v.get("hausse")
+    after = _money(int(before) + int(rise)) if before is not None and rise is not None else "…"
+    lines = [
+        str(v.get("nom") or "…"),
+        str(v.get("adresse_logement") or "[adresse du logement]"),
+        "",
+        f"À l'attention de {v.get('bailleur') or 'mon bailleur'}",
+        "",
+        f"Le {_fr_date(today)}",
+        "",
+        f"Objet : révision de loyer non due — logement classé {v.get('classe') or 'F ou G'}",
+        "",
+        "Madame, Monsieur,",
+        "",
+        f"Locataire du logement cité en tête, je constate que le montant payé chaque mois a été révisé le {when}, "
+        f"passant de {_money(before)} à {after}.",
+        "",
+        f"Or ce logement est classé {v.get('classe') or 'F ou G'} au diagnostic de performance énergétique{dpe}. "
+        "Comme le rappelle Service-Public (fiche F1311), réviser le loyer est interdit pour un logement classé F ou G "
+        "lorsque le bail est signé, renouvelé ou tacitement reconduit depuis le 24 août 2022 en métropole (depuis le "
+        "1er juillet 2024 en Guadeloupe, Guyane, Martinique, à La Réunion et à Mayotte), ce qui est le cas de mon "
+        "bail.",
+        "",
+        f"Je vous demande donc de ramener le loyer au montant d'avant la révision et de me rembourser les sommes "
+        f"versées au titre de cette révision, soit {_money(v.get('montant'))} "
+        f"({v.get('periode') or 'période à préciser'}).",
+        "",
+        "Je vous prie d'agréer, Madame, Monsieur, mes salutations distinguées.",
+        "",
+        str(v.get("nom") or "…"),
+    ]
+    return "\n".join(lines)
+
+
 # ============================================================================ modèles
+_SP_F1311 = Source(
+    "Service-Public — Augmentation et révision du loyer en cours de bail d'habitation (fiche F1311, vérifiée le "
+    "08/08/2025)",
+    "https://www.service-public.gouv.fr/particuliers/vosdroits/F1311",
+    "2026-10-24",
+)
+_ADEME_DPE = Source(
+    "ADEME — base des DPE des logements existants (dpe03existant)",
+    "https://data.ademe.fr/datasets/dpe03existant",
+    "2026-10-24",
+)
 _CAF_FICHE = Source(
     "Cnaf — fiche pratique « Faire une demande de prime d'activité » (mise à jour 07/2022)",
     "https://www.caf.fr/sites/default/files/medias/cnaf/Aides_et_demarches/Mes-demarches/Fiches-pratiques/"
@@ -457,6 +507,56 @@ TEMPLATES: dict[str, Template] = {
             followup_days=35,
             followup_label="Vérifie que les prélèvements se sont arrêtés",
             letter=_cancel_letter,
+        ),
+        Template(
+            key="revision_loyer_dpe",
+            title="Révision de loyer non due (logement classé F ou G)",
+            summary="Une lettre à ton bailleur : le loyer revient au montant d'avant la révision, le surplus versé "
+            "est remboursé.",
+            category="autre",
+            organisme="Ton bailleur",
+            channel="letter",
+            recipient="Ton bailleur ou son agence (courrier recommandé avec accusé de réception)",
+            official_url="https://www.service-public.gouv.fr/particuliers/vosdroits/F1311",
+            steps=(
+                "Relis les montants : ils viennent de tes prélèvements, et une hausse de la provision pour charges "
+                "reste due (l'avis du bailleur sépare loyer et charges).",
+                "Envoie la lettre en recommandé avec accusé de réception, avec une copie du DPE ; garde la date "
+                "d'envoi.",
+                "Si le désaccord persiste, une démarche amiable est obligatoire avant le juge pour un litige "
+                "jusqu'à 5 000 € : commission départementale de conciliation ou conciliateur de justice, tous deux "
+                "gratuits.",
+                "Le juge des contentieux de la protection se saisit dans les 3 ans qui suivent la révision contestée.",
+            ),
+            sources=(_SP_F1311, _ADEME_DPE),
+            confidence="élevée",
+            fields=(
+                FieldDef("nom", "Ton nom et prénom (signature de la lettre)", "text"),
+                FieldDef("adresse_logement", "Adresse du logement loué", "text"),
+                FieldDef("bailleur", "Bailleur ou agence", "text"),
+                FieldDef("classe", "Classe du DPE", "choice", choices=(("F", "F"), ("G", "G"))),
+                FieldDef("numero_dpe", "Numéro du DPE (ADEME)", "text", required=False),
+                FieldDef("date_revision", "Date de la révision", "date"),
+                FieldDef("loyer_avant", "Montant payé avant la révision", "amount"),
+                FieldDef("hausse", "Hausse mensuelle", "amount"),
+                FieldDef("montant", "Somme à rembourser", "amount"),
+                FieldDef("periode", "Période concernée", "text", help="Par exemple « du 09/2025 au 10/2026 »"),
+            ),
+            pieces=(
+                PieceDef("bail", "Bail", ("lease",), required=False),
+                PieceDef("quittances", "Quittances après la révision", ("rent_receipt",), required=False),
+            ),
+            declarations=(
+                Declaration(
+                    "nom_propre",
+                    "Cette lettre part en ton nom : relis la classe du DPE, les dates et les montants avant de "
+                    "l'envoyer.",
+                    "engagement",
+                ),
+            ),
+            followup_days=60,
+            followup_label="Sans accord : commission départementale de conciliation ou conciliateur de justice",
+            letter=_rent_dpe_letter,
         ),
         Template(
             key="ouvrir_lep",

@@ -373,6 +373,7 @@ KINDS: dict[str, KindSpec] = {
                 _f("assurance_exigee", "Assurance exigée", "text"),
                 _f("assureur", "Assureur nommé", "text"),
                 _f("bailleur", "Bailleur", "text"),
+                _f("classe_dpe", "Classe énergie (DPE)", "text"),
             ),
             Retention("Durée de la location, puis 3 ans"),
             (
@@ -594,6 +595,16 @@ def _irl_clause(line: Line, m: re.Match[str]) -> str | None:
     return f"IRL {contracts.quarter_label(q)}" if q else "IRL"
 
 
+def _dpe_letter(line: Line, m: re.Match[str]) -> str | None:
+    """« Classe énergie : F », « DPE classe G » : la lettre qui suit, seule (A à G), sinon rien (#34). « à définir »
+    replié en « A DEFINIR » n'est pas une classe A."""
+    found = re.match(
+        r"[\s:=«\"(-]*(?:DU LOGEMENT\s*)?(?:EST\s*)?(?:CLASSE\s*)?[:=«\"(]?\s*(?:([B-G])\b|(A)\b(?!\s+[A-Z]))",
+        line.folded[m.end() :],
+    )
+    return (found.group(1) or found.group(2)) if found else None
+
+
 def _months_after(line: Line, m: re.Match[str]) -> int | None:
     found = re.search(r"\b(UN|DEUX|TROIS|SIX|[1-9]|1[0-2])\s*MOIS\b", line.folded[m.end() :])
     if not found:
@@ -678,6 +689,12 @@ _RULES: dict[str, tuple[Rule, ...]] = {
         ),
         Rule("assureur", r"ASSUR", _insurer_in_line, confidence=0.7),
         Rule("bailleur", r"BAILLEUR\s*:|PROPRIETAIRE\s*:|LE BAILLEUR,?\s", _text_after, confidence=0.6),
+        Rule(
+            "classe_dpe",
+            r"(?:CLASSE|ETIQUETTE|CLASSEMENT) (?:ENERGIE|ENERGETIQUE|DPE)|\bDPE\b\W*(?=CLASSE)",
+            _dpe_letter,
+            confidence=0.7,
+        ),
     ),
     "bank_statement": (
         Rule("solde", r"NOUVEAU SOLDE|SOLDE (?:FINAL|AU \d)|SOLDE (?:CREDITEUR|DEBITEUR)", _signed_balance),
