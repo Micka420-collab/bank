@@ -67,8 +67,8 @@ export function ruleText(r: PilotRule, every: Record<string, string>): string {
   let t = `${verb} ${money(r.amount_cents)} de ${r.asset}`;
   if (r.kind === "swap" && r.to_asset) t += ` contre ${r.to_asset}`;
   if (r.kind === "transfer" && r.destination) t += ` vers « ${r.destination} »`;
-  if (r.on && r.every === "week") return `${t} chaque ${WEEKDAYS[r.on - 1] ?? ""}`;
-  if (r.on && r.every === "month") return `${t} le ${r.on === 1 ? "1er" : r.on} de chaque mois`;
+  if (r.on && r.every === "week") return `${t} chaque semaine, prévu le ${WEEKDAYS[r.on - 1] ?? ""}`;
+  if (r.on && r.every === "month") return `${t} chaque mois, prévu le ${r.on === 1 ? "1er" : r.on}`;
   return `${t} ${every[r.every] ?? r.every}`;
 }
 

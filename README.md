@@ -558,7 +558,7 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 970 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+Qualité au moment de la livraison : 952 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
 aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, scénarios adverses du
 banc d'essai crypto de Minara rejoués contre le pilote automatique, demandes simultanées qui ne passent jamais
@@ -569,12 +569,12 @@ direct recomposée fragment par fragment, Web Push vérifié au bit près contre
 par un faux navigateur, amortissement vérifié sur un cas de référence public, plan B contre un moteur fiscal
 simulé qui réagit au revenu, sauvegarde chiffrée altérée, tronquée ou rallongée refusée, boîte mail contre un faux
 serveur IMAP qui journalise chaque commande, retraite vérifiée sur le cas de référence de service-public et contre
-les paliers de la LFSS 2026, lien de partage ouvert deux fois en même temps, pilote vs consigne sur un calendrier de référence — fins de mois,
-heures d'été et d'hiver, pauses, refus —, alertes de cours franchies une seule fois par deux relèves simultanées, clés de plateforme face à de fausses plateformes qui vérifient chaque signature et
-refusent les droits trop larges), couverture 91 %, 154 tests front (parcours de première ouverture,
-coffre et partage d'un papier, démarches, opportunités, veille, assistant, chat interactif et réponse en direct, notifications sur
-l'appareil, plan B, crédits, retraite, sauvegardes, boîte mail, crypto et plateformes reliées, alertes de cours, pilote, pilote vs consigne, déclarations, corrélations, année qui vient,
-passkeys, erreurs qui disent quoi faire),
+les paliers de la LFSS 2026, pilote vs consigne sur un calendrier de référence — fins de mois, heures d'été et
+d'hiver, pauses, refus —, alertes de cours franchies une seule fois par deux relèves simultanées),
+couverture 91 %, 144 tests front (parcours de première ouverture,
+coffre, démarches, opportunités, veille, assistant, chat interactif et réponse en direct, notifications sur
+l'appareil, plan B, crédits, retraite, sauvegardes, boîte mail, crypto, alertes de cours, pilote, pilote vs
+consigne, déclarations, corrélations, année qui vient, passkeys, erreurs qui disent quoi faire),
 mypy strict sans erreur,
 ruff et bandit propres, revue de sécurité indépendante du pilote et de la crypto (ses constats corrigés et
 testés), `pip-audit` et `npm audit` sans vulnérabilité connue, aucune erreur de console ni débordement

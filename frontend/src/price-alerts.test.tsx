@@ -154,8 +154,8 @@ describe("pilote vs consigne", () => {
     expect(statusText(rule.slots[3]!)).toBe("manqué");
     expect(gapText(rule.slots[4]!)).toMatch(/-2,00\s€\s\(-4\s%\)/);
     expect(gapText(rule.slots[0]!)).toBeNull();
-    expect(ruleText({ kind: "buy", asset: "BTC", to_asset: null, destination: null, amount_cents: 5000, every: "week", on: 1 }, {})).toMatch(/chaque lundi$/);
-    expect(ruleText({ kind: "buy", asset: "BTC", to_asset: null, destination: null, amount_cents: 5000, every: "month", on: 1 }, {})).toMatch(/le 1er de chaque mois$/);
+    expect(ruleText({ kind: "buy", asset: "BTC", to_asset: null, destination: null, amount_cents: 5000, every: "week", on: 1 }, {})).toMatch(/chaque semaine, prévu le lundi$/);
+    expect(ruleText({ kind: "buy", asset: "BTC", to_asset: null, destination: null, amount_cents: 5000, every: "month", on: 1 }, {})).toMatch(/chaque mois, prévu le 1er$/);
   });
 
   it("montre le prévu face au fait, le rythme et les mouvements hors consigne", async () => {
