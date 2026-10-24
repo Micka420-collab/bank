@@ -47,6 +47,7 @@ from app.models import (
 from app.security import audit
 from app.security.auth import verify_password
 from app.services import exchange_keys as exchange_keys_service
+from app.services import home_value as home_value_service
 from app.services import obligations as obligations_service
 from app.services import retirement as retirement_service
 
@@ -346,6 +347,8 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
             for loan in db.scalars(select(Loan).order_by(Loan.id))
         ],
         "retirement_profile": retirement_service.profile(db) or None,
+        # Logement : ta description (données déclarées) et la dernière estimation ; les ventes DVF se retéléchargent.
+        "home": {"profile": home_value_service.profile(db) or None, "estimate": home_value_service.view_estimate(db)},
         # Crypto : adresses publiques suivies, avoirs, opérations fiscales (aucune clé : Bank n'en a jamais).
         "crypto": {
             "wallets": [

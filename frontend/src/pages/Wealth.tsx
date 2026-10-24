@@ -52,6 +52,7 @@ const WEALTH_SECTIONS = [
   { id: "nw", label: "Valeur nette" },
   { id: "reg-title", label: "Livrets" },
   { id: "goals-title", label: "Objectifs" },
+  { id: "home-title", label: "Logement" },
   { id: "loans-title", label: "Crédits" },
   { id: "rt-title", label: "Retraite" },
   { id: "proj-title", label: "Simulation" },

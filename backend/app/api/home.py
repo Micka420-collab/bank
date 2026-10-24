@@ -25,6 +25,7 @@ class HomeIn(BaseModel):
     section: str | None = Field(default=None, max_length=2)
     rooms: int | None = Field(default=None, ge=dvf.MIN_ROOMS, le=dvf.MAX_ROOMS)
     in_wealth: bool = True
+    declared_as: str | None = Field(default=None, max_length=80, description="libellé déjà déclaré à l'agent")
 
 
 def _fail(exc: Exception) -> HTTPException:

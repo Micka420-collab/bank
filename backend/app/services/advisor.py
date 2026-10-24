@@ -508,12 +508,9 @@ def build_dossier(db: Session, today: date, privacy: str = "redacted") -> dict[s
     sim_row = db.scalar(select(FiscalSimulation).order_by(FiscalSimulation.id.desc()).limit(1))
     sim = json.loads(sim_row.result) if sim_row else None
     household = analytics.load_profile(db) or {}
-    outside = values.get("outside_assets") or []
-    home = next((b for b in balances if b.kind == home_value.HOME_KIND), None)
-    if home is not None:
-        # Le logement estimé (DVF) est déjà dans la valeur nette : déclaré aussi, il ne s'ajoute pas en double ; un
-        # autre bien (locatif, SCPI) reste compté.
-        outside = home_value.without_declared_home(outside, home.balance_cents)
+    # Le logement estimé (DVF) est déjà dans la valeur nette : déclaré aussi, il ne s'ajoute pas en double ; un
+    # autre bien (locatif, SCPI) reste compté. Le bloc dit que c'est une estimation, et quelle ligne a été retirée.
+    outside, home = home_value.for_agent(db, values.get("outside_assets") or [])
     last_import = db.scalar(select(func.max(ImportBatch.created_at)))
     last_sync = db.scalar(select(func.max(BankConnection.last_sync_at)))
     names = {r.slug: r.name for r in db.scalars(select(Category))}
@@ -653,6 +650,7 @@ def build_dossier(db: Session, today: date, privacy: str = "redacted") -> dict[s
             "tracked_net_worth_cents": nw.net_cents,
             "buckets": nw.by_bucket,
             "outside_assets_cents": sum(int(a.get("value_cents", 0)) for a in outside),
+            "home": home,
             "emergency_fund": {
                 "available_cents": ef.available_cents,
                 "monthly_essentials_cents": ef.monthly_essentials_cents,
@@ -834,6 +832,11 @@ def render_markdown(d: dict[str, Any]) -> str:
 
     add("\n## Patrimoine")
     add(f"- Valeur nette {_eur(w['net_worth_cents'])} (dont {_eur(w['outside_assets_cents'])} hors Bank)")
+    if h := w.get("home"):
+        add(
+            f"- Dont logement **estimé** {_eur(h['estimate_cents'])} (fourchette {_eur(h['low_cents'])} – "
+            f"{_eur(h['high_cents'])}, {h['comparables']} ventes DVF jusqu'au {h['window_end']}) : un repère"
+        )
     add(
         f"- Matelas : {ef['months_covered']} mois couverts sur {ef['target_months']} visés "
         f"(manque {_eur(ef['gap_cents'])})"

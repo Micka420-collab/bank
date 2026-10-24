@@ -22,7 +22,7 @@ from app.domain import dvf
 from app.domain import loans as loans_domain
 from app.domain.recurring import add_months
 from app.domain.wealth import AccountBalance
-from app.models import Account, DvfCache, HomeProfile, Loan
+from app.models import Account, DvfCache, FinancialProfile, HomeProfile, Loan
 from app.security import audit, netfetch
 from app.services import consents
 
@@ -33,6 +33,8 @@ GEO_URL = "https://geo.api.gouv.fr/communes"
 MAX_FILE_BYTES = 40_000_000
 YEARS_BACK = 3  # l'année en cours et les trois précédentes : 24 mois pleins malgré le retard de publication
 MAX_ATTEMPTS_PER_DAY = 3  # essais de téléchargement par jour (manuels et automatiques) : on reste poli
+# Par fichier : quatre fichiers tiennent sous le délai que nginx accorde à /api/home/(profile|refresh) (180 s).
+FILE_SECONDS = 30.0
 HOME_LINE = "Logement (estimation DVF)"
 HOME_KIND = "real_estate"
 HOME_LINE_ID = -1_000_000_000  # ligne à part du patrimoine : jamais un vrai compte (> 0) ni un prêt (−id)
@@ -54,10 +56,15 @@ def default_fetch(http: Any = None, resolver: netfetch.Resolver | None = None) -
     def get(url: str) -> bytes | None:
         try:
             result = netfetch.fetch(
-                url, http=http, resolver=resolver, accept="text/csv, */*;q=0.1", max_bytes=MAX_FILE_BYTES, seconds=60.0
+                url,
+                http=http,
+                resolver=resolver,
+                accept="text/csv, */*;q=0.1",
+                max_bytes=MAX_FILE_BYTES,
+                seconds=FILE_SECONDS,
             )
         except netfetch.FetchError as exc:
-            if str(exc).endswith(" 404"):
+            if exc.status == 404:
                 return None
             raise
         return result.body
@@ -96,6 +103,7 @@ def save_profile(
     section: str | None,
     rooms: int | None,
     in_wealth: bool,
+    declared_as: str | None = None,
 ) -> dict[str, Any]:
     try:
         clean_code = dvf.normalize_code(code)
@@ -116,6 +124,8 @@ def save_profile(
         "section": clean_section,
         "rooms": rooms,
         "in_wealth": in_wealth,
+        # Le libellé sous lequel tu l'as déjà déclaré à l'agent (placements hors Bank), ou None : dit, pas deviné.
+        "declared_as": " ".join((declared_as or "").split())[:80] or None,
     }
     before = profile(db)
     row = db.get(HomeProfile, 1) or HomeProfile(id=1, data="{}")
@@ -269,6 +279,11 @@ def _result(db: Session, prof: dict[str, Any]) -> dict[str, Any] | None:
     return result if isinstance(result, dict) and result.get("code") == prof.get("code") else None
 
 
+def view_estimate(db: Session) -> dict[str, Any] | None:
+    """La dernière estimation de ton logement, pour l'export."""
+    return _result(db, profile(db))
+
+
 # ------------------------------------------------------------------ patrimoine
 def wealth_line(db: Session) -> AccountBalance | None:
     """La ligne « Logement (estimation DVF) » du patrimoine net : la médiane, si l'estimation tient et si tu veux
@@ -308,11 +323,26 @@ def home_loans(db: Session, today: date) -> list[dict[str, Any]]:
     return out
 
 
-def without_declared_home(assets: list[dict[str, Any]], median_cents: int) -> list[dict[str, Any]]:
-    """Les placements déclarés à l'agent, moins ton logement s'il y figure déjà (l'estimation DVF le compte) : une
-    seule ligne « immobilier », celle dont le libellé le dit (« résidence principale », « maison »…, jamais
-    « locatif » ni « SCPI ») ou dont la valeur tombe à ± 30 % de l'estimation, la plus proche. Un locatif ou des
-    SCPI ne sont pas ton logement : ils restent comptés."""
+def declared_property(db: Session) -> list[dict[str, Any]]:
+    """L'immobilier déclaré à l'agent (placements hors Bank) : de quoi dire, dans le formulaire, sous quel libellé
+    ton logement y figure déjà. Lu ici plutôt que par analytics, qui dépend de ce module."""
+    row = db.get(FinancialProfile, 1)
+    try:
+        data = json.loads(row.data) if row else {}
+    except ValueError:
+        return []
+    assets = (data.get("outside_assets") or {}).get("value") if isinstance(data, dict) else None
+    return [
+        {"label": str(a.get("label") or ""), "value_cents": int(a.get("value_cents", 0))}
+        for a in assets or []
+        if isinstance(a, dict) and a.get("kind") == "immobilier"
+    ]
+
+
+def _guess(assets: list[dict[str, Any]], median_cents: int) -> int | None:
+    """Description d'avant la case « déjà déclaré » : une seule ligne « immobilier », celle dont le libellé le dit
+    (« résidence principale », « maison »…, jamais « locatif » ni « SCPI ») ou dont la valeur tombe à ± 30 % de
+    l'estimation, la plus proche. Une supposition : le dossier de l'agent le dit."""
 
     def plausible(asset: dict[str, Any]) -> bool:
         label = str(asset.get("label") or "")
@@ -324,9 +354,60 @@ def without_declared_home(assets: list[dict[str, Any]], median_cents: int) -> li
 
     candidates = [i for i, a in enumerate(assets) if plausible(a)]
     if not candidates:
-        return list(assets)
-    drop = min(candidates, key=lambda i: abs(int(assets[i].get("value_cents", 0)) - median_cents))
-    return [a for i, a in enumerate(assets) if i != drop]
+        return None
+    return min(candidates, key=lambda i: abs(int(assets[i].get("value_cents", 0)) - median_cents))
+
+
+def without_declared_home(
+    assets: list[dict[str, Any]], median_cents: int, prof: dict[str, Any] | None = None
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    """Les placements déclarés à l'agent, moins ton logement s'il y figure déjà (l'estimation DVF le compte), et la
+    ligne retirée avec la règle suivie : « chosen » si tu as coché « déjà déclaré sous … », « guessed » pour une
+    description d'avant cette case (supposition par le libellé ou la valeur). Un autre bien reste compté."""
+    prof = prof or {}
+    if "declared_as" in prof:
+        label = prof.get("declared_as")
+        drop = next(
+            (i for i, a in enumerate(assets) if label and a.get("kind") == "immobilier" and a.get("label") == label),
+            None,
+        )
+        rule = "chosen"
+    else:
+        drop, rule = _guess(assets, median_cents), "guessed"
+    if drop is None:
+        return list(assets), None
+    removed = {"label": assets[drop].get("label"), "value_cents": int(assets[drop].get("value_cents", 0))}
+    return [a for i, a in enumerate(assets) if i != drop], removed | {"rule": rule}
+
+
+def declared_match(db: Session, prof: dict[str, Any]) -> str | None:
+    """Le libellé que le formulaire coche d'office : ton choix, ou la supposition pour une description d'avant."""
+    result = _result(db, prof)
+    median = int(result["median_cents"]) if result and result.get("ok") else 0
+    _kept, removed = without_declared_home([{**a, "kind": "immobilier"} for a in declared_property(db)], median, prof)
+    return str(removed["label"]) if removed else None
+
+
+def for_agent(db: Session, outside: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    """Pour le dossier de l'agent : le logement compté dans la valeur nette, présenté comme une estimation (fourchette,
+    nombre de ventes, dates, source) et non comme un fait, et les placements déclarés sans lui."""
+    line = wealth_line(db)
+    if line is None:
+        return outside, None
+    prof = profile(db)
+    result = _result(db, prof) or {}
+    row = db.get(DvfCache, 1)
+    kept, removed = without_declared_home(outside, line.balance_cents, prof)
+    return kept, {
+        "estimate_cents": line.balance_cents,
+        "low_cents": result.get("low_cents"),
+        "high_cents": result.get("high_cents"),
+        "comparables": result.get("count"),
+        "window_end": result.get("window_end"),
+        "fetched_at": row.fetched_at.isoformat() if row and row.fetched_at else None,
+        "declared_duplicate": removed,
+        "source": "estimated_dvf",
+    }
 
 
 # ------------------------------------------------------------------ recherche de commune
@@ -340,7 +421,7 @@ def search_communes(
     if not SEARCH_RE.match(clean):
         raise HomeValueError("Un nom de commune ou un code postal à 5 chiffres", 422)
     params = {"codePostal": clean} if clean.isdigit() else {"nom": clean, "boost": "population"}
-    params |= {"fields": "nom,code,codesPostaux", "type": "commune-actuelle,arrondissement-municipal", "limit": "10"}
+    params |= {"fields": "nom,code,codesPostaux", "type": "commune-actuelle,arrondissement-municipal", "limit": "25"}
     try:
         data = netfetch.get_json(
             f"{GEO_URL}?{urlencode(params)}", http=http, resolver=resolver, max_bytes=200_000, seconds=10.0
@@ -354,7 +435,7 @@ def search_communes(
             continue
         postcodes = [str(p) for p in item.get("codesPostaux") or [] if isinstance(p, str)][:5]
         out.append({"code": code, "name": str(item.get("nom") or code)[:80], "postcodes": postcodes})
-    return out[:10]
+    return out[:24]  # Paris : ses vingt arrondissements tiennent dans la liste
 
 
 # ------------------------------------------------------------------ vue et tâche de fond
@@ -382,6 +463,8 @@ def view(db: Session, today: date) -> dict[str, Any]:
             "error": row.last_error if row else None,
         },
         "in_wealth": bool(median is not None and prof.get("in_wealth", True)),
+        "declared_property": declared_property(db),
+        "declared_match": declared_match(db, prof) if prof else None,
         "loans": loans,
         "loans_remaining_cents": owed,
         "net_cents": median - owed if median is not None else None,

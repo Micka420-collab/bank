@@ -1923,6 +1923,7 @@ export type HomeProfile = {
   section: string | null;
   rooms: number | null;
   in_wealth: boolean;
+  declared_as?: string | null; // libellé sous lequel il est déjà déclaré à l'agent (absent : description d'avant)
 };
 export type HomeEstimate = {
   ok: boolean;
@@ -1962,6 +1963,8 @@ export type HomeView = {
     error: string | null;
   };
   in_wealth: boolean;
+  declared_property: { label: string; value_cents: number }[];
+  declared_match: string | null;
   loans: { id: number; name: string; remaining_cents: number }[];
   loans_remaining_cents: number;
   net_cents: number | null;

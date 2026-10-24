@@ -30,7 +30,11 @@ Resolver = Callable[[str], list[str]]
 
 
 class FetchError(Exception):
-    """Message lisible, sans détail technique sensible."""
+    """Message lisible, sans détail technique sensible ; `status` : le code HTTP quand la source a répondu."""
+
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 @dataclass(frozen=True)
@@ -140,7 +144,7 @@ def fetch(
                 if resp.status_code == 304:
                     return FetchResult(304, b"", current, "", etag, last_modified)
                 if resp.status_code != 200:
-                    raise FetchError(f"La source répond {resp.status_code}")
+                    raise FetchError(f"La source répond {resp.status_code}", resp.status_code)
                 declared = resp.headers.get("content-length")
                 if declared and declared.isdigit() and int(declared) > max_bytes:
                     raise FetchError("Ressource trop volumineuse")
@@ -194,7 +198,7 @@ def post_json(
         body = json.dumps(payload, separators=(",", ":")).encode()
         with client.stream("POST", target, headers=headers, content=body, extensions=extensions) as resp:
             if resp.status_code != 200:
-                raise FetchError(f"La source répond {resp.status_code}")
+                raise FetchError(f"La source répond {resp.status_code}", resp.status_code)
             declared = resp.headers.get("content-length")
             if declared and declared.isdigit() and int(declared) > max_bytes:
                 raise FetchError("Ressource trop volumineuse")

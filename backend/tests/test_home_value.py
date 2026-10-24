@@ -379,6 +379,7 @@ def test_background_tick_refreshes_once_per_quarter(app, home: tuple[TestClient,
 
 
 def test_agent_dossier_does_not_count_the_home_twice(app, home: tuple[TestClient, FakeDvf]) -> None:  # type: ignore[no-untyped-def]
+    from app.models import HomeProfile
     from app.services import advisor
 
     client, _fake = home
@@ -388,25 +389,64 @@ def test_agent_dossier_does_not_count_the_home_twice(app, home: tuple[TestClient
         advisor.set_answer(db, "outside_assets", [flat, pea], source="user:micka")
         db.commit()
         declared = advisor.build_dossier(db, TODAY)["wealth"]
-    assert declared["outside_assets_cents"] == 25_250_000
+    assert declared["outside_assets_cents"] == 25_250_000 and declared["home"] is None
     _agree(client)
+    # Tu dis sous quel libellé ton logement est déjà déclaré : il n'est retiré que là, sans deviner.
+    view = client.put("/api/home/profile", json={**HOME, "declared_as": "Appartement"}).json()["view"]
+    assert view["declared_property"] == [{"label": "Appartement", "value_cents": 25_000_000}]
+    assert view["declared_match"] == "Appartement"
+    with app.state.sessionmaker() as db:
+        dossier = advisor.build_dossier(db, TODAY)
+    w = dossier["wealth"]
+    assert w["buckets"]["immobilier"] == 19_800_000 and w["outside_assets_cents"] == 250_000
+    assert w["net_worth_cents"] == w["tracked_net_worth_cents"] + 250_000
+    # Une estimation, pas un fait : fourchette, nombre de ventes, dates, et la ligne déclarée retirée.
+    h = w["home"]
+    assert h["source"] == "estimated_dvf" and h["estimate_cents"] == 19_800_000
+    assert h["low_cents"] < h["estimate_cents"] < h["high_cents"] and h["comparables"] > 0
+    assert h["window_end"] and h["fetched_at"]
+    assert h["declared_duplicate"] == {"label": "Appartement", "value_cents": 25_000_000, "rule": "chosen"}
+    assert "logement **estimé**" in advisor.render_markdown(dossier)
+    # Case décochée : rien n'est retiré, même un libellé qui ressemble à un logement.
     client.put("/api/home/profile", json=HOME)
     with app.state.sessionmaker() as db:
         w = advisor.build_dossier(db, TODAY)["wealth"]
-    assert w["buckets"]["immobilier"] == 19_800_000 and w["outside_assets_cents"] == 250_000
-    assert w["net_worth_cents"] == w["tracked_net_worth_cents"] + 250_000
-    # Un autre bien déclaré (des SCPI, un locatif) n'est pas ton logement : il reste compté.
+    assert w["outside_assets_cents"] == 25_250_000 and w["home"]["declared_duplicate"] is None
+
+    # Description d'avant la case : supposition par le libellé ou la valeur, dite comme telle. Un autre bien
+    # déclaré (des SCPI, un locatif) n'est pas ton logement : il reste compté.
+    def legacy(db) -> None:  # type: ignore[no-untyped-def]
+        row = db.get(HomeProfile, 1)
+        data = json.loads(row.data)
+        data.pop("declared_as")
+        row.data = json.dumps(data)
+
     scpi = {"label": "SCPI", "kind": "immobilier", "value_cents": 5_000_000}
     rental = {"label": "Appartement locatif", "kind": "immobilier", "value_cents": 19_000_000}
     with app.state.sessionmaker() as db:
+        legacy(db)
         advisor.set_answer(db, "outside_assets", [scpi, rental, flat], source="user:micka")
         db.commit()
-        assert advisor.build_dossier(db, TODAY)["wealth"]["outside_assets_cents"] == 24_000_000
+        w = advisor.build_dossier(db, TODAY)["wealth"]
+        assert w["outside_assets_cents"] == 24_000_000 and w["home"]["declared_duplicate"]["rule"] == "guessed"
         advisor.set_answer(
             db, "outside_assets", [scpi, {**flat, "label": "Bien", "value_cents": 21_000_000}], source="user:micka"
         )
         db.commit()
         assert advisor.build_dossier(db, TODAY)["wealth"]["outside_assets_cents"] == 5_000_000, "valeur proche"
+    assert client.get("/api/home").json()["declared_match"] == "Bien", "le formulaire coche la supposition"
+
+
+def test_export_carries_the_home_description_and_estimate(home: tuple[TestClient, FakeDvf]) -> None:
+    from tests.conftest import PASSWORD
+
+    client, _fake = home
+    _agree(client)
+    client.put("/api/home/profile", json={**HOME, "rooms": 3})
+    body = client.post("/api/export", json={"password": PASSWORD}).json()
+    assert body["home"]["profile"]["surface"] == 60 and body["home"]["profile"]["rooms"] == 3
+    assert body["home"]["profile"]["code"] == "45234" and body["home"]["estimate"]["ok"]
+    assert "sales" not in body["home"], "les ventes DVF se retéléchargent : elles ne sont pas tes données"
 
 
 def test_removing_the_home_keeps_the_daily_cap(app, home: tuple[TestClient, FakeDvf]) -> None:  # type: ignore[no-untyped-def]

@@ -184,12 +184,16 @@ export const ACTIONS: Record<string, string> = {
   "loan.delete": "Prêt retiré",
   "retirement.profile": "Relevé de carrière enregistré",
   "retirement.profile_removed": "Relevé de carrière oublié",
+  // Logement (estimation DVF)
+  "home.profile": "Logement décrit ou modifié",
+  "home.profile_removed": "Logement oublié",
+  "home.dvf_refresh": "Ventes DVF téléchargées",
 };
 
 const DOMAINS: Record<string, string> = {
   assistant: "Assistant", autonomy: "Pilote", crypto: "Crypto", channel: "Messagerie", vault: "Papiers", mail: "Boîte mail",
   backup: "Sauvegarde", procedure: "Démarche", obligation: "Déclaration", watch: "Veille", opportunity: "Opportunité",
-  loan: "Crédit", retirement: "Retraite", memory: "Mémoire", search: "Recherche web", push: "Notifications",
+  loan: "Crédit", home: "Logement", retirement: "Retraite", memory: "Mémoire", search: "Recherche web", push: "Notifications",
   bank: "Banque", energy: "Linky", planning: "Agenda", export: "Export", agent: "Agent IA", mcp: "Agent IA",
 };
 

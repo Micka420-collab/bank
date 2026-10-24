@@ -47,7 +47,7 @@ const ESTIMATE: HomeEstimate = {
 const BASE: HomeView = {
   consent: false, profile: null, estimate: null,
   data: { matches: false, fetched_at: null, latest_sale: null, sales: 0, years: [], fresh: false, next_refresh: "2027-01-01", error: null },
-  in_wealth: false, loans: [], loans_remaining_cents: 0, net_cents: null,
+  in_wealth: false, declared_property: [], declared_match: null, loans: [], loans_remaining_cents: 0, net_cents: null,
   kinds: [{ key: "appartement", label: "Appartement" }, { key: "maison", label: "Maison" }],
   bounds: { surface: [9, 1000], rooms: [1, 20] },
   source: "DVF, Etalab / DGFiP, Licence Ouverte 2.0", source_url: "https://www.data.gouv.fr/fr/datasets/demandes-de-valeurs-foncieres-geolocalisees/",
@@ -118,7 +118,7 @@ describe("ton logement", () => {
     await type("Section cadastrale", "ab");
     await act(async () => { host.querySelector("form")!.requestSubmit(); });
     await settle();
-    expect(bodyOf("/api/home/profile")).toEqual({ kind: "appartement", surface: 60, code: "45234", commune: "Orléans", section: "AB", rooms: null, in_wealth: true });
+    expect(bodyOf("/api/home/profile")).toEqual({ kind: "appartement", surface: 60, code: "45234", commune: "Orléans", section: "AB", rooms: null, in_wealth: true, declared_as: null });
     expect(changed).toHaveBeenCalled();
     expect(text()).toContain("198 000 €");
   });
@@ -158,6 +158,30 @@ describe("ton logement", () => {
     expect(calls.some((c) => c.url === "/api/home/refresh" && c.init?.method === "POST")).toBe(true);
     expect(text()).toContain("garde l'extraction du 24/10/2026");
     expect(text()).toContain("198 000 €");
+  });
+
+  it("says under which label the home is already declared to the agent, explicitly", async () => {
+    const owned = [{ label: "Locatif Tours", value_cents: 26000000 }, { label: "Chez moi", value_cents: 20000000 }];
+    mockApi({ st: { ...DONE, declared_property: owned, declared_match: "Chez moi" } });
+    await mount();
+    await click("Modifier");
+    const box = [...host.querySelectorAll<HTMLInputElement>("label.check input")].find((i) => i.parentElement?.textContent?.includes("Déjà déclaré"))!;
+    expect(box.checked).toBe(true);
+    const select = [...host.querySelectorAll("select")].find((s) => s.closest("label")?.textContent?.includes("Sous le libellé"))!;
+    expect(select.value).toBe("Chez moi");
+    await act(async () => { box.click(); });
+    expect(text()).not.toContain("Sous le libellé");
+    await act(async () => { host.querySelector("form")!.requestSubmit(); });
+    await settle();
+    expect(bodyOf("/api/home/profile")).toMatchObject({ declared_as: null });
+  });
+
+  it("consent withdrawn: the card keeps the estimate the net worth still counts", async () => {
+    mockApi({ st: { ...DONE, consent: false } });
+    await mount();
+    expect(text()).toContain("198 000 €");
+    expect(text()).toMatch(/Accord retiré : l'estimation garde l'extraction du 24 oct\.? 2026/);
+    expect(text()).not.toContain("attend ton accord");
   });
 
   it("never offers the estimated home (nor crypto or a loan line) as a goal's account", () => {
