@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HomeEstimate, HomeView } from "./api";
 import { fullDate, HomeValue, medianPosition } from "./components/HomeValue";
 import { ToastProvider } from "./components/ui";
+import { goalAccounts } from "./pages/Wealth";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -157,5 +158,11 @@ describe("ton logement", () => {
     expect(calls.some((c) => c.url === "/api/home/refresh" && c.init?.method === "POST")).toBe(true);
     expect(text()).toContain("garde l'extraction du 24/10/2026");
     expect(text()).toContain("198 000 €");
+  });
+
+  it("never offers the estimated home (nor crypto or a loan line) as a goal's account", () => {
+    const line = (id: number, name: string, kind: string) => ({ id, name, kind, balance_cents: 100 });
+    const accounts = [line(3, "Livret A", "livret_a"), line(-1_000_000_000, "Logement (estimation DVF)", "real_estate"), line(0, "Cryptos", "crypto"), line(-2, "Prêt", "credit")];
+    expect(goalAccounts(accounts).map((a) => a.name)).toEqual(["Livret A"]);
   });
 });

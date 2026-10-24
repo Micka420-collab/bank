@@ -53,7 +53,10 @@ def save(body: HomeIn, request: Request, ctx: AuthDep, db: DbDep, today: TodayDe
     result = None
     # Commune nouvelle ou trimestre passé : l'extraction suit, avec ton accord (mêmes bornes que le bouton).
     if consents.granted(db, svc.CONSENT) and not svc.view(db, today)["data"]["fresh"]:
-        result = svc.refresh(db, today=today, now=utcnow(), fetch=_fetch(request), actor=ctx.user.username)
+        if request.app.state.limiters["home"].hit(client_ip(request)):
+            result = svc.refresh(db, today=today, now=utcnow(), fetch=_fetch(request), actor=ctx.user.username)
+        else:
+            result = {"status": "capped", "message": "Logement enregistré ; l'extraction attend quelques minutes."}
     return {"result": result, "view": svc.view(db, today)}
 
 

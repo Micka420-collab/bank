@@ -509,9 +509,11 @@ def build_dossier(db: Session, today: date, privacy: str = "redacted") -> dict[s
     sim = json.loads(sim_row.result) if sim_row else None
     household = analytics.load_profile(db) or {}
     outside = values.get("outside_assets") or []
-    if any(b.kind == home_value.HOME_KIND for b in balances):
-        # Le logement estimé (DVF) est déjà dans la valeur nette : l'immobilier déclaré ne s'ajoute pas en double.
-        outside = [a for a in outside if a.get("kind") != "immobilier"]
+    home = next((b for b in balances if b.kind == home_value.HOME_KIND), None)
+    if home is not None:
+        # Le logement estimé (DVF) est déjà dans la valeur nette : déclaré aussi, il ne s'ajoute pas en double ; un
+        # autre bien (locatif, SCPI) reste compté.
+        outside = home_value.without_declared_home(outside, home.balance_cents)
     last_import = db.scalar(select(func.max(ImportBatch.created_at)))
     last_sync = db.scalar(select(func.max(BankConnection.last_sync_at)))
     names = {r.slug: r.name for r in db.scalars(select(Category))}

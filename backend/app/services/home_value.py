@@ -17,6 +17,7 @@ from urllib.parse import urlencode
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.db import write_lock
 from app.domain import dvf
 from app.domain import loans as loans_domain
 from app.domain.recurring import add_months
@@ -36,6 +37,9 @@ HOME_LINE = "Logement (estimation DVF)"
 HOME_KIND = "real_estate"
 HOME_LINE_ID = -1_000_000_000  # ligne à part du patrimoine : jamais un vrai compte (> 0) ni un prêt (−id)
 SEARCH_RE = re.compile(r"^(?:\d{5}|[^\W\d_][\w'’ -]{1,59})$")
+# L'immobilier déclaré à l'agent qui est sans doute ton logement… ou sans doute un autre bien.
+HOME_WORDS = re.compile(r"r[ée]sidence principale|\brp\b|logement|domicile|chez moi|maison|appart", re.I)
+OTHER_WORDS = re.compile(r"locati|location|lou[ée]|scpi|lmnp|\bsci\b|investissement|secondaire|parking|garage", re.I)
 
 Fetch = Callable[[str], bytes | None]  # None : pas de fichier pour cette année (404)
 
@@ -126,10 +130,14 @@ def save_profile(
 
 
 def remove_profile(db: Session, *, actor: str) -> None:
-    for model in (HomeProfile, DvfCache):
-        row = db.get(model, 1)
-        if row is not None:
-            db.delete(row)
+    """Ta description et les ventes de ta commune s'effacent ; le compteur d'essais du jour reste, sinon effacer
+    puis redécrire relancerait un téléchargement sans fin."""
+    row = db.get(HomeProfile, 1)
+    if row is not None:
+        db.delete(row)
+    cache = db.get(DvfCache, 1)
+    if cache is not None:
+        cache.data = cache.result = cache.fetched_at = cache.quarter = cache.last_error = None
     db.flush()
     audit.record(db, actor, "home.profile_removed")
 
@@ -171,13 +179,18 @@ def download(code: str, today: date, fetch: Fetch) -> tuple[list[dvf.Sale], list
 
 def refresh(db: Session, *, today: date, now: datetime, fetch: Fetch, actor: str) -> dict[str, Any]:
     """Télécharge les ventes si le cache n'est pas celui de ta commune ou date d'un trimestre passé ; sinon ne fait
-    rien (même règle pour le bouton et pour la tâche de fond). Trois essais par jour au plus."""
+    rien (même règle pour le bouton et pour la tâche de fond). Trois essais par jour au plus.
+
+    L'essai est compté et validé avant le réseau, et le téléchargement se fait hors transaction : une source lente
+    ne garde pas le verrou d'écriture (connexions, journal, imports attendraient), un fichier piégé ne remet pas le
+    compteur à zéro."""
     consents.require(db, CONSENT)
     prof = profile(db)
     if not prof:
         raise HomeValueError("Décris d'abord ton logement", 409)
     code = str(prof["code"])
-    row = db.get(DvfCache, 1)
+    write_lock(db)
+    row = db.get(DvfCache, 1, populate_existing=True)
     if row is None:
         row = DvfCache(id=1, attempts=0)
         db.add(row)
@@ -194,15 +207,24 @@ def refresh(db: Session, *, today: date, now: datetime, fetch: Fetch, actor: str
         return {"status": "capped", "message": f"{MAX_ATTEMPTS_PER_DAY} essais aujourd'hui : réessaie demain."}
     row.attempts = (row.attempts or 0) + 1
     row.last_attempt_at = now
+    db.commit()
     try:
         sales, years = download(code, today, fetch)
     except (netfetch.FetchError, dvf.DvfError) as exc:
-        row.last_error = str(exc)[:300]
+        error: Exception | None = exc
+    else:
+        error = None
+    write_lock(db)
+    db.expire_all()  # relu sous le verrou : ta description a pu changer pendant le téléchargement
+    row = db.get(DvfCache, 1)
+    if row is None or profile(db).get("code") != code:
+        return {"status": "failed", "message": "Ta description a changé pendant le téléchargement : réessaie."}
+    if error is not None:
+        row.last_error = str(error)[:300]
         db.flush()
         audit.record(db, actor, "home.dvf_refresh", ok=False)
-        kept = cached_code == code and row.fetched_at is not None
-        message = f"Téléchargement DVF en échec : {exc}."
-        if kept and row.fetched_at is not None:
+        message = f"Téléchargement DVF en échec : {error}."
+        if cached_code == code and row.fetched_at is not None:
             message += f" L'estimation garde l'extraction du {row.fetched_at.strftime('%d/%m/%Y')}."
         return {"status": "failed", "message": message}
     row.data = json.dumps({"code": code, "years": years, "sales": [s.to_row() for s in sales]}, separators=(",", ":"))
@@ -261,12 +283,15 @@ def wealth_line(db: Session) -> AccountBalance | None:
 
 
 def home_loans(db: Session, today: date) -> list[dict[str, Any]]:
-    """Les prêts immobiliers suivis, avec le restant dû tel que le patrimoine le compte : le solde du compte
-    crédit relié s'il y en a un, sinon le tableau d'amortissement."""
+    """Les prêts immobiliers suivis, avec le restant dû tel que le patrimoine le compte (même règle
+    qu'analytics.account_balances) : le solde du compte crédit relié s'il est actif, le tableau d'amortissement s'il
+    n'y a pas de compte. Relié à un compte archivé, le prêt ne compte nulle part : il ne compte pas ici non plus."""
     out = []
     for loan in db.scalars(select(Loan).where(Loan.kind == "immobilier").order_by(Loan.id)):
-        account = db.get(Account, loan.account_id) if loan.account_id else None
-        if account is not None and not account.archived:
+        if loan.account_id is not None:
+            account = db.get(Account, loan.account_id)
+            if account is None or account.archived:
+                continue
             remaining = max(0, -account.balance_cents)
         else:
             dom = loans_domain.Loan(
@@ -281,6 +306,27 @@ def home_loans(db: Session, today: date) -> list[dict[str, Any]]:
             remaining = loans_domain.position(loans_domain.schedule(dom), today).remaining_cents
         out.append({"id": loan.id, "name": loan.name, "remaining_cents": remaining})
     return out
+
+
+def without_declared_home(assets: list[dict[str, Any]], median_cents: int) -> list[dict[str, Any]]:
+    """Les placements déclarés à l'agent, moins ton logement s'il y figure déjà (l'estimation DVF le compte) : une
+    seule ligne « immobilier », celle dont le libellé le dit (« résidence principale », « maison »…, jamais
+    « locatif » ni « SCPI ») ou dont la valeur tombe à ± 30 % de l'estimation, la plus proche. Un locatif ou des
+    SCPI ne sont pas ton logement : ils restent comptés."""
+
+    def plausible(asset: dict[str, Any]) -> bool:
+        label = str(asset.get("label") or "")
+        if asset.get("kind") != "immobilier" or OTHER_WORDS.search(label):
+            return False
+        return (
+            bool(HOME_WORDS.search(label)) or abs(int(asset.get("value_cents", 0)) - median_cents) <= 0.3 * median_cents
+        )
+
+    candidates = [i for i, a in enumerate(assets) if plausible(a)]
+    if not candidates:
+        return list(assets)
+    drop = min(candidates, key=lambda i: abs(int(assets[i].get("value_cents", 0)) - median_cents))
+    return [a for i, a in enumerate(assets) if i != drop]
 
 
 # ------------------------------------------------------------------ recherche de commune

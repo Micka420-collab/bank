@@ -175,6 +175,9 @@ export function Wealth({ retraite = false }: { retraite?: boolean }) {
   );
 }
 
+// Un objectif suit un vrai compte : ni la ligne crypto (id 0), ni un prêt (−id), ni le logement estimé (DVF).
+export const goalAccounts = (accounts: WealthResponse["accounts"]) => accounts.filter((a) => a.id > 0);
+
 function Goals({ goals, accounts, onChange }: { goals: WealthResponse["goals"]; accounts: WealthResponse["accounts"]; onChange: () => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -250,7 +253,7 @@ function Goals({ goals, accounts, onChange }: { goals: WealthResponse["goals"]; 
             <Field label="Compte suivi">
               <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
                 <option value="">Aucun</option>
-                {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                {goalAccounts(accounts).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </Field>
           </div>
