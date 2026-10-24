@@ -39,6 +39,8 @@ DEFAULTS: dict[str, Any] = {
     # L'année qui vient : pics ajoutés à la main et pics détectés que tu as écartés.
     "year_spikes": {"custom": [], "ignored": []},
     "web_search_counter": {"day": "", "count": 0},  # recherches web du jour (plafond réglable)
+    # Assistant de connexion bancaire : dernier résultat de vérification par agrégateur (jamais un secret).
+    "bank_setup_check": {},
 }
 
 

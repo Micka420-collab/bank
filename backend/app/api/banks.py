@@ -12,10 +12,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.api.deps import AuthDep, DbDep, SettingsDep, TodayDep, client_ip
-from app.models import BankConnection, ConnectionStatus
+from app.models import BankConnection, ConnectionStatus, Provider
 from app.providers.enablebanking import EnableBankingClient, ProviderError
 from app.security import audit
-from app.services.bank_sync import BankFlowError, complete_connection, start_connection, sync_connection
+from app.services.bank_sync import (
+    BankFlowError,
+    complete_connection,
+    enablebanking_only,
+    start_connection,
+    sync_connection,
+)
 
 router = APIRouter(prefix="/api/banks", tags=["banks"])
 
@@ -41,7 +47,7 @@ def _client(request: Request) -> EnableBankingClient:
     if client is None:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
-            "Enable Banking non configuré (BANK_ENABLEBANKING_APP_ID / _KEY_FILE)",
+            "Enable Banking n'est pas encore configuré : suis l'assistant dans Connecteurs › Banques",
         )
     return client
 
@@ -49,7 +55,9 @@ def _client(request: Request) -> EnableBankingClient:
 @router.get("")
 def list_connections(request: Request, _: AuthDep, db: DbDep) -> dict[str, object]:
     conns = db.scalars(
-        select(BankConnection).where(BankConnection.status != ConnectionStatus.PENDING).order_by(BankConnection.id)
+        select(BankConnection)
+        .where(BankConnection.status != ConnectionStatus.PENDING, enablebanking_only())  # Powens : /api/banks/powens
+        .order_by(BankConnection.id)
     )
     return {
         "enabled": request.app.state.enablebanking is not None,
@@ -120,7 +128,7 @@ def callback(
 @router.post("/{connection_id}/sync")
 def sync(connection_id: int, request: Request, ctx: AuthDep, db: DbDep, today: TodayDep) -> dict[str, object]:
     conn = db.get(BankConnection, connection_id)
-    if conn is None:
+    if conn is None or conn.provider == Provider.POWENS:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Connexion introuvable")
     report = sync_connection(db, _client(request), conn, today)
     return {
@@ -135,7 +143,7 @@ def sync(connection_id: int, request: Request, ctx: AuthDep, db: DbDep, today: T
 @router.delete("/{connection_id}", status_code=204)
 def revoke(connection_id: int, request: Request, ctx: AuthDep, db: DbDep) -> None:
     conn = db.get(BankConnection, connection_id)
-    if conn is None:
+    if conn is None or conn.provider == Provider.POWENS:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Connexion introuvable")
     if conn.session_id and request.app.state.enablebanking is not None:
         # révocation côté banque au mieux ; localement on coupe quoi qu'il arrive

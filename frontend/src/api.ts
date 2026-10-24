@@ -861,6 +861,43 @@ export type Connection = {
   accounts: string[];
 };
 
+/** Assistant Enable Banking : jamais la clé, seulement un indice de l'identifiant et l'empreinte de la clé publique. */
+export type BankSetupIssue = { code: "bad_key" | "unreachable" | "redirect" | "inactive" | "sandbox"; message: string };
+export type BankSetupStatus = {
+  configured: boolean;
+  source: "server" | "app" | null;
+  app_id_hint: string | null;
+  key_fingerprint: string | null;
+  updated_at: string | null;
+  redirect_url: string;
+  console_url: string;
+  check: { ok: boolean; issues: BankSetupIssue[]; app_name: string | null; environment: string | null; checked_at: string } | null;
+  connections: number;
+};
+
+/** Powens (sur contrat) : jamais le secret ni le jeton, seulement le domaine, un indice du client_id et une empreinte. */
+export type PowensIssue = { code: "bad_key" | "unreachable" | "sandbox"; message: string };
+export type PowensConnection = {
+  id: number;
+  aspsp_name: string;
+  status: "active" | "expired" | "revoked" | "error" | "pending";
+  last_sync_at: string | null;
+  last_error: string | null;
+  accounts: string[];
+};
+export type PowensStatus = {
+  configured: boolean;
+  domain: string | null;
+  client_id_hint: string | null;
+  secret_fingerprint: string | null;
+  sandbox: boolean;
+  updated_at: string | null;
+  redirect_url: string;
+  console_url: string;
+  check: { ok: boolean; issues: PowensIssue[]; environment: string; checked_at: string } | null;
+  connections: PowensConnection[];
+};
+
 // ------------------------------------------------------------------ agent IA (HERMÈS) et « Ma situation »
 export type QuestionKind = "choice" | "multi" | "money" | "int" | "text" | "list";
 

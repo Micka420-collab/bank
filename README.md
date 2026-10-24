@@ -164,17 +164,64 @@ Ouvre l'adresse, crée ton accès avec le jeton d'installation, puis **active la
 GoCardless Bank Account Data n'accepte plus de nouveaux comptes depuis juillet 2025. Enable Banking propose un
 **mode restreint gratuit** réservé à l'usage personnel : ton application ne voit que les comptes que tu as liés toi-même.
 
-1. Crée un compte sur le Control Panel Enable Banking et enregistre une application **Production**.
-2. Redirect URL : `https://bank.nimbus.lan/api/banks/callback` (exactement ton `BANK_PUBLIC_URL` + `/api/banks/callback`).
-3. Télécharge la clé privée générée et place-la dans `secrets/enablebanking.pem` (`chmod 640`, groupe 10010).
-4. Clique « Activate by linking accounts » et lie tes comptes : l'application passe en mode restreint actif.
-5. Dans `.env` : `BANK_ENABLEBANKING_APP_ID=<id>` et décommente `BANK_ENABLEBANKING_KEY_FILE`.
-6. `docker compose up -d` puis, à la première ouverture, l'étape « Connecte ta banque » (ou plus tard :
-   Connecteurs → Banques → Ajouter une banque).
+Tout se fait dans l'application, sans `.env` à éditer : à la première ouverture (étape « Connecte ta banque ») ou
+dans Connecteurs → Banques, un assistant en six étapes te guide.
+
+1. **Créer l'application** sur le Control Panel Enable Banking, environnement **Production**, clé « Generate in the
+   browser » : un fichier `<identifiant>.pem` se télécharge.
+2. **Adresse de retour** : Bank affiche l'adresse à coller dans « Allowed redirect URLs » (bouton Copier), exactement
+   ton `BANK_PUBLIC_URL` + `/api/banks/callback`.
+3. **Ta clé** : dépose le `.pem` (l'identifiant se remplit d'après le nom du fichier), confirme avec ton mot de passe
+   Bank. La clé est chiffrée en base et n'est plus jamais affichée : seuls un indice de l'identifiant et l'empreinte
+   de la clé publique ressortent.
+4. **Vérification** : Bank signe une requête (`GET /application`) et te dit quoi corriger : clé qui ne correspond pas
+   (jamais gardée), adresse de retour absente, Enable Banking injoignable, application de test (Sandbox).
+5. **Activation** : clique « Activate by linking accounts » et lie tes comptes ; l'application passe en mode
+   restreint actif, Bank le vérifie.
+6. **Ta banque** : choisis-la, donne ton accord chez elle, reviens dans Bank.
+
+Le client est remplacé à chaud : ni redémarrage, ni attente, la synchronisation automatique prend la nouvelle clé.
+« Changer de clé » et « Retirer » (mot de passe exigé) restent sous l'assistant. Tes banques sont liées à
+l'application qui les a connectées : changer seulement la clé les garde, changer d'application demande de les couper
+d'abord.
+
+Configuration par le serveur, toujours possible : `BANK_ENABLEBANKING_APP_ID=<id>` dans `.env` et la clé dans
+`secrets/enablebanking.pem` (`chmod 640`, groupe 10010, `BANK_ENABLEBANKING_KEY_FILE` décommenté). Elle **prime** sur
+la saisie dans l'application : l'assistant l'affiche « configurée par le serveur », la vérifie, mais ne la modifie pas.
 
 Synchronisation automatique toutes les 8 h (la DSP2 limite à 4 accès non sollicités par jour). Le consentement
 dure 90 jours ; Bank t'indique quand le renouveler. Un compte déjà importé en CSV est retrouvé par son IBAN
 (index aveugle) : l'historique est fusionné et les doublons rapprochés, pas recréés.
+
+### Powens (sur contrat)
+
+Powens (ex-Budget Insight) couvre plus de types de comptes : livrets, assurance-vie, PEA, PER et crédits. Son API de
+production n'est ouverte qu'aux clients **sous contrat** ; le bac à sable gratuit (domaine `…-sandbox`) ne montre que
+la banque de démonstration. Le connecteur est donc **prêt à brancher** : Connecteurs → Banques → « Configurer Powens ».
+
+1. **Ton contrat** : dans la console Powens, ton domaine (`monappli`) et une application cliente (client_id, secret).
+2. **Adresse de retour** : ajoute `BANK_PUBLIC_URL` + `/api/banks/powens/callback` aux adresses autorisées (Bank ne
+   peut pas le vérifier pour toi).
+3. **Identifiants** : domaine, client_id et secret, avec ton mot de passe Bank. Bank crée son utilisateur Powens
+   (`POST /auth/init`) ; secret et jeton sont chiffrés, seuls le domaine, un indice et une empreinte ressortent. Un
+   secret refusé n'est jamais gardé ; changer seulement le secret garde tes banques (`POST /auth/renew`).
+4. **Vérification** : un appel avec le jeton ; le bac à sable est signalé.
+5. **Tes banques** : la page de Powens (webview) s'ouvre, tu choisis ta banque, t'authentifies chez elle et coches les
+   comptes à suivre ; Bank ne voit jamais tes identifiants bancaires.
+
+Synchronisation au même rythme qu'Enable Banking : comptes et soldes, opérations dédoublonnées (identifiant Powens,
+puis empreinte), compte déjà importé retrouvé par son IBAN, opérations relues sur 45 jours (une opération longtemps « à
+venir » n'est pas perdue). Un compte déjà suivi par Enable Banking n'est pas repris par Powens (et inversement) : ses
+opérations n'arrivent pas deux fois. Les cartes à débit différé sont ignorées (leurs opérations
+arrivent sur le compte courant) ; un crédit devient un compte « crédit » à solde négatif, à relier à un prêt dans
+Crédits (l'échéancier Powens n'est pas importé) ; pour l'assurance-vie et le PEA, Bank garde le solde (ou la
+valorisation totale des supports), pas le détail ligne à ligne. Quand ta banque redemande l'authentification forte
+(`SCARequired`, `decoupled`, mot de passe expiré…), la connexion passe « à reconnecter » et une carte te le rappelle :
+« Reconnecter » rouvre la webview sur la même connexion. Une tentative annulée ne laisse rien ; changer d'application
+Powens efface l'ancien utilisateur chez Powens (jamais d'utilisateur orphelin avec tes accès bancaires).
+
+**NON VÉRIFIÉ** contre l'API réelle (ni production ni bac à sable, faute de contrat) : écrit d'après docs.powens.com
+et testé contre un faux Powens fidèle aux charges documentées. Les points à confirmer sont listés dans SECURITY.md.
 
 ## Importer des relevés
 
@@ -585,7 +632,7 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 1039 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+Qualité au moment de la livraison : 1057 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
 aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, scénarios adverses du
 banc d'essai crypto de Minara rejoués contre le pilote automatique, demandes simultanées qui ne passent jamais
@@ -600,7 +647,7 @@ les paliers de la LFSS 2026, lien de partage ouvert deux fois en même temps, va
 synthétique, clés de plateforme face à de fausses
 plateformes qui vérifient chaque signature et refusent les droits trop larges, pilote vs consigne sur un calendrier
 de référence — fins de mois, heures d'été et d'hiver, pauses, refus —, alertes de cours franchies une seule fois par
-deux relèves simultanées), couverture 92 %, 174 tests front (parcours de première ouverture,
+deux relèves simultanées), couverture 92 %, 178 tests front (parcours de première ouverture,
 coffre et partage d'un papier, démarches, opportunités, veille, assistant, chat interactif et réponse en direct,
 notifications sur l'appareil, plan B, crédits, retraite, logement, sauvegardes, boîte mail, crypto et plateformes reliées,
 alertes de cours, pilote, pilote vs consigne, déclarations, corrélations, année qui vient, passkeys, erreurs qui

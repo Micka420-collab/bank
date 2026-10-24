@@ -44,6 +44,7 @@ class Provider(StrEnum):
     MANUAL = "manual"
     FILE = "file"
     ENABLEBANKING = "enablebanking"
+    POWENS = "powens"
 
 
 class CategoryKind(StrEnum):
@@ -157,8 +158,33 @@ class BankConnection(Base):
     last_sync_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     last_error: Mapped[str | None] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    # Agrégateur de la connexion : NULL = Enable Banking (connexions d'avant Powens), « powens » sinon. Pour Powens,
+    # session_id porte l'identifiant de connexion Powens (chiffré comme le reste).
+    provider: Mapped[str | None] = mapped_column(String(24))
 
     accounts: Mapped[list[Account]] = relationship(back_populates="connection")
+
+
+class ProviderCredential(Base):
+    """Identifiants d'un agrégateur bancaire saisis dans l'assistant de connexion (Enable Banking : identifiant
+    d'application et clé privée RSA). Chiffrés ; l'API n'en rend qu'un indice et l'empreinte de la clé publique,
+    jamais la clé ; ni l'export ni le journal ne les contiennent. Une configuration du serveur (.env) prime."""
+
+    __tablename__ = "bank_provider_credentials"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    provider: Mapped[str] = mapped_column(String(24), unique=True)  # enablebanking | powens
+    client_id: Mapped[str] = mapped_column(EncryptedText("bank_provider.client_id"))
+    secret: Mapped[str] = mapped_column(EncryptedText("bank_provider.secret"))
+    client_hint: Mapped[str] = mapped_column(String(24))  # « …9f3a2c » : reconnaître l'application
+    secret_fingerprint: Mapped[str] = mapped_column(String(64))  # empreinte SHA-256 de la clé publique
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    # Powens seulement : le domaine de l'API (« monappli » pour monappli.biapi.pro), le jeton permanent de
+    # l'utilisateur Powens de Bank et son identifiant (pour renouveler le jeton sans recréer l'utilisateur).
+    domain: Mapped[str | None] = mapped_column(String(80))
+    user_token: Mapped[str | None] = mapped_column(EncryptedText("bank_provider.user_token"))
+    user_ref: Mapped[str | None] = mapped_column(EncryptedText("bank_provider.user_ref"))
 
 
 class Account(Base):

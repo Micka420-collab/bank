@@ -20,6 +20,13 @@ import { applyTheme, readTheme } from "./theme";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const ASPSPS = ["Crédit Agricole Centre Loire", "Crédit Agricole Val de France", "BNP Paribas", "Boursorama", "Caisse d'Epargne Loire Centre", "Banque Delubac"];
+// Assistant Enable Banking : prêt (application vérifiée) ou rien de configuré.
+const SETUP_READY = {
+  configured: true, source: "server", app_id_hint: "…3b4a59", key_fingerprint: "ab12 cd34 ef56 7890", updated_at: null,
+  redirect_url: "https://bank.example/api/banks/callback", console_url: "https://enablebanking.com/cp/applications",
+  check: { ok: true, issues: [], app_name: "Bank", environment: "PRODUCTION", checked_at: "2026-10-24T10:00:00Z" }, connections: 0,
+};
+const SETUP_EMPTY = { ...SETUP_READY, configured: false, source: null, app_id_hint: null, key_fingerprint: null, check: null };
 const CA = BANK_BRANDS.find((b) => b.id === "ca")!;
 
 type Call = { url: string; init?: RequestInit };
@@ -128,6 +135,7 @@ describe("première ouverture", () => {
     mockApi({
       "/api/setup": () => ({ ok: true }),
       "/api/auth/login": () => ({ mfa_required: false }),
+      "/api/banks/setup": () => SETUP_READY,
       "/api/banks/aspsps": () => ASPSPS.map((name) => ({ name })),
       "/api/banks": () => ({ enabled: true, connections: [] }),
       "/api/consents/watch": () => ({ purpose: "watch", granted: false }),
@@ -188,6 +196,7 @@ describe("première ouverture", () => {
     mockApi({
       "/api/setup/status": () => ({ needs_setup: false }),
       "/api/auth/me": () => ({ username: "micka", totp_enabled: false, recovery_codes_left: 0, session_expires_at: "2026-10-22T10:00:00Z" }),
+      "/api/banks/setup": () => SETUP_EMPTY,
       "/api/banks": () => ({ enabled: false, connections: [] }),
       "/api/consents": () => [],
       "/api/opportunities/top": () => ({ opportunities: [], value: {} }),
@@ -206,11 +215,12 @@ describe("première ouverture", () => {
     window.location.hash = "";
   });
 
-  it("explains when the server has no bank sync and still lets you continue", async () => {
-    mockApi({ "/api/banks": () => ({ enabled: false, connections: [] }) });
+  it("guides through the Enable Banking setup when nothing is configured, and still lets you continue", async () => {
+    mockApi({ "/api/banks/setup": () => SETUP_EMPTY, "/api/banks": () => ({ enabled: false, connections: [] }) });
     await render(<ToastProvider><Onboarding stage="bank" onDone={() => undefined} /></ToastProvider>);
     await settle();
-    expect(host.textContent).toContain("n'est pas configurée sur ce serveur");
+    expect(host.textContent).toContain("Crée ton application Enable Banking");
+    expect(host.querySelector(".wizard-steps li.is-active")?.textContent).toContain("Créer l'application");
     expect(host.querySelector(".bank-grid")).toBeNull();
     expect(button("Continuer sans connexion")).not.toBeNull();
     expect(calls.some((c) => c.url.startsWith("/api/banks/aspsps"))).toBe(false);

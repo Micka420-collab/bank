@@ -3,26 +3,34 @@
 Mode « restreint » gratuit : l'application ne voit que les comptes que tu as liés toi-même dans le
 Control Panel — exactement le cas d'usage perso. Auth : JWT RS256 signé avec la clé privée de
 l'application (kid = application id), durée de vie max 24 h côté API ; on émet des jetons d'1 h.
+
+Le réseau passe par netfetch (https, hôte public vérifié puis épinglé, aucune redirection suivie, réponse bornée) ;
+un client httpx déjà réglé sur l'API (``http``) reste accepté pour les tests du protocole.
 """
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 import jwt
 
 from app.domain.money import AmountError, decimal_to_cents
 from app.importers.base import ParsedTransaction
+from app.security import netfetch
 
 API_ISS = "enablebanking.com"
 API_AUD = "api.enablebanking.com"
 JWT_TTL = 3600
 MAX_PAGES = 200
+MAX_BODY = 8_000_000  # une page d'opérations tient en quelques centaines de Ko
+SECONDS = 30.0
 # Préférence de solde : disponible intermédiaire > disponible clôture > comptable intermédiaire > clôture…
 BALANCE_PREFERENCE = ("ITAV", "CLAV", "ITBD", "CLBD", "XPCD", "OPBD", "PRCD")
 
@@ -63,12 +71,18 @@ class EnableBankingClient:
         http: httpx.Client | None = None,
         clock: Callable[[], float] = time.time,
         sleep: Callable[[float], None] = time.sleep,
+        *,
+        fetch_http: httpx.Client | None = None,
+        resolver: netfetch.Resolver | None = None,
     ) -> None:
         self.app_id = app_id
         self._key = private_key_pem
         self._clock = clock
         self._sleep = sleep
-        self._http = http or httpx.Client(base_url=base_url, timeout=httpx.Timeout(20.0, connect=10.0))
+        self._base = base_url.rstrip("/")
+        self._http = http  # client direct (tests du protocole) ; sinon netfetch
+        self._fetch_http = fetch_http  # transport de netfetch (remplaçable en test)
+        self._resolver = resolver
         self._token: str | None = None
         self._token_exp = 0.0
 
@@ -86,26 +100,66 @@ class EnableBankingClient:
             self._token_exp = iat + JWT_TTL
         return self._token
 
-    def _request(self, method: str, path: str, **kwargs: Any) -> Any:
+    def _send(self, method: str, path: str, params: dict[str, str] | None, payload: Any) -> tuple[int, str, bytes]:
+        """Un aller-retour : code HTTP, Retry-After, corps. Une panne réseau lève _NetworkError."""
+        headers = {"Authorization": f"Bearer {self._jwt()}", "Accept": "application/json"}
+        if self._http is not None:
+            try:
+                resp = self._http.request(method, path, headers=headers, params=params, json=payload)
+            except httpx.TransportError as exc:
+                raise _NetworkError(str(exc)) from exc
+            return resp.status_code, resp.headers.get("retry-after", ""), resp.content
+        url = f"{self._base}{path}" + (f"?{urlencode(params)}" if params else "")
+        body = None
+        if payload is not None:
+            body = json.dumps(payload, separators=(",", ":")).encode()
+            headers["Content-Type"] = "application/json"
+        try:
+            r = netfetch.request_bytes(
+                method,
+                url,
+                body,
+                headers=headers,
+                http=self._fetch_http,
+                resolver=self._resolver,
+                max_bytes=MAX_BODY,
+                seconds=SECONDS,
+            )
+        except netfetch.FetchError as exc:
+            raise _NetworkError(str(exc)) from exc
+        return r.status, "", r.body
+
+    def _request(self, method: str, path: str, *, params: dict[str, str] | None = None, json: Any = None) -> Any:
         """Requête avec 3 tentatives sur 429/5xx/erreur réseau (back-off exponentiel, Retry-After respecté)."""
         last: Exception | None = None
         for attempt in range(3):
             try:
-                resp = self._http.request(method, path, headers={"Authorization": f"Bearer {self._jwt()}"}, **kwargs)
-            except httpx.TransportError as exc:
+                code, retry_after, content = self._send(method, path, params, json)
+            except _NetworkError as exc:
                 last = exc
                 self._sleep(2**attempt)
                 continue
-            if resp.status_code == 429 or resp.status_code >= 500:
-                retry_after = resp.headers.get("retry-after", "")
+            if code == 429 or code >= 500:
                 delay = float(retry_after) if retry_after.isdigit() else 2.0**attempt
-                last = ProviderError(f"Enable Banking indisponible ({resp.status_code})", resp.status_code)
+                last = ProviderError(f"Enable Banking indisponible ({code})", code)
                 self._sleep(min(delay, 30.0))
                 continue
-            if resp.status_code >= 400:
-                raise ProviderError(_safe_error(resp), resp.status_code)
-            return resp.json() if resp.content else {}
+            if code >= 400:
+                raise ProviderError(_safe_error(code, content), code)
+            if not content:
+                return {}
+            try:
+                return _json_loads(content)
+            except ValueError as exc:
+                raise ProviderError("Réponse illisible d'Enable Banking") from exc
         raise ProviderError(str(last) if last else "échec réseau")
+
+    # -------------------------------------------------------------- application
+    def get_application(self) -> dict[str, Any]:
+        """L'application elle-même (nom, environnement, adresses de retour, active ou non) : la vérification de
+        l'assistant, qui prouve aussi que la clé signe bien pour cet identifiant."""
+        data = self._request("GET", "/application")
+        return data if isinstance(data, dict) else {}
 
     # -------------------------------------------------------------- endpoints
     def list_aspsps(self, country: str = "FR") -> list[dict[str, Any]]:
@@ -177,13 +231,21 @@ class EnableBankingClient:
         raise ProviderError("Pagination anormalement longue — interrompue")
 
 
-def _safe_error(resp: httpx.Response) -> str:
+class _NetworkError(Exception):
+    """Panne réseau (rejouée), distincte d'un refus de l'API."""
+
+
+def _json_loads(content: bytes) -> Any:
+    return json.loads(content)
+
+
+def _safe_error(status: int, content: bytes) -> str:
     try:
-        body = resp.json()
-        msg = body.get("message") or body.get("error") or ""
+        body = _json_loads(content) if content else {}
+        msg = (body.get("message") or body.get("error") or "") if isinstance(body, dict) else ""
     except ValueError:
         msg = ""
-    return f"Enable Banking a refusé la requête ({resp.status_code}) {str(msg)[:160]}".strip()
+    return f"Enable Banking a refusé la requête ({status}) {str(msg)[:160]}".strip()
 
 
 def _parse_dt(value: Any) -> datetime | None:

@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db import utcnow
@@ -206,8 +206,23 @@ def build_context(db: Session, today: date) -> Context:
         goals=goals,
         totp_enabled=bool(user.totp_enabled) if user else True,
         connections=[
-            ConnectionInfo(c.id, c.aspsp_name, c.valid_until.date() if c.valid_until else None)
-            for c in db.scalars(select(BankConnection).where(BankConnection.status == ConnectionStatus.ACTIVE))
+            ConnectionInfo(
+                c.id,
+                c.aspsp_name,
+                c.valid_until.date() if c.valid_until else None,
+                # Powens : l'état de la connexion dit quand l'authentification forte est à refaire (SCARequired…)
+                reconnect=(c.last_error or "Ta banque demande une nouvelle authentification.")
+                if c.status == ConnectionStatus.EXPIRED
+                else None,
+            )
+            for c in db.scalars(
+                select(BankConnection).where(
+                    or_(
+                        BankConnection.status == ConnectionStatus.ACTIVE,
+                        and_(BankConnection.status == ConnectionStatus.EXPIRED, BankConnection.provider == "powens"),
+                    )
+                )
+            )
         ],
         energy_connected=energy_conn is not None,
         energy_days_since_data=(today - last_energy).days if last_energy else None,

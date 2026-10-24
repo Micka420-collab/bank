@@ -5,6 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import {
   api,
   useApi,
+  type BankSetupStatus,
   type Connection,
   type EnergyStatus,
   type OfficialFact,
@@ -12,6 +13,8 @@ import {
   type Portal,
 } from "../api";
 import { BankConnect, BankMark } from "../components/BankConnect";
+import { BankSetup, setupReady } from "../components/BankSetup";
+import { PowensSetup } from "../components/PowensSetup";
 import { Icon } from "../components/Icon";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useCelebrate, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
@@ -21,7 +24,7 @@ import { MailSettings } from "./MailSettings";
 import { SearchSettings } from "./SearchSettings";
 import { Planning } from "./Planning";
 
-export function Connecteurs({ bankResult }: { bankResult: string | null }) {
+export function Connecteurs({ bankResult, bankProvider = null }: { bankResult: string | null; bankProvider?: string | null }) {
   return (
     <>
       <div className="page-head">
@@ -30,7 +33,7 @@ export function Connecteurs({ bankResult }: { bankResult: string | null }) {
           <p className="muted">Branche tes sources en quelques clics : plus Bank en sait, plus ses conseils sont justes.</p>
         </div>
       </div>
-      <Banks result={bankResult} />
+      <Banks result={bankResult} provider={bankProvider} />
       <Planning />
       <Linky />
       <Etat />
@@ -52,30 +55,41 @@ export function Connecteurs({ bankResult }: { bankResult: string | null }) {
 // ------------------------------------------------------------------ banques (DSP2) en un clic
 const CONNECTION_LABELS: Record<string, string> = { active: "active", expired: "à renouveler", revoked: "coupée", error: "erreur", pending: "en attente" };
 
-export function Banks({ result }: { result: string | null }) {
+export function Banks({ result, provider = null }: { result: string | null; provider?: string | null }) {
   const status = useApi<{ enabled: boolean; connections: Connection[] }>("/api/banks");
   const [aspsps, setAspsps] = useState<string[] | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
+  const [setupOk, setSetupOk] = useState(false);
   const [busy, error, run] = useAsyncAction();
   const [listError, setListError] = useState<string | null>(null);
   const toast = useToast();
   const celebrate = useCelebrate();
 
   useEffect(() => {
-    if (result === "connected") celebrate("done", "Banque connectée. Lance une synchronisation pour récupérer tes opérations.");
-    if (result === "refused") toast("Connexion annulée côté banque.");
-    if (result === "error") toast("La connexion a échoué ou a expiré : recommence.");
+    // le retour de Powens a ses propres messages, dans sa section
+    if (provider !== "powens") {
+      if (result === "connected") celebrate("done", "Banque connectée. Lance une synchronisation pour récupérer tes opérations.");
+      if (result === "refused") toast("Connexion annulée côté banque.");
+      if (result === "error") toast("La connexion a échoué ou a expiré : recommence.");
+    }
     // Le retour de la banque ne se fête qu'une fois : sans ce paramètre, ni un rechargement ni « Retour » ne le rejouent.
     if (result && window.location.hash.includes("?")) {
       window.history.replaceState(null, "", window.location.pathname + window.location.search + window.location.hash.split("?")[0]);
     }
-  }, [result, toast, celebrate]);
+  }, [result, provider, toast, celebrate]);
 
   const connections = status.data?.connections ?? [];
   const enabled = status.data?.enabled ?? false;
-  const wantList = enabled && (showAdd || connections.length === 0);
+  // Sans banque connectée (ou à la demande), l'assistant Enable Banking guide jusqu'au choix de la banque.
+  const wizard = !!status.data && (!enabled || connections.length === 0 || showSetup);
+  const wantList = enabled && (showAdd || (connections.length === 0 && setupOk));
+  const onSetup = (s: BankSetupStatus) => {
+    setSetupOk(setupReady(s));
+    if (s.configured !== enabled) status.reload();
+  };
   useEffect(() => {
     if (wantList && aspsps === null) {
       api<{ name: string }[]>("/api/banks/aspsps?country=FR")
@@ -116,9 +130,14 @@ export function Banks({ result }: { result: string | null }) {
       <div className="section-head">
         <h2 id="banks-title"><Icon name="bank" /> Banques</h2>
         {enabled && connections.length > 0 && (
-          <button type="button" className="btn quiet sm" aria-expanded={showAdd} onClick={() => setShowAdd((v) => !v)}>
-            <Icon name={showAdd ? "close" : "plus"} /> {showAdd ? "Fermer" : "Ajouter une banque"}
-          </button>
+          <span className="actions" style={{ marginTop: 0 }}>
+            <button type="button" className="btn ghost sm" aria-expanded={showSetup} onClick={() => setShowSetup((v) => !v)}>
+              <Icon name={showSetup ? "close" : "lock"} /> Application Enable Banking
+            </button>
+            <button type="button" className="btn quiet sm" aria-expanded={showAdd} onClick={() => setShowAdd((v) => !v)}>
+              <Icon name={showAdd ? "close" : "plus"} /> {showAdd ? "Fermer" : "Ajouter une banque"}
+            </button>
+          </span>
         )}
       </div>
       <p className="section-note">
@@ -128,14 +147,17 @@ export function Banks({ result }: { result: string | null }) {
       </p>
       {status.error && <ErrorNote message={status.error} onRetry={status.reload} />}
       {!status.data && !status.error && <Loading what="Connexions" />}
-      {status.data && !enabled && (
-        <div className="notice">
-          <Icon name="alert" />
-          <span>
-            La synchronisation n'est pas configurée sur le serveur (BANK_ENABLEBANKING_APP_ID et clé privée) : voir le README.
-            En attendant, importe tes relevés CSV / OFX depuis Opérations.
-          </span>
-        </div>
+      {wizard && (
+        <BankSetup
+          onChange={onSetup}
+          chooser={connections.length === 0 ? (
+            listError ? (
+              <ErrorNote message={listError} onRetry={() => { setListError(null); setAspsps(null); }} />
+            ) : (
+              <BankConnect aspsps={aspsps} connections={connections} busy={connecting} failed={failed} onConnect={(n) => void connect(n)} />
+            )
+          ) : undefined}
+        />
       )}
       {connections.length > 0 && (
         <ul className="connected" aria-label="Banques connectées">
@@ -166,9 +188,8 @@ export function Banks({ result }: { result: string | null }) {
           ))}
         </ul>
       )}
-      {wantList && (
-        <div className="stack" style={{ marginTop: connections.length ? "1.25rem" : "0.5rem" }}>
-          {connections.length === 0 && <h3>Connecter une banque</h3>}
+      {wantList && connections.length > 0 && (
+        <div className="stack" style={{ marginTop: "1.25rem" }}>
           {listError ? (
             <ErrorNote message={listError} onRetry={() => { setListError(null); setAspsps(null); }} />
           ) : (
@@ -177,6 +198,7 @@ export function Banks({ result }: { result: string | null }) {
         </div>
       )}
       {error && <p className="error" role="alert" style={{ marginTop: "0.75rem" }}>{error}</p>}
+      <PowensSetup result={provider === "powens" ? result : null} />
     </section>
   );
 }

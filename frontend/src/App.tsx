@@ -114,7 +114,10 @@ export function App() {
   if (phase === "login" || !me) return <Login onDone={() => void refresh()} />;
 
   // L'onboarding continue après la création de l'accès (et au retour de la banque) tant qu'il n'est pas terminé.
-  if (route.page === "bienvenue" || (onboardingWanted() && (route.page === "banques" || route.page === "aujourdhui" || route.page === ""))) {
+  // Le retour de Powens va droit à Connecteurs : l'étape « Connecte ta banque » ne connaît qu'Enable Banking.
+  const bankProvider = route.page === "banques" ? route.params.get("provider") : null;
+  const bankReturn = route.page === "banques" && bankProvider !== "powens";
+  if (route.page === "bienvenue" || (onboardingWanted() && (bankReturn || route.page === "aujourdhui" || route.page === ""))) {
     return (
       <ToastProvider>
         <Onboarding stage="bank" bankResult={route.page === "banques" ? route.params.get("result") : null}
@@ -145,7 +148,7 @@ export function App() {
             : page === "crypto" ? <Crypto />
             : page === "pilote" ? <Pilot />
             : page === "situation" ? <Situation />
-            : page === "connecteurs" ? <Connecteurs bankResult={route.page === "banques" ? route.params.get("result") : null} />
+            : page === "connecteurs" ? <Connecteurs bankResult={route.page === "banques" ? route.params.get("result") : null} bankProvider={bankProvider} />
             : page === "plus" ? <More username={me.username} onLogout={() => void logout()} />
             : page === "reglages" ? <Settings me={me} onMeChange={() => void refresh()} />
             : page === "memoire" ? <Memory />

@@ -7,6 +7,7 @@ import { api, useApi, type Account, type Connection, type ConsentView, type Oppo
 import { money, perPeriod } from "../format";
 import { KIND_LABELS } from "../pages/Settings";
 import { BankConnect, BankMark } from "./BankConnect";
+import { BankSetup, setupReady } from "./BankSetup";
 import { CountUp } from "./CountUp";
 import { Icon } from "./Icon";
 import { Field, Loading, useAsyncAction, useToast } from "./ui";
@@ -192,6 +193,7 @@ function Bank({ result, onLater }: { result: string | null; onLater: () => void 
   const [aspsps, setAspsps] = useState<string[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
+  const [ready, setReady] = useState(false); // assistant Enable Banking terminé : la liste des banques peut se charger
   const [error, setError] = useState<string | null>(
     result === "refused" ? "Connexion annulée côté banque. Tu peux réessayer, ou choisir une autre banque."
       : result === "error" ? "La connexion a échoué ou a expiré : recommence."
@@ -199,10 +201,10 @@ function Bank({ result, onLater }: { result: string | null; onLater: () => void 
   );
 
   useEffect(() => {
-    if (status.data?.enabled && aspsps === null) {
+    if (status.data?.enabled && ready && aspsps === null) {
       api<{ name: string }[]>("/api/banks/aspsps?country=FR").then((list) => setAspsps(list.map((a) => a.name))).catch((e: Error) => setError(e.message));
     }
-  }, [status.data, aspsps]);
+  }, [status.data, ready, aspsps]);
 
   const connect = async (name: string) => {
     setBusy(name);
@@ -229,15 +231,18 @@ function Bank({ result, onLater }: { result: string | null; onLater: () => void 
           ne peut rien faire d'autre que lire. Mise à jour automatique ensuite, pendant 90 jours renouvelables.
         </p>
       </div>
-      {status.data && !status.data.enabled && (
-        <div className="notice warn">
-          <Icon name="alert" />
-          <span>La synchronisation bancaire n'est pas configurée sur ce serveur (voir le README : BANK_ENABLEBANKING_APP_ID et clé privée). Tu peux importer tes relevés CSV / OFX ou commencer avec trois chiffres.</span>
-        </div>
-      )}
       {error && <div className="notice danger" role="alert"><Icon name="alert" /><span>{error}</span></div>}
-      {status.data?.enabled && (
-        <BankConnect aspsps={aspsps} connections={status.data.connections} busy={busy} failed={failed} onConnect={(n) => void connect(n)} />
+      {status.data && (
+        <BankSetup
+          onChange={(s) => {
+            setReady(setupReady(s));
+            if (s.configured !== status.data?.enabled) status.reload();
+          }}
+          chooser={<BankConnect aspsps={aspsps} connections={status.data.connections} busy={busy} failed={failed} onConnect={(n) => void connect(n)} />}
+        />
+      )}
+      {status.data && !status.data.enabled && (
+        <p className="faint">Pas envie maintenant ? Tu peux importer tes relevés CSV / OFX ou commencer avec trois chiffres.</p>
       )}
       {status.data && !status.data.enabled && (
         <div className="actions">
