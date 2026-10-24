@@ -250,3 +250,69 @@ def test_service_guards(db: Session, platforms: fx.FakeExchanges) -> None:
     assert manual.exchange_key_id is None and manual.id != next(iter(db.scalars(select_holdings(key.id)))).id
     with pytest.raises(svc.ExchangeKeyError):
         svc.revoke(db, 999, actor="micka", now=utcnow())
+
+
+def test_safe_transport_and_odd_answers_turn_into_readable_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.security import netfetch
+
+    def refused(*a: object, **k: object) -> object:
+        raise netfetch.FetchError("Adresse introuvable (DNS)")
+
+    monkeypatch.setattr(ex, "get_bytes", refused)
+    monkeypatch.setattr(ex, "post_bytes", refused)
+    safe = ex.SafeTransport()
+    with pytest.raises(ex.ExchangeError, match="DNS"):
+        safe.get("https://api.binance.com/x", {})
+    with pytest.raises(ex.ExchangeError, match="DNS"):
+        safe.post("https://api.kraken.com/x", {}, b"")
+
+    class Odd:
+        """Une plateforme qui répond n'importe quoi : jamais une trace, toujours une phrase."""
+
+        def __init__(self) -> None:
+            self.answers: list[tuple[int, bytes]] = []
+
+        def get(self, url: str, headers: dict[str, str]) -> tuple[int, bytes]:
+            return self.answers.pop(0)
+
+        def post(self, url: str, headers: dict[str, str], body: bytes) -> tuple[int, bytes]:
+            return self.answers.pop(0)
+
+    odd = Odd()
+    odd.answers = [(500, b"boom")]
+    with pytest.raises(ex.ExchangeError, match="répond 500"):
+        ex.make("kraken", fx.KRAKEN_KEY, fx.KRAKEN_SECRET, odd).balances()
+    odd.answers = [(200, b"not json")]
+    with pytest.raises(ex.ExchangeError, match="illisible"):
+        ex.make("kraken", fx.KRAKEN_KEY, fx.KRAKEN_SECRET, odd).balances()
+    odd.answers = [(200, b'{"error": [], "result": "?"}')]
+    with pytest.raises(ex.ExchangeError, match="inattendue"):
+        ex.make("kraken", fx.KRAKEN_KEY, fx.KRAKEN_SECRET, odd).balances()
+    odd.answers = [(200, b'{"error": [], "result": {"XXBT": "-1"}}')]
+    with pytest.raises(ex.ExchangeError, match="hors de proportion"):
+        ex.make("kraken", fx.KRAKEN_KEY, fx.KRAKEN_SECRET, odd).balances()
+    odd.answers = [(200, b'{"nope": 1}')]
+    with pytest.raises(ex.ExchangeError, match="inattendue"):
+        ex.make("binance", fx.BINANCE_KEY, fx.BINANCE_SECRET, odd).rights()
+    odd.answers = [(418, b'{"code": -1000}')]
+    with pytest.raises(ex.ExchangeError, match="répond 418"):
+        ex.make("binance", fx.BINANCE_KEY, fx.BINANCE_SECRET, odd).balances()
+    odd.answers = [(200, b'{"accounts": "?"}')]
+    with pytest.raises(ex.ExchangeError, match="inattendue"):
+        ex.make("coinbase", fx.COINBASE_KEY, fx.COINBASE_SECRET, odd).balances()
+    odd.answers = [(503, b"{}")]
+    with pytest.raises(ex.ExchangeError, match="répond 503"):
+        ex.make("coinbase", fx.COINBASE_KEY, fx.COINBASE_SECRET, odd).rights()
+    # Trop d'actifs : les plus gros soldes sont gardés, dans la limite.
+    many = {f"T{i:03d}": str(i + 1) for i in range(80)}
+    odd.answers = [(200, json_bytes({"error": [], "result": many}))]
+    kept = ex.make("kraken", fx.KRAKEN_KEY, fx.KRAKEN_SECRET, odd).balances()
+    assert len(kept) == ex.MAX_ASSETS and max(kept.values()) == Decimal("80")
+    with pytest.raises(ex.ExchangeError, match="Plateforme inconnue"):
+        ex.make("bitpanda", "k", "s", odd)
+
+
+def json_bytes(payload: object) -> bytes:
+    import json
+
+    return json.dumps(payload).encode()
