@@ -84,7 +84,8 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
   flottant qui s'efface quand tu lis, cibles tactiles larges (un bouton-lien se touche sur 32 px, une icône seule
   sur 36), contrastes AA sur chaque écran (texte discret, pastilles vertes, ambre et rouges lisibles au soleil —
   audit axe-core à 390 px, zéro constat sérieux), tableaux qui défilent accessibles au clavier, lien « Aller au
-  contenu », installation sur l'écran d'accueil, bandeau hors ligne — et des **notifications sur le téléphone** (Web Push, chiffrées pour ton appareil, sans messagerie ni
+  contenu », sommaire collant sur les pages longues (Patrimoine, Aides, Réglages), installation sur l'écran
+  d'accueil, bandeau hors ligne — et des **notifications sur le téléphone** (Web Push, chiffrées pour ton appareil, sans messagerie ni
   compte tiers) pour le découvert qui approche, la déclaration à faire, le gain à confirmer, le pilote arrêté.
 - **Simple et ludique** : cinq destinations (Aujourd'hui, Opérations, Gagner, Papiers, Épargne), des
   missions avec leur récompense, une tirelire qui se remplit avec ce que Bank t'a vraiment fait récupérer.
@@ -560,7 +561,7 @@ par un faux navigateur, amortissement vérifié sur un cas de référence public
 simulé qui réagit au revenu, sauvegarde chiffrée altérée, tronquée ou rallongée refusée, boîte mail contre un faux
 serveur IMAP qui journalise chaque commande, retraite vérifiée sur le cas de référence de service-public et contre
 les paliers de la LFSS 2026, clés de plateforme face à de fausses plateformes qui vérifient chaque signature et
-refusent les droits trop larges), couverture 91 %, 144 tests front (parcours de première ouverture,
+refusent les droits trop larges), couverture 91 %, 146 tests front (parcours de première ouverture,
 coffre, démarches, opportunités, veille, assistant, chat interactif et réponse en direct, notifications sur
 l'appareil, plan B, crédits, retraite, sauvegardes, boîte mail, crypto et plateformes reliées, pilote, déclarations, corrélations, année qui vient,
 passkeys, erreurs qui disent quoi faire),
