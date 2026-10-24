@@ -45,13 +45,26 @@ class CustomSpike:
 
 
 @dataclass(frozen=True)
+class ForecastSpike:
+    """Une échéance prévue ailleurs dans Bank (la taxe foncière de Ton logement, #34) : elle remplace le pic détecté
+    des marchands qu'elle couvre, avec son explication en note."""
+
+    key: str
+    label: str
+    amount_cents: int
+    day: date
+    replaces: frozenset[str] = frozenset()  # marchands des prélèvements qu'elle remplace
+    note: str = ""
+
+
+@dataclass(frozen=True)
 class Spike:
     key: str
     label: str
     amount_cents: int
     day: date
     cadence: str  # quarterly | yearly | custom | planned
-    source: str  # detected | custom | planned
+    source: str  # detected | custom | planned | forecast
     category: str | None = None
     occurrences: int = 0
     confidence: float = 1.0
@@ -170,6 +183,7 @@ def build_year_ahead(
     months: int = MONTHS,
     holidays: Mapping[date, str] | None = None,
     school_breaks: Sequence[SchoolBreak] = (),
+    forecasts: Sequence[ForecastSpike] = (),
 ) -> YearAhead:
     first = add_months(today.replace(day=1), 1)  # le mois en cours est à la prévision du mois
     until = add_months(first, months) - timedelta(days=1)
@@ -182,7 +196,13 @@ def build_year_ahead(
     income_other = [s for s in series if s.direction == "in" and s.cadence != "monthly"]
     fixed_monthly = sum(_monthly_equivalent(s) for s in planned_out if s.cadence in ("weekly", "biweekly", "monthly"))
     skip = set(ignored)
-    all_spikes = detected_spikes(series, categories, today, until, holidays) + custom_occurrences(custom, today, until)
+    replaced = {m for f in forecasts if today <= f.day <= until for m in f.replaces}
+    spike_series = [s for s in series if s.merchant not in replaced]
+    all_spikes = detected_spikes(spike_series, categories, today, until, holidays)
+    all_spikes += custom_occurrences(custom, today, until)
+    all_spikes += [
+        Spike(f.key, f.label, f.amount_cents, f.day, "yearly", "forecast") for f in forecasts if today <= f.day <= until
+    ]
     all_spikes += [
         Spike(f"planned:{d.isoformat()}:{c}", label, c, d, "planned", "planned")
         for d, label, c in planned
@@ -241,6 +261,7 @@ def build_year_ahead(
         notes.append("Aucun revenu régulier reconnu : la projection ne compte que les sorties.")
     if variable == 0:
         notes.append("Pas assez d'historique pour estimer tes dépenses variables : elles comptent pour zéro.")
+    notes += [f.note for f in forecasts if f.note and today <= f.day <= until and f.key not in skip]
     return YearAhead(
         start_month=_month_key(first),
         start_balance_cents=start_balance_cents,

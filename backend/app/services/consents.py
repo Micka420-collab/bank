@@ -194,6 +194,23 @@ PURPOSES: dict[str, dict[str, Any]] = {
         "default": False,
         "version": 1,
     },
+    "housing": {
+        "title": "Ton logement face aux données publiques",
+        "text": (
+            "Pour retrouver le diagnostic de performance énergétique (DPE) de ton logement, Bank envoie à l'ADEME "
+            "(data.ademe.fr) l'identifiant de ton adresse dans la Base adresse nationale (numéro, rue, commune), tiré "
+            "de ton adresse située : l'ADEME voit ton immeuble et l'adresse de ton serveur, jamais ton nom ni ton "
+            "loyer. C'est toi qui indiques lequel des DPE de l'immeuble est ton logement. Pour situer ton loyer, Bank "
+            "télécharge le fichier national de la carte des loyers de l'ANIL (data.gouv.fr) : rien te concernant ne "
+            "part. Pour l'encadrement des loyers, Bank relit la fiche F1314 de Service-Public et, à Paris, télécharge "
+            "les loyers de référence et les quartiers en entier (opendata.paris.fr) : ton quartier se calcule ici. "
+            "Pour prévoir ta taxe foncière, seul le code de ton département part vers data.economie.gouv.fr. "
+            "Géorisques est seulement sondé, sans rien envoyer de toi. Tout est gardé chiffré ici ; sans ton accord, "
+            "rien ne part."
+        ),
+        "default": False,
+        "version": 1,
+    },
 }
 
 

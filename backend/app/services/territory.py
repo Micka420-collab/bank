@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.db import write_lock
 from app.domain import territory as dom
-from app.models import HouseholdPlace, PublicCalendar, WeatherDay
+from app.models import HouseholdPlace, HousingSource, PublicCalendar, WeatherDay
 from app.security import audit, netfetch
 from app.services import consents
 
@@ -125,6 +125,10 @@ def remove_place(db: Session, *, actor: str) -> None:
     school = db.get(PublicCalendar, "scolaire")
     if school is not None:
         db.delete(school)  # les vacances de ton académie disent où tu habites
+    for key in ("dpe", "paris"):
+        found = db.get(HousingSource, key)
+        if found is not None:
+            db.delete(found)  # les DPE de ton immeuble, ton quartier à Paris : ils disent ton adresse (#34)
     for cal in db.scalars(select(PublicCalendar).where(PublicCalendar.key.like("feries:%"))):
         if _data(cal).get("zone") != dom.holiday_zone(None):
             db.delete(cal)  # les fériés d'Alsace-Moselle ou d'outre-mer le disent aussi : relus pour la métropole

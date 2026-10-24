@@ -23,6 +23,9 @@ from statistics import median
 from typing import Any
 
 from app.domain import contracts
+from app.domain import housing as hz
+from app.domain import property_tax as pt
+from app.domain import rent_control as rc
 from app.domain.energy_analysis import ClimateCheck
 from app.domain.energy_signals import OPTIONS, PowerCheck, kva_label
 from app.domain.money import format_eur
@@ -91,6 +94,20 @@ class EnergyLink:
 
 
 @dataclass(frozen=True)
+class HousingLink:
+    """Ton logement face aux données publiques (#34), tel que Bank l'a gardé : rien n'est relu ici."""
+
+    dpe: hz.Dpe | None = None  # le DPE de l'ADEME que tu as reconnu comme le tien
+    depcode: str | None = None  # département : la règle F/G ne date pas du même jour outre-mer
+    market: hz.Market | None = None  # ta commune dans la carte des loyers de l'ANIL
+    surface_m2: float | None = None
+    surface_source: str | None = None  # « ta description du logement » | « le DPE que tu as reconnu »
+    control: rc.ControlLink | None = None  # encadrement des loyers de ta commune (fiche F1314, Paris en open data)
+    tax: pt.Forecast | None = None  # taxe foncière de l'exercice qui vient
+    tax_notes: tuple[str, ...] = ()  # ce qui manque pour la prévoir
+
+
+@dataclass(frozen=True)
 class Inputs:
     today: date
     series: Sequence[Series] = ()
@@ -106,6 +123,7 @@ class Inputs:
     daily_variable_spend: Mapping[date, int] = field(default_factory=dict)  # dépenses variables par jour
     paydays: Sequence[date] = ()
     category_names: Mapping[str, str] = field(default_factory=dict)
+    housing: HousingLink | None = None
 
 
 # ------------------------------------------------------------------ sorties
@@ -976,6 +994,433 @@ def payday_concentration(
     ]
 
 
+# ------------------------------------------------------------------ logement : DPE et carte des loyers (#34)
+def _lease(docs: Sequence[Doc]) -> Doc | None:
+    return next((d for d in docs if d.kind == "lease" and d.fields.get("loyer")), None)
+
+
+def _dpe_frozen(
+    link: HousingLink, lease: Doc | None, rent: Series | None, today: date, notes: list[str]
+) -> list[Finding]:
+    """Une révision de loyer appliquée à un logement classé F ou G alors que le bail tombe sous la règle : la somme
+    payée en plus, mois par mois depuis cette révision. Seulement quand tout est connu : la classe (DPE reconnu, ou
+    lue dans le bail), la date du bail, le département et la révision vue dans les prélèvements."""
+    floor: date | None = None
+    if link.dpe is not None:
+        letter = link.dpe.letter
+        dpe_label = f"DPE n° {link.dpe.number} du {link.dpe.established:%d/%m/%Y}, base de l'ADEME"
+        dpe_ev = Evidence(
+            "DPE", f"classe {letter}, n° {link.dpe.number} du {link.dpe.established:%d/%m/%Y}", f"url:{hz.DPE_PAGE}"
+        )
+        floor = link.dpe.established  # une révision antérieure au DPE n'est pas comptée : la classe d'alors manque
+    elif lease is not None and str(lease.fields.get("classe_dpe") or "") in hz.LETTERS:
+        letter = str(lease.fields["classe_dpe"])
+        dpe_label = "classe énergie lue dans ton bail"
+        dpe_ev = Evidence("Bail", f"classe énergie {letter}", f"doc:{lease.id}")
+    else:
+        notes.append(
+            "Classe énergie du logement inconnue : reconnais ton DPE parmi ceux de ton adresse, ou dépose ton bail "
+            "dans Papiers (la classe y est souvent écrite)."
+        )
+        return []
+    if letter not in hz.FROZEN_LETTERS:
+        notes.append(f"Logement classé {letter} : le gel des loyers des logements classés F ou G ne s'applique pas.")
+        return []
+    start = lease.fields.get("date_debut") if lease is not None else None
+    if lease is None or not start:
+        notes.append(
+            "Logement classé F ou G, mais la date de prise d'effet du bail est inconnue : dépose ton bail dans "
+            "Papiers ou complète-la."
+        )
+        return []
+    if rent is None or len(rent.history) < 2:
+        notes.append("Logement classé F ou G, mais le loyer n'est pas encore reconnu dans tes prélèvements.")
+        return []
+    depcode = link.depcode or (link.dpe.depcode if link.dpe else None)
+    if depcode is None:
+        notes.append(
+            "Logement classé F ou G, mais le département est inconnu (la règle ne date pas du même jour outre-mer) : "
+            "situe ton adresse dans Réglages."
+        )
+        return []
+    lease_start = date.fromisoformat(str(start))
+    furnished = {"oui": True, "non": False}.get(str(lease.fields.get("meuble") or ""))
+    covered, exact = hz.covered_from(lease_start, furnished, depcode)
+    rule_day = hz.rule_start(depcode)
+    if covered > today:
+        notes.append(
+            f"Ton bail tombera sous le gel des loyers F et G {'le' if exact else 'au plus tard le'} "
+            f"{covered:%d/%m/%Y} (reconduction) : une révision avant cette date reste possible."
+        )
+        return []
+    frozen_from = max(covered, floor) if floor else covered
+    steps = hz.anniversary_steps(rent.history, lease_start)
+    found = hz.overpaid(rent.history, steps, frozen_from, today)
+    if found is None:
+        late = hz.frozen_steps(steps, frozen_from)
+        notes.append(
+            f"La révision du {late[0].day:%d/%m/%Y} date de plus de trois ans : Service-Public (F1311) indique que le "
+            "juge se saisit dans les 3 ans qui suivent la révision."
+            if late
+            else f"Aucune révision vue dans tes prélèvements depuis le {frozen_from:%d/%m/%Y} : rien à réclamer sur "
+            "ce point."
+        )
+        return []
+    first = found.first
+    if lease_start >= rule_day:
+        when = f"a pris effet le {lease_start:%d/%m/%Y}, après le {rule_day:%d/%m/%Y}"
+    else:
+        when = (
+            f"a été reconduit {'le' if exact else 'au plus tard le'} {covered:%d/%m/%Y}, après le {rule_day:%d/%m/%Y}"
+        )
+    rise = first.after - first.before
+    charges_note = (
+        " Si une partie de la hausse vient de la provision pour charges, cette partie reste due : l'avis du bailleur "
+        "le dit."
+        if int(lease.fields.get("charges") or 0)
+        else ""
+    )
+    return [
+        Finding(
+            key=f"rent_dpe_frozen:{lease.id}:{first.day.isoformat()}",  # stable : écarté ou démarche, ça tient
+            kind="rent_dpe_frozen",
+            level="danger",
+            topic="logement",
+            title=f"Loyer révisé alors que le logement est classé {letter}",
+            body=(
+                f"Ton logement est classé {letter} ({dpe_label}) et ton bail {when} : la révision du "
+                f"{first.day:%d/%m/%Y} (+{format_eur(rise)} par mois) n'est pas due (Service-Public, fiche F1311). "
+                f"Payé en plus : {format_eur(found.total_cents)} sur {found.months} mois depuis le "
+                f"{found.since:%d/%m/%Y}, et {format_eur(found.monthly_cents)} par mois tant que le loyer n'est pas "
+                f"revenu à {format_eur(first.before)}. Le juge se saisit dans les 3 ans qui suivent la révision "
+                f"(Service-Public, F1311).{charges_note}"
+            ),
+            evidence=(
+                dpe_ev,
+                Evidence("Bail", f"prise d'effet le {lease_start:%d/%m/%Y}", f"doc:{lease.id}"),
+                Evidence(
+                    rent.merchant,
+                    f"{format_eur(first.before)} puis {format_eur(first.after)} le {first.day:%d/%m/%Y}",
+                    f"series:{rent.key}",
+                ),
+                Evidence("Règle", f"{hz.RULE_SOURCE}, relue le {hz.RULE_CHECKED_ON}", f"url:{hz.RULE_URL}"),
+            ),
+            yearly_cents=found.monthly_cents * 12,
+            action={
+                "template": "revision_loyer_dpe",
+                "label": "Préparer la lettre au bailleur",
+                "title": f"Révision de loyer non due (classe {letter})",
+                "initial": {
+                    "bailleur": lease.fields.get("bailleur"),
+                    "classe": letter,
+                    "numero_dpe": link.dpe.number if link.dpe else None,
+                    "date_revision": first.day.isoformat(),
+                    "loyer_avant": first.before,
+                    "hausse": rise,
+                    "montant": found.total_cents,
+                    "periode": f"du {found.since:%m/%Y} au {rent.history[-1][0]:%m/%Y}",
+                },
+            },
+            confidence=0.8 if link.dpe else 0.7,
+        )
+    ]
+
+
+def _rent_market(link: HousingLink, lease: Doc | None, rent: Series | None, notes: list[str]) -> list[Finding]:
+    """Ton loyer au m² face à l'intervalle des annonces de ta commune : pas quand l'ANIL invite à la prudence (R²
+    inférieur à 0,5 ou moins de 30 annonces dans la commune). Une position, jamais un jugement."""
+    m = link.market
+    if m is None:
+        notes.append("Carte des loyers : ta commune n'est pas encore lue.")
+        return []
+    if not m.reliable:
+        notes.append(
+            f"Carte des loyers : indicateur à lire avec prudence pour {m.commune} (R² {hz.fr2(m.r2)}, {m.obs} "
+            f"annonces dans la commune ; l'ANIL invite à la prudence quand le R² est inférieur à 0,5 ou que la "
+            f"commune compte moins de {hz.MIN_OBS} annonces) : pas de comparaison."
+        )
+        return []
+    if lease is not None and str(lease.fields.get("meuble") or "") == "oui":
+        notes.append("Ton bail est meublé : la carte des loyers ne porte que sur des logements loués vides.")
+        return []
+    if not link.surface_m2:
+        notes.append("Surface habitable inconnue : décris ton logement dans Patrimoine, ou reconnais ton DPE.")
+        return []
+    if rent is not None and rent.history:
+        last_day, paid = rent.history[-1]
+        paid_ev = Evidence(rent.merchant, f"{format_eur(paid)} le {last_day:%d/%m/%Y}", f"series:{rent.key}")
+    elif lease is not None:
+        paid = int(lease.fields["loyer"]) + int(lease.fields.get("charges") or 0)
+        paid_ev = Evidence("Bail", f"loyer et charges : {format_eur(paid)}", f"doc:{lease.id}")
+    else:
+        notes.append("Loyer inconnu : ni bail dans Papiers, ni loyer reconnu dans tes prélèvements.")
+        return []
+    rent_m2 = paid / 100 / link.surface_m2
+    _prefix, label, ref_m2 = hz.MARKET_FILES[m.file]
+    verdict = {
+        "above": "au-dessus de l'intervalle des annonces",
+        "within": "dans l'intervalle des annonces",
+        "below": "sous l'intervalle des annonces",
+    }[hz.position(rent_m2, m)]
+    nearby = (
+        " L'indicateur de ta commune est estimé avec des communes voisines semblables." if m.level == "maille" else ""
+    )
+    surface = f"{link.surface_m2:g}".replace(".", ",")
+    return [
+        Finding(
+            key=f"rent_market:{m.code}:{m.file}:{m.year}:{paid}",
+            kind="rent_market",
+            level="info",
+            topic="logement",
+            title=f"Ton loyer face aux annonces de {m.commune}",
+            body=(
+                f"{hz.fr2(rent_m2)} €/m² charges comprises ({format_eur(paid)} pour {surface} m²) : {verdict} de "
+                f"{m.commune}, de {hz.fr2(m.low)} à {hz.fr2(m.high)} €/m² (loyer prédit {hz.fr2(m.m2)} €/m², "
+                f"{label} loué vide, bien type de {ref_m2} m²). Un repère tiré des annonces, pas un loyer de "
+                f"référence : la taille, l'état et l'emplacement du logement comptent.{nearby}"
+            ),
+            evidence=(
+                paid_ev,
+                Evidence("Surface", f"{surface} m² ({link.surface_source or 'source inconnue'})", None),
+                Evidence(
+                    f"Carte des loyers {m.year}",
+                    f"{hz.fr2(m.low)} à {hz.fr2(m.high)} €/m², R² {hz.fr2(m.r2)}, {m.obs} annonces "
+                    f"({hz.MARKET_CREDIT})",
+                    f"url:{hz.MARKET_PAGE.format(year=m.year)}",
+                ),
+            ),
+            confidence=0.6,
+        )
+    ]
+
+
+def _rent_control(link: HousingLink, lease: Doc | None, notes: list[str]) -> list[Finding]:
+    """Le loyer de base face au loyer de référence majoré, dans une commune encadrée (fiche F1314). Seulement à Paris,
+    seule ville dont les loyers de référence sont publiés en open data ; ailleurs, le simulateur officiel est lié. Ce
+    qui manque est demandé (l'époque de construction n'est jamais devinée)."""
+    c = link.control
+    if c is None:
+        return []
+    t = c.territory
+    if c.page is not None and c.page.changed:
+        gone = f" ; n'y figure plus : {', '.join(c.page.missing)}" if c.page.missing else ""
+        notes.append(
+            f"Encadrement des loyers : la fiche F1314 a été revue le {c.page.verified:%d/%m/%Y}, après la liste de "
+            f"Bank (vérifiée le {rc.LIST_VERIFIED:%d/%m/%Y}){gone}. Relis la fiche."
+        )
+    if c.partial:
+        notes.append(
+            f"Encadrement des loyers : une partie seulement de ta commune est encadrée ({t.name}) ; le simulateur "
+            "officiel dit si ton adresse l'est."
+        )
+        return []
+    start = lease.fields.get("date_debut") if lease is not None else None
+    if lease is None or not start or not lease.fields.get("loyer"):
+        notes.append(
+            f"Encadrement des loyers ({t.name}) : dépose ton bail dans Papiers (date de prise d'effet et loyer hors "
+            "charges) pour comparer ton loyer au plafond."
+        )
+        return []
+    signed = date.fromisoformat(str(start))
+    if signed < t.start:
+        notes.append(
+            f"Encadrement des loyers ({t.name}) : ton bail a pris effet le {signed:%d/%m/%Y}, avant l'encadrement "
+            f"(baux signés ou renouvelés depuis le {t.start:%d/%m/%Y}, fiche F1314) : Bank ne compare que le loyer "
+            "fixé à la signature."
+        )
+        return []
+    if signed > rc.END:
+        notes.append(
+            f"Encadrement des loyers : la fiche F1314 et l'arrêté parisien fixent la fin de l'expérimentation au "
+            f"{rc.END:%d/%m/%Y} ; ton bail est plus récent, Bank ne sait pas ce qui s'applique."
+        )
+        return []
+    if t.key != "paris":
+        notes.append(
+            f"Encadrement des loyers ({t.name}) : pas de données ouvertes vérifiées par Bank pour les loyers de "
+            "référence ; le simulateur officiel cité par Service-Public est lié dans Ton logement."
+        )
+        return []
+    meuble = str(lease.fields.get("meuble") or "")
+    missing = []
+    if meuble not in ("oui", "non"):
+        missing.append("si le logement est loué meublé ou vide (dans ton bail)")
+    if c.epoque is None:
+        missing.append("l'époque de construction de l'immeuble")
+    if c.rooms is None:
+        missing.append("le nombre de pièces principales")
+    if not link.surface_m2:
+        missing.append("la surface habitable")
+    if not c.located:
+        missing.append("ton adresse située (Réglages)")
+    elif c.quartier is None:
+        missing.append("les loyers de référence de ton quartier (relis l'encadrement dans Ton logement)")
+    if missing:
+        notes.append(f"Encadrement des loyers à Paris : il manque {', '.join(missing)}. Bank ne devine rien.")
+        return []
+    epoque, rooms, surface_m2 = c.epoque, c.rooms, link.surface_m2
+    if epoque is None or rooms is None or not surface_m2:
+        return []
+    year = rc.reference_year(signed)
+    ref = rc.reference_for(c.refs, year, rooms, epoque, meuble == "oui")
+    if ref is None:
+        last = max(c.years) if c.years else None
+        notes.append(
+            f"Encadrement des loyers à Paris : les loyers de référence en vigueur à la signature de ton bail "
+            f"(arrêté de {year}) ne sont pas dans le jeu de la Ville de Paris"
+            + (f" (dernière année publiée : {last})" if last else "")
+            + " ; ils figurent dans l'arrêté préfectoral."
+        )
+        return []
+    rent = int(lease.fields["loyer"])
+    over = rc.above_cap(rent, surface_m2, ref)
+    surface = f"{surface_m2:g}".replace(".", ",")
+    kind_label = "meublé" if ref.furnished else "vide"
+    category = f"{c.quartier}, {rc.rooms_label(ref.rooms)}, construit {rc.EPOQUES[ref.epoque]}, loué {kind_label}"
+    evidence = (
+        Evidence(
+            "Bail", f"loyer hors charges {format_eur(rent)}, prise d'effet le {signed:%d/%m/%Y}", f"doc:{lease.id}"
+        ),
+        Evidence("Surface", f"{surface} m² ({link.surface_source or 'source inconnue'})", None),
+        Evidence(
+            f"Loyers de référence {year}",
+            f"{category} : majoré {hz.fr2(ref.high)} €/m², référence {hz.fr2(ref.ref)} €/m² (valeur indicative ; "
+            "l'arrêté préfectoral fait foi)",
+            f"url:{rc.PARIS_PAGE}",
+        ),
+        Evidence("Règle", f"{rc.PAGE_SOURCE}, vérifiée le {rc.LIST_VERIFIED:%d/%m/%Y}", f"url:{rc.PAGE_URL}"),
+    )
+    rent_m2 = rent / 100 / surface_m2
+    if over is None:
+        return [
+            Finding(
+                key=f"rent_control_ok:{lease.id}:{year}:{rent}",
+                kind="rent_control_ok",
+                level="info",
+                topic="logement",
+                title="Loyer sous le plafond de l'encadrement",
+                body=(
+                    f"Loyer de base {hz.fr2(rent_m2)} €/m² hors charges ({format_eur(rent)} pour {surface} m²), pour "
+                    f"un loyer de référence majoré de {hz.fr2(ref.high)} €/m² ({category}, valeurs {year} de la Ville "
+                    "de Paris)."
+                ),
+                evidence=evidence,
+                confidence=0.7,
+            )
+        ]
+    return [
+        Finding(
+            key=f"rent_control_above:{lease.id}:{year}:{rent}",
+            kind="rent_control_above",
+            level="warning",
+            topic="logement",
+            title="Loyer au-dessus du loyer de référence majoré",
+            body=(
+                f"Loyer de base {hz.fr2(over.rent_m2)} €/m² hors charges ({format_eur(rent)} pour {surface} m²), pour "
+                f"un loyer de référence majoré de {hz.fr2(ref.high)} €/m² ({category}, valeurs {year} de la Ville de "
+                f"Paris) : {format_eur(over.monthly_cents)} par mois au-dessus, soit {format_eur(over.yearly_cents)} "
+                "par an. Un complément de loyer écrit dans le bail et justifié par des caractéristiques "
+                "exceptionnelles peut dépasser ce plafond (Service-Public, F1314). Sinon, le locataire peut demander "
+                "la baisse du loyer et le remboursement du trop-perçu ; la commission départementale de conciliation "
+                "se saisit gratuitement (F1216), puis le juge des contentieux de la protection."
+            ),
+            evidence=evidence,
+            yearly_cents=over.yearly_cents,
+            action={
+                "template": "encadrement_loyer",
+                "label": "Préparer la lettre au bailleur",
+                "title": "Loyer au-dessus du plafond de l'encadrement",
+                "initial": {
+                    "bailleur": lease.fields.get("bailleur"),
+                    "date_bail": signed.isoformat(),
+                    "loyer": rent,
+                    "surface": surface,
+                    "plafond_m2": hz.fr2(ref.high),
+                    "categorie": f"{category} (arrêté {year})",
+                    "ecart_mensuel": over.monthly_cents,
+                },
+            },
+            confidence=0.7,
+        )
+    ]
+
+
+def _property_tax(link: HousingLink, notes: list[str]) -> list[Finding]:
+    """La taxe foncière de l'exercice qui vient : le dernier montant connu, l'effet des taux votés publiés, et ce qui
+    reste inconnu (taux pas encore publiés, revalorisation des bases)."""
+    notes.extend(link.tax_notes)
+    f = link.tax
+    if f is None:
+        return []
+    b = f.base
+    src = "ton avis de taxe foncière" if b.source == "avis" else f"tes prélèvements ({b.payments})"
+    lines: list[str] = []
+    for s in f.steps:
+        if s.tfb_from is None or s.tfb_to is None or s.teom_from is None or s.teom_to is None:
+            continue
+        teom = f", TEOM {pt.fr_rate(s.teom_from)} % → {pt.fr_rate(s.teom_to)} %" if s.teom_from or s.teom_to else ""
+        lines.append(f"taux {s.year} votés : taxe foncière {pt.fr_rate(s.tfb_from)} % → {pt.fr_rate(s.tfb_to)} %{teom}")
+    unknown = (
+        f" Taux {', '.join(str(y) for y in f.unknown_rates)} pas encore publiés"
+        + (f" (dernier exercice publié : {f.latest_rates})" if f.latest_rates else "")
+        + " : comptés inchangés."
+        if f.unknown_rates
+        else ""
+    )
+    bases = (
+        f" La revalorisation des valeurs locatives {f.target} s'y ajoute (« revalorisée chaque année », "
+        "Service-Public, F59) : Bank ne la chiffre pas, faute de l'avoir vérifiée sur une source officielle."
+    )
+    known = f"{b.year} : {format_eur(b.amount_cents)} d'après {src}"
+    if b.teom_cents is not None:
+        known += f", dont {format_eur(b.teom_cents)} de TEOM"
+    effect = f" Effet des taux : {' ; '.join(lines)}." if lines else ""
+    if f.amount_cents is None:
+        title = f"Taxe foncière {f.target} : effet des taux non chiffré"
+        figure = ""
+    else:
+        delta = f.amount_cents - b.amount_cents
+        sign = "+" if delta >= 0 else "−"
+        pct = f" ({sign}{abs(delta) / b.amount_cents * 100:.1f} %)".replace(".", ",") if delta else ""
+        title = f"Taxe foncière {f.target} : {format_eur(f.amount_cents)} à bases inchangées{pct}"
+        figure = f"{format_eur(f.amount_cents)} à bases inchangées. "
+    when = f" Échéance prévue vers le {f.due:%d/%m/%Y}." if f.due else ""
+    monthly = " Mensualisée : déjà comptée dans tes charges du mois." if b.monthly else ""
+    evidence: list[Evidence] = [
+        Evidence("Taxe foncière " + str(b.year), format_eur(b.amount_cents), b.ref if b.ref != "txns" else None)
+    ]
+    if f.commune and (lines or f.latest_rates):
+        evidence.append(Evidence("Taux votés", f"{f.commune.title()}, exercices publiés", f"url:{pt.RATES_PAGE}"))
+    evidence.append(Evidence("Bases", pt.BASES_SOURCE, f"url:{pt.BASES_URL}"))
+    return [
+        Finding(
+            key=f"property_tax:{f.target}:{b.year}:{b.amount_cents}:{f.amount_cents}",
+            kind="property_tax_forecast",
+            level="info",
+            topic="logement",
+            title=title,
+            body=f"Taxe foncière {f.target} : {figure}Dernier montant connu, {known}.{effect}{unknown}{bases}{when}"
+            f"{monthly}",
+            evidence=tuple(evidence),
+            confidence=0.6,
+        )
+    ]
+
+
+def housing_checks(inputs: Inputs) -> tuple[list[Finding], list[str]]:
+    """(constats, ce qui manque pour en dire plus) : chaque manque est dit, rien n'est deviné."""
+    link = inputs.housing
+    if link is None:
+        return [], []
+    notes: list[str] = []
+    lease, rent = _lease(inputs.docs), _rent_series(inputs.series)
+    out = _dpe_frozen(link, lease, rent, inputs.today, notes)
+    out += _rent_market(link, lease, rent, notes)
+    out += _rent_control(link, lease, notes)
+    out += _property_tax(link, notes)
+    return out, notes
+
+
 # ------------------------------------------------------------------ orchestration
 LEVEL_ORDER = {"danger": 0, "warning": 1, "info": 2}
 
@@ -993,6 +1438,11 @@ def analyse(inputs: Inputs) -> list[Finding]:
     out += climate_findings(inputs.climate)
     out += statistical_links(inputs.monthly_spend, inputs.monthly_income, inputs.category_names)
     out += payday_concentration(inputs.daily_variable_spend, inputs.paydays, inputs.category_names)
+    housing, _notes = housing_checks(inputs)
+    if any(f.kind == "rent_dpe_frozen" for f in housing):
+        # « révisé dans la limite de l'IRL » rassurerait à tort : la révision elle-même n'était pas due.
+        out = [f for f in out if f.kind != "rent_revised"]
+    out += housing
     seen: set[str] = set()
     unique = []
     for f in out:

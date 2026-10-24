@@ -8859,3 +8859,36 @@ label {
 .sim-current th { font-weight: 600; }
 .sim-assumptions { margin-block: 0.35rem; padding-inline-start: 1.1rem; }
 .climate-note p, .gas-line { margin-block: 0.35rem; }
+/* Logement face aux données publiques (#34) */
+.housing-dpe {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+  display: grid;
+  gap: 0.4rem;
+}
+.housing-dpe li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+}
+.housing-notes {
+  margin: 0.25rem 0 0.75rem;
+  padding-left: 1.2rem;
+}
+.housing-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem 0.75rem;
+  margin: 0.5rem 0;
+}
+.housing-details label {
+  display: grid;
+  gap: 0.2rem;
+}
+.housing-rates {
+  margin: 0.25rem 0 0.5rem;
+  padding-left: 1.2rem;
+}

@@ -1,0 +1,70 @@
+{
+ "total": 4,
+ "results": [
+  {
+   "code_departement_ban": "31",
+   "code_insee_ban": "31555",
+   "type_batiment": "appartement",
+   "numero_dpe": "2631E0120274I",
+   "date_fin_validite_dpe": "2036-01-14",
+   "complement_adresse_logement": "App au RDC",
+   "adresse_ban": "14 Rue Dalmatie 31500 Toulouse",
+   "etiquette_ges": "C",
+   "identifiant_ban": "31555_2468_00014",
+   "numero_etage_appartement": 0,
+   "date_etablissement_dpe": "2026-01-15",
+   "surface_habitable_logement": 65,
+   "etiquette_dpe": "E",
+   "_score": null
+  },
+  {
+   "code_departement_ban": "31",
+   "code_insee_ban": "31555",
+   "type_batiment": "appartement",
+   "numero_dpe": "2631E0066371D",
+   "date_fin_validite_dpe": "2036-01-09",
+   "complement_adresse_logement": "Etage RDC; Porte 2",
+   "adresse_ban": "14 Rue Dalmatie 31500 Toulouse",
+   "etiquette_ges": "C",
+   "identifiant_ban": "31555_2468_00014",
+   "numero_etage_appartement": 0,
+   "numero_dpe_remplace": "2631E0066353L",
+   "date_etablissement_dpe": "2026-01-10",
+   "surface_habitable_logement": 65.3,
+   "etiquette_dpe": "F",
+   "_score": null
+  },
+  {
+   "code_departement_ban": "31",
+   "code_insee_ban": "31555",
+   "type_batiment": "appartement",
+   "numero_dpe": "2531E2571077Y",
+   "date_fin_validite_dpe": "2035-08-06",
+   "complement_adresse_logement": "Etage 1; Porte 3",
+   "adresse_ban": "14 Rue Dalmatie 31500 Toulouse",
+   "etiquette_ges": "B",
+   "identifiant_ban": "31555_2468_00014",
+   "numero_etage_appartement": 0,
+   "date_etablissement_dpe": "2025-08-07",
+   "surface_habitable_logement": 69.5,
+   "etiquette_dpe": "E",
+   "_score": null
+  },
+  {
+   "code_departement_ban": "31",
+   "code_insee_ban": "31555",
+   "type_batiment": "appartement",
+   "numero_dpe": "2231E1713168I",
+   "date_fin_validite_dpe": "2032-07-26",
+   "complement_adresse_logement": "Etage 2; Porte Gauche",
+   "adresse_ban": "14 Rue Dalmatie 31500 Toulouse",
+   "etiquette_ges": "C",
+   "identifiant_ban": "31555_2468_00014",
+   "numero_etage_appartement": 0,
+   "date_etablissement_dpe": "2022-07-27",
+   "surface_habitable_logement": 28.2,
+   "etiquette_dpe": "E",
+   "_score": null
+  }
+ ]
+}

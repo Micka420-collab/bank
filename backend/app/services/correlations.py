@@ -21,6 +21,7 @@ from app.models import Category, Obligation, ObligationDone, OpportunityState, T
 from app.security import audit
 from app.services import analytics, procedures
 from app.services import energy as energy_service
+from app.services import housing as housing_service
 from app.services import weather as weather_service
 
 DOC_KINDS = ("lease", "insurance", "payslip", "rent_receipt")
@@ -175,6 +176,7 @@ def build_inputs(db: Session, today: date) -> dom.Inputs:
         daily_variable_spend=daily,
         paydays=paydays,
         category_names=names,
+        housing=housing_service.link(db, today),
     )
 
 
@@ -188,6 +190,20 @@ def _states(db: Session) -> dict[str, OpportunityState]:
 
 def findings(db: Session, today: date) -> list[dom.Finding]:
     return dom.analyse(build_inputs(db, today))
+
+
+def housing_checks(db: Session, today: date) -> dict[str, Any]:
+    """Les constats logement (DPE, carte des loyers) et ce qui manque pour en dire plus (#34)."""
+    found, notes = dom.housing_checks(build_inputs(db, today))
+    states = _states(db)
+    rows = []
+    for f in found:
+        d = dom.finding_to_dict(f)
+        state = states.get(f.key)
+        d["status"] = state.status if state else "new"
+        d["procedure_id"] = state.procedure_id if state else None
+        rows.append(d)
+    return {"findings": rows, "notes": notes}
 
 
 def view(db: Session, today: date) -> dict[str, Any]:
@@ -238,7 +254,7 @@ def start(db: Session, key: str, *, actor: str, today: date) -> int:
     found = next((f for f in findings(db, today) if f.key == key), None)
     if found is None or not found.action or not found.action.get("template"):
         raise CorrelationError("Rien à préparer pour ce constat", 409)
-    initial: dict[str, Any] = {}
+    initial: dict[str, Any] = {k: v for k, v in dict(found.action.get("initial") or {}).items() if v is not None}
     merchant = found.action.get("merchant")
     if merchant:
         initial["fournisseur"] = str(merchant).title()
@@ -252,7 +268,7 @@ def start(db: Session, key: str, *, actor: str, today: date) -> int:
         today=today,
         opportunity_key=STATE_PREFIX + key[:150],
         initial=initial,
-        title=f"Résilier {str(merchant).title()}" if merchant else None,
+        title=f"Résilier {str(merchant).title()}" if merchant else found.action.get("title"),
     )
     return proc.id
 

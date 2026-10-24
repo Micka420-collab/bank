@@ -338,6 +338,37 @@ valeur nette sur la ligne « Logement (estimation DVF) » (décochable), le rest
 dette en face, et la carte montre le net ; l'immobilier déclaré dans ta situation ne s'ajoute plus en double dans
 le dossier de l'agent. Un repère statistique, pas une expertise : l'état, l'étage ou les travaux comptent.
 
+## Ton logement face aux données publiques (DPE, carte des loyers)
+
+Sur la page Situation, avec l'accord « Ton logement face aux données publiques » (désactivé par défaut). **DPE** : à
+partir de ton adresse située au numéro près (Réglages › Ton adresse), Bank demande à l'ADEME (jeu `dpe03existant`,
+filtre `identifiant_ban_eq` : seul l'identifiant BAN de l'adresse part) les DPE de ton immeuble ; plusieurs logements
+par immeuble, donc c'est toi qui dis lequel est le tien (ou aucun) — Bank n'en retient jamais un seul. À défaut, la
+classe écrite dans ton bail (Papiers) sert. Si le logement est classé F ou G et que le bail est signé, renouvelé ou
+reconduit depuis le 24 août 2022 (1er juillet 2024 outre-mer ; règle relue sur Service-Public, fiche F1311), une
+hausse vue dans tes prélèvements à l'anniversaire du bail, après la date du DPE et dans les 3 ans, devient un
+constat avec la somme payée en plus, mois par mois, et la lettre au bailleur se prépare dans Démarches. Un bail plus
+ancien n'est compté qu'à sa reconduction (un an en meublé ; six ans pour un logement vide, faute de savoir qui loue).
+**Carte des loyers** (ANIL, « Estimations ANIL, à partir des données du Groupe SeLoger et de leboncoin », fichier
+national sur data.gouv.fr, rien de toi ne part) : la ligne de ta commune pour ton type de logement, et ton loyer
+charges comprises au m² situé dans l'intervalle des annonces — seulement si le R² ajusté atteint 0,5 et que la
+commune compte au moins 30 annonces (règle de l'ANIL), jamais pour un meublé, jamais un jugement sur le loyer. Ce qui
+manque pour conclure est dit tel quel ; tout est chiffré ici, relu chaque trimestre (DPE) ou chaque mois (fiche de la
+carte, CSV retéléchargé seulement s'il a changé).
+
+**Encadrement des loyers** : la liste des territoires de la fiche F1314 de Service-Public est gardée datée (« vérifiée
+le 01/08/2026 ») ; Bank relit la fiche chaque mois et dit quand elle a été revue depuis. À Paris, les loyers de
+référence de la Ville (opendata.paris.fr) et les contours des quartiers sont téléchargés en entier, ton quartier se
+calcule ici ; avec ton époque de construction (demandée, jamais devinée), tes pièces, ta surface et ton bail, un loyer
+de base au-dessus du loyer de référence majoré devient un constat chiffré par an, avec la commission départementale de
+conciliation (gratuite) et la lettre au bailleur. Ailleurs, pas de données ouvertes vérifiées : le simulateur officiel
+est lié. **Taxe foncière** (avis rangé dans Papiers, nouveau type « Avis de taxe foncière », sinon tes prélèvements) :
+les taux votés par ta commune (data.economie.gouv.fr, seul le département part ; dernier exercice publié : 2025)
+donnent l'effet des taux, la revalorisation des bases est dite inconnue (non vérifiée sur une source officielle), et
+l'échéance prévue remplace le pic détecté dans l'année qui vient. **Géorisques** : l'API coupait la connexion depuis le
+serveur le 24/10/2026 ; Bank la sonde sans rien envoyer de toi, le dit, et lie la page officielle à côté de ton
+assurance habitation.
+
 ## Ce qui est lié (corrélations)
 
 Bank › Plus › Ma situation › **Ce qui est lié**. Un bail déposé dans Papiers est lu pour ses petites lignes

@@ -38,6 +38,7 @@ from app.api import (
     energy,
     exchange_keys,
     home,
+    housing,
     imports,
     initiatives,
     insights,
@@ -86,6 +87,7 @@ from app.services import crypto as crypto_service
 from app.services import energy as energy_service
 from app.services import exchange_keys as exchange_keys_service
 from app.services import home_value as home_value_service
+from app.services import housing as housing_service
 from app.services import mail as mail_service
 from app.services import obligations as obligations_service
 from app.services import planning as planning_service
@@ -265,6 +267,14 @@ def _housekeeping_once(app: FastAPI, today: date) -> dict[str, int]:
         except Exception:
             db.rollback()
             log.exception("météo : relève en échec")
+    with app.state.sessionmaker() as db:  # ton logement face aux données publiques : relu quand c'est dû
+        try:  # une source publique inattendue n'arrête pas les documents à récupérer qui suivent
+            fetch_home = housing_service.default_fetch(http=app.state.housing_http, resolver=app.state.housing_resolver)
+            report.update(housing_service.tick(db, now=utcnow(), today=today, fetch=fetch_home))
+            db.commit()
+        except Exception:
+            log.exception("logement : relève en échec")
+            db.rollback()
     with app.state.sessionmaker() as db:  # documents à récupérer : attentes de saison, tâches fermées par le PDF
         report.update(state_accounts_service.sync(db, today=today, now=utcnow()))
         db.commit()
@@ -404,6 +414,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "bank_setup": SlidingWindowLimiter(10, 600),  # assistant Enable Banking : saisie, vérification, retrait
         "baremes": SlidingWindowLimiter(6, 3600),  # « Vérifier maintenant » des barèmes (sources publiques)
         "territory": SlidingWindowLimiter(10, 600),  # géocodage de l'adresse et relève du calendrier à la demande
+        "housing": SlidingWindowLimiter(10, 600),  # DPE de l'immeuble et carte des loyers relus à la demande
     }
     app.state.enablebanking = _build_enablebanking(settings)
     app.state.enablebanking_http = None  # transport netfetch du client saisi dans l'assistant (remplaçable en test)
@@ -432,6 +443,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.tempo_resolver = None
     app.state.weather_http = None  # client HTTP de l'archive Open-Meteo (remplaçable en test)
     app.state.weather_resolver = None
+    app.state.housing_http = None  # client HTTP de l'ADEME et de data.gouv.fr (remplaçable en test)
+    app.state.housing_resolver = None
     app.state.channels_options = {}  # surcharges de la passerelle (tests : fabrique d'adaptateurs, horloge…)
 
     routers = (
@@ -478,6 +491,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         home,
         baremes,
         territory,
+        housing,
         state_accounts,
     )
     for r in routers:

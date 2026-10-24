@@ -1,0 +1,35 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     1.456322,
+     43.609092
+    ]
+   },
+   "properties": {
+    "label": "14 Rue Dalmatie 31500 Toulouse",
+    "score": 0.9772609090909089,
+    "housenumber": "14",
+    "id": "31555_2468_00014",
+    "banId": "604095b6-0f71-41ae-9d32-5fdd6cad531b",
+    "name": "14 Rue Dalmatie",
+    "postcode": "31500",
+    "citycode": "31555",
+    "x": 575346.18,
+    "y": 6280111.79,
+    "city": "Toulouse",
+    "context": "31, Haute-Garonne, Occitanie",
+    "type": "housenumber",
+    "importance": 0.74987,
+    "depcode": "31",
+    "street": "Rue Dalmatie",
+    "_type": "address"
+   }
+  }
+ ],
+ "query": "14 Rue Dalmatie 31500 Toulouse"
+}

@@ -88,7 +88,9 @@ def _filed(db: Session, body: str, since: datetime) -> tuple[str, int | None] | 
     doc = db.scalar(
         select(VaultDocument)
         .where(
-            VaultDocument.kind == spec.doc_kind, VaultDocument.status.in_(READABLE), VaultDocument.created_at >= since
+            VaultDocument.kind.in_(dom.doc_kinds(spec.slug)),
+            VaultDocument.status.in_(READABLE),
+            VaultDocument.created_at >= since,
         )
         .order_by(VaultDocument.created_at)
         .limit(1)

@@ -1388,6 +1388,21 @@ class PublicCalendar(Base):
     last_error: Mapped[str | None] = mapped_column(String(300))
 
 
+class HousingSource(Base):
+    """Ton logement face aux données publiques (#34) : les DPE de ton immeuble relus à l'ADEME et celui que tu as
+    reconnu comme le tien (clé « dpe »), la ligne de ta commune dans la carte des loyers de l'ANIL (clé « market »).
+    Chiffré : l'immeuble et la commune disent où tu habites. Une relève ratée garde la précédente."""
+
+    __tablename__ = "housing_sources"
+
+    key: Mapped[str] = mapped_column(String(16), primary_key=True)  # dpe | market
+    data: Mapped[str | None] = mapped_column(EncryptedText("housing.data"))  # JSON
+    source_url: Mapped[str | None] = mapped_column(EncryptedText("housing.source"))
+    fetched_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_attempt_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_error: Mapped[str | None] = mapped_column(String(300))
+
+
 class DocumentTask(Base):
     """« Document à récupérer » : un mail d'un organisme sans pièce jointe (avis disponible, nouveau document) ou une
     attente de saison (avis d'impôt fin août, attestation mensuelle) dont le PDF n'est pas encore dans Papiers. Se
