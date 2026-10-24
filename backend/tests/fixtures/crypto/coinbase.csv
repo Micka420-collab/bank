@@ -1,0 +1,10 @@
+Transactions
+User,Jeanne Exemple,5f0c0000-0000-4000-8000-000000000000
+ID,Timestamp,Transaction Type,Asset,Quantity Transacted,Price Currency,Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes
+6650a1b2c3d4e5f600000001,2026-02-10 08:00:00 UTC,Buy,BTC,0.002,EUR,€55000.00,€110.00,€111.99,€1.99,Bought 0.002 BTC for €111.99 EUR
+6650a1b2c3d4e5f600000002,2026-03-11 12:00:00 UTC,Advanced Trade Sell,BTC,-0.001,EUR,"€60,000.00",€60.00,€59.64,€0.36,Sold 0.001 BTC for 60 EUR on BTC-EUR
+6650a1b2c3d4e5f600000003,2026-03-12 12:00:00 UTC,Advanced Trade Buy,ETH,0.1,EUR,€2500.00,€250.00,€250.50,€0.50,Bought 0.1 ETH for 0.004 BTC on ETH-BTC
+6650a1b2c3d4e5f600000004,2026-03-13 12:00:00 UTC,Convert,ETH,-0.05,EUR,€2400.00,€120.00,€120.00,€0.00,Converted 0.05 ETH to 120 USDC
+6650a1b2c3d4e5f600000005,2026-03-14 12:00:00 UTC,Send,BTC,-0.0005,EUR,€60000.00,€30.00,€30.00,€0.00,Sent 0.0005 BTC to bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4
+6650a1b2c3d4e5f600000006,2026-03-15 12:00:00 UTC,Staking Income,ETH,0.0002,EUR,€2400.00,€0.48,€0.48,€0.00,
+6650a1b2c3d4e5f600000007,2026-03-16 12:00:00 UTC,Sell,ETH,-0.02,USD,$3000.00,$60.00,$59.10,$0.90,Sold 0.02 ETH for $59.10 USD

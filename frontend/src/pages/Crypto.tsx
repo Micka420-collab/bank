@@ -1,14 +1,16 @@
 // Crypto : ton portefeuille sous verre. Lecture seule — des adresses publiques, jamais une clé : Bank ne peut
 // rien signer ni envoyer. La valeur et sa composition d'abord (un ruban qui se dessine une fois), puis les
-// actifs, les adresses suivies, les avoirs saisis, l'humeur du marché, le vérificateur d'arnaques, la fiscalité.
+// actifs, les adresses suivies, les avoirs saisis, l'humeur du marché, le vérificateur d'arnaques, la fiscalité
+// (et l'import des exports Kraken, Binance, Coinbase qui la remplit).
 // Une phrase de récupération ou une clé collée par erreur est arrêtée ici, avant même de partir au serveur.
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type DragEvent, type FormEvent } from "react";
 import {
   api,
   useApi,
   type ConsentView,
   type CryptoAsset,
+  type CryptoImportPreview,
   type CryptoTax,
   type CryptoView,
   type ScamCheck,
@@ -19,7 +21,7 @@ import { ExchangeKeys } from "../components/ExchangeKeys";
 import { Icon } from "../components/Icon";
 import { Segmented } from "../components/Segmented";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
-import { amountOnly, money, safeHref, shortDate } from "../format";
+import { amountOnly, money, plural, safeHref, shortDate } from "../format";
 
 const SWATCH = 6; // nombre de teintes du ruban (--c1 … --c6), réutilisées dans l'ordre
 
@@ -38,6 +40,7 @@ export function Crypto() {
   const toast = useToast();
   const [busy, error, run] = useAsyncAction();
   const [view, setView] = useState<CryptoView | null>(null);
+  const [imported, setImported] = useState(0); // remonte l'encart Impôts sur les opérations importées
   const data = view ?? v.data;
   if (v.error) return <ErrorNote message={v.error} onRetry={v.reload} />;
   if (!data) return <Loading />;
@@ -94,7 +97,8 @@ export function Crypto() {
         <Checker resources={data.resources} />
       </div>
 
-      <Taxes initial={data.tax} currentValue={data.total_cents} />
+      <Taxes key={imported} initial={data.tax} currentValue={data.total_cents} />
+      <PlatformImport onImported={(next) => { setView(next); setImported((n) => n + 1); }} />
 
       <section className="card cx-pilot reveal" style={{ marginTop: "1rem" }} aria-labelledby="cx-pilot">
         <div>
@@ -570,6 +574,138 @@ function Taxes({ initial, currentValue }: { initial: CryptoTax; currentValue: nu
         {tax.sources.map((s) => <li key={s.url}><a href={safeHref(s.url) ?? "#"} target="_blank" rel="noreferrer noopener">{s.label} <Icon name="external" /></a></li>)}
       </ul>
       <p className="faint">{tax.disclaimer}</p>
+    </section>
+  );
+}
+
+// ------------------------------------------------------------------ import d'un export de plateforme
+const fullDate = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString("fr-FR");
+
+export function PlatformImport({ onImported }: { onImported: (view: CryptoView) => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<CryptoImportPreview | null>(null);
+  const [values, setValues] = useState<Record<string, number | null>>({});
+  const [over, setOver] = useState(false);
+  const [busy, error, run] = useAsyncAction();
+  const toast = useToast();
+  const waiting = preview?.events.filter((e) => e.status === "to_complete") ?? [];
+  const filled = waiting.filter((e) => (values[e.key] ?? 0) >= e.amount_cents);
+  const ready = preview ? preview.counts.acquisitions + preview.counts.cessions + filled.length : 0;
+
+  const body = (f: File) => {
+    const form = new FormData();
+    form.append("file", f);
+    const given = Object.fromEntries(filled.map((e) => [e.key, values[e.key]]));
+    if (Object.keys(given).length) form.append("values", JSON.stringify(given));
+    return form;
+  };
+  const check = (f: File | undefined) => {
+    if (!f) return;
+    void run(async () => {
+      setFile(f);
+      setPreview(null);
+      setValues({});
+      const form = new FormData();
+      form.append("file", f);
+      setPreview(await api<CryptoImportPreview>("/api/crypto/import/preview", { method: "POST", form }));
+    });
+  };
+  const confirm = () =>
+    run(async () => {
+      if (!file) return;
+      const r = await api<{ result: CryptoImportPreview; view: CryptoView }>("/api/crypto/import", { method: "POST", form: body(file) });
+      const { created = 0, counts } = r.result;
+      toast(
+        `${plural(created, "opération notée", "opérations notées")}` +
+          (counts.duplicates ? `, ${plural(counts.duplicates, "déjà là", "déjà là")}` : "") +
+          (counts.to_complete ? `, ${plural(counts.to_complete, "vente attend", "ventes attendent")} sa valeur` : "") +
+          ".",
+      );
+      setPreview(null);
+      setFile(null);
+      onImported(r.view);
+    });
+  const drop = (e: DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    setOver(false);
+    check(e.dataTransfer.files?.[0]);
+  };
+
+  const c = preview?.counts;
+  return (
+    <section className="card reveal" style={{ marginTop: "1rem" }} aria-labelledby="cx-import">
+      <div className="card-head"><h2 id="cx-import">Importer un export de plateforme</h2><span className="faint">Kraken, Binance, Coinbase</span></div>
+      <p className="muted">
+        Dépose l'export CSV de ta plateforme : Bank y lit tes achats et tes ventes en euros pour le 2086, et te montre
+        tout avant de noter quoi que ce soit. Lu sur ton serveur, rien ne part ; ni identifiant de compte, ni adresse,
+        ni note n'est gardé.
+      </p>
+      <label className={`drop${over ? " is-over" : ""}`} style={{ marginTop: "0.75rem" }}
+             onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={drop}>
+        <input className="sr-only" type="file" accept=".csv,text/csv" disabled={busy} aria-label="Export CSV de ta plateforme"
+               onChange={(e) => { check(e.target.files?.[0]); e.target.value = ""; }} />
+        <span className="btn quiet" aria-hidden="true">{busy && !preview ? "Lecture…" : "Choisir un fichier"}</span>
+        <span className="faint">Kraken : grand livre (ledgers.csv) ou trades.csv · Binance : historique des transactions · Coinbase : rapport d'historique des transactions. 5 Mo au plus.</span>
+      </label>
+      {error && <ErrorNote message={error} />}
+
+      {preview && c && (
+        <div className="stack" style={{ marginTop: "1rem" }}>
+          <p className="muted">{preview.platform_label} : {plural(preview.rows, "ligne lue", "lignes lues")}{file ? ` dans ${file.name}` : ""}.</p>
+          <dl className="cx-import-counts">
+            <div><dt>Achats en euros</dt><dd>{c.acquisitions}</dd></div>
+            <div><dt>Ventes en euros</dt><dd>{c.cessions}</dd></div>
+            <div><dt>À compléter</dt><dd>{c.to_complete}</dd></div>
+            <div><dt>Déjà importées</dt><dd>{c.duplicates}</dd></div>
+            <div><dt>Écartées</dt><dd>{c.ignored}</dd></div>
+          </dl>
+
+          {waiting.length > 0 && (
+            <div className="stack">
+              <p className="notice warn"><Icon name="alert" /> <span>Pour une vente, il faut la valeur globale de ton portefeuille juste avant : Bank la reprend de son suivi quand il l'a, sinon c'est à toi de l'indiquer. Sans elle, la vente attend (un nouvel import la reprendra).</span></p>
+              {waiting.map((e) => (
+                <Field key={e.key} label={`Vente du ${fullDate(e.day)} : ${money(e.amount_cents)}${e.asset ? ` de ${e.asset}` : ""}`} hint={e.issue ?? undefined}>
+                  <EuroInput value={values[e.key] ?? null} onChange={(v) => setValues((prev) => ({ ...prev, [e.key]: v }))}
+                             aria-label={`Valeur du portefeuille avant la vente du ${fullDate(e.day)}`} />
+                </Field>
+              ))}
+            </div>
+          )}
+
+          {preview.events.length > 0 && (
+            <div className="table-scroll"><table className="plain">
+              <thead><tr><th>Date</th><th>Type</th><th className="num">Montant</th><th className="num">Frais</th><th className="num">Portefeuille</th><th>État</th></tr></thead>
+              <tbody>
+                {preview.events.slice(0, 50).map((e) => (
+                  <tr key={e.key}>
+                    <td>{fullDate(e.day)}</td>
+                    <td>{e.kind === "acquisition" ? "Achat" : "Vente"}{e.asset ? ` ${e.quantity ? `${qty(e.quantity)} ` : ""}${e.asset}` : ""}</td>
+                    <td className="num">{money(e.amount_cents)}</td>
+                    <td className="num">{money(e.fees_cents)}</td>
+                    <td className="num">{e.portfolio_value_cents !== null ? `${money(e.portfolio_value_cents, { whole: true })}${e.value_source === "suivi" ? " (suivi)" : ""}` : e.kind === "cession" ? "à indiquer" : "—"}</td>
+                    <td>{e.status === "duplicate" ? "déjà importée" : e.status === "to_complete" ? "à compléter" : "nouvelle"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table></div>
+          )}
+          {(preview.events.length > 50 || preview.truncated) && <p className="faint">Les 50 premières opérations sont affichées ; toutes seront importées.</p>}
+
+          {preview.reasons.length > 0 && (
+            <details className="cx-details">
+              <summary>Lignes écartées ({c.ignored})</summary>
+              <ul className="cx-reminders">{preview.reasons.map((r) => <li key={r.reason}>{r.reason} ({r.count})</li>)}</ul>
+            </details>
+          )}
+
+          <div className="actions">
+            <button type="button" className={`btn${busy ? " is-loading" : ""}`} disabled={busy || ready === 0} onClick={() => void confirm()}>
+              <Icon name="plus" /> {ready ? `Importer ${plural(ready, "opération", "opérations")}` : "Rien de nouveau à importer"}
+            </button>
+            <button type="button" className="btn quiet" disabled={busy} onClick={() => { setPreview(null); setFile(null); }}>Annuler</button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

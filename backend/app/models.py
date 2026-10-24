@@ -1090,6 +1090,15 @@ class CryptoTaxEvent(Base):
     le 2086. Les échanges crypto contre crypto ne sont pas imposables et ne s'y notent pas."""
 
     __tablename__ = "crypto_tax_events"
+    __table_args__ = (
+        Index(
+            "uq_crypto_tax_import",
+            "import_key",
+            unique=True,
+            sqlite_where=text("import_key IS NOT NULL"),
+            postgresql_where=text("import_key IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     day: Mapped[date] = mapped_column(Date, index=True)
@@ -1100,6 +1109,8 @@ class CryptoTaxEvent(Base):
     asset: Mapped[str | None] = mapped_column(String(16))
     note: Mapped[str | None] = mapped_column(EncryptedText("crypto.tax_note"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    # Empreinte d'une ligne d'export de plateforme (jamais son identifiant) : réimporter ne crée rien.
+    import_key: Mapped[str | None] = mapped_column(String(64))
 
 
 # ---------------------------------------------------------------------------- déclarations récurrentes

@@ -417,7 +417,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         BodyLimitMiddleware,
         default_limit=256_000,
         upload_limit=settings.max_upload_bytes + 64_000,
-        upload_prefixes=("/api/imports", "/api/documents/preview", "/api/planning/file"),
+        upload_prefixes=("/api/imports", "/api/documents/preview", "/api/planning/file", "/api/crypto/import"),
         special_limits={"/api/vault/upload": settings.vault_upload_bytes + 256_000},
     )
     app.add_middleware(

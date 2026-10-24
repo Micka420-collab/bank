@@ -3,18 +3,21 @@ d'un message ou d'une adresse. Aucun endpoint n'accepte ni ne renvoie de clé : 
 
 from __future__ import annotations
 
+import json
 from datetime import date
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import AuthDep, DbDep, TodayDep, client_ip
 from app.db import utcnow
 from app.domain.crypto import CryptoError
+from app.importers import crypto_csv
+from app.importers.base import ImportFormatError
 from app.security import audit
 from app.security.auth import verify_password
-from app.services import consents, exchange_keys
+from app.services import consents, crypto_import, exchange_keys
 from app.services import crypto as svc
 from app.services.settings_store import set_setting
 
@@ -201,3 +204,50 @@ def settings(body: SettingsIn, request: Request, ctx: AuthDep, db: DbDep, today:
     if body.in_wealth is not None:
         set_setting(db, "crypto_in_wealth", body.in_wealth)
     return svc.view(db, today=today, now=utcnow())
+
+
+# ------------------------------------------------------------------ import d'un export de plateforme
+async def _export(file: UploadFile) -> bytes:
+    data = await file.read(crypto_csv.MAX_BYTES + 1)
+    if len(data) > crypto_csv.MAX_BYTES:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "Fichier trop volumineux (5 Mo au plus)")
+    return data
+
+
+def _given(values: str | None) -> Any:
+    try:
+        return json.loads(values) if values else None
+    except ValueError:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Valeurs du portefeuille illisibles") from None
+
+
+@router.post("/import/preview")
+async def import_preview(
+    _: AuthDep,
+    db: DbDep,
+    today: TodayDep,
+    file: Annotated[UploadFile, File()],
+    values: Annotated[str | None, Form(max_length=2_000_000)] = None,
+) -> dict[str, Any]:
+    # Lu ici, sur ton serveur : aucun cours n'est cherché, rien ne part.
+    data = await _export(file)
+    try:
+        return crypto_import.preview(db, data, today=today, values=_given(values))
+    except (ImportFormatError, CryptoError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
+
+
+@router.post("/import", status_code=201)
+async def import_commit(
+    ctx: AuthDep,
+    db: DbDep,
+    today: TodayDep,
+    file: Annotated[UploadFile, File()],
+    values: Annotated[str | None, Form(max_length=2_000_000)] = None,
+) -> dict[str, Any]:
+    data = await _export(file)
+    try:
+        result = crypto_import.commit(db, data, actor=ctx.user.username, today=today, values=_given(values))
+    except (ImportFormatError, CryptoError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
+    return {"result": result, "view": svc.view(db, today=today, now=utcnow())}
