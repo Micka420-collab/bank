@@ -278,6 +278,7 @@ OPENFISCA_FILES = {
     "marche_travail.salaire_minimum.smic.smic_b_horaire": "openfisca_smic_b_horaire.json",
     "marche_travail.salaire_minimum.smic.smic_b_mensuel": "openfisca_smic_b_mensuel.json",
     "impot_revenu.bareme_ir_depuis_1945.bareme": "openfisca_bareme_ir.json",
+    "prestations_sociales.prestations_familiales.bmaf.bmaf": "openfisca_bmaf.json",
 }
 
 

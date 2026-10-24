@@ -382,6 +382,18 @@ consommation Linky. Les pistes statistiques (revenu ↔ catégorie, dépenses de
 qu'avec huit mois et un test par permutation, et jamais comme des causes. Détails :
 [docs/CORRELATIONS.md](docs/CORRELATIONS.md).
 
+Côté revenus, trois constats s'y ajoutent, chacun avec sa source. Une **revalorisation légale** qui ne se voit
+pas : prestations de la CAF au 1er avril (+0,8 % en 2026), retraites de base au 1er janvier (+0,9 %), ARE au 1er
+juillet (aucune hausse en 2026) ; quand le premier versement d'après est identique au centime au précédent, Bank
+renvoie à la notification et au délai de recours (2 mois pour une caisse de sécurité sociale), sans jamais dire
+qu'un montant est dû. Le taux 2027 se date seul : la base des allocations familiales est relue dans OpenFisca avec
+les autres barèmes. Ton **taux de prélèvement à la source** (bulletin ou avis lu dans Papiers) face à tes salaires
+de l'année : impôt estimé au barème (abattement, décote, quotient familial), recoupé avec OpenFisca ; au-delà de
+5 % d'écart la baisse est possible et Bank chiffre l'effet par mois ; si tes revenus montent, le solde de
+septembre suivant est posé dans l'Année qui vient (en une fois jusqu'à 300 €, sinon de septembre à décembre). Le
+**chèque énergie** : éligible d'après la simulation des aides et rien vu dans tes relevés, Bank te demande de
+vérifier qu'il a été reçu et utilisé ; si ton revenu fiscal de l'année N-2 lui manque, il dit lequel.
+
 ## Déclarations à ne pas oublier
 
 Bank › Gagner › Aides › **Tes déclarations**. Un versement France Travail reconnu dans tes relevés fait proposer

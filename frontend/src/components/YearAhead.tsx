@@ -86,7 +86,7 @@ export function YearAhead() {
         <ul className="ya-spikes">
           {y.spikes.map((s) => (
             <li key={`${s.key}:${s.day}`}>
-              <span><b>{s.label}</b> <span className="faint">{shortDate(s.day)}{s.shifted_from && ` (décalé du ${shortDate(s.shifted_from)})`} · {s.source === "forecast" ? "prévision (Ton logement)" : s.cadence === "yearly" ? "chaque année" : s.cadence === "quarterly" ? "chaque trimestre" : s.source === "planned" ? "prévu" : "ajouté"}</span></span>
+              <span><b>{s.label}</b> <span className="faint">{s.source === "estimated" ? new Date(s.day).toLocaleDateString("fr-FR", { month: "long", year: "numeric" }) : shortDate(s.day)}{s.shifted_from && ` (décalé du ${shortDate(s.shifted_from)})`} · {s.source === "forecast" ? "prévision (Ton logement)" : s.cadence === "yearly" ? "chaque année" : s.cadence === "quarterly" ? "chaque trimestre" : s.source === "estimated" ? "estimation Bank, détail dans « Ce qui est lié »" : s.source === "planned" ? "prévu" : "ajouté"}</span></span>
               <span className="ya-amount">{money(s.amount_cents, { whole: true })}</span>
               {(s.source === "detected" || s.source === "forecast") && <button type="button" className="btn link" disabled={busy} onClick={() => void ignore(s.key, true)}>Écarter</button>}
               {s.source === "custom" && <button type="button" className="btn link" disabled={busy} onClick={() => void remove(s.key)}>Retirer</button>}

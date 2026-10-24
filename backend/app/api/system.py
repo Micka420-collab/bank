@@ -30,6 +30,7 @@ from app.models import (
     EnergyLoadCurve,
     EnergyMaxPower,
     EnergyReading,
+    FiscalSimulation,
     HousingSource,
     InitiativeState,
     LlmUsage,
@@ -208,6 +209,11 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
         ],
         "official_facts": [
             {"kind": f.kind, "period": f.period, "fields": json.loads(f.data)} for f in db.scalars(select(OfficialFact))
+        ],
+        # Simulations des aides (OpenFisca), chèque énergie estimé compris (#35).
+        "fiscal_simulations": [
+            {"period": f.period, "result": json.loads(f.result), "created_at": f.created_at.isoformat()}
+            for f in db.scalars(select(FiscalSimulation).order_by(FiscalSimulation.id))
         ],
         # Planning : les journées et le modèle de paie, jamais l'adresse privée de l'agenda.
         "work_plan": next(

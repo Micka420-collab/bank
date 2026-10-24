@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.domain import yearahead as dom
 from app.domain.money import format_eur
 from app.security import audit
-from app.services import analytics, housing, territory
+from app.services import analytics, housing, income_watch, territory
 from app.services.settings_store import get_setting, set_setting
 
 ALERT_DAYS = 60
@@ -77,6 +77,7 @@ def compute(db: Session, today: date) -> dom.YearAhead:
         txns=inputs.txns,
         custom=_custom(db),
         planned=_planned(db),
+        estimated=income_watch.september_balance(db, today),  # solde d'impôt estimé (taux de prélèvement)
         ignored=_settings(db)["ignored"],
         buffer_cents=int(get_setting(db, "buffer_cents")),
         holidays=cal.holidays if cal is not None and cal.holidays else None,

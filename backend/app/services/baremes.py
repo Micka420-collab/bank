@@ -50,7 +50,11 @@ class Feed:
 FEED_ERRORS = (netfetch.FetchError, ValueError, csv.Error, RecursionError)
 CRE_LABELS = {"base": "option Base", "hphc": "option Heures creuses", "tempo": "option Tempo"}
 INSEE_LABELS = {"011814056": "IPC", "011814133": "inflation sur un an", "001515333": "IRL"}
-OPENFISCA_LABELS = {"openfisca.smic_horaire": "SMIC horaire", "openfisca.smic_mensuel": "SMIC mensuel"}
+OPENFISCA_LABELS = {
+    "openfisca.smic_horaire": "SMIC horaire",
+    "openfisca.smic_mensuel": "SMIC mensuel",
+    "openfisca.bmaf": "base des allocations familiales",
+}
 
 
 @dataclass(frozen=True)
@@ -87,7 +91,7 @@ SOURCES: tuple[Spec, ...] = (
     ),
     Spec(
         "bareme-openfisca",
-        "OpenFisca — SMIC et barème de l'impôt sur le revenu",
+        "OpenFisca — SMIC, base des allocations familiales et barème de l'impôt sur le revenu",
         dom.OPENFISCA_URL.format(name=dom.OPENFISCA_SCALE),
         (
             *(
@@ -122,6 +126,7 @@ INDICES: tuple[tuple[str, str, str], ...] = (
     ("insee.irl", "Indice de référence des loyers (IRL)", ""),
     ("openfisca.smic_horaire", "SMIC brut horaire", " €"),
     ("openfisca.smic_mensuel", "SMIC brut mensuel (35 h)", " €"),
+    ("openfisca.bmaf", "Base mensuelle des allocations familiales (BMAF)", " €"),
     ("cdc.livret_a", "Livret A et LDDS, dernier mois publié par la Caisse des Dépôts", " %"),
     ("cdc.lep", "LEP, dernier mois publié par la Caisse des Dépôts", " %"),
 )

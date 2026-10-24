@@ -735,7 +735,7 @@ export type YearSpike = {
   amount_cents: number;
   day: string;
   cadence: "quarterly" | "yearly" | "custom" | "planned";
-  source: "detected" | "custom" | "planned" | "forecast";
+  source: "detected" | "custom" | "planned" | "forecast" | "estimated";
   category: string | null;
   occurrences: number;
   confidence: number;

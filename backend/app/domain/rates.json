@@ -49,7 +49,24 @@
         "up_to_cents": null,
         "rate_percent": 45
       }
-    ]
+    ],
+    "decote": {
+      "single_cents": 89700,
+      "couple_cents": 148300,
+      "rate_percent": "45.25",
+      "source": "CGI art. 197, I-4-a, LF 2026 n° 2026-103 art. 4 (revenus 2025), relu dans OpenFisca le 24/10/2026",
+      "url": "https://api.fr.openfisca.org/latest/parameter/impot_revenu.calcul_impot_revenu.plaf_qf.decote.seuil_celib"
+    },
+    "qf_cap_half_part_cents": 180700,
+    "qf_cap_source": "CGI art. 197, I-2 (cas général), LF 2026 art. 4 (revenus 2025), relu dans OpenFisca le 24/10/2026",
+    "professional_deduction": {
+      "rate_percent": 10,
+      "min_cents": 50400,
+      "max_cents": 1442600,
+      "incomes_year": 2024,
+      "source": "CGI art. 83, 3° : abattement de 10 % ; plancher et plafond des revenus 2024, les derniers relus dans OpenFisca le 24/10/2026",
+      "url": "https://api.fr.openfisca.org/latest/parameter/impot_revenu.calcul_revenus_imposables.deductions.abatpro.max"
+    }
   },
   "electricity_trv": {
     "as_of": "2026-08-01",
@@ -122,6 +139,86 @@
           "chauffage": {"abonnement_ttc": "360.79", "kwh_ttc": "0.15760", "kwh_low_ttc": "0.14798", "kwh_high_ttc": "0.17639"},
           "cuisson": {"abonnement_ttc": "152.46", "kwh_ttc": "0.19027", "kwh_low_ttc": "0.18560", "kwh_high_ttc": "0.19999"}
         }
+      }
+    ]
+  },
+  "withholding_tax": {
+    "decrease_gap_percent": 5,
+    "decrease_source": "CGI art. 204 J, III-1 ; BOFiP BOI-IR-PAS-20-30-20-10 § 80 (publié le 07/05/2025) : baisse possible si l'écart dépasse 5 % (10 % jusqu'au 31/12/2022)",
+    "decrease_url": "https://bofip.impots.gouv.fr/bofip/11263-PGP.html/identifiant=BOI-IR-PAS-20-30-20-10-20250507",
+    "balance_single_max_cents": 30000,
+    "balance_source": "Service-Public F35898 (vérifié le 01/01/2026) : jusqu'à 300 € en une fois en septembre, au-delà en 4 fois de septembre à décembre",
+    "balance_url": "https://www.service-public.gouv.fr/particuliers/vosdroits/F35898"
+  },
+  "revaluations": {
+    "appeal_months": 2,
+    "appeal_source": "Service-Public F2500 (vérifié le 28/09/2026) : commission de recours amiable saisie dans les 2 mois qui suivent la notification",
+    "appeal_url": "https://www.service-public.gouv.fr/particuliers/vosdroits/F2500",
+    "items": [
+      {
+        "id": "prestations-2026",
+        "kind": "prestations",
+        "effective": "2026-04-01",
+        "rate_percent": "0.8",
+        "applies_to": [
+          "caf_ppa",
+          "caf_rsa",
+          "caf_af",
+          "caf_asf",
+          "caf_aah",
+          "cpam_invalidite"
+        ],
+        "source": "Instruction interministérielle DSS/2A/2026/36 du 26 mars 2026 (art. L. 161-25 du code de la sécurité sociale) ; BMAF 474,37 € puis 478,16 € (OpenFisca)",
+        "url": "https://legislation.lassuranceretraite.fr/Pdf/instruction_ministerielle_2026_36_26032026.pdf"
+      },
+      {
+        "id": "prestations-2025",
+        "kind": "prestations",
+        "effective": "2025-04-01",
+        "rate_percent": "1.7",
+        "applies_to": [
+          "caf_ppa",
+          "caf_rsa",
+          "caf_af",
+          "caf_asf",
+          "caf_aah",
+          "cpam_invalidite"
+        ],
+        "source": "BMAF 466,44 € puis 474,37 € au 1er avril 2025 (OpenFisca, instruction DSS/2A/2C/2025/32 du 7 mars 2025)",
+        "url": "https://api.fr.openfisca.org/latest/parameter/prestations_sociales.prestations_familiales.bmaf.bmaf"
+      },
+      {
+        "id": "pensions-2026",
+        "kind": "pensions",
+        "effective": "2026-01-01",
+        "rate_percent": "0.9",
+        "applies_to": [
+          "retraite_pension"
+        ],
+        "source": "Circulaire Cnav 2025-29 du 22 décembre 2025 : retraites de base revalorisées de 0,9 % (coefficient 1,009) ; pas les complémentaires",
+        "url": "https://legislation.lassuranceretraite.fr/Pdf/circulaire_cnav_2025_29_22122025.pdf"
+      },
+      {
+        "id": "are-2026",
+        "kind": "are",
+        "effective": "2026-07-01",
+        "rate_percent": "0",
+        "applies_to": [
+          "ft_are"
+        ],
+        "source": "Unédic, communiqué du 30 juin 2026 : pas de revalorisation au 1er juillet 2026",
+        "url": "https://www.unedic.org/actualites/allocations-dassurance-chomage-pas-de-revalorisation-au-1er-juillet-2026"
+      },
+      {
+        "id": "are-2025",
+        "kind": "are",
+        "effective": "2025-07-01",
+        "rate_percent": "0.5",
+        "applies_to": [
+          "ft_are"
+        ],
+        "source": "Unédic, communiqué du 25 juin 2025 : revalorisation de 0,5 % au 1er juillet 2025",
+        "url": "https://www.unedic.org/actualites/allocations-d-assurance-chomage-revalorisation-de-0-5-au-1er-juillet-2025"
       }
     ]
   }

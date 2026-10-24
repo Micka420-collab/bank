@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 
-from app.fiscal.situation import FAMILLE_OUTPUTS, INDIVIDU_OUTPUTS
+from app.fiscal.situation import FAMILLE_OUTPUTS, INDIVIDU_OUTPUTS, MENAGE_YEAR_OUTPUTS
 
 LABELS = {
     "rsa": "RSA",
@@ -38,6 +38,7 @@ class SimulationOutcome:
     css: str  # gratuite | participation | non_eligible
     css_participation_cents: int
     lep_eligible: bool
+    cheque_energie_cents: int | None = None  # montant annuel estimé ; None : non calculé (ancien moteur)
 
 
 def interpret(period: str, version: str, values: dict[str, Any]) -> SimulationOutcome:
@@ -56,6 +57,9 @@ def interpret(period: str, version: str, values: dict[str, Any]) -> SimulationOu
         css=css,
         css_participation_cents=participation,
         lep_eligible=bool(values.get("livret_epargne_populaire_eligibilite")),
+        cheque_energie_cents=(
+            round(num("cheque_energie") * 100) if isinstance(values.get("cheque_energie"), int | float) else None
+        ),
     )
 
 
@@ -68,7 +72,9 @@ class FiscalClient:
 
     def simulate(self, situation: dict[str, Any], period: date) -> SimulationOutcome:
         p = f"{period.year:04d}-{period.month:02d}"
+        year = f"{period.year:04d}"
         outputs = [{"variable": v, "period": p} for v in (*FAMILLE_OUTPUTS, *INDIVIDU_OUTPUTS)]
+        outputs += [{"variable": v, "period": year} for v in MENAGE_YEAR_OUTPUTS]
         try:
             resp = self._http.post("/simulate", json={"situation": situation, "outputs": outputs})
         except httpx.HTTPError as exc:
@@ -76,5 +82,9 @@ class FiscalClient:
         if resp.status_code != 200:
             raise FiscalEngineError(f"Moteur fiscal : erreur {resp.status_code}")
         body = resp.json()
-        values = {k: v.get(p) for k, v in body.get("results", {}).items() if isinstance(v, dict)}
+        values = {
+            k: v.get(year if k in MENAGE_YEAR_OUTPUTS else p)
+            for k, v in body.get("results", {}).items()
+            if isinstance(v, dict)
+        }
         return interpret(p, str(body.get("engine_version", "?")), values)
