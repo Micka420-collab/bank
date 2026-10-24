@@ -585,7 +585,7 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 994 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+Qualité au moment de la livraison : 1021 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
 aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, scénarios adverses du
 banc d'essai crypto de Minara rejoués contre le pilote automatique, demandes simultanées qui ne passent jamais
@@ -600,7 +600,7 @@ les paliers de la LFSS 2026, lien de partage ouvert deux fois en même temps, va
 synthétique, clés de plateforme face à de fausses
 plateformes qui vérifient chaque signature et refusent les droits trop larges, pilote vs consigne sur un calendrier
 de référence — fins de mois, heures d'été et d'hiver, pauses, refus —, alertes de cours franchies une seule fois par
-deux relèves simultanées), couverture 91 %, 161 tests front (parcours de première ouverture,
+deux relèves simultanées), couverture 91 %, 167 tests front (parcours de première ouverture,
 coffre et partage d'un papier, démarches, opportunités, veille, assistant, chat interactif et réponse en direct,
 notifications sur l'appareil, plan B, crédits, retraite, logement, sauvegardes, boîte mail, crypto et plateformes reliées,
 alertes de cours, pilote, pilote vs consigne, déclarations, corrélations, année qui vient, passkeys, erreurs qui
