@@ -290,6 +290,26 @@ KINDS: dict[str, KindSpec] = {
             official="avis_impot",
         ),
         KindSpec(
+            "property_tax",
+            "Avis de taxe foncière",
+            False,
+            (
+                _f("annee", "Année d'imposition", "number"),
+                _f("montant", "Montant de l'impôt", "amount"),
+                _f("teom", "Dont taxe d'enlèvement des ordures ménagères", "amount"),
+                _f("date_limite", "Date limite de paiement", "date"),
+            ),
+            # Service-Public, fiche F19134 (vérifiée le 13 octobre 2026), relue le 24 octobre 2026.
+            Retention("Jusqu'au 31 décembre de l'année qui suit celle de la mise en recouvrement", 1, "tax_year"),
+            (
+                (r"TAXES? FONCIERES?", 6),
+                (r"PROPRIETES? BATIES?", 3),
+                (r"ORDURES MENAGERES", 2),
+                (r"AVIS D'IMPOT", 1),
+            ),
+            date_field="date_limite",
+        ),
+        KindSpec(
             "caf",
             "Attestation CAF",
             False,
@@ -605,6 +625,25 @@ def _dpe_letter(line: Line, m: re.Match[str]) -> str | None:
     return (found.group(1) or found.group(2)) if found else None
 
 
+def _year_in(line: Line, m: re.Match[str]) -> int | None:
+    """« AVIS D'IMPOT 2025 TAXES FONCIERES » : l'année écrite sur la ligne du titre (#34)."""
+    found = re.search(r"\b(20\d\d)\b", line.folded)
+    return int(found.group(1)) if found else None
+
+
+def _euros_after(line: Line, m: re.Match[str]) -> int | None:
+    """« Montant de votre impôt : 1 234 € » : un avis écrit souvent l'euro sans centimes (#34). Seul un nombre suivi
+    de « € » ou « EUR » compte : une année ou un numéro d'avis ne passent pas pour un montant."""
+    rest = line.folded[m.end() :]
+    for found in _AMOUNT_LOOSE.finditer(rest):
+        if found.group(1) or not re.match(r"\s?(?:€|EUR\b)", rest[found.end() :]):
+            continue
+        cents = int(found.group(2).replace(" ", "").replace(".", "")) * 100 + int(found.group(3) or 0)
+        if 100 <= cents <= 100_000_000:
+            return cents
+    return None
+
+
 def _months_after(line: Line, m: re.Match[str]) -> int | None:
     found = re.search(r"\b(UN|DEUX|TROIS|SIX|[1-9]|1[0-2])\s*MOIS\b", line.folded[m.end() :])
     if not found:
@@ -695,6 +734,12 @@ _RULES: dict[str, tuple[Rule, ...]] = {
             _dpe_letter,
             confidence=0.7,
         ),
+    ),
+    "property_tax": (
+        Rule("annee", r"AVIS D'IMPOT\s*(?:20\d\d\s*)?TAXES? FONCIERES?|TAXES? FONCIERES? (?:DE )?20\d\d", _year_in),
+        Rule("montant", r"MONTANT DE (?:VOTRE|L')\s?IMPOT|(?:TOTAL|SOMME|MONTANT) A PAYER", _euros_after),
+        Rule("teom", r"ORDURES MENAGERES", _euros_after, exclude=r"TAUX|%", confidence=0.6),
+        Rule("date_limite", r"DATE LIMITE (?:DE PAIEMENT)?|A PAYER (?:AVANT|AU PLUS TARD)", _date_after),
     ),
     "bank_statement": (
         Rule("solde", r"NOUVEAU SOLDE|SOLDE (?:FINAL|AU \d)|SOLDE (?:CREDITEUR|DEBITEUR)", _signed_balance),
@@ -925,6 +970,8 @@ def title_of(kind: str, found: list[Found], issuer: str | None, document_date: d
     when = month_label(str(month)) if month else (_date_label(document_date) if document_date else "")
     if kind == "tax_notice" and by.get("annee_revenus"):
         return f"Avis d'impôt — revenus {by['annee_revenus']}"
+    if kind == "property_tax" and by.get("annee"):
+        return f"Avis de taxe foncière {by['annee']}"
     if kind == "identity" and by.get("type_piece"):
         return str(by["type_piece"])
     if kind == "other":

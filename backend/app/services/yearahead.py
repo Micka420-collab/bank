@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.domain import yearahead as dom
 from app.domain.money import format_eur
 from app.security import audit
-from app.services import analytics, territory
+from app.services import analytics, housing, territory
 from app.services.settings_store import get_setting, set_setting
 
 ALERT_DAYS = 60
@@ -81,6 +81,7 @@ def compute(db: Session, today: date) -> dom.YearAhead:
         buffer_cents=int(get_setting(db, "buffer_cents")),
         holidays=cal.holidays if cal is not None and cal.holidays else None,
         school_breaks=cal.breaks if cal is not None else (),
+        forecasts=[f] if (f := housing.tax_provision(db, today)) is not None else [],
     )
 
 

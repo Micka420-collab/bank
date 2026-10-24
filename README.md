@@ -356,6 +356,19 @@ commune compte au moins 30 annonces (règle de l'ANIL), jamais pour un meublé, 
 manque pour conclure est dit tel quel ; tout est chiffré ici, relu chaque trimestre (DPE) ou chaque mois (fiche de la
 carte, CSV retéléchargé seulement s'il a changé).
 
+**Encadrement des loyers** : la liste des territoires de la fiche F1314 de Service-Public est gardée datée (« vérifiée
+le 01/08/2026 ») ; Bank relit la fiche chaque mois et dit quand elle a été revue depuis. À Paris, les loyers de
+référence de la Ville (opendata.paris.fr) et les contours des quartiers sont téléchargés en entier, ton quartier se
+calcule ici ; avec ton époque de construction (demandée, jamais devinée), tes pièces, ta surface et ton bail, un loyer
+de base au-dessus du loyer de référence majoré devient un constat chiffré par an, avec la commission départementale de
+conciliation (gratuite) et la lettre au bailleur. Ailleurs, pas de données ouvertes vérifiées : le simulateur officiel
+est lié. **Taxe foncière** (avis rangé dans Papiers, nouveau type « Avis de taxe foncière », sinon tes prélèvements) :
+les taux votés par ta commune (data.economie.gouv.fr, seul le département part ; dernier exercice publié : 2025)
+donnent l'effet des taux, la revalorisation des bases est dite inconnue (non vérifiée sur une source officielle), et
+l'échéance prévue remplace le pic détecté dans l'année qui vient. **Géorisques** : l'API coupait la connexion depuis le
+serveur le 24/10/2026 ; Bank la sonde sans rien envoyer de toi, le dit, et lie la page officielle à côté de ton
+assurance habitation.
+
 ## Ce qui est lié (corrélations)
 
 Bank › Plus › Ma situation › **Ce qui est lié**. Un bail déposé dans Papiers est lu pour ses petites lignes

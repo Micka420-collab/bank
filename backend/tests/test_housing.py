@@ -305,20 +305,39 @@ class Chunks(httpx.SyncByteStream):
 
 
 class FakeNet:
-    """Géoplateforme, ADEME et data.gouv.fr simulés avec leurs vraies réponses. L'hôte se lit dans l'en-tête Host :
-    netfetch épingle la connexion sur l'adresse résolue."""
+    """Géoplateforme, ADEME, data.gouv.fr, Service-Public, opendata.paris.fr et data.economie.gouv.fr simulés avec
+    leurs vraies réponses (réduites) ; Géorisques coupe la connexion, comme depuis ce serveur le 24 octobre 2026.
+    L'hôte se lit dans l'en-tête Host : netfetch épingle la connexion sur l'adresse résolue."""
 
-    def __init__(self) -> None:
+    def __init__(self, geocode: str = "geocodage_numero.json") -> None:
         self.requests: list[httpx.Request] = []
         self.down: set[str] = set()
+        self.geocode = geocode
+        self.georisques_up = False
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
         host, path = request.headers["host"], request.url.path
         if host in self.down:
             return httpx.Response(503, stream=Chunks(b""))
-        if host == "data.geopf.fr":
-            body = read("geocodage_numero.json")
+        if host == "www.georisques.gouv.fr" and not self.georisques_up:
+            raise httpx.ConnectError("Connection reset by peer", request=request)
+        if host == "www.georisques.gouv.fr":
+            body = b'{"openapi": "3.0.1"}'
+        elif host == "www.service-public.gouv.fr":
+            body = read("f1314_extrait.html")
+        elif host == "opendata.paris.fr":
+            if path.endswith("/exports/json"):
+                body = read("paris_loyers_reference_extrait.json")
+            elif path.endswith("/exports/geojson"):
+                body = read("paris_quartiers_extrait.geojson")
+            else:
+                body = read("paris_jeu.json")
+        elif host == "data.economie.gouv.fr":
+            dep = parse_qs(request.url.query.decode())["where"][0]
+            body = read("fiscalite_75.json" if '"75"' in dep else "fiscalite_31_extrait.json")
+        elif host == "data.geopf.fr":
+            body = read(self.geocode)
         elif host == "data.ademe.fr":
             body = read("dpe_14_rue_dalmatie.json")
         elif host == "www.data.gouv.fr":
@@ -489,11 +508,12 @@ def test_background_tick_reads_only_what_is_due(app, net: tuple[TestClient, Fake
     with app.state.sessionmaker() as db:
         report = svc.tick(db, now=now, today=TODAY, fetch=fetch)
         db.commit()
-    assert report == {"housing_dpe_refreshed": 1, "housing_market_refreshed": 1}
+    # Toulouse n'est pas encadrée et aucune taxe foncière n'est connue : ni F1314 ni taux ; Géorisques est sondé.
+    assert report == {"housing_dpe_refreshed": 1, "housing_market_refreshed": 1, "housing_risks_failed": 1}
     fake.requests.clear()
     with app.state.sessionmaker() as db:
-        assert svc.tick(db, now=now + timedelta(days=1), today=TODAY, fetch=fetch) == {}
+        assert svc.tick(db, now=now + timedelta(days=1), today=TODAY, fetch=fetch) == {}, "Géorisques : une semaine"
         later = svc.tick(db, now=now + timedelta(days=95), today=TODAY, fetch=fetch)
         db.commit()
-    assert later == {"housing_dpe_refreshed": 1, "housing_market_refreshed": 1}
+    assert later == {"housing_dpe_refreshed": 1, "housing_market_refreshed": 1, "housing_risks_failed": 1}
     assert "static.data.gouv.fr" not in fake.hosts(), "même fichier publié : pas de nouveau téléchargement"

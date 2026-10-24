@@ -230,11 +230,65 @@ def _rent_dpe_letter(v: dict[str, Any], today: date | None) -> str:
     return "\n".join(lines)
 
 
+def _rent_control_letter(v: dict[str, Any], today: date | None) -> str:
+    """Loyer au-dessus du loyer de référence majoré (#34) : la règle citée telle que Service-Public l'écrit."""
+    signed = v.get("date_bail")
+    when = _fr_date(date.fromisoformat(str(signed))) if signed else "[date du bail]"
+    lines = [
+        str(v.get("nom") or "…"),
+        str(v.get("adresse_logement") or "[adresse du logement]"),
+        "",
+        f"À l'attention de {v.get('bailleur') or 'mon bailleur'}",
+        "",
+        f"Le {_fr_date(today)}",
+        "",
+        "Objet : loyer de base supérieur au loyer de référence majoré (encadrement des loyers)",
+        "",
+        "Madame, Monsieur,",
+        "",
+        f"Locataire du logement cité en tête en vertu d'un bail prenant effet le {when}, je constate que le loyer de "
+        f"base fixé, {_money(v.get('loyer'))} hors charges pour {v.get('surface') or '…'} m², dépasse le loyer de "
+        f"référence majoré en vigueur à la signature du bail : {v.get('plafond_m2') or '…'} €/m² "
+        f"({v.get('categorie') or 'catégorie à préciser'}).",
+        "",
+        "Comme le rappelle Service-Public (fiche F1314), le loyer de base ne doit pas dépasser le loyer de référence "
+        "majoré en vigueur à la date de signature du bail, sauf complément de loyer prévu au bail et justifié par "
+        "des caractéristiques particulières du logement.",
+        "",
+        f"Je vous demande donc de ramener le loyer de base à ce plafond, soit {_money(v.get('ecart_mensuel'))} de "
+        "moins par mois, et de me rembourser les sommes versées au-delà depuis la prise d'effet du bail.",
+        "",
+        "À défaut d'accord, je saisirai la commission départementale de conciliation.",
+        "",
+        "Je vous prie d'agréer, Madame, Monsieur, mes salutations distinguées.",
+        "",
+        str(v.get("nom") or "…"),
+    ]
+    return "\n".join(lines)
+
+
 # ============================================================================ modèles
 _SP_F1311 = Source(
     "Service-Public — Augmentation et révision du loyer en cours de bail d'habitation (fiche F1311, vérifiée le "
     "08/08/2025)",
     "https://www.service-public.gouv.fr/particuliers/vosdroits/F1311",
+    "2026-10-24",
+)
+_SP_F1314 = Source(
+    "Service-Public — En quoi consiste l'encadrement des loyers à respecter en zone tendue ? (fiche F1314, vérifiée "
+    "le 01/08/2026)",
+    "https://www.service-public.gouv.fr/particuliers/vosdroits/F1314",
+    "2026-10-24",
+)
+_SP_F1216 = Source(
+    "Service-Public — Commission départementale de conciliation (fiche F1216, vérifiée le 03/05/2024)",
+    "https://www.service-public.gouv.fr/particuliers/vosdroits/F1216",
+    "2026-10-24",
+)
+_PARIS_REF = Source(
+    "Ville de Paris — Logement : encadrement des loyers (opendata.paris.fr, valeurs indicatives ; l'arrêté "
+    "préfectoral fait foi)",
+    "https://opendata.paris.fr/explore/dataset/logement-encadrement-des-loyers/",
     "2026-10-24",
 )
 _ADEME_DPE = Source(
@@ -557,6 +611,50 @@ TEMPLATES: dict[str, Template] = {
             followup_days=60,
             followup_label="Sans accord : commission départementale de conciliation ou conciliateur de justice",
             letter=_rent_dpe_letter,
+        ),
+        Template(
+            key="encadrement_loyer",
+            title="Loyer au-dessus du plafond de l'encadrement",
+            summary="Une lettre à ton bailleur : le loyer de base revient au loyer de référence majoré, le trop-perçu "
+            "est remboursé.",
+            category="autre",
+            organisme="Ton bailleur",
+            channel="letter",
+            recipient="Ton bailleur ou son agence (courrier recommandé avec accusé de réception)",
+            official_url="https://www.service-public.gouv.fr/particuliers/vosdroits/F1314",
+            steps=(
+                "Relis le bail : un complément de loyer écrit et justifié par des caractéristiques particulières peut "
+                "dépasser le plafond ; la valeur opposable est celle de l'arrêté préfectoral, le jeu de la Ville de "
+                "Paris n'a qu'une valeur indicative.",
+                "Envoie la lettre en recommandé avec accusé de réception ; garde la date d'envoi.",
+                "Sans accord : la commission départementale de conciliation se saisit gratuitement, puis le juge des "
+                "contentieux de la protection.",
+                "Tu peux aussi signaler le non-respect de l'encadrement à la Ville de Paris (Service-Public, F1314).",
+            ),
+            sources=(_SP_F1314, _SP_F1216, _PARIS_REF),
+            confidence="moyenne",
+            fields=(
+                FieldDef("nom", "Ton nom et prénom (signature de la lettre)", "text"),
+                FieldDef("adresse_logement", "Adresse du logement loué", "text"),
+                FieldDef("bailleur", "Bailleur ou agence", "text"),
+                FieldDef("date_bail", "Prise d'effet du bail", "date"),
+                FieldDef("loyer", "Loyer de base hors charges", "amount"),
+                FieldDef("surface", "Surface habitable (m²)", "text"),
+                FieldDef("plafond_m2", "Loyer de référence majoré (€/m²)", "text"),
+                FieldDef("categorie", "Catégorie du logement", "text", help="Quartier, pièces, époque, vide ou meublé"),
+                FieldDef("ecart_mensuel", "Écart mensuel", "amount"),
+            ),
+            pieces=(PieceDef("bail", "Bail", ("lease",), required=False),),
+            declarations=(
+                Declaration(
+                    "nom_propre",
+                    "Cette lettre part en ton nom : relis la catégorie, la surface et les montants avant de l'envoyer.",
+                    "engagement",
+                ),
+            ),
+            followup_days=60,
+            followup_label="Sans accord : commission départementale de conciliation",
+            letter=_rent_control_letter,
         ),
         Template(
             key="ouvrir_lep",

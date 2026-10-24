@@ -125,9 +125,10 @@ def remove_place(db: Session, *, actor: str) -> None:
     school = db.get(PublicCalendar, "scolaire")
     if school is not None:
         db.delete(school)  # les vacances de ton académie disent où tu habites
-    dpe = db.get(HousingSource, "dpe")
-    if dpe is not None:
-        db.delete(dpe)  # les DPE de ton immeuble disent ton adresse (#34)
+    for key in ("dpe", "paris"):
+        found = db.get(HousingSource, key)
+        if found is not None:
+            db.delete(found)  # les DPE de ton immeuble, ton quartier à Paris : ils disent ton adresse (#34)
     for cal in db.scalars(select(PublicCalendar).where(PublicCalendar.key.like("feries:%"))):
         if _data(cal).get("zone") != dom.holiday_zone(None):
             db.delete(cal)  # les fériés d'Alsace-Moselle ou d'outre-mer le disent aussi : relus pour la métropole

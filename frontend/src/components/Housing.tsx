@@ -5,6 +5,7 @@
 
 import { api, useApi, type ConsentView } from "../api";
 import { dayText } from "./Baremes";
+import { HousingPublic, type HousingPublicView } from "./HousingPublic";
 import { Icon } from "./Icon";
 import { ErrorNote, Loading, useAsyncAction, useToast } from "./ui";
 
@@ -22,7 +23,7 @@ export type HousingDpe = {
   depcode: string | null;
 };
 type Source = { name: string; url: string | null; fetched_at: string | null; last_error: string | null } | null;
-export type HousingView = {
+export type HousingView = HousingPublicView & {
   consent: boolean;
   dpe: {
     missing: string | null;
@@ -88,10 +89,16 @@ export function Housing() {
       view.reload();
       consents.reload();
     });
-  const refresh = (what: "dpe" | "market") =>
+  const refresh = (what: "dpe" | "market" | "control" | "taxes" | "risks") =>
     void run(async () => {
       const r = await api<Refresh>(`/api/housing/${what}/refresh`, { method: "POST" });
       toast(r.result.message);
+      view.reload();
+    });
+  const saveDetails = (epoque: string | null, rooms: number | null) =>
+    void run(async () => {
+      await api("/api/housing/details", { method: "POST", body: { epoque, rooms } });
+      toast("Noté.");
       view.reload();
     });
   const choose = (number: string | null) =>
@@ -108,7 +115,8 @@ export function Housing() {
       </div>
       <p className="muted">
         Le DPE de ton logement (ADEME) et la règle qui gèle le loyer d'un logement classé F ou G ; ton loyer situé dans
-        les annonces de ta commune (ANIL). Les constats s'affichent dans « Ce qui est lié ».
+        les annonces de ta commune (ANIL) et face à l'encadrement ; ta taxe foncière prévue ; les risques naturels.
+        Les constats s'affichent dans « Ce qui est lié ».
       </p>
       {view.error && <ErrorNote message={view.error} onRetry={view.reload} />}
       {!data && !view.error && <Loading />}
@@ -194,6 +202,8 @@ export function Housing() {
             {data.home.surface_m2 && <> · surface prise : {String(data.home.surface_m2).replace(".", ",")} m² ({data.home.surface_source})</>}
           </p>
           <SourceLine s={data.market.source} />
+
+          <HousingPublic data={data} busy={busy} refresh={refresh} saveDetails={saveDetails} />
 
           {data.notes.length > 0 && (
             <>

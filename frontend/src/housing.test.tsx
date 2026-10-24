@@ -6,6 +6,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Housing, dpeWhere, m2Text, type HousingDpe, type HousingView } from "./components/Housing";
+import { rateText, type HousingPublicView } from "./components/HousingPublic";
 import { ToastProvider } from "./components/ui";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -39,7 +40,18 @@ const MARKET_EMPTY: HousingView["market"] = {
   rule: "Fiable seulement avec un R² ajusté d'au moins 0,5 et au moins 30 annonces dans la commune (ANIL).", year: null,
   published: null, page: null, credit: "Estimations ANIL, à partir des données du Groupe SeLoger et de leboncoin", source: null,
 };
+const LIST = {
+  source: "Service-Public, fiche F1314", url: "https://www.service-public.gouv.fr/particuliers/vosdroits/F1314",
+  verified: "2026-08-01", checked_on: "24 octobre 2026", end: "2026-11-24",
+};
+const PUBLIC_EMPTY: HousingPublicView = {
+  details: { epoque: null, rooms: null, epoques: [{ key: "Avant 1946", label: "avant 1946" }, { key: "1946-1970", label: "de 1946 à 1970" }] },
+  control: { commune: "Toulouse", territory: null, list: LIST, page: null, paris: null, cdc: { source: "F1216", url: "https://www.service-public.gouv.fr/particuliers/vosdroits/F1216" }, source: null, paris_source: null },
+  taxes: { code: null, known: null, forecast: null, rates: [], notes: [], page: "https://data.economie.gouv.fr/explore/dataset/fiscalite-locale-des-particuliers/", bases: { source: "Service-Public, fiche F59", url: "https://www.service-public.gouv.fr/particuliers/vosdroits/F59" }, source: null },
+  risks: { reachable: null, checked_at: null, last_error: null, page: "https://www.georisques.gouv.fr/", insurance: null, source: null },
+};
 const OFF: HousingView = {
+  ...PUBLIC_EMPTY,
   consent: false,
   dpe: { missing: null, candidates: [], total: null, chosen: null, none_mine: false, chosen_at: null, source: null, page: "https://data.ademe.fr/datasets/dpe03existant" },
   rule: RULE,
@@ -76,6 +88,7 @@ function mockApi(state: { st: HousingView }) {
     if (url === "/api/consents/housing") { state.st = { ...state.st, consent: true }; return json({}); }
     if (url === "/api/housing/dpe/refresh") { state.st = LISTED; return json({ result: { status: "refreshed", message: "2 DPE à ton adresse : indique lequel est ton logement." }, view: LISTED }); }
     if (url === "/api/housing/dpe/choose") { state.st = CHOSEN; return json(CHOSEN); }
+    if (url === "/api/housing/details") { state.st = { ...state.st, details: { ...state.st.details, epoque: "1946-1970", rooms: 2 } }; return json(state.st); }
     return json({}, 404);
   });
 }
@@ -128,7 +141,52 @@ describe("Ton logement face aux données publiques", () => {
     expect(text()).not.toMatch(/abusi/i);
   });
 
+  it("encadrement à Paris, taxe foncière prévue et Géorisques injoignable, sans rien deviner", async () => {
+    const paris: HousingView = {
+      ...CHOSEN,
+      control: {
+        ...PUBLIC_EMPTY.control, commune: "Paris",
+        territory: { name: "Paris", start: "2019-07-01", partial: false, simulator: "https://teleservices.paris.fr/encadrementdesloyers/", simulator_label: "Paris : tester mon loyer", open_data: true },
+        page: { verified: "2026-08-01", missing: [], changed: false },
+        paris: { quartier: "Sainte-Marguerite", years: [2024, 2025], page: "https://opendata.paris.fr/explore/dataset/logement-encadrement-des-loyers/", source: "Ville de Paris", arrete_2026: "https://cdn.paris.fr/x.pdf" },
+      },
+      taxes: {
+        ...PUBLIC_EMPTY.taxes, code: "75056",
+        known: { year: 2026, amount_cents: 101000, teom_cents: null, source: "prelevements", monthly: false },
+        forecast: { target: 2027, amount_cents: 101000, due: "2027-10-15", unknown_rates: [2027] },
+        rates: [{ year: 2024, commune: "VILLE DE PARIS", tfb: 21.19, teom: 6.21 }, { year: 2025, commune: "VILLE DE PARIS", tfb: 21.21, teom: 6.21 }],
+      },
+      risks: { ...PUBLIC_EMPTY.risks, reachable: false, checked_at: "2026-10-24T09:00:00+00:00", last_error: "Source injoignable (réseau)" },
+    };
+    const state = { st: paris };
+    mockApi(state);
+    await mount();
+    expect(text()).toContain("Paris : loyer plafonné pour un bail signé ou renouvelé depuis le 01/07/2019");
+    expect(text()).toContain("Ton quartier : Sainte-Marguerite");
+    expect(text()).toContain("fiche F1314 vérifiée le 01/08/2026");
+    expect(text().replace(/\s/g, " ")).toContain("2027 : 1 010,00 € à bases inchangées · échéance vers le 15/10/2027 · taux 2027 pas encore publiés");
+    expect(text()).toContain("2025 : taxe foncière 21,21 %, TEOM 6,21 %");
+    expect(text()).toContain("revalorisation des bases non chiffrée");
+    expect(text()).toContain("Géorisques injoignable depuis ton serveur");
+    const select = host.querySelector("select") as HTMLSelectElement;
+    await act(async () => {
+      select.value = "1946-1970";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const input = host.querySelector('input[type="number"]') as HTMLInputElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(input, "2");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await click(buttons("Enregistrer")[0]);
+    const saved = calls.find((c) => c.url === "/api/housing/details");
+    expect(JSON.parse(String(saved?.init?.body))).toEqual({ epoque: "1946-1970", rooms: 2 });
+    expect(text()).not.toMatch(/abusi|conseill|recommand/i);
+  });
+
   it("formate sans arrondir en silence", () => {
+    expect(rateText(49.67)).toBe("49,67 %");
     expect(m2Text(13.9839)).toBe("13,98");
     expect(dpeWhere({ ...F, where: "", floor: 2, surface_m2: null })).toBe("étage 2 · appartement");
   });

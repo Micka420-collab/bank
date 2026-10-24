@@ -176,7 +176,7 @@ def build_inputs(db: Session, today: date) -> dom.Inputs:
         daily_variable_spend=daily,
         paydays=paydays,
         category_names=names,
-        housing=housing_service.link(db),
+        housing=housing_service.link(db, today),
     )
 
 

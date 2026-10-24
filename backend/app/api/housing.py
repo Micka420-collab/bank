@@ -1,5 +1,7 @@
 """Ton logement face aux données publiques (#34) : les DPE de ton immeuble (ADEME) et celui que tu reconnais comme le
-tien, la carte des loyers de ta commune (ANIL), les constats qui en découlent et ce qui manque pour en dire plus."""
+tien, la carte des loyers de ta commune (ANIL), l'encadrement des loyers (F1314, Paris en open data), les taux de taxe
+foncière de ta commune, la disponibilité de Géorisques, les constats qui en découlent et ce qui manque pour en dire
+plus."""
 
 from __future__ import annotations
 
@@ -18,6 +20,11 @@ from app.services import housing as svc
 router = APIRouter(prefix="/api/housing", tags=["housing"])
 
 
+class DetailsIn(BaseModel):
+    epoque: str | None = Field(default=None, max_length=20, description="époque de construction (encadrement)")
+    rooms: int | None = Field(default=None, ge=1, le=20, description="pièces principales")
+
+
 class ChooseIn(BaseModel):
     number: str | None = Field(default=None, pattern=r"^[0-9A-Z]{13}$", description="numéro du DPE ; vide : aucun")
 
@@ -34,7 +41,7 @@ def _limit(request: Request) -> None:
 
 
 def _view(db: Any, today: Any) -> dict[str, Any]:
-    return svc.view(db) | correlations.housing_checks(db, today)
+    return svc.view(db, today) | correlations.housing_checks(db, today)
 
 
 @router.get("")
@@ -83,3 +90,30 @@ async def refresh_market(request: Request, ctx: AuthDep, today: TodayDep) -> dic
     return await _refresh(
         request, today, lambda db: svc.refresh_market(db, fetch=fetch, now=utcnow(), today=today, actor=actor)
     )
+
+
+@router.post("/details")
+def save_details(body: DetailsIn, ctx: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
+    try:
+        svc.save_details(db, epoque=body.epoque, rooms=body.rooms, actor=ctx.user.username)
+    except svc.HousingError as exc:
+        raise HTTPException(exc.status, str(exc)) from None
+    return _view(db, today)
+
+
+@router.post("/control/refresh")
+async def refresh_control(request: Request, ctx: AuthDep, today: TodayDep) -> dict[str, Any]:
+    fetch, actor = _fetch(request), ctx.user.username
+    return await _refresh(request, today, lambda db: svc.refresh_control(db, fetch=fetch, now=utcnow(), actor=actor))
+
+
+@router.post("/taxes/refresh")
+async def refresh_taxes(request: Request, ctx: AuthDep, today: TodayDep) -> dict[str, Any]:
+    fetch, actor = _fetch(request), ctx.user.username
+    return await _refresh(request, today, lambda db: svc.refresh_taxes(db, fetch=fetch, now=utcnow(), actor=actor))
+
+
+@router.post("/risks/refresh")
+async def refresh_risks(request: Request, ctx: AuthDep, today: TodayDep) -> dict[str, Any]:
+    fetch, actor = _fetch(request), ctx.user.username
+    return await _refresh(request, today, lambda db: svc.refresh_risks(db, fetch=fetch, now=utcnow(), actor=actor))

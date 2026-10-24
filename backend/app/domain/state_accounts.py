@@ -200,7 +200,16 @@ def season_expires(key: str, due: date) -> date:
     return due + timedelta(days=SEASON_GRACE_DAYS)
 
 
+# L'avis de taxe foncière a son propre genre de papier dans le coffre (#34) : il ferme aussi une tâche des impôts.
+EXTRA_KINDS: dict[str, tuple[str, ...]] = {"impots": ("property_tax",)}
+
+
+def doc_kinds(body: str) -> tuple[str, ...]:
+    spec = BY_SLUG.get(body)
+    return (spec.doc_kind, *EXTRA_KINDS.get(body, ())) if spec else ()
+
+
 def closes(expected: str, body: str, doc_kind: str) -> bool:
     """Ce papier déposé ferme-t-il la tâche ? Même organisme (genre de papier), sauf une réponse sans PDF."""
     spec = BY_SLUG.get(body)
-    return spec is not None and expected not in NO_PDF and doc_kind == spec.doc_kind
+    return spec is not None and expected not in NO_PDF and doc_kind in doc_kinds(body)
