@@ -164,13 +164,28 @@ Ouvre l'adresse, crée ton accès avec le jeton d'installation, puis **active la
 GoCardless Bank Account Data n'accepte plus de nouveaux comptes depuis juillet 2025. Enable Banking propose un
 **mode restreint gratuit** réservé à l'usage personnel : ton application ne voit que les comptes que tu as liés toi-même.
 
-1. Crée un compte sur le Control Panel Enable Banking et enregistre une application **Production**.
-2. Redirect URL : `https://bank.nimbus.lan/api/banks/callback` (exactement ton `BANK_PUBLIC_URL` + `/api/banks/callback`).
-3. Télécharge la clé privée générée et place-la dans `secrets/enablebanking.pem` (`chmod 640`, groupe 10010).
-4. Clique « Activate by linking accounts » et lie tes comptes : l'application passe en mode restreint actif.
-5. Dans `.env` : `BANK_ENABLEBANKING_APP_ID=<id>` et décommente `BANK_ENABLEBANKING_KEY_FILE`.
-6. `docker compose up -d` puis, à la première ouverture, l'étape « Connecte ta banque » (ou plus tard :
-   Connecteurs → Banques → Ajouter une banque).
+Tout se fait dans l'application, sans `.env` à éditer : à la première ouverture (étape « Connecte ta banque ») ou
+dans Connecteurs → Banques, un assistant en six étapes te guide.
+
+1. **Créer l'application** sur le Control Panel Enable Banking, environnement **Production**, clé « Generate in the
+   browser » : un fichier `<identifiant>.pem` se télécharge.
+2. **Adresse de retour** : Bank affiche l'adresse à coller dans « Allowed redirect URLs » (bouton Copier), exactement
+   ton `BANK_PUBLIC_URL` + `/api/banks/callback`.
+3. **Ta clé** : dépose le `.pem` (l'identifiant se remplit d'après le nom du fichier), confirme avec ton mot de passe
+   Bank. La clé est chiffrée en base et n'est plus jamais affichée : seuls un indice de l'identifiant et l'empreinte
+   de la clé publique ressortent.
+4. **Vérification** : Bank signe une requête (`GET /application`) et te dit quoi corriger : clé qui ne correspond pas
+   (jamais gardée), adresse de retour absente, Enable Banking injoignable, application de test (Sandbox).
+5. **Activation** : clique « Activate by linking accounts » et lie tes comptes ; l'application passe en mode
+   restreint actif, Bank le vérifie.
+6. **Ta banque** : choisis-la, donne ton accord chez elle, reviens dans Bank.
+
+Le client est remplacé à chaud : ni redémarrage, ni attente, la synchronisation automatique prend la nouvelle clé.
+« Changer de clé » et « Retirer » (mot de passe exigé) restent sous l'assistant.
+
+Configuration par le serveur, toujours possible : `BANK_ENABLEBANKING_APP_ID=<id>` dans `.env` et la clé dans
+`secrets/enablebanking.pem` (`chmod 640`, groupe 10010, `BANK_ENABLEBANKING_KEY_FILE` décommenté). Elle **prime** sur
+la saisie dans l'application : l'assistant l'affiche « configurée par le serveur », la vérifie, mais ne la modifie pas.
 
 Synchronisation automatique toutes les 8 h (la DSP2 limite à 4 accès non sollicités par jour). Le consentement
 dure 90 jours ; Bank t'indique quand le renouveler. Un compte déjà importé en CSV est retrouvé par son IBAN

@@ -41,7 +41,7 @@ def _client(request: Request) -> EnableBankingClient:
     if client is None:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
-            "Enable Banking non configuré (BANK_ENABLEBANKING_APP_ID / _KEY_FILE)",
+            "Enable Banking n'est pas encore configuré : suis l'assistant dans Connecteurs › Banques",
         )
     return client
 

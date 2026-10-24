@@ -24,6 +24,7 @@ from app.api import (
     auth,
     autonomy,
     backups,
+    bank_setup,
     banks,
     channels,
     consents,
@@ -73,6 +74,7 @@ from app.security.middleware import AccessLogMiddleware, BodyLimitMiddleware, Se
 from app.services import assistant as assistant_service
 from app.services import autonomy as autonomy_service
 from app.services import backup as backup_service
+from app.services import bank_setup as bank_setup_service
 from app.services import consents as consent_service
 from app.services import crypto as crypto_service
 from app.services import energy as energy_service
@@ -242,9 +244,12 @@ async def _sync_loop(app: FastAPI) -> None:
     while True:
         # Gigue aléatoire : pas de rafale toujours à la même minute côté banque.
         await asyncio.sleep(hours * 3600 + random.uniform(0, 600))  # noqa: S311  # nosec B311
+        client = app.state.enablebanking  # relu à chaque tour : l'assistant de connexion peut l'avoir changé
+        if client is None:
+            continue
         try:
             today = date.today()  # noqa: DTZ011 - date locale du serveur
-            report = await asyncio.to_thread(sync_all, app.state.sessionmaker, app.state.enablebanking, today)
+            report = await asyncio.to_thread(sync_all, app.state.sessionmaker, client, today)
             log.info("sync auto : %s comptes, %s nouvelles opérations", report.accounts, report.inserted)
         except Exception:
             log.exception("sync auto en échec")
@@ -267,8 +272,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 log.info("aides relues : %s opérations corrigées", repaired)
             crypto_service.upgrade(db)
             db.commit()
+            if app.state.enablebanking is None:  # identifiants saisis dans l'assistant (le .env prime)
+                app.state.enablebanking = bank_setup_service.client_from_db(
+                    db, settings, http=app.state.enablebanking_http, resolver=app.state.enablebanking_resolver
+                )
         tasks = []
-        if app.state.enablebanking is not None and settings.sync_interval_hours > 0:
+        if settings.sync_interval_hours > 0:
             tasks.append(asyncio.create_task(_sync_loop(app)))
         if settings.energy_enabled:
             tasks.append(asyncio.create_task(_energy_loop(app)))
@@ -329,8 +338,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "crypto": SlidingWindowLimiter(6, 600),  # relèves crypto à la demande (nœuds publics : on reste poli)
         "share": SlidingWindowLimiter(10, 300),  # ouvertures de liens de partage (route publique) par adresse
         "home": SlidingWindowLimiter(30, 600),  # recherches de commune et extractions DVF à la demande
+        "bank_setup": SlidingWindowLimiter(10, 600),  # assistant Enable Banking : saisie, vérification, retrait
     }
     app.state.enablebanking = _build_enablebanking(settings)
+    app.state.enablebanking_http = None  # transport netfetch du client saisi dans l'assistant (remplaçable en test)
+    app.state.enablebanking_resolver = None
     app.state.fiscal_client = FiscalClient(settings.fiscal_engine_url, settings.fiscal_token_value)
     app.state.energy_client_factory = energy_service.default_client
     app.state.ics_fetcher = planning_service.fetch_ics
@@ -355,6 +367,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         transactions,
         imports,
         insights,
+        bank_setup,  # avant banks : « /api/banks/setup » ne doit pas tomber sur « /{connection_id} »
         banks,
         agents,
         decisions,

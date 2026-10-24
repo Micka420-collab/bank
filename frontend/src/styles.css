@@ -8668,3 +8668,80 @@ label {
     border: 0;
   }
 }
+
+/* Assistant Enable Banking : six étapes numérotées, adresse de retour à copier, problèmes listés. */
+.wizard {
+  display: grid;
+  gap: 1rem;
+}
+.wizard-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  font-size: var(--t-sm);
+  color: var(--ink-3);
+}
+.wizard-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.wizard-steps li > span {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.wizard-steps li.is-done > span {
+  border-color: var(--positive);
+  color: var(--positive);
+}
+.wizard-steps li.is-active {
+  color: inherit;
+  font-weight: 600;
+}
+.wizard-steps li.is-active > span {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.wizard-panel {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 46rem;
+}
+.wizard-issues {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.copy-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface-2);
+  border-radius: var(--r-s);
+}
+.copy-field code {
+  word-break: break-all;
+  flex: 1 1 16rem;
+}
+.wizard-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.75rem;
+}

@@ -5,6 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import {
   api,
   useApi,
+  type BankSetupStatus,
   type Connection,
   type EnergyStatus,
   type OfficialFact,
@@ -12,6 +13,7 @@ import {
   type Portal,
 } from "../api";
 import { BankConnect, BankMark } from "../components/BankConnect";
+import { BankSetup, setupReady } from "../components/BankSetup";
 import { Icon } from "../components/Icon";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useCelebrate, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
@@ -58,6 +60,8 @@ export function Banks({ result }: { result: string | null }) {
   const [connecting, setConnecting] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
+  const [setupOk, setSetupOk] = useState(false);
   const [busy, error, run] = useAsyncAction();
   const [listError, setListError] = useState<string | null>(null);
   const toast = useToast();
@@ -75,7 +79,13 @@ export function Banks({ result }: { result: string | null }) {
 
   const connections = status.data?.connections ?? [];
   const enabled = status.data?.enabled ?? false;
-  const wantList = enabled && (showAdd || connections.length === 0);
+  // Sans banque connectée (ou à la demande), l'assistant Enable Banking guide jusqu'au choix de la banque.
+  const wizard = !!status.data && (!enabled || connections.length === 0 || showSetup);
+  const wantList = enabled && (showAdd || (connections.length === 0 && setupOk));
+  const onSetup = (s: BankSetupStatus) => {
+    setSetupOk(setupReady(s));
+    if (s.configured !== enabled) status.reload();
+  };
   useEffect(() => {
     if (wantList && aspsps === null) {
       api<{ name: string }[]>("/api/banks/aspsps?country=FR")
@@ -116,9 +126,14 @@ export function Banks({ result }: { result: string | null }) {
       <div className="section-head">
         <h2 id="banks-title"><Icon name="bank" /> Banques</h2>
         {enabled && connections.length > 0 && (
-          <button type="button" className="btn quiet sm" aria-expanded={showAdd} onClick={() => setShowAdd((v) => !v)}>
-            <Icon name={showAdd ? "close" : "plus"} /> {showAdd ? "Fermer" : "Ajouter une banque"}
-          </button>
+          <span className="actions" style={{ marginTop: 0 }}>
+            <button type="button" className="btn ghost sm" aria-expanded={showSetup} onClick={() => setShowSetup((v) => !v)}>
+              <Icon name={showSetup ? "close" : "lock"} /> Application Enable Banking
+            </button>
+            <button type="button" className="btn quiet sm" aria-expanded={showAdd} onClick={() => setShowAdd((v) => !v)}>
+              <Icon name={showAdd ? "close" : "plus"} /> {showAdd ? "Fermer" : "Ajouter une banque"}
+            </button>
+          </span>
         )}
       </div>
       <p className="section-note">
@@ -128,14 +143,17 @@ export function Banks({ result }: { result: string | null }) {
       </p>
       {status.error && <ErrorNote message={status.error} onRetry={status.reload} />}
       {!status.data && !status.error && <Loading what="Connexions" />}
-      {status.data && !enabled && (
-        <div className="notice">
-          <Icon name="alert" />
-          <span>
-            La synchronisation n'est pas configurée sur le serveur (BANK_ENABLEBANKING_APP_ID et clé privée) : voir le README.
-            En attendant, importe tes relevés CSV / OFX depuis Opérations.
-          </span>
-        </div>
+      {wizard && (
+        <BankSetup
+          onChange={onSetup}
+          chooser={connections.length === 0 ? (
+            listError ? (
+              <ErrorNote message={listError} onRetry={() => { setListError(null); setAspsps(null); }} />
+            ) : (
+              <BankConnect aspsps={aspsps} connections={connections} busy={connecting} failed={failed} onConnect={(n) => void connect(n)} />
+            )
+          ) : undefined}
+        />
       )}
       {connections.length > 0 && (
         <ul className="connected" aria-label="Banques connectées">
@@ -166,9 +184,8 @@ export function Banks({ result }: { result: string | null }) {
           ))}
         </ul>
       )}
-      {wantList && (
-        <div className="stack" style={{ marginTop: connections.length ? "1.25rem" : "0.5rem" }}>
-          {connections.length === 0 && <h3>Connecter une banque</h3>}
+      {wantList && connections.length > 0 && (
+        <div className="stack" style={{ marginTop: "1.25rem" }}>
           {listError ? (
             <ErrorNote message={listError} onRetry={() => { setListError(null); setAspsps(null); }} />
           ) : (

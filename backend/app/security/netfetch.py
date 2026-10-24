@@ -292,6 +292,25 @@ def get_bytes(
     )
 
 
+def request_bytes(
+    method: str,
+    url: str,
+    body: bytes | None = None,
+    *,
+    headers: dict[str, str],
+    http: httpx.Client | None = None,
+    resolver: Resolver | None = None,
+    max_bytes: int = 64_000,
+    seconds: float = 20.0,
+    pin: bool | None = None,
+) -> PostResult:
+    """Appel d'API signé, toute méthode (GET, POST, DELETE) : mêmes garde-fous, aucune redirection suivie, code
+    HTTP rendu tel quel (l'API d'un agrégateur bancaire, par exemple)."""
+    return _request_bytes(
+        method, url, body, headers=headers, http=http, resolver=resolver, max_bytes=max_bytes, seconds=seconds, pin=pin
+    )
+
+
 def get_json(url: str, **kw: Any) -> Any:
     result = fetch(url, accept="application/json", **kw)
     try:

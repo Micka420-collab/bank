@@ -47,6 +47,7 @@ from app.models import (
 )
 from app.security import audit
 from app.security.auth import verify_password
+from app.services import bank_setup as bank_setup_service
 from app.services import exchange_keys as exchange_keys_service
 from app.services import home_value as home_value_service
 from app.services import obligations as obligations_service
@@ -397,6 +398,8 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
                 for a in db.scalars(select(PriceAlert).order_by(PriceAlert.id))
             ],
         },
+        # Assistant Enable Banking : indice et empreinte seulement, jamais l'identifiant entier ni la clé privée.
+        "bank_setup": bank_setup_service.export(db),
     }
     audit.record(db, ctx.user.username, "export.done", transactions=len(payload["transactions"]))
     return Response(

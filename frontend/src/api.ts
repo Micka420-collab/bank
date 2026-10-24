@@ -861,6 +861,20 @@ export type Connection = {
   accounts: string[];
 };
 
+/** Assistant Enable Banking : jamais la clé, seulement un indice de l'identifiant et l'empreinte de la clé publique. */
+export type BankSetupIssue = { code: "bad_key" | "unreachable" | "redirect" | "inactive" | "sandbox"; message: string };
+export type BankSetupStatus = {
+  configured: boolean;
+  source: "server" | "app" | null;
+  app_id_hint: string | null;
+  key_fingerprint: string | null;
+  updated_at: string | null;
+  redirect_url: string;
+  console_url: string;
+  check: { ok: boolean; issues: BankSetupIssue[]; app_name: string | null; environment: string | null; checked_at: string } | null;
+  connections: number;
+};
+
 // ------------------------------------------------------------------ agent IA (HERMÈS) et « Ma situation »
 export type QuestionKind = "choice" | "multi" | "money" | "int" | "text" | "list";
 
