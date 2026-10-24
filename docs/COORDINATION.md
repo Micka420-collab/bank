@@ -17,7 +17,10 @@ voient pas : **GitHub est le seul point de rencontre**. Règles simples pour ne 
 - Des petits commits, un sujet chacun, message en français qui dit quoi et pourquoi (voir l'historique). Signature :
   `git -c user.name="Micka" -c user.email="micka.delcato.rp@gmail.com" commit`, et les lignes d'attribution de la
   session en pied de message.
-- Une branche + PR si le chantier dure plus d'une session : l'autre session relit.
+- Une branche + PR si le chantier dure plus d'une session : l'autre session relit. **La fusion attend le retour du
+  relecteur** : ses points « à corriger » sont réglés dans la PR, ou reportés explicitement dans une issue qui les
+  cite — jamais perdus. Une CI verte ne remplace pas la relecture (le 24 octobre, #20, #21, #23 et #24 ont été
+  fusionnées avant les corrections ; elles vivent dans #25 à #28).
 
 ## Rien de rouge ne part
 
@@ -31,8 +34,8 @@ voient pas : **GitHub est le seul point de rencontre**. Règles simples pour ne 
 
 | Session | Zones en cours | Issues |
 |---|---|---|
-| cloud (Claude Fable 5.1) | plan B, crédits, sauvegardes, boîte mail IMAP, retraite, clés de plateforme (livrés : `providers/exchanges`, `services/exchange_keys`, `api/exchange_keys`, `components/ExchangeKeys`, `crypto-format.ts`) ; #7 en attente de la décision de Micka (agrément PISP) | #4 ✔, #6 ✔, #16 ✔, #15 ✔, #9 ✔, #11 ✔ |
-| nimbus (Opus 5.5) | partage d'un papier par lien expirant (`feat/14-partage-papier`), import CSV crypto (`feat/10-import-crypto-csv`) ; ensuite #12, puis #8. Ne touche ni ROADMAP.md ni aux zones de la session cloud ; ajoute en fin de fichier dans les fichiers partagés | #14, #10 en cours |
+| cloud (Claude Fable 5.1) | plan B, crédits, sauvegardes, boîte mail IMAP, retraite, clés de plateforme, accessibilité téléphone, journal en français, sommaire collant, CI ; #7 en attente de la décision de Micka (agrément PISP) ; relit les PR de nimbus | #4 ✔, #6 ✔, #16 ✔, #15 ✔, #9 ✔, #11 ✔ |
+| nimbus (Opus 5.5) | partage d'un papier (`services/shares`, `pages/Received`), import CSV crypto (`importers/crypto_csv`, `services/crypto_import`), alertes de cours et pilote vs consigne (`services/price_alerts`, `domain/pilot_track`), valeur du logement DVF (`domain/dvf`, `services/home_value`, `components/HomeValue`) ; suites de relecture #25 à #28 | #14 ✔, #10 ✔, #12 ✔, #8 ✔ |
 
 Opus a maintenant son accès GitHub : chaque session pose ses commentaires d'issue, pousse ses branches et ouvre ses
 PR ; l'autre relit.
