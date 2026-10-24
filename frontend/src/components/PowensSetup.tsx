@@ -7,7 +7,7 @@ import { api, useApi, type PowensConnection, type PowensIssue, type PowensStatus
 import { shortDate } from "../format";
 import { BankMark } from "./BankConnect";
 import { Icon } from "./Icon";
-import { ErrorNote, Field, Loading, useAsyncAction, useToast } from "./ui";
+import { ErrorNote, Field, Loading, useAsyncAction, useCelebrate, useToast } from "./ui";
 
 export const POWENS_STEPS = ["Ton contrat", "Adresse de retour", "Identifiants", "Vérification", "Tes banques"];
 const BLOCKING = new Set<PowensIssue["code"]>(["bad_key", "unreachable"]);
@@ -40,15 +40,16 @@ export function PowensSetup({ result = null }: { result?: string | null }) {
   const [current, setCurrent] = useState<PowensStatus | null>(null);
   const [busy, error, run] = useAsyncAction();
   const toast = useToast();
+  const celebrate = useCelebrate();
 
   const data = current ?? st.data;
   // Retour de la webview Powens : son message, et la section Powens sous les yeux.
   useEffect(() => {
     if (!result) return;
-    if (result === "connected") toast("Banque connectée via Powens : clique Synchroniser pour récupérer tes opérations.");
+    if (result === "connected") celebrate("done", "Banque connectée via Powens : clique Synchroniser pour récupérer tes opérations.");
     if (result === "refused") toast("Connexion annulée dans la page de Powens.");
     if (result === "error") toast("La connexion Powens a échoué ou a expiré : recommence.");
-  }, [result, toast]);
+  }, [result, toast, celebrate]);
   const loaded = !!data;
   useEffect(() => {
     if (result && loaded) document.getElementById("powens-title")?.scrollIntoView?.({ block: "start" });
