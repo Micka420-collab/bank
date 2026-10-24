@@ -25,13 +25,14 @@ from app.models import (
     Obligation,
     Passkey,
     Provider,
+    RetirementProfile,
     SavingsGoal,
     SearchProvider,
     Transaction,
     User,
     VaultDocument,
 )
-from app.services import advisor, consents
+from app.services import advisor, analytics, consents
 from app.services import backup as backup_service
 
 
@@ -104,6 +105,8 @@ def build_input(db: Session, today: date) -> dom.CoverageInput:
         ),
         backup=_backup_level(db),
         mail=_mail_level(db),
+        retirement=db.get(RetirementProfile, 1) is not None,
+        birth_known=bool((analytics.load_profile(db) or {}).get("birth_date")),
     )
 
 

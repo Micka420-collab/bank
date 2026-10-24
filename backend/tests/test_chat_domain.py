@@ -68,6 +68,16 @@ def test_owner_is_not_asked_for_a_lease_and_a_stale_bank_asks_to_reconnect() -> 
     assert coverage.next_steps(srcs)[0].key == "bank"
 
 
+def test_retirement_asks_for_the_career_statement_once_the_birth_date_is_known() -> None:
+    nothing = {s.key for s in coverage.sources(coverage.CoverageInput(today=TODAY))}
+    assert "retirement" not in nothing, "sans date de naissance, c'est le profil du foyer qui manque, pas le relevé"
+    partial = {s.key: s for s in coverage.sources(coverage.CoverageInput(today=TODAY, birth_known=True))}
+    assert partial["retirement"].state == "partial" and partial["retirement"].page == "patrimoine?retraite=1"
+    assert "trimestres" in partial["retirement"].unlocks and blocks.valid_page(partial["retirement"].page)
+    done = {s.key: s for s in coverage.sources(coverage.CoverageInput(today=TODAY, birth_known=True, retirement=True))}
+    assert done["retirement"].state == "connected"
+
+
 def test_energy_states_and_totp_before_passkeys() -> None:
     err = coverage.sources(coverage.CoverageInput(today=TODAY, energy="error"))
     assert next(s for s in err if s.key == "energy").state == "partial"

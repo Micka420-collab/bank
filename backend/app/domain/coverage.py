@@ -44,6 +44,8 @@ class CoverageInput:
     push_devices: int = 0  # appareils qui reçoivent les notifications du navigateur
     backup: str = "none"  # none | unverified | ok | failed | stale : la sauvegarde chiffrée et sa restauration d'essai
     mail: str = "none"  # none | active | error : la boîte mail reliée en lecture seule (PDF proposés dans Papiers)
+    retirement: bool = False  # relevé de carrière saisi (trimestres, salaire moyen, points)
+    birth_known: bool = False  # date de naissance connue (profil du foyer) : sans elle, pas de génération
 
 
 @dataclass(frozen=True)
@@ -338,6 +340,33 @@ def sources(inp: CoverageInput) -> list[Source]:
                 "connecteurs",
                 "Relier ma boîte mail",
                 11,
+            )
+        )
+    if inp.retirement:
+        out.append(
+            Source(
+                "retirement",
+                "Retraite",
+                "connected",
+                "relevé de carrière saisi",
+                "",
+                "patrimoine?retraite=1",
+                "Voir",
+                96,
+            )
+        )
+    elif inp.birth_known:
+        out.append(
+            Source(
+                "retirement",
+                "Retraite",
+                "partial",
+                "trimestres estimés (4 par an), relevé de carrière non saisi",
+                "tes départs possibles (âge légal, taux plein, 67 ans) calculés avec tes vrais trimestres, ton "
+                "salaire moyen et tes points Agirc-Arrco, et l'effet d'un versement PER sur ton impôt",
+                "patrimoine?retraite=1",
+                "Saisir mon relevé de carrière",
+                13,
             )
         )
     if inp.backup == "ok":
