@@ -1,19 +1,21 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { money } from "../format";
+import { Celebration, type CelebrationKind } from "./Celebration";
 import { Icon, type IconName } from "./Icon";
 
 // ------------------------------------------------------------------ toast
 /** Neutre par défaut ; « success » (coche qui se trace), « coin » (un gain), « error » (reste plus longtemps). */
 export type ToastKind = "info" | "success" | "coin" | "error";
-type Toast = { msg: string; kind: ToastKind; n: number };
+type Toast = { msg: string; kind: ToastKind; n: number; party?: CelebrationKind };
 const TOAST_ICON: Record<ToastKind, IconName> = { info: "spark", success: "check", coin: "coin", error: "alert" };
-const ToastCtx = createContext<(msg: string, kind?: ToastKind) => void>(() => undefined);
+type Show = (msg: string, kind?: ToastKind, party?: CelebrationKind) => void;
+const ToastCtx = createContext<Show>(() => undefined);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<Toast | null>(null);
   const timer = useRef<number | undefined>(undefined);
-  const show = useCallback((msg: string, kind: ToastKind = "info") => {
-    setToast((t) => ({ msg, kind, n: (t?.n ?? 0) + 1 }));
+  const show = useCallback<Show>((msg, kind = "info", party) => {
+    setToast((t) => ({ msg, kind, party, n: (t?.n ?? 0) + 1 }));
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setToast(null), kind === "error" ? 8000 : 4500);
   }, []);
@@ -30,11 +32,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           </div>
         )}
       </div>
+      {/* Hors de la région annoncée : la fête se voit, le texte du toast suffit à la dire. */}
+      {toast?.party && <Celebration key={toast.n} kind={toast.party} />}
     </ToastCtx.Provider>
   );
 }
 
 export const useToast = () => useContext(ToastCtx);
+
+/**
+ * Un petit moment de fête (§ 3.6 de DESIGN.md) : le toast annonce le texte, quelques pièces ou étincelles
+ * jaillissent de lui et un halo s'allume au fond, moins d'une seconde. À n'appeler qu'après une réponse 2xx du
+ * serveur à un geste de l'utilisateur — jamais au chargement, jamais pour une estimation.
+ */
+export function useCelebrate(): (kind: CelebrationKind, msg: string) => void {
+  const toast = useToast();
+  return useCallback((kind: CelebrationKind, msg: string) => toast(msg, kind === "coin" ? "coin" : "success", kind), [toast]);
+}
 
 // ------------------------------------------------------------------ petits composants
 export function Amount({ cents, whole = false }: { cents: number; whole?: boolean }) {

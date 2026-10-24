@@ -154,7 +154,7 @@ export function App() {
             : page === "demarches" ? <Procedures id={route.rest[0] && /^\d+$/.test(route.rest[0]) ? Number(route.rest[0]) : null} wantNew={route.params.get("nouvelle") === "1"} />
             : page === "veille" ? <Watch />
             : page === "messageries" ? <Messageries />
-            : <Today />}
+            : <Today name={me.username} />}
           </Suspense>
         </main>
       </div>

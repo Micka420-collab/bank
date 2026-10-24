@@ -13,7 +13,8 @@ import {
   type SourceRef,
 } from "../api";
 import { Icon, type IconName } from "../components/Icon";
-import { ErrorNote, EuroInput, Loading, useAsyncAction, useToast } from "../components/ui";
+import { EmptyState } from "../components/EmptyState";
+import { ErrorNote, EuroInput, Loading, useAsyncAction, useCelebrate, useToast } from "../components/ui";
 import { money, perPeriod, plural, safeHref, shortDate } from "../format";
 import { fullDate } from "./Documents";
 
@@ -93,10 +94,9 @@ export function Opportunities() {
       )}
 
       {shown.length === 0 && (
-        <section className="card card-quiet opp-empty">
-          <h2>Pas de mission pour l'instant</h2>
+        <EmptyState art="sun" title="Pas de mission pour l'instant" className="card card-quiet opp-empty">
           <p className="muted">Bank regarde à nouveau à chaque synchronisation : nouveaux frais, abonnements, droits aux aides, papiers qui expirent.</p>
-        </section>
+        </EmptyState>
       )}
       {featured && (
         <section className="section opp-group" aria-labelledby="featured-title">
@@ -135,8 +135,17 @@ function PiggyBank({ value, coin }: { value: OpportunityCenter["value"]; coin: n
   const target = nextMilestone(got);
   const fill = Math.min(1, got / target);
   const reached = MILESTONES.filter((m) => m <= got);
+  // Un palier franchi par le gain que tu viens de confirmer apparaît en « pop » ; jamais au chargement.
+  const seen = useRef(reached.length);
+  const [fresh, setFresh] = useState<number | null>(null);
+  const count = reached.length;
+  const last = reached[count - 1] ?? null;
+  useEffect(() => {
+    if (coin > 0 && count > seen.current) setFresh(last);
+    seen.current = count;
+  }, [coin, count, last]);
   return (
-    <section className="card piggy" aria-labelledby="piggy-title">
+    <section className="card card-hero piggy" aria-labelledby="piggy-title">
       <Jar fill={fill} coin={coin} />
       <div className="piggy-body">
         <h2 id="piggy-title" className="piggy-title">Ta tirelire</h2>
@@ -148,7 +157,7 @@ function PiggyBank({ value, coin }: { value: OpportunityCenter["value"]; coin: n
         </div>
         {reached.length > 0 && (
           <ul className="piggy-badges" aria-label="Paliers atteints">
-            {reached.map((m) => <li key={m}><Icon name="coin" size={14} /> {money(m, { whole: true })}</li>)}
+            {reached.map((m) => <li key={m} className={m === fresh ? "is-new" : undefined}><Icon name="coin" size={14} /> {money(m, { whole: true })}</li>)}
           </ul>
         )}
         <p className="piggy-road">
@@ -220,14 +229,14 @@ export function Jar({ fill, coin = 0 }: { fill: number; coin?: number }) {
 
 function ConfirmGain({ item, onDone }: { item: Confirmation; onDone: () => void }) {
   const [busy, error, run] = useAsyncAction();
-  const toast = useToast();
+  const celebrate = useCelebrate();
   const confirm = () =>
     void run(async () => {
       await api("/api/opportunities/confirm", {
         method: "POST",
         body: { key: item.key, amount_cents: item.amount_cents, period: item.period, label: item.label, procedure_id: item.procedure_id },
       });
-      toast(`+${perPeriod(item.amount_cents, item.period)} dans ta tirelire !`);
+      celebrate("coin", `+${perPeriod(item.amount_cents, item.period)} dans ta tirelire !`);
       onDone();
     });
   return (
@@ -267,7 +276,7 @@ function MissionCard({ opp, tv, onChange, featured = false }: { opp: Opportunity
     <li className={`opp mission is-${opp.category}${featured ? " is-featured" : ""}${opp.procedure ? " is-started" : ""}`}>
       <div className="mission-top">
         <span className="mission-kind"><Icon name={CATEGORY_ICON[opp.category]} size={16} /> {opp.category_label}</span>
-        {noMoney ? <span className="reward is-none">À vérifier</span> : <span className="reward">+{perPeriod(opp.amount_cents, opp.period)}</span>}
+        {noMoney ? <span className="reward is-none">À vérifier</span> : <span className="reward coin-chip"><Icon name="coin" size={15} />+{perPeriod(opp.amount_cents, opp.period)}</span>}
       </div>
       <h3>{opp.title}</h3>
       <p className="muted">{opp.summary}</p>

@@ -14,7 +14,7 @@ const KIND_LABEL: Record<Card["kind"], string> = {
   tip: "Bank te propose",
 };
 
-export function Initiatives({ onChanged, limit = 5, compact = false }: { onChanged?: () => void; limit?: number; compact?: boolean }) {
+export function Initiatives({ onChanged, limit = 5, compact = false, title }: { onChanged?: () => void; limit?: number; compact?: boolean; title?: string }) {
   const initial = useApi<InitiativesData>(`/api/initiatives?limit=${limit}`);
   const [data, setData] = useState<InitiativesData | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -42,7 +42,8 @@ export function Initiatives({ onChanged, limit = 5, compact = false }: { onChang
 
   return (
     <section className={`asks${compact ? " compact" : ""}`} aria-labelledby="asks-title">
-      <h2 id="asks-title" className="sr-only">Ce que Bank te demande</h2>
+      {/* Sur Aujourd'hui, le titre se voit : une seule chose à faire, dite comme telle. */}
+      <h2 id="asks-title" className={title ? "asks-title" : "sr-only"}>{title ?? "Ce que Bank te demande"}</h2>
       <div className="asks-stack">
         {visible.map((card) => (
           <AskCard key={card.key} card={card} leaving={leaving === card.key} limit={limit}

@@ -5,7 +5,7 @@
 import { useState, type FormEvent } from "react";
 import { api, useApi, type MailStatus } from "../api";
 import { Icon } from "../components/Icon";
-import { ErrorNote, Field, Loading, useAsyncAction, useToast } from "../components/ui";
+import { ErrorNote, Field, Loading, useAsyncAction, useCelebrate, useToast } from "../components/ui";
 
 export function MailSettings() {
   const st = useApi<MailStatus>("/api/mail");
@@ -107,7 +107,7 @@ function MailForm({ status: s, onDone, onCancel }: { status: MailStatus; onDone:
   const [senders, setSenders] = useState((a?.senders ?? []).join("\n"));
   const [password, setPassword] = useState("");
   const [busy, error, run] = useAsyncAction();
-  const toast = useToast();
+  const celebrate = useCelebrate();
   const submit = (e: FormEvent) => {
     e.preventDefault();
     void run(async () => {
@@ -118,7 +118,7 @@ function MailForm({ status: s, onDone, onCancel }: { status: MailStatus; onDone:
           senders: senders.split(/[\n,;]+/).map((x) => x.trim()).filter(Boolean),
         },
       });
-      toast("Boîte reliée : l'essai de connexion a réussi.");
+      celebrate("done", "Boîte reliée : l'essai de connexion a réussi.");
       onDone();
     });
   };

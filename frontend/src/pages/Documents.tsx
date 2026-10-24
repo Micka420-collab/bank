@@ -14,10 +14,12 @@ import {
   type VaultSummary,
   type VaultUpload,
 } from "../api";
+import { EmptyState } from "../components/EmptyState";
 import { Icon } from "../components/Icon";
 import { MailProposals } from "../components/MailProposals";
+import { Ring } from "../components/Ring";
 import { SharePaper } from "../components/SharePaper";
-import { ErrorNote, Loading, useAsyncAction, useToast } from "../components/ui";
+import { ErrorNote, Loading, useAsyncAction, useCelebrate, useToast } from "../components/ui";
 import { money, plural } from "../format";
 
 const STATUS: Record<VaultStatus, string> = {
@@ -200,11 +202,12 @@ function Library() {
       {listing.error && <ErrorNote message={listing.error} onRetry={listing.reload} />}
       {!listing.data && !listing.error && <Loading what="Ouverture du coffre" />}
       {listing.data && docs.length === 0 && (
-        <section className="card section vault-empty">
-          <h2>Ton coffre est vide</h2>
+        <EmptyState art="folder" title="Ton coffre est vide" className="card section vault-empty">
           <p className="muted">Commence par ce qui sert le plus : ton dernier bulletin de paie, ton avis d'impôt, une attestation CAF, un RIB. Bank en tire les chiffres pour tes aides et tes démarches.</p>
-        </section>
+          <p className="faint">Prends un papier en photo : Bank le lit pour toi.</p>
+        </EmptyState>
       )}
+      {kind === "" && docs.length > 0 && <Collection docs={docs} />}
       {docs.length > 0 && (
         <ul className="vault-grid" aria-label="Documents">
           {docs.map((d) => <DocumentTile key={d.id} doc={d} />)}
@@ -214,6 +217,29 @@ function Library() {
         <p className="faint vault-foot"><Icon name="lock" /> {bytes(listing.data.total_bytes)} chiffrés · <ExportVault /></p>
       )}
     </>
+  );
+}
+
+/** « N papiers rangés » : la collection, et l'anneau des papiers déjà vérifiés par toi. */
+function Collection({ docs }: { docs: VaultSummary[] }) {
+  const verified = docs.filter((d) => d.status === "verified").length;
+  const left = docs.filter((d) => d.status === "to_review").length;
+  const reading = docs.filter((d) => d.status === "processing").length;
+  return (
+    <section className="card vault-collection" aria-labelledby="collection-title">
+      <Ring value={verified} max={docs.length} size="md"
+            label={`${plural(verified, "papier vérifié", "papiers vérifiés")} sur ${docs.length}`}>
+        {verified}<small>/{docs.length}</small>
+      </Ring>
+      <div>
+        <h2 id="collection-title">{plural(docs.length, "papier rangé", "papiers rangés")}</h2>
+        <p className="muted">
+          {left > 0 ? `Encore ${plural(left, "papier", "papiers")} à vérifier d'un coup d'œil.`
+            : reading > 0 ? "Bank finit de lire les derniers."
+            : verified === docs.length ? "Tout est vérifié. Bravo !" : "Rien à vérifier pour l'instant."}
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -284,6 +310,7 @@ function DocumentDetail({ id }: { id: number }) {
   const [assistNote, setAssistNote] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const toast = useToast();
+  const celebrate = useCelebrate();
   const reload = doc.reload;
 
   useEffect(() => {
@@ -296,10 +323,11 @@ function DocumentDetail({ id }: { id: number }) {
   if (!doc.data) return <><BackLink /><Loading what="Ouverture du document" /></>;
   const d = doc.data;
 
-  const act = (fn: () => Promise<unknown>, done?: string) =>
+  const act = (fn: () => Promise<unknown>, done?: string, party = false) =>
     void run(async () => {
       await fn();
-      if (done) toast(done);
+      if (done && party) celebrate("done", done);
+      else if (done) toast(done);
       doc.reload();
     });
   const save = (key: string) =>
@@ -413,7 +441,7 @@ function DocumentDetail({ id }: { id: number }) {
           {readable && (
             <div className="actions vault-buttons">
               {d.status === "to_review" && (
-                <button type="button" className="btn" disabled={busy} onClick={() => act(() => api(`/api/vault/${d.id}/verify`, { method: "POST" }), "Document vérifié.")}>
+                <button type="button" className="btn" disabled={busy} onClick={() => act(() => api(`/api/vault/${d.id}/verify`, { method: "POST" }), "Document vérifié.", true)}>
                   <Icon name="check" /> C'est bon
                 </button>
               )}

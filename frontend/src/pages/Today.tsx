@@ -38,7 +38,15 @@ function verdict(f: MonthForecast): string {
   return `Mois sans découvert · point bas ${money(f.lowest_balance_cents, { whole: true })} le ${shortDate(f.lowest_balance_date)}`;
 }
 
-export function Today() {
+/** « Bonjour » le jour, « Bonsoir » à partir de 18 h (et la nuit) ; le prénom quand on le connaît. */
+export function greeting(name?: string, now: Date = new Date()): string {
+  const h = now.getHours();
+  const hello = h >= 18 || h < 5 ? "Bonsoir" : "Bonjour";
+  const who = name?.trim();
+  return who ? `${hello} ${who[0]!.toUpperCase()}${who.slice(1)}` : hello;
+}
+
+export function Today({ name }: { name?: string } = {}) {
   const budget = useApi<BudgetResponse>("/api/budget");
   const aids = useApi<AidsResponse>("/api/aids");
   const cats = useApi<Category[]>("/api/categories");
@@ -70,13 +78,23 @@ export function Today() {
 
   return (
     <>
-      <section className="card card-hero today reveal" style={{ ["--i" as string]: 0 }} aria-labelledby="today-title">
+      <section className="card card-hero today reveal" data-status={f.status} style={{ ["--i" as string]: 0 }} aria-labelledby="today-title">
+        <p className="today-hello">{greeting(name)}</p>
         <h1 className="today-lead" id="today-title">{perDay > 0 ? "Tu peux dépenser" : "Plus de marge ce mois-ci"}</h1>
         <p className={`today-figure${perDay > 0 ? "" : " is-zero"}`}>
           <CountUp value={Math.round(perDay / 100)} format={(n) => amountOnly(n * 100)} /> €<small>par jour</small>
         </p>
         <p className="muted">{allowanceSentence(f, settings.buffer_cents, settings.savings_goal_cents)}</p>
-        <p className="verdict" data-status={f.status}>{verdict(f)}</p>
+        <p className="today-verdict">
+          <span className="verdict" data-status={f.status}>{verdict(f)}</span>
+          {f.status !== "ok" && (
+            // La mauvaise nouvelle vient avec son « que faire » : la question « Je peux m'acheter… ? » plus bas.
+            <button type="button" className="btn ghost sm what-now"
+                    onClick={() => document.getElementById("decide-card")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+              Que faire ? <Icon name="arrow" />
+            </button>
+          )}
+        </p>
         {agent.data && agent.data.pending_proposals > 0 && (
           <div className="actions quick-actions">
             <a className="btn sm" href="#/situation"><Icon name="robot" /> {plural(agent.data.pending_proposals, "proposition à valider", "propositions à valider")}</a>
@@ -84,7 +102,7 @@ export function Today() {
         )}
       </section>
 
-      <Initiatives onChanged={reload} />
+      <Initiatives onChanged={reload} title="La prochaine chose à faire" />
 
       <Copilot />
 
@@ -99,7 +117,7 @@ export function Today() {
 
       <YearAhead />
 
-      <section className="card reveal" style={{ marginTop: "1rem", ["--i" as string]: 3 }}>
+      <section className="card reveal" id="decide-card" style={{ marginTop: "1rem", ["--i" as string]: 3 }}>
         <Decide />
       </section>
 

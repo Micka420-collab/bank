@@ -15,7 +15,7 @@ import {
   type PrivacyMode,
 } from "../api";
 import { Icon } from "../components/Icon";
-import { ErrorNote, Field, Loading, useAsyncAction, useToast } from "../components/ui";
+import { ErrorNote, Field, Loading, useAsyncAction, useCelebrate, useToast } from "../components/ui";
 import { safeHref, shortDate } from "../format";
 
 const BLURB: Record<string, string> = {
@@ -350,6 +350,7 @@ function Pairing({ p, reload }: { p: ChannelPlatform; reload: () => void }) {
   const [left, setLeft] = useState(0);
   const [busy, error, run] = useAsyncAction();
   const toast = useToast();
+  const celebrate = useCelebrate();
   const startCount = useRef(p.links.length);
 
   const start = (e: FormEvent) => {
@@ -381,9 +382,9 @@ function Pairing({ p, reload }: { p: ChannelPlatform; reload: () => void }) {
   useEffect(() => {
     if (code && p.links.length > startCount.current) {
       setCode(null);
-      toast(`C'est relié 🎉 Écris /budget à ton robot ${p.label} pour essayer.`);
+      celebrate("done", `C'est relié 🎉 Écris /budget à ton robot ${p.label} pour essayer.`);
     }
-  }, [code, p.links.length, p.label, toast]);
+  }, [code, p.links.length, p.label, celebrate]);
 
   if (!code) {
     return (

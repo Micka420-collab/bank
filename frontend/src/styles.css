@@ -30,6 +30,8 @@
   --accent-ink: #3f32c8;
   --accent-soft: #ebe8ff;
   --accent-grad: linear-gradient(135deg, #5b4bff, #9b3fd8);
+  --grad-a: #5b4bff; /* bouts du dégradé, pour les SVG (anneau de progression) */
+  --grad-b: #9b3fd8;
   --accent-wash: linear-gradient(135deg, rgba(91, 75, 255, 0.14), rgba(155, 63, 216, 0.14));
   --on-accent: #ffffff;
   --glow: 0 0 0 4px rgba(91, 75, 255, 0.18), 0 10px 28px -8px rgba(123, 69, 236, 0.6);
@@ -121,6 +123,10 @@
     --accent-ink: #c9c1ff;
     --accent-soft: #2a2560;
     --accent-grad: linear-gradient(135deg, #8c7cff, #d07bff);
+  --grad-a: #8c7cff;
+  --grad-b: #d07bff;
+    --grad-a: #8c7cff;
+    --grad-b: #d07bff;
     --accent-wash: linear-gradient(135deg, rgba(140, 124, 255, 0.2), rgba(208, 123, 255, 0.16));
     --on-accent: #0c0b1d;
     --glow: 0 0 0 4px rgba(169, 157, 255, 0.22), 0 10px 32px -6px rgba(208, 123, 255, 0.55);
@@ -7862,6 +7868,555 @@ label {
 }
 .home-foot p {
   margin: 0;
+}
+
+/* ==================================================================== verre lumineux : expérience (DESIGN.md § 3.5–3.7)
+   Le héros du jour qui salue, la progression qui se voit (anneaux, barres d'étapes), les états vides illustrés et
+   les petits moments de fête. Les replis (transparence, contraste, couleurs forcées, mouvement) suivent plus bas. */
+
+/* ---------------------------------------------------------------- Aujourd'hui : salut, halo d'humeur, verdict */
+.today[data-status="ok"] {
+  --hero-halo: var(--halo-3);
+}
+.today[data-status="tight"] {
+  --hero-halo: var(--halo-4);
+}
+.today[data-status="risk"] {
+  --hero-halo: var(--halo-2);
+}
+.today-hello {
+  margin: 0;
+  font-size: var(--t-sm);
+  font-weight: 650;
+  color: var(--ink-2);
+  letter-spacing: 0.01em;
+}
+/* Le chiffre prend une lumière douce : de l'encre vers l'accent (les deux ≥ 6:1 sur le verre). */
+.today-figure:not(.is-zero) {
+  width: fit-content; /* le dégradé se règle sur le chiffre, pas sur la largeur de la carte */
+  background: linear-gradient(115deg, var(--ink) 30%, var(--accent) 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.today-verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0.15rem 0 0;
+  max-width: none;
+}
+.today-verdict .verdict {
+  max-width: 100%;
+}
+.what-now .icon {
+  transition: transform var(--d-fast) var(--ease-out);
+}
+.what-now:hover .icon {
+  transform: translateX(3px);
+}
+/* « La prochaine chose à faire » : un titre visible, sur le fond nu (donc en --ink-2), avec un point qui luit. */
+.asks-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 0.7rem;
+  font-size: var(--t-md);
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.asks-title::before {
+  content: "";
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--accent-grad);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+  flex: none;
+}
+
+/* ---------------------------------------------------------------- anneau de progression */
+.ring {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 4.5rem;
+  height: 4.5rem;
+}
+.ring-sm {
+  width: 3rem;
+  height: 3rem;
+}
+.ring-lg {
+  width: 6rem;
+  height: 6rem;
+}
+.ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.ring-track {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 3.5;
+}
+.ring-arc {
+  fill: none;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  animation: ring-draw 900ms var(--ease-out) 120ms both;
+}
+.ring-stop-a {
+  stop-color: var(--grad-a);
+}
+.ring-stop-b {
+  stop-color: var(--grad-b);
+}
+.ring-value {
+  position: relative;
+  font-size: var(--t-sm);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.ring-sm .ring-value {
+  font-size: var(--t-xs);
+}
+.ring-lg .ring-value {
+  font-size: var(--t-lg);
+}
+.ring-value small {
+  font-size: 0.7em;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.ring.is-full svg {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--positive) 45%, transparent));
+}
+@keyframes ring-draw {
+  from {
+    stroke-dasharray: 0 100;
+  }
+}
+
+/* Cartes de progression : « classé ce mois » (Opérations), « N papiers rangés » (Documents). */
+.sort-progress,
+.vault-collection {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+}
+.sort-progress {
+  margin-top: 1rem;
+}
+.vault-collection {
+  margin: 0 0 1.25rem;
+}
+.sort-progress > div,
+.vault-collection > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+.sort-progress h2,
+.vault-collection h2 {
+  font-size: var(--t-lg);
+}
+.sort-progress.is-done {
+  border-color: color-mix(in srgb, var(--positive) 45%, var(--glass-edge));
+}
+
+/* Démarches : une barre d'étapes sur chaque carte du tableau. */
+.proc-progress {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 3px;
+  margin-top: 0.4rem;
+}
+.proc-progress > i {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--line);
+}
+.proc-progress > i.is-done {
+  background: var(--positive);
+}
+.proc-progress > i.is-active {
+  background: var(--accent-grad);
+  box-shadow: 0 0 8px -1px var(--grad-b);
+}
+
+/* ---------------------------------------------------------------- états vides illustrés */
+.empty-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.5rem;
+}
+.empty-state-body {
+  flex: 1 1 16rem;
+  min-width: 0;
+  display: grid;
+  gap: 0.4rem;
+  justify-items: start;
+}
+.empty-state-body h2 {
+  font-size: var(--t-lg);
+}
+.empty-state-body .actions {
+  margin-top: 0.4rem;
+}
+.empty-art {
+  width: 6rem;
+  height: 6rem;
+  flex: none;
+  overflow: visible;
+}
+.ea-halo {
+  fill: var(--accent-soft);
+}
+.empty-art.is-sun .ea-halo,
+.empty-art.is-jar .ea-halo {
+  fill: var(--coin-soft);
+}
+.empty-art.is-check .ea-halo {
+  fill: var(--positive-soft);
+}
+.ea-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ea-paper {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.ea-fill {
+  fill: color-mix(in srgb, var(--accent) 22%, var(--surface));
+}
+.ea-spark {
+  fill: none;
+  stroke: var(--grad-b);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+.empty-art.is-sun .ea-fill {
+  fill: var(--coin);
+}
+.empty-art.is-sun .ea-line {
+  stroke: var(--coin-ink);
+}
+.empty-art.is-check .ea-fill {
+  fill: var(--surface);
+  stroke: var(--positive);
+  stroke-width: 2.5;
+}
+.empty-art.is-check .ea-line {
+  stroke: var(--positive);
+  stroke-width: 4;
+}
+.ea-tick {
+  stroke-dasharray: 40;
+  animation: ea-tick 520ms var(--ease-out) 200ms both;
+}
+@keyframes ea-tick {
+  from {
+    stroke-dashoffset: 40;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.empty-art.is-jar .ea-fill {
+  fill: var(--coin);
+  opacity: 0.85;
+}
+.empty-art.is-jar .ea-line {
+  stroke: var(--ink-2);
+}
+.ea-coin {
+  fill: var(--coin);
+  stroke: var(--coin-ink);
+  stroke-width: 1.5;
+}
+.ea-coin-mark {
+  fill: none;
+  stroke: var(--coin-ink);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.opp-empty .empty-state-body,
+.vault-empty .empty-state-body {
+  max-width: 60ch;
+}
+
+/* ---------------------------------------------------------------- Gagner : tirelire héros, pièces, chance */
+.piggy.card-hero {
+  --hero-halo: var(--halo-4);
+}
+.piggy-badges li.is-new {
+  animation: badge-pop 560ms var(--ease-spring) both;
+  box-shadow: var(--glow-coin);
+}
+@keyframes badge-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+.reward.coin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding-left: 0.55rem;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--coin) 22%, transparent),
+    0 6px 16px -8px color-mix(in srgb, var(--coin) 75%, transparent);
+}
+.reward.coin-chip .icon {
+  color: var(--coin-ink);
+}
+/* La chance en jauge à trois crans, en soleil, tous verts quand elle est forte ; le libellé suit toujours en texte. */
+.chance {
+  gap: 0.2rem;
+}
+.chance i {
+  width: 0.95rem;
+  height: 0.42rem;
+  border-radius: var(--r-pill);
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
+}
+.chance i.is-on {
+  box-shadow: none;
+  background: var(--coin);
+}
+.chance:has(i:nth-child(3).is-on) i {
+  background: var(--positive); /* chance forte : les trois crans passent au vert */
+}
+.chance i:last-of-type {
+  margin-right: 0.25rem;
+}
+.mission.is-featured {
+  box-shadow: var(--glass-shine), var(--glass-shadow), 0 0 0 4px color-mix(in srgb, var(--coin) 16%, transparent);
+}
+
+/* ---------------------------------------------------------------- Papiers : une zone de dépôt lumineuse */
+.vault-drop {
+  border: 2px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: var(--r-card);
+  background:
+    radial-gradient(70% 120% at 50% 0%, color-mix(in srgb, var(--accent-soft) 85%, transparent), transparent 70%),
+    var(--glass-strong);
+  padding: 1.6rem 1rem;
+  transition:
+    border-color var(--d-fast),
+    box-shadow var(--d-glow);
+}
+.vault-drop > .icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0.55rem;
+  border-radius: 50%;
+  background: var(--accent-grad);
+  color: var(--on-accent);
+  box-shadow: var(--glow);
+}
+.vault-drop.is-over {
+  border-color: var(--accent);
+  box-shadow: var(--glow);
+}
+
+/* ---------------------------------------------------------------- micro-interactions sur ce qui s'ouvre */
+.proc-card a,
+.vault-tile > a,
+.more a {
+  transition:
+    border-color var(--d-fast),
+    box-shadow var(--d-glow),
+    transform var(--d-base) var(--ease-out);
+}
+@media (hover: hover) {
+  .proc-card a:hover,
+  .vault-tile > a:hover,
+  .more a:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--glass-shine), var(--glass-shadow), 0 0 0 3px var(--accent-soft);
+  }
+}
+.proc-card a:active,
+.vault-tile > a:active,
+.more a:active {
+  transform: scale(0.98);
+}
+
+/* ---------------------------------------------------------------- téléphone : l'action principale, en grand */
+@media (max-width: 760px) {
+  .page-head > .btn {
+    width: 100%;
+    min-height: 52px;
+    justify-content: center;
+  }
+  .vault-actions {
+    width: 100%;
+  }
+  .vault-actions .btn {
+    flex: 1 1 9.5rem;
+    min-height: 52px;
+    justify-content: center;
+  }
+  .vault-drop {
+    padding: 1.1rem 1rem;
+  }
+  .sort-progress,
+  .vault-collection {
+    padding: 1rem;
+  }
+}
+
+/* ---------------------------------------------------------------- moments de fête (§ 3.6) */
+.celebrate {
+  --toast-bottom: 1.5rem;
+  position: fixed;
+  inset: 0;
+  z-index: 29; /* juste sous le toast : les pièces sortent de derrière la pilule */
+  pointer-events: none;
+  overflow: hidden;
+}
+.celebrate.is-coin {
+  --c-glow: var(--halo-4);
+  --c-a: var(--coin);
+  --c-b: var(--coin);
+}
+.celebrate.is-done {
+  --c-glow: var(--halo-3);
+  --c-a: var(--positive);
+  --c-b: var(--grad-b);
+}
+.celebrate-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(55% 45% at 50% 100%, var(--c-glow), transparent 72%);
+  opacity: 0;
+  animation: party-glow 1200ms var(--ease-out) both;
+}
+.celebrate-burst {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--toast-bottom) + 1.4rem);
+  width: 0;
+  height: 0;
+}
+.celebrate-burst > i {
+  --a: 0deg;
+  --d: 76px;
+  position: absolute;
+  left: -6px;
+  top: -6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--c-a);
+  opacity: 0;
+  animation: party-burst 760ms var(--ease-out) both;
+}
+.celebrate.is-coin .celebrate-burst > i {
+  box-shadow: inset 0 0 0 1.5px var(--coin-ink);
+}
+.celebrate.is-done .celebrate-burst > i {
+  left: -3px;
+  top: -7px;
+  width: 6px;
+  height: 14px;
+  border-radius: 3px;
+}
+.celebrate.is-done .celebrate-burst > i:nth-child(even) {
+  background: var(--c-b);
+}
+.celebrate-burst > i:nth-child(1) { --a: -90deg; --d: 92px; }
+.celebrate-burst > i:nth-child(2) { --a: -54deg; --d: 74px; animation-delay: 40ms; }
+.celebrate-burst > i:nth-child(3) { --a: -18deg; --d: 96px; }
+.celebrate-burst > i:nth-child(4) { --a: 18deg; --d: 70px; animation-delay: 60ms; }
+.celebrate-burst > i:nth-child(5) { --a: 54deg; --d: 88px; }
+.celebrate-burst > i:nth-child(6) { --a: 90deg; --d: 78px; animation-delay: 30ms; }
+.celebrate-burst > i:nth-child(7) { --a: 126deg; --d: 66px; }
+.celebrate-burst > i:nth-child(8) { --a: 162deg; --d: 84px; animation-delay: 50ms; }
+.celebrate-burst > i:nth-child(9) { --a: 198deg; --d: 68px; }
+.celebrate-burst > i:nth-child(10) { --a: 234deg; --d: 90px; animation-delay: 20ms; }
+@keyframes party-burst {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateX(0) scale(0.4);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateX(var(--d)) scale(1);
+  }
+}
+@keyframes party-glow {
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (max-width: 760px) {
+  .celebrate {
+    --toast-bottom: calc(5.6rem + env(safe-area-inset-bottom));
+  }
+}
+/* Mouvement réduit : pas de gerbe ni de halo, le toast dit tout (la règle globale coupe déjà les animations). */
+@media (prefers-reduced-motion: reduce) {
+  .celebrate {
+    display: none;
+  }
+  .what-now:hover .icon,
+  .proc-card a:hover,
+  .proc-card a:active,
+  .vault-tile > a:hover,
+  .vault-tile > a:active,
+  .more a:hover,
+  .more a:active {
+    transform: none;
+  }
+}
+@media (prefers-contrast: more) {
+  .celebrate-glow {
+    display: none;
+  }
+}
+@media (forced-colors: active) {
+  .celebrate {
+    display: none;
+  }
+  .today-figure:not(.is-zero) {
+    background: none;
+    color: CanvasText;
+  }
+  .ring-arc {
+    stroke: Highlight;
+  }
+  .proc-progress > i {
+    border: 1px solid CanvasText;
+  }
+  .proc-progress > i.is-done,
+  .proc-progress > i.is-active {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
 }
 
 /* ==================================================================== verre lumineux : replis (DESIGN.md § 3.8)

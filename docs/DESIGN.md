@@ -415,6 +415,19 @@ réduisent à l'état final (badge visible, coche pleine) et au toast.
 8. Plus, Réglages, Connecteurs : tuiles colorées, groupes en cartes, pastille « relié » qui s'allume ;
    Épargne, Aides, Crypto, Pilote : phrase « ce que ça veut dire pour toi » et détails repliés.
 
+*Expérience, premier passage (octobre 2026).* Fait : salutation et halo d'humeur du héros, verdict en pastille
+avec « Que faire ? » (vers « Je peux m'acheter… ? ») quand le mois se resserre, titre visible « La prochaine chose
+à faire » ; `useCelebrate()` (ui.tsx) + `Celebration.tsx` (gerbe CSS de 10 pièces ou étincelles derrière le toast,
+halo du fond 1,2 s, `aria-hidden`, le toast `aria-live` dit le texte ; retirée en mouvement réduit et en couleurs
+forcées), branchée sur : gain confirmé, résultat « obtenu » avec montant, dossier validé, document vérifié,
+dernière opération « à classer » de la page rangée, banque / messagerie / agenda / boîte mail reliés. Palier de
+tirelire : badge en « pop » (sans second toast, pour ne pas couvrir le gain). Anneau `Ring.tsx` (« classé ce mois »
+dans Opérations, « N papiers rangés » dans Documents), barre d'étapes sur les cartes de démarche, tirelire en
+héros soleil, pièce lumineuse sur les récompenses, chance en trois crans, zone de dépôt lumineuse, états vides
+illustrés (`EmptyState.tsx`), action principale pleine largeur au téléphone. Pas d'objectif d'épargne « atteint »
+côté serveur : rien n'est fêté là. Reste : mode tri rapide, filtres en pastilles des colonnes de démarches, une seule
+alerte dépliée par page, phrases « ce que ça veut dire pour toi », tuiles colorées de Plus.
+
 ## 4. Architecture des composants
 
 ```
