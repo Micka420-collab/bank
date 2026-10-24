@@ -345,6 +345,43 @@ export type AidsResponse = {
   disclaimer: string;
 };
 
+// ------------------------------------------------------------------ boîte mail (lecture seule)
+export type MailProposal = {
+  id: number;
+  sender: string;
+  sender_domain: string;
+  subject: string;
+  filename: string;
+  size: number;
+  kind_guess: string;
+  kind_label: string;
+  confidence: number;
+  received_at: string | null;
+  status: "proposed" | "imported" | "dismissed";
+  document_id: number | null;
+};
+export type MailStatus = {
+  configured: boolean;
+  consent: boolean;
+  asked: boolean;
+  account: {
+    host: string;
+    port: number;
+    security: "ssl" | "starttls";
+    username_hint: string;
+    folder: string;
+    senders: string[];
+    status: "active" | "error";
+    last_sync_at: string | null;
+    last_error: string | null;
+    last_uid: number;
+  } | null;
+  proposals: MailProposal[];
+  recent: MailProposal[];
+  limits: { messages_per_scan: number; attachment_bytes: number; every_minutes: number };
+  document_ids?: number[];
+};
+
 // ------------------------------------------------------------------ sauvegardes
 export type BackupRun = {
   id: number;

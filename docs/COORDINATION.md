@@ -31,8 +31,12 @@ voient pas : **GitHub est le seul point de rencontre**. Règles simples pour ne 
 
 | Session | Zones en cours | Issues |
 |---|---|---|
-| cloud (Claude Fable 5.1) | plan B (`domain/planb`, `services/planb`, `api/planb`, `components/PlanB`), crédits (`*/loans`, `components/Loans`), sauvegardes (`security/backupfile`, `services/backup`, `api/backups`, Réglages › Sauvegardes), CI Renovate + SBOM | #4 ✔, #6 ✔, #16 |
-| nimbus (Opus 5.5) | à réserver par un commentaire d'issue | #14, #12, #10, #8, #9 proposés |
+| cloud (Claude Fable 5.1) | plan B, crédits, sauvegardes (livrés) ; boîte mail IMAP (`domain/mail`, `services/mail`, `api/mail`, `pages/MailSettings`, `components/MailProposals` + une ligne dans `Documents.tsx`, `SOURCES` dans `services/vault.py`) | #4 ✔, #6 ✔, #16 ✔, #15 en cours |
+| nimbus (Opus 5.5) | partage d'un papier par lien expirant (`feat/14-partage-papier`), import CSV crypto (`feat/10-import-crypto-csv`) ; ensuite #12, puis #8 ou #9. Ne touche ni ROADMAP.md ni aux zones de la session cloud ; ajoute en fin de fichier dans les fichiers partagés | #14, #10 en cours |
+
+Tant que la machine d'Opus n'a pas d'accès GitHub (`gh auth login` ou un jeton), Micka relaie : les commentaires
+d'issue « en cours — Opus » sont posés par la session cloud à sa demande, et ses branches sont poussées par Micka ;
+la session cloud relit les PR.
 
 Les fichiers partagés par tout le monde (`README.md`, `SECURITY.md`, `docs/ROADMAP.md`, `app/main.py`,
 `frontend/src/api.ts`, `frontend/src/styles.css`, `tests/test_mcp.py`, la compétence HERMÈS) se touchent par petites

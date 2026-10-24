@@ -43,6 +43,7 @@ class CoverageInput:
     goals: int = 0
     push_devices: int = 0  # appareils qui reçoivent les notifications du navigateur
     backup: str = "none"  # none | unverified | ok | failed | stale : la sauvegarde chiffrée et sa restauration d'essai
+    mail: str = "none"  # none | active | error : la boîte mail reliée en lecture seule (PDF proposés dans Papiers)
 
 
 @dataclass(frozen=True)
@@ -309,6 +310,34 @@ def sources(inp: CoverageInput) -> list[Source]:
                 "reglages",
                 "Activer les notifications",
                 9,
+            )
+        )
+    if inp.mail == "active":
+        out.append(Source("mail", "Boîte mail", "connected", "lue en lecture seule", "", "connecteurs", "Voir", 93))
+    elif inp.mail == "error":
+        out.append(
+            Source(
+                "mail",
+                "Boîte mail",
+                "partial",
+                "reliée, mais la dernière lecture a échoué",
+                "les factures, attestations et avis reçus par mail proposés dans Papiers",
+                "connecteurs",
+                "Vérifier la boîte mail",
+                6,
+            )
+        )
+    else:
+        out.append(
+            Source(
+                "mail",
+                "Boîte mail",
+                "missing",
+                "aucune boîte mail reliée",
+                "les factures, attestations et avis reçus par mail proposés dans Papiers, sans rien envoyer ni effacer",
+                "connecteurs",
+                "Relier ma boîte mail",
+                11,
             )
         )
     if inp.backup == "ok":

@@ -15,6 +15,7 @@ from typing import Any
 
 MAX_BLOCKS = 6
 MAX_ACTIONS = 7  # jusqu'à 4 boutons et 3 questions suivantes
+MAX_CATALOGUE = 60  # le modèle lit le catalogue à chaque question : il reste court
 MAX_LABEL = 60
 MAX_TITLE = 80
 MAX_PROMPT = 200
@@ -110,7 +111,7 @@ class Catalogue:
     actions: dict[str, ChatAction] = field(default_factory=dict)
 
     def add(self, action: ChatAction) -> None:
-        if len(self.actions) < 40:
+        if len(self.actions) < MAX_CATALOGUE:
             self.actions.setdefault(action.key, action)
 
     def resolve(self, keys: Iterable[Any]) -> list[ChatAction]:

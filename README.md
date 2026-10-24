@@ -39,6 +39,8 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
   (matelas d'abord ou au plus vite) ; « où placer mon argent ? » donne un plan par priorité (mois d'avance, dette
   chère, matelas sur LEP / livrets, projets datés, long terme PEA / assurance vie / PER selon ta tranche d'impôt,
   ton profil de risque, ton horizon et tes lignes rouges).
+- **Boîte mail en lecture seule** : les factures, attestations et avis reçus par mail proposés dans Papiers (un
+  dossier, PDF seulement, rien n'est marqué ni effacé, identifiants chiffrés), import à ta demande.
 - **Connecteurs** : banques en un clic (DSP2), compteur **Linky** (consommation réelle, facture annuelle estimée,
   rattrapage probable, pics), documents de l'**État** (avis d'impôt, attestations CAF et France Travail lus pour
   leurs chiffres — identifiants jetés), et les agents IA.
@@ -384,6 +386,17 @@ scans, reconnaissance de texte (Tesseract, en français), le tout dans des proce
   les dates d'expiration (pièce d'identité, assurance, fin de droits France Travail) sont surveillées.
 - **Photos sans traces** : position GPS, appareil et date de prise de vue sont retirés ; l'original n'est pas gardé.
 - **Portabilité** : export de tout le coffre en .zip (fichiers + valeurs + preuves), protégé par ton mot de passe.
+- **Boîte mail en lecture seule** (Connecteurs › Boîte mail) : relie une boîte IMAP avec un **mot de passe
+  d'application** (chiffré, jamais réaffiché ; TLS exigé) et un seul dossier ; chaque heure, Bank lit les messages
+  nouveaux en lecture seule (`EXAMINE`, `BODY.PEEK` : rien n'est marqué lu, rien n'est déplacé ni effacé, jamais de
+  `STORE`), au plus quarante à la fois, et ne télécharge un message que s'il peut porter une pièce jointe et pèse
+  moins de 25 Mo. Les PDF joints (15 Mo au plus, cinq par message, vrais PDF seulement) sont **proposés dans Papiers**
+  avec l'expéditeur, l'objet et le genre deviné (domaine institutionnel — caf.fr, francetravail.fr, impots.gouv.fr,
+  ameli.fr —, mots de l'objet, nom du fichier) ; les doublons (empreinte déjà au coffre ou déjà proposée) sont
+  écartés, et une liste d'expéditeurs retenus filtre le reste. Tu importes ou tu écartes : rien n'entre dans le
+  coffre sans ce geste ; à l'import la pièce est relue dans la boîte, vérifiée par son empreinte, déposée puis lue
+  par le lecteur confiné habituel. Accord dédié « Boîte mail en lecture seule », révocable ; le texte des mails n'est
+  jamais lu ni gardé, les identifiants ne sortent ni dans l'API, ni dans le journal, ni dans une erreur.
 
 ## Opportunités : ce que tu pourrais gagner, chiffré honnêtement
 
@@ -491,7 +504,7 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 915 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+Qualité au moment de la livraison : 919 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
 aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, scénarios adverses du
 banc d'essai crypto de Minara rejoués contre le pilote automatique, demandes simultanées qui ne passent jamais
@@ -500,10 +513,11 @@ référence, intégration OpenFisca réelle, passkeys face à un authentificateu
 l'envoi de chaque réponse, chat interactif face à un modèle simulé et à de faux moteurs de recherche, réponse en
 direct recomposée fragment par fragment, Web Push vérifié au bit près contre le vecteur de la RFC 8291 et déchiffré
 par un faux navigateur, amortissement vérifié sur un cas de référence public, plan B contre un moteur fiscal
-simulé qui réagit au revenu, sauvegarde chiffrée altérée, tronquée ou rallongée refusée), couverture 91 %,
-129 tests front (parcours de première ouverture, coffre, démarches, opportunités, veille, assistant, chat
-interactif et réponse en direct, notifications sur l'appareil, plan B, crédits, sauvegardes, crypto, pilote,
-déclarations, corrélations, année qui vient, passkeys, erreurs qui disent quoi faire),
+simulé qui réagit au revenu, sauvegarde chiffrée altérée, tronquée ou rallongée refusée, boîte mail contre un faux
+serveur IMAP qui journalise chaque commande), couverture 91 %, 132 tests front (parcours de première ouverture,
+coffre, démarches, opportunités, veille, assistant, chat interactif et réponse en direct, notifications sur
+l'appareil, plan B, crédits, sauvegardes, boîte mail, crypto, pilote, déclarations, corrélations, année qui vient,
+passkeys, erreurs qui disent quoi faire),
 mypy strict sans erreur,
 ruff et bandit propres, revue de sécurité indépendante du pilote et de la crypto (ses constats corrigés et
 testés), `pip-audit` et `npm audit` sans vulnérabilité connue, aucune erreur de console ni débordement

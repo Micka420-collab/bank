@@ -318,6 +318,52 @@ class Loan(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 
+class MailAccount(Base):
+    """La boîte mail reliée en lecture seule : serveur, identifiants chiffrés (jamais réaffichés), un dossier, la
+    liste des expéditeurs retenus, où en est la lecture (dernier UID vu). Une seule ligne (id = 1)."""
+
+    __tablename__ = "mail_accounts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    host: Mapped[str] = mapped_column(String(253))
+    port: Mapped[int] = mapped_column(Integer, default=993)
+    security: Mapped[str] = mapped_column(String(8), default="ssl")  # ssl | starttls
+    username: Mapped[str] = mapped_column(EncryptedText("mail.username"))
+    username_hint: Mapped[str] = mapped_column(String(40), default="")  # « mi…@example.org » : pour reconnaître
+    password: Mapped[str] = mapped_column(EncryptedText("mail.password"))
+    folder: Mapped[str] = mapped_column(String(120), default="INBOX")
+    senders: Mapped[str] = mapped_column(Text, default="[]")  # JSON : adresses ou domaines retenus (vide : tous)
+    status: Mapped[str] = mapped_column(String(16), default="active")  # active | error
+    last_sync_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_error: Mapped[str | None] = mapped_column(String(300))
+    last_uid: Mapped[int] = mapped_column(Integer, default=0)
+    uid_validity: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class MailProposal(Base):
+    """Un PDF repéré dans la boîte mail, proposé à l'import dans Papiers : qui l'envoie, quel objet, quel fichier,
+    quel genre probable. L'expéditeur et l'objet sont chiffrés ; l'empreinte sert à écarter les doublons."""
+
+    __tablename__ = "mail_proposals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    uid: Mapped[int] = mapped_column(Integer, index=True)
+    part_sha256: Mapped[str] = mapped_column(String(64), index=True)
+    sender: Mapped[str] = mapped_column(EncryptedText("mail.sender"))
+    sender_domain: Mapped[str] = mapped_column(String(120), default="")
+    subject: Mapped[str] = mapped_column(EncryptedText("mail.subject"))
+    filename: Mapped[str] = mapped_column(String(160))
+    size: Mapped[int] = mapped_column(Integer, default=0)
+    kind_guess: Mapped[str] = mapped_column(String(24), default="other")
+    confidence: Mapped[float] = mapped_column(Float, default=0.3)
+    received_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    status: Mapped[str] = mapped_column(String(10), default="proposed", index=True)  # proposed | imported | dismissed
+    document_id: Mapped[int | None] = mapped_column(ForeignKey("vault_documents.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
 class BackupRun(Base):
     """Une sauvegarde ou une restauration d'essai : ce qui s'est passé, visible dans Bank. Jamais de secret :
     noms de fichiers, tailles, nombre de lignes par table, message d'erreur."""

@@ -6448,6 +6448,39 @@ details.card.cx-details > summary {
   font-size: var(--t-sm);
 }
 
+/* ------------------------------------------------------------------ papiers : proposés par la boîte mail */
+.mail-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+.mail-item {
+  display: grid;
+  gap: 0.4rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+}
+@media (min-width: 640px) {
+  .mail-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+}
+.mail-text p {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+}
+.mail-text .tag {
+  margin-left: 0.3rem;
+}
+.mail-do {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
 /* ------------------------------------------------------------------ réglages : passkeys */
 .pk-list {
   list-style: none;

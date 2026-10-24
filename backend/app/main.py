@@ -38,6 +38,7 @@ from app.api import (
     initiatives,
     insights,
     loans,
+    mail,
     memory,
     obligations,
     opportunities,
@@ -69,6 +70,7 @@ from app.services import backup as backup_service
 from app.services import consents as consent_service
 from app.services import crypto as crypto_service
 from app.services import energy as energy_service
+from app.services import mail as mail_service
 from app.services import obligations as obligations_service
 from app.services import planning as planning_service
 from app.services import vault as vault_service
@@ -192,6 +194,10 @@ def _housekeeping_once(app: FastAPI, today: date) -> dict[str, int]:
     with app.state.sessionmaker() as db:  # sauvegarde chiffrée du jour, restauration d'essai de la semaine
         report.update(backup_service.tick(db, app.state.settings))
         db.commit()
+    with app.state.sessionmaker() as db:  # boîte mail en lecture seule : les nouveaux PDF proposés dans Papiers
+        factory = getattr(app.state, "mail_client_factory", None) or mail_service.default_client
+        report.update(mail_service.tick(db, factory=factory))
+        db.commit()
     return report
 
 
@@ -296,6 +302,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "assistant": SlidingWindowLimiter(30, 300),  # questions au modèle : 30 par 5 min, en plus des plafonds
         "watch": SlidingWindowLimiter(6, 600),  # relèves de veille à la demande
         "channel": SlidingWindowLimiter(20, 300),  # messages par compte relié (messageries), avant « doucement »
+        "backups": SlidingWindowLimiter(6, 3600),  # sauvegardes et restaurations d'essai à la demande
+        "mail_scan": SlidingWindowLimiter(6, 3600),  # lectures de la boîte mail à la demande
         "crypto": SlidingWindowLimiter(6, 600),  # relèves crypto à la demande (nœuds publics : on reste poli)
     }
     app.state.enablebanking = _build_enablebanking(settings)
@@ -344,6 +352,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         planb,
         loans,
         backups,
+        mail,
         system,
     )
     for r in routers:

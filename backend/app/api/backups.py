@@ -8,15 +8,14 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, status
 
 from app.api.deps import AuthDep, DbDep
-from app.security.auth import SlidingWindowLimiter
 from app.services import backup as svc
 
 router = APIRouter(prefix="/api/system/backups", tags=["system"])
-_manual = SlidingWindowLimiter(6, 3600)  # six gestes par heure : une sauvegarde prend quelques secondes
 
 
 def _limited(request: Request) -> None:
-    if not _manual.hit("backups"):
+    """Six gestes par heure : une sauvegarde prend quelques secondes, une restauration d'essai aussi."""
+    if not request.app.state.limiters["backups"].hit("backups"):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Trop de demandes : attends une heure")
 
 

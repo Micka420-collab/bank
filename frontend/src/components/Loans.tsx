@@ -170,6 +170,7 @@ function Early({ loan, rules }: { loan: LoanView; rules: LoansResponse["rules"] 
   const rule = rules[loan.kind === "immobilier" ? "ira_immobilier" : "ira_consommation"];
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    if (mode !== "full" && !amount) return;
     void run(async () => {
       setResult(await api<EarlyRepayment>(`/api/loans/${loan.id}/early`, { method: "POST", body: { amount_cents: mode === "full" ? 0 : amount ?? 0, mode } }));
     });
@@ -178,7 +179,7 @@ function Early({ loan, rules }: { loan: LoanView; rules: LoansResponse["rules"] 
     <form className="loan-form" onSubmit={submit} aria-label="Remboursement anticipé">
       <Segmented value={mode} onChange={setMode} label="Que faire de l'avance" options={[{ value: "shorter", label: "Finir plus tôt" }, { value: "lower", label: "Payer moins par mois" }, { value: "full", label: "Tout solder" }]} />
       {mode !== "full" && <Field label="Montant remboursé"><EuroInput value={amount} onChange={setAmount} required /></Field>}
-      <button className={`btn sm${busy ? " is-loading" : ""}`} disabled={busy || (mode !== "full" && !amount)}>Simuler</button>
+      <button className={`btn sm${busy ? " is-loading" : ""}`} disabled={busy}>Simuler</button>
       {error && <ErrorNote message={error} />}
       {result && (
         <div className="loan-result" role="status">

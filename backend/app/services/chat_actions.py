@@ -47,10 +47,16 @@ def _connect(source: Source) -> blocks.ChatAction:
 
 
 def build(db: Session, today: date, *, sources: list[Source] | None = None) -> blocks.Catalogue:
+    """Le catalogue, borné : ce qui manque à relier d'abord, puis les écrans et les questions toutes prêtes (toujours
+    présents), puis les cartes « Bank te demande » avec ce qu'il reste de place."""
     cat = blocks.Catalogue()
     for s in sources if sources is not None else coverage.sources(db, today):
         if s.state != "connected":
             cat.add(_connect(s))
+    for key, label, page, hint in STATIC:
+        cat.add(blocks.navigate(key, label, page, hint=hint))
+    for key, label, prompt in FOLLOW_UPS:
+        cat.add(blocks.ask(key, label, prompt, hint="question suivante toute prête"))
     for c in initiatives.cards(db, today)[:12]:
         if c.input is not None:
             continue  # une saisie en ligne : ça se fait sur la carte, pas depuis un bouton du chat
@@ -63,8 +69,4 @@ def build(db: Session, today: date, *, sources: list[Source] | None = None) -> b
                 cat.add(blocks.navigate(key, a.label, str(effect["page"]), hint=f"carte « {c.title} »"))
             elif effect.get("type") != "navigate":
                 cat.add(blocks.act(key, a.label, c.key, a.id, hint=f"carte « {c.title} » : {c.body[:90]}"))
-    for key, label, page, hint in STATIC:
-        cat.add(blocks.navigate(key, label, page, hint=hint))
-    for key, label, prompt in FOLLOW_UPS:
-        cat.add(blocks.ask(key, label, prompt, hint="question suivante toute prête"))
     return cat

@@ -17,6 +17,7 @@ import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "
 import { money, shortDate } from "../format";
 import { AgentTokens } from "./Agents";
 import { AssistantSettings } from "./AssistantSettings";
+import { MailSettings } from "./MailSettings";
 import { SearchSettings } from "./SearchSettings";
 import { Planning } from "./Planning";
 
@@ -35,6 +36,7 @@ export function Connecteurs({ bankResult }: { bankResult: string | null }) {
       <Etat />
       <AssistantSettings />
       <SearchSettings />
+      <MailSettings />
       <AgentTokens />
       <section className="section" aria-labelledby="ch-link-title">
         <div className="section-head"><h2 id="ch-link-title"><Icon name="chat" /> Messageries</h2></div>

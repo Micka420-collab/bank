@@ -15,6 +15,7 @@ import {
   type VaultUpload,
 } from "../api";
 import { Icon } from "../components/Icon";
+import { MailProposals } from "../components/MailProposals";
 import { ErrorNote, Loading, useAsyncAction, useToast } from "../components/ui";
 import { money, plural } from "../format";
 
@@ -194,6 +195,7 @@ function Library() {
         </div>
       )}
 
+      <MailProposals onImported={reload} />
       {listing.error && <ErrorNote message={listing.error} onRetry={listing.reload} />}
       {!listing.data && !listing.error && <Loading what="Ouverture du coffre" />}
       {listing.data && docs.length === 0 && (

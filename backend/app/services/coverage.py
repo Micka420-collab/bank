@@ -21,6 +21,7 @@ from app.models import (
     CryptoWallet,
     EnergyConnection,
     LlmProvider,
+    MailAccount,
     Obligation,
     Passkey,
     Provider,
@@ -102,7 +103,15 @@ def build_input(db: Session, today: date) -> dom.CoverageInput:
             or 0
         ),
         backup=_backup_level(db),
+        mail=_mail_level(db),
     )
+
+
+def _mail_level(db: Session) -> str:
+    row = db.get(MailAccount, 1)
+    if row is None:
+        return "none"
+    return "error" if row.status == "error" else "active"
 
 
 def _backup_level(db: Session) -> str:

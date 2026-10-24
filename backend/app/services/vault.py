@@ -37,7 +37,7 @@ MAX_FILES_PER_UPLOAD = 10
 MAX_OCR_PAGES = 5
 STUCK_AFTER = timedelta(minutes=10)
 MAX_TEXT_CHARS = 200_000
-SOURCES = ("upload", "camera")
+SOURCES = ("upload", "camera", "mail")
 EXPORT_MAX_BYTES = 500_000_000
 
 

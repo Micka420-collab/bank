@@ -89,6 +89,18 @@ PURPOSES: dict[str, dict[str, Any]] = {
         "default": False,
         "version": 1,
     },
+    "mail": {
+        "title": "Boîte mail en lecture seule",
+        "text": (
+            "Bank se connecte à ta boîte mail avec un mot de passe d'application (chiffré ici, jamais réaffiché), "
+            "ouvre un seul dossier en lecture seule et repère les PDF joints qui ressemblent à des papiers (facture, "
+            "attestation, avis, quittance, bulletin). Il te les propose dans Papiers avec l'expéditeur et l'objet ; "
+            "rien n'entre dans le coffre sans ton geste. Bank ne lit pas le texte de tes mails, n'en supprime, n'en "
+            "marque ni n'en envoie aucun. Révocable ici ; la connexion s'arrête aussitôt."
+        ),
+        "default": False,
+        "version": 1,
+    },
     "watch": {
         "title": "Veille sur les sources officielles",
         "text": (
