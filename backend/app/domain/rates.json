@@ -95,5 +95,15 @@
       "equilibre": 50,
       "dynamique": 75
     }
+  },
+  "gas_reference": {
+    "source": "Prix repère de vente de gaz de la CRE, relayé par Service-Public (actualité du 12/10/2026, relue le 24/10/2026)",
+    "source_url": "https://www.service-public.gouv.fr/particuliers/actualites/A17956",
+    "published": "2026-10-12",
+    "unit": "€/MWh TTC",
+    "prices": [
+      {"from": "2026-10-01", "eur_per_mwh_ttc": "182.88"},
+      {"from": "2026-11-01", "eur_per_mwh_ttc": "194.90"}
+    ]
   }
 }

@@ -315,8 +315,9 @@ def test_tempo_needs_consent_then_stores_known_colours(app, tnet: tuple[TestClie
     st = client.post("/api/energy/tempo/refresh").json()
     assert st["tempo_error"] is None
     assert st["tempo"]["today"]["color"] == "rouge" and st["tempo"]["tomorrow"]["label"] == "Blanc"
-    (req,) = fake.requests
+    req, *history = fake.requests  # puis l'historique de l'année, saison par saison (simulation Tempo, #33 suite)
     assert req.url.path == "/api/joursTempo" and req.url.query.decode().count("dateJour%5B%5D=") == 3
+    assert [r.url.query.decode() for r in history] == ["periode=2025-2026", "periode=2026-2027"]
     # « Pas encore publiée » ne s'écrit pas ; une panne garde les couleurs connues.
     fake.body = (FIX / "energie" / "tempo_jours_inconnu.json").read_bytes()
     fake.down = True
@@ -346,7 +347,8 @@ def test_tick_is_quiet_when_today_and_tomorrow_are_known(app, tnet: tuple[TestCl
         assert tempo.tick(db, now=now + timedelta(hours=3), today=TODAY, fetch=fetch)["tempo_stored"] == 2
         db.commit()
         assert tempo.tick(db, now=now + timedelta(hours=6), today=TODAY, fetch=fetch) == {}
-    assert len(fake.requests) == 2
+    # Deux relèves du jour, et un seul essai d'historique de l'année (une fois par jour au plus, #33 suite).
+    assert len(fake.requests) == 4 and sum("periode=" in str(r.url) for r in fake.requests) == 2, "deux saisons"
 
 
 def test_red_day_alert_the_evening_before_for_a_tempo_contract(app, tnet: tuple[TestClient, TempoNet]) -> None:  # type: ignore[no-untyped-def]

@@ -30,7 +30,7 @@ planning.connect planning.disconnect planning.model planning.sync_failed plannin
 procedure.close procedure.create procedure.delete procedure.fields procedure.pieces procedure.restore procedure.sent
 procedure.update profile.update proposal.approve proposal.create proposal.reject push.subscribe push.test
 rates.revert rates.update place.geocode place.remove papers.task_done papers.task_close
-energy.contract energy.max_power energy.max_power_failed tempo.refresh
+energy.contract energy.max_power energy.max_power_failed tempo.refresh tempo.history energy.load_curve weather.refresh
 push.unsubscribe retirement.profile retirement.profile_removed rule.create search.configure search.denied
 search.remove search.test search.test_failed setup.denied setup.done transaction.update vault.applied vault.assist
 vault.delete vault.export vault.export_denied vault.field_removed vault.field_set vault.file_read vault.read_failed

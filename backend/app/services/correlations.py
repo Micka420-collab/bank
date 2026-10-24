@@ -15,11 +15,13 @@ from sqlalchemy.orm import Session
 from app.domain import contracts
 from app.domain import correlations as dom
 from app.domain.categorize import CATEGORY_KIND
+from app.domain.energy_analysis import ClimateCheck
 from app.domain.recurring import add_months, detect_recurring
 from app.models import Category, Obligation, ObligationDone, OpportunityState, Transaction, VaultDocument, VaultField
 from app.security import audit
 from app.services import analytics, procedures
 from app.services import energy as energy_service
+from app.services import weather as weather_service
 
 DOC_KINDS = ("lease", "insurance", "payslip", "rent_receipt")
 STATE_PREFIX = "corr:"
@@ -146,6 +148,14 @@ def _monthly(db: Session, today: date) -> tuple[dict[str, dict[str, int]], dict[
     return {k: dict(v) for k, v in spend.items()}, dict(income), dict(daily), sorted(paydays)
 
 
+def _climate(db: Session, today: date) -> ClimateCheck | None:
+    """Consommation à climat égal (#33) : seulement avec un compteur et des températures (accord « Météo »)."""
+    if energy_service.active_connection(db) is None:
+        return None
+    temps = weather_service.temps(db, today - timedelta(days=800))
+    return energy_service.climate(db, today, temps) if temps else None
+
+
 def build_inputs(db: Session, today: date) -> dom.Inputs:
     salary, aids = _credits(db, add_months(today, -24))
     spend, income, daily, paydays = _monthly(db, today)
@@ -159,6 +169,7 @@ def build_inputs(db: Session, today: date) -> dom.Inputs:
         declared=_declared(db),
         energy=_energy(db, today),
         power=energy_service.power(db, today) if energy_service.active_connection(db) is not None else None,
+        climate=_climate(db, today),
         monthly_spend=spend,
         monthly_income=income,
         daily_variable_spend=daily,

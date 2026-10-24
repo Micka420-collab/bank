@@ -377,6 +377,13 @@ déclare pas. Rien n'est envoyé : tu déclares sur le site de l'organisme. Règ
   1 kVA sous une puissance plus basse, Bank chiffre l'économie annuelle sur la grille de la CRE (sinon, il dit combien
   de mois il a). Avec l'accord « Couleur Tempo », la carte montre la couleur du jour et de demain
   (api-couleur-tempo.fr, relais gratuit de RTE) et, en option Tempo, une alerte part la veille d'un jour rouge.
+  La carte chiffre aussi **Base, Heures creuses et Tempo** sur tes 12 derniers mois aux prix de la grille de la CRE,
+  abonnement compris : estimation écrite avec ses hypothèses (35 % en heures creuses, jour Tempo de minuit à minuit)
+  et le seuil de bascule, calcul exact jour par jour avec l'accord « Courbe de charge Linky » (pas de 30 min, à
+  activer aussi chez Enedis) et tes heures creuses. Avec l'accord « Météo de ta commune », Bank compare ta
+  consommation d'une année sur l'autre **à climat égal** (degrés-jours base 18 °C, archive Open-Meteo, coordonnées
+  arrondies à 10 km) et ne signale qu'une dérive de plus de 10 % sur trois mois. Si tu paies du gaz, le **prix
+  repère** de la CRE (daté dans `rates.json`, d'après Service-Public) s'affiche à côté pour comparer.
 - **Planning de travail** : colle l'adresse privée iCal de ton agenda (Google Agenda › « Adresse secrète au
   format iCal », Outlook › « Publier ») ou dépose un .ics. Bank garde les journées et les titres (chiffrés),
   relit l'adresse chaque nuit, et calcule la prochaine paie : part fixe (la paie habituelle lue dans tes relevés)

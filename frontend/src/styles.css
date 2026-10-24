@@ -8853,3 +8853,9 @@ label {
 .tempo-rouge { background: var(--negative-soft); color: var(--negative); font-weight: 600; }
 .tempo-unknown { color: var(--ink-3); }
 .power-note p { margin-block: 0.35rem; }
+/* Énergie (#33, suite) : simulation des options, consommation à climat égal. */
+.energy-sim .sim-mode { margin-inline-start: 0.5rem; padding: 0.1rem 0.5rem; border-radius: 999px; border: 1px solid var(--line-strong); font-size: var(--t-sm); }
+.sim-table td, .sim-table th { padding: 0.3rem 0.6rem; text-align: start; }
+.sim-current th { font-weight: 600; }
+.sim-assumptions { margin-block: 0.35rem; padding-inline-start: 1.1rem; }
+.climate-note p, .gas-line { margin-block: 0.35rem; }

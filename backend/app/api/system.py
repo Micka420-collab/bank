@@ -27,6 +27,7 @@ from app.models import (
     CryptoTaxEvent,
     CryptoWallet,
     DocumentTask,
+    EnergyLoadCurve,
     EnergyMaxPower,
     EnergyReading,
     InitiativeState,
@@ -46,6 +47,7 @@ from app.models import (
     ValueEvent,
     VaultDocument,
     WatchSource,
+    WeatherDay,
     WorkPlan,
     WorkShift,
 )
@@ -194,6 +196,15 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
             for r in db.scalars(select(EnergyMaxPower).order_by(EnergyMaxPower.day))
         ],
         "energy_contract": energy_service.contract(db),
+        # Courbe de charge (Wh par demi-heure, gardée chiffrée) et températures de ta commune (#33).
+        "energy_load_curve": [
+            {"day": r.day.isoformat(), "wh_per_half_hour": json.loads(r.slots)}
+            for r in db.scalars(select(EnergyLoadCurve).order_by(EnergyLoadCurve.day))
+        ],
+        "weather_days": [
+            {"day": r.day.isoformat(), "temp_c": r.temp_c}
+            for r in db.scalars(select(WeatherDay).order_by(WeatherDay.day))
+        ],
         "official_facts": [
             {"kind": f.kind, "period": f.period, "fields": json.loads(f.data)} for f in db.scalars(select(OfficialFact))
         ],

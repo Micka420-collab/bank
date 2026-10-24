@@ -19,11 +19,13 @@ from typing import Any
 import httpx
 
 from app.domain.energy import DailyReading, EnergyFormatError, parse_daily
+from app.domain.energy_analysis import parse_load_curve
 from app.domain.energy_signals import MaxPower, SignalFormatError, parse_max_power
 
 BASE_URL = "https://conso.boris.sh/api"
 USER_AGENT = "Bank/0.3 (self-hosted personal finance; contact via GitHub issues of the deployment)"  # ASCII only
 MAX_DAYS_PER_CALL = 180  # Enedis plafonne la fenêtre d'une requête ; on reste large en dessous d'un an
+CURVE_DAYS_PER_CALL = 7  # courbe de charge : Enedis la sert par semaine au plus
 MAX_BODY_BYTES = 2_000_000  # 180 jours de relevés pèsent quelques dizaines de Ko ; au-delà, on coupe
 MAX_SECONDS_PER_CALL = 60.0  # délai total d'une réponse, octet par octet compris (le timeout httpx est par opération)
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{20,}$")
@@ -145,3 +147,31 @@ class ConsoApiClient:
                     by_day[r.day] = r
             cursor = chunk_end
         return [by_day[d] for d in sorted(by_day)]
+
+    def load_curve(self, prm: str, start: date, end_exclusive: date) -> dict[date, list[int | None]]:
+        """Courbe de charge [start, end_exclusive[ : l'énergie de chaque demi-heure (Wh), par jour civil, par
+        tranches de 7 jours. Type relu le 24/10/2026 sur https://conso.boris.sh/documentation :
+        `courbe_de_charge_consommation` (puissance moyenne en W par intervalle de 30 min, PT30M). Elle n'existe que
+        si son enregistrement est activé chez Enedis, et seulement depuis cette date."""
+        by_day: dict[date, list[int | None]] = {}
+        cursor = start
+        while cursor < end_exclusive:
+            chunk_end = min(end_exclusive, cursor + timedelta(days=CURVE_DAYS_PER_CALL))
+            payload = self._get("courbe_de_charge_consommation", prm, cursor, chunk_end)
+            try:
+                days = parse_load_curve(payload)
+            except SignalFormatError as exc:
+                raise ConsoApiError(
+                    f"Format de la courbe de charge non reconnu ({exc}) : le format Enedis a peut-être changé, mets "
+                    "Bank à jour ou signale-le (integrations/README)",
+                    200,
+                    permanent=True,
+                ) from exc
+            for day, slots in days.items():
+                if start <= day < end_exclusive:
+                    merged = by_day.setdefault(day, list(slots))
+                    for i, v in enumerate(slots):  # un jour à cheval sur deux tranches : les demi-heures s'ajoutent
+                        if v is not None:
+                            merged[i] = v
+            cursor = chunk_end
+        return dict(sorted(by_day.items()))

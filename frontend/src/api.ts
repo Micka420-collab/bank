@@ -1091,7 +1091,7 @@ export type EnergyInsights = {
 
 export type TariffOption = { id: string; label: string; cents_per_100kwh: number; yearly_subscription_cents: number; as_of: string; source: string };
 
-export type EnergyContract = { option: "base" | "hphc" | "tempo"; kva: number };
+export type EnergyContract = { option: "base" | "hphc" | "tempo"; kva: number; hc?: string };
 // Puissance maximale Linky face aux kVA souscrits (#33) : le message est composé par le serveur, chiffres sourcés.
 export type PowerCheckView = {
   status: "too_high" | "fits" | "no_saving" | "too_few_months" | "no_contract" | "no_grid" | "no_data" | "none_lower";
@@ -1123,7 +1123,58 @@ export type TempoView = {
   licence: string;
   last_success_at: string | null;
   last_error: string | null;
+  history_missing_days?: number | null;
+  history_error?: string | null;
 };
+// Simulation Base / Heures creuses / Tempo, climat, courbe de charge, gaz (#33) : tout est calculé par le serveur.
+export type OptionCostView = {
+  option: EnergyContract["option"];
+  label: string;
+  total_cents: number | null;
+  subscription_cents: number | null;
+  energy_cents: number | null;
+  missing: string | null;
+};
+export type SimulationView = {
+  status: "ok" | "no_contract" | "too_few" | "no_grid";
+  message: string;
+  kva: number | null;
+  mode: "estimation" | "exacte" | "en partie exacte" | null;
+  days: number;
+  exact_days: number;
+  kwh: number | null;
+  options: OptionCostView[];
+  current_option: string | null;
+  assumptions: string[];
+  notes: string[];
+  hc_breakeven_pct: number | null;
+  red_days: number | null;
+  grid_as_of: string | null;
+  grid_url: string | null;
+  source: string;
+  tempo_hours_url: string;
+};
+export type ClimateView = {
+  status: "drift" | "steady" | "lower" | "no_weather" | "too_few";
+  message: string;
+  corrected_pct: number | null;
+  threshold_pct: number;
+  base_c: number;
+  wh_per_hdd: number | null;
+  r2: number | null;
+  months: { month: string; kwh: number; prev_kwh: number; hdd: number; prev_hdd: number }[];
+};
+export type WeatherView = {
+  consent: boolean;
+  place_known: boolean;
+  source: string;
+  source_url: string;
+  base_c: number;
+  last_success_at: string | null;
+  last_error: string | null;
+};
+export type CurveView = { consent: boolean; days: number; since: string | null; last_sync_at: string | null; last_error: string | null };
+export type GasView = { message: string; spent_cents: number; source: string; source_url: string; published: string | null };
 
 export type EnergyStatus = {
   connected: boolean;
@@ -1135,8 +1186,14 @@ export type EnergyStatus = {
   daily?: { day: string; wh: number }[];
   power?: PowerCheckView;
   tempo: TempoView;
+  simulation?: SimulationView;
+  climate?: ClimateView;
+  curve?: CurveView;
+  weather: WeatherView;
+  gas: GasView | null;
   imported?: number;
   tempo_error?: string | null;
+  weather_error?: string | null;
 };
 
 // ------------------------------------------------------------------ documents officiels

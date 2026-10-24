@@ -14,12 +14,12 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db import write_lock
 from app.domain import territory as dom
-from app.models import HouseholdPlace, PublicCalendar
+from app.models import HouseholdPlace, PublicCalendar, WeatherDay
 from app.security import audit, netfetch
 from app.services import consents
 
@@ -70,6 +70,13 @@ def _save_place(db: Session, data: dict[str, Any]) -> None:
     db.flush()
 
 
+def mark_place(db: Session, key: str, value: Any) -> None:
+    """Ajoute à l'adresse gardée (chiffrée) une marque d'un service qui en dépend, ex. la maille météo (#33)."""
+    data = place(db)
+    if data is not None:
+        _save_place(db, {**data, key: value})
+
+
 def geocode(db: Session, query: str, *, fetch: Fetch, now: datetime, actor: str) -> dict[str, Any]:
     """Envoie l'adresse tapée (et elle seule) au géocodeur de l'IGN, garde le résultat chiffré. Une adresse non
     reconnue ou un géocodeur indisponible ne change rien à l'adresse gardée."""
@@ -99,6 +106,8 @@ def geocode(db: Session, query: str, *, fetch: Fetch, now: datetime, actor: str)
     if before.get("depcode") == found.depcode and before.get("academy"):  # même département : même académie
         data["academy"], data["academy_checked_at"] = before["academy"], before.get("academy_checked_at")
     _save_place(db, data)
+    if before.get("citycode") != found.citycode:
+        db.execute(delete(WeatherDay))  # la météo de l'ancienne commune ne sert plus (#33)
     # Le journal dit ce qui a changé, jamais l'adresse.
     audit.record(
         db, actor, "place.geocode", precision=found.precision, commune_changed=before.get("citycode") != found.citycode
@@ -112,6 +121,7 @@ def remove_place(db: Session, *, actor: str) -> None:
     if row is None:
         raise TerritoryError("Aucune adresse enregistrée", 404)
     db.delete(row)
+    db.execute(delete(WeatherDay))  # les températures de ta commune disent, à 10 km près, où tu habites (#33)
     school = db.get(PublicCalendar, "scolaire")
     if school is not None:
         db.delete(school)  # les vacances de ton académie disent où tu habites

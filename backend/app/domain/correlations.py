@@ -23,6 +23,7 @@ from statistics import median
 from typing import Any
 
 from app.domain import contracts
+from app.domain.energy_analysis import ClimateCheck
 from app.domain.energy_signals import OPTIONS, PowerCheck, kva_label
 from app.domain.money import format_eur
 from app.domain.recurring import add_months
@@ -99,6 +100,7 @@ class Inputs:
     declared: Sequence[Declared] = ()
     energy: EnergyLink | None = None
     power: PowerCheck | None = None  # puissance maximale Linky face aux kVA souscrits (#33)
+    climate: ClimateCheck | None = None  # consommation à climat égal, degrés-jours d'Open-Meteo (#33)
     monthly_spend: Mapping[str, Mapping[str, int]] = field(default_factory=dict)  # catégorie -> AAAA-MM -> centimes
     monthly_income: Mapping[str, int] = field(default_factory=dict)  # AAAA-MM -> centimes
     daily_variable_spend: Mapping[date, int] = field(default_factory=dict)  # dépenses variables par jour
@@ -816,6 +818,35 @@ def power_findings(check: PowerCheck | None) -> list[Finding]:
     ]
 
 
+# ------------------------------------------------------------------ énergie : dérive à climat égal (#33)
+def climate_findings(check: ClimateCheck | None) -> list[Finding]:
+    """Un constat seulement quand la consommation des trois derniers mois dépasse de plus de 10 % (et 30 kWh) celle
+    des mêmes mois de l'an dernier une fois le climat ramené au même : le message vient tel quel du calcul."""
+    if check is None or check.status != "drift" or check.corrected_pct is None or not check.period:
+        return []
+    evidence = [
+        Evidence("Écart brut sur un an", f"{check.raw_pct:+d} %" if check.raw_pct is not None else "inconnu"),
+        Evidence("Écart à climat égal", f"{check.corrected_pct:+d} % ({check.extra_kwh} kWh)"),
+        Evidence(
+            "Climat", "degrés-jours de chauffe base 18 °C, températures Open-Meteo", "url:https://open-meteo.com/"
+        ),
+    ]
+    if check.cold_pct is not None:
+        evidence.insert(1, Evidence("Froid sur un an", f"{check.cold_pct:+d} % de degrés-jours"))
+    return [
+        Finding(
+            key=f"energy_climate_drift:{check.period}",
+            kind="energy_climate_drift",
+            level="warning",
+            topic="energie",
+            title=f"Électricité : {check.corrected_pct:+d} % à climat égal {check.period}",
+            body=check.message,
+            evidence=tuple(evidence),
+            confidence=0.7,
+        )
+    ]
+
+
 # ------------------------------------------------------------------ habitudes : pistes statistiques
 def _ranks(values: Sequence[float]) -> list[float]:
     order = sorted(range(len(values)), key=lambda i: values[i])
@@ -959,6 +990,7 @@ def analyse(inputs: Inputs) -> list[Finding]:
     out += declared_vs_paid(inputs.declared, inputs.aid_credits)
     out += energy_findings(inputs.energy)
     out += power_findings(inputs.power)
+    out += climate_findings(inputs.climate)
     out += statistical_links(inputs.monthly_spend, inputs.monthly_income, inputs.category_names)
     out += payday_concentration(inputs.daily_variable_spend, inputs.paydays, inputs.category_names)
     seen: set[str] = set()

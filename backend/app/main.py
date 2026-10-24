@@ -96,6 +96,7 @@ from app.services import tempo as tempo_service
 from app.services import territory as territory_service
 from app.services import vault as vault_service
 from app.services import watch as watch_service
+from app.services import weather as weather_service
 from app.services.bank_sync import sync_all
 from app.services.categories import seed_categories
 from app.services.ingest import repair_aid_kinds
@@ -115,6 +116,8 @@ def _energy_sync_once(app: FastAPI, today: date) -> int:
         n = energy_service.sync(db, today, make_client=app.state.energy_client_factory)
         db.commit()
         energy_service.sync_max_power(db, today, make_client=app.state.energy_client_factory)  # puissance max (#33)
+        db.commit()
+        energy_service.sync_load_curve(db, today, make_client=app.state.energy_client_factory)  # avec ton accord
         db.commit()
         return int(n)
 
@@ -246,6 +249,10 @@ def _housekeeping_once(app: FastAPI, today: date) -> dict[str, int]:
     with app.state.sessionmaker() as db:  # couleur Tempo d'aujourd'hui et de demain, avec ton accord (#33)
         fetch_tempo = tempo_service.default_fetch(http=app.state.tempo_http, resolver=app.state.tempo_resolver)
         report.update(tempo_service.tick(db, now=utcnow(), today=today, fetch=fetch_tempo))
+        db.commit()
+    with app.state.sessionmaker() as db:  # météo de ta commune (degrés-jours), une fois par jour, avec ton accord
+        fetch_meteo = weather_service.default_fetch(http=app.state.weather_http, resolver=app.state.weather_resolver)
+        report.update(weather_service.tick(db, now=utcnow(), today=today, fetch=fetch_meteo))
         db.commit()
     with app.state.sessionmaker() as db:  # documents à récupérer : attentes de saison, tâches fermées par le PDF
         report.update(state_accounts_service.sync(db, today=today, now=utcnow()))
@@ -412,6 +419,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.territory_resolver = None
     app.state.tempo_http = None  # client HTTP de la couleur Tempo (api-couleur-tempo.fr ; remplaçable en test)
     app.state.tempo_resolver = None
+    app.state.weather_http = None  # client HTTP de l'archive Open-Meteo (remplaçable en test)
+    app.state.weather_resolver = None
     app.state.channels_options = {}  # surcharges de la passerelle (tests : fabrique d'adaptateurs, horloge…)
 
     routers = (
