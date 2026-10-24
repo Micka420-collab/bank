@@ -98,4 +98,42 @@ describe("WhatsApp par QR code", () => {
     expect(host.textContent).toContain("Passerelle injoignable");
     expect(host.querySelector("form")).toBeNull();
   });
+
+  it("still lets you unlink when the bridge is unreachable", async () => {
+    status = { ...status, bridge: false, linked: true, error: "Passerelle WhatsApp injoignable" };
+    await act(async () => root.render(<ToastProvider><WhatsAppQr onLinked={() => {}} /></ToastProvider>));
+    await flush();
+    expect(host.textContent).toContain("Passerelle injoignable");
+    await typePassword("mon-mot-de-passe");
+    expect(calls.find((c) => c.url.endsWith("/logout"))).toMatchObject({ method: "POST", body: { password: "mon-mot-de-passe" } });
+  });
+
+  it("says the phone unlinked Bank, and offers to rescan or unlink", async () => {
+    status = { ...status, paired: false, linked: true };
+    await act(async () => root.render(<ToastProvider><WhatsAppQr onLinked={() => {}} /></ToastProvider>));
+    await flush();
+    expect(host.textContent).toContain("délié depuis ton téléphone");
+    expect(host.textContent).toContain("Rescanner le QR code");
+    expect(host.textContent).toContain("Délier");
+    await typePassword("mon-mot-de-passe"); // Entrée : le premier bouton, rescanner
+    expect(calls.find((c) => c.url.endsWith("/pairing"))).toMatchObject({ method: "POST", body: { password: "mon-mot-de-passe" } });
+    expect(calls.find((c) => c.url.endsWith("/logout"))).toBeUndefined();
+    await flush();
+    expect(host.querySelector("img")?.getAttribute("src")).toBe(QR);
+  });
+
+  it("unlinks from the « phone unlinked » card with the Délier button", async () => {
+    status = { ...status, paired: false, linked: true };
+    await act(async () => root.render(<ToastProvider><WhatsAppQr onLinked={() => {}} /></ToastProvider>));
+    await flush();
+    const input = host.querySelector<HTMLInputElement>("input[type='password']")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "mon-mot-de-passe");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => { host.querySelector<HTMLButtonElement>("button[name='unlink']")!.click(); });
+    await flush();
+    expect(calls.find((c) => c.url.endsWith("/logout"))).toMatchObject({ method: "POST", body: { password: "mon-mot-de-passe" } });
+    expect(calls.find((c) => c.url.endsWith("/pairing"))).toBeUndefined();
+  });
 });

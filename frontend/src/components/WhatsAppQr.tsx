@@ -2,7 +2,7 @@
 // Appareils connectés, puis tu écris dans ta conversation « Moi ». Afficher le QR et délier demandent ton mot de
 // passe ; le QR arrive en image (data URI) : le navigateur ne connaît jamais l'adresse de la passerelle.
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, type WhatsAppQrCode, type WhatsAppQrStatus } from "../api";
 import { Icon } from "./Icon";
 import { useAsyncAction, useToast } from "./ui";
@@ -110,28 +110,71 @@ export function WhatsAppQr({ onLinked }: { onLinked: () => void }) {
   };
 
   if (st === null) return <p className="faint">Lecture de la passerelle…</p>;
-  if (!st.bridge) {
-    return (
-      <div className="ch-pair">
-        <h3><Icon name="alert" /> Passerelle injoignable</h3>
-        <p className="faint">{st.error ?? "Vérifie qu'elle tourne et son adresse."}</p>
-      </div>
-    );
-  }
   const passwordField = (
     <input className="input" type="password" autoComplete="current-password" aria-label="Mot de passe" placeholder="Ton mot de passe"
            value={password} onChange={(e) => setPassword(e.target.value)} required />
   );
+  // Ton compte relié reste supprimable quoi qu'il arrive (passerelle injoignable, téléphone délié de son côté) :
+  // sinon les alertes continueraient de viser un WhatsApp qui ne répond plus.
+  const unlinkForm = (children: ReactNode, className = "ch-pair") => (
+    <form className={className} onSubmit={unlink} aria-label="Délier WhatsApp">
+      {children}
+      <div className="ch-pair-row">
+        {passwordField}
+        <button className={`btn ghost${busy ? " is-loading" : ""}`} disabled={busy}>Délier</button>
+      </div>
+      {error && <p className="error" role="alert">{error}</p>}
+    </form>
+  );
+
+  if (!st.bridge) {
+    const unreachable = (
+      <>
+        <h3><Icon name="alert" /> Passerelle injoignable</h3>
+        <p className="faint">{st.error ?? "Vérifie qu'elle tourne et son adresse."}</p>
+      </>
+    );
+    if (st.linked) {
+      return unlinkForm(
+        <>
+          {unreachable}
+          <p className="faint">Tu peux quand même délier : Bank ne t'écrira plus. Retire alors aussi « Bank » dans WhatsApp › Appareils connectés.</p>
+        </>,
+      );
+    }
+    return (
+      <div className="ch-pair">
+        {unreachable}
+        {error && <p className="error" role="alert">{error}</p>}
+      </div>
+    );
+  }
 
   if (st.paired && st.linked) {
-    return (
-      <form className="ch-pair wa-qr-done" onSubmit={unlink} aria-label="Délier WhatsApp">
+    return unlinkForm(
+      <>
         <h3><Icon name="check" /> Relié : {st.phone ?? "ton numéro"}</h3>
         <p>Écris-toi un message dans ta conversation « Moi » : Bank répond là. Tes autres conversations restent invisibles pour lui.</p>
         <p className="faint">Délier déconnecte Bank de ton WhatsApp (il disparaît de tes appareils connectés).</p>
+      </>,
+      "ch-pair wa-qr-done",
+    );
+  }
+  if (st.linked && !showQr) {
+    // Délié depuis WhatsApp › Appareils connectés : rescanner (même mot de passe) ou délier aussi côté Bank.
+    const submit = (e: FormEvent<HTMLFormElement>) => {
+      const by = (e.nativeEvent as SubmitEvent).submitter?.getAttribute("name");
+      if (by === "unlink") unlink(e);
+      else openWindow(e); // Entrée : le premier bouton, rescanner
+    };
+    return (
+      <form className="ch-pair" onSubmit={submit} aria-label="WhatsApp délié depuis ton téléphone">
+        <h3><Icon name="alert" /> WhatsApp a été délié depuis ton téléphone</h3>
+        <p className="faint">Rescanne le QR code pour reprendre, ou délie ici : Bank ne t'écrira plus.</p>
         <div className="ch-pair-row">
           {passwordField}
-          <button className={`btn ghost${busy ? " is-loading" : ""}`} disabled={busy}>Délier</button>
+          <button name="rescan" className={`btn${busy ? " is-loading" : ""}`} disabled={busy}>Rescanner le QR code</button>
+          <button name="unlink" className="btn ghost" disabled={busy}>Délier</button>
         </div>
         {error && <p className="error" role="alert">{error}</p>}
       </form>

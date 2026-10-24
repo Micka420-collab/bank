@@ -241,12 +241,13 @@ async def whatsapp_qr_code(request: Request, _: AuthDep, db: DbDep) -> dict[str,
         raise HTTPException(status.HTTP_409_CONFLICT, "Confirme ton mot de passe pour afficher le QR code")
     bridge = await _qr_bridge(request)
     try:
-        image = await bridge.qr_image()
+        qr = await bridge.qr_image()
     except AdapterError as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from None
-    if image is None:
+    if qr is None:
         return {"paired": True, "qr": None, "refresh_in": None}
-    return {"paired": False, "qr": image, "refresh_in": int(whatsapp_qr.QR_TTL)}
+    image, refresh_in = qr  # le temps qui reste à CE QR (il peut sortir du cache), pas une durée fixe
+    return {"paired": False, "qr": image, "refresh_in": refresh_in}
 
 
 @router.post("/whatsapp_qr/logout", status_code=204)
@@ -271,17 +272,27 @@ async def whatsapp_qr_logout(body: PairIn, request: Request, ctx: AuthDep, db: D
     return Response(status_code=204)
 
 
+_NOT_READY = "Messagerie WhatsApp en cours de connexion : réessaie dans un instant"
+
+
 @router.post("/whatsapp_qr/webhook", include_in_schema=False)
 async def whatsapp_qr_webhook(
-    request: Request, signature: Annotated[str | None, Header(alias="x-hub-signature-256")] = None
+    request: Request, db: DbDep, signature: Annotated[str | None, Header(alias="x-hub-signature-256")] = None
 ) -> dict[str, bool]:
     """Webhook INTERNE de la passerelle : jamais relayé par le frontal (nginx répond 404 sur ce chemin), signé
-    avec le secret partagé. Seule la conversation « Moi » passe ; le reste est écarté sans être lu ni gardé."""
+    avec le secret partagé. Seule la conversation « Moi » passe ; le reste est écarté sans être lu ni gardé.
+
+    Juste après le scan (ou une reconnexion), la messagerie redémarre et ne connaît pas encore ton numéro : on
+    répond alors 503, sans rien garder, pour que la passerelle renvoie le message un peu plus tard — un 200 le
+    perdrait. 200 seulement pour ce qui est traité ou écarté exprès."""
     if "x-forwarded-for" in request.headers:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not Found")  # venu par le frontal : pas pour nous
     gateway: Gateway | None = getattr(request.app.state, "channels", None)
     adapter = gateway.adapters.get(QR) if gateway is not None else None
     if not isinstance(adapter, WhatsAppQrAdapter):
+        row = db.get(ChannelConfig, QR) if gateway is not None else None
+        if row is not None and row.enabled:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _NOT_READY)  # entre deux démarrages
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not Found")
     raw = await request.body()
     if not adapter.verify_signature(raw, signature):
@@ -290,9 +301,12 @@ async def whatsapp_qr_webhook(
         payload = json.loads(raw)
     except ValueError:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "JSON invalide") from None
+    if adapter.jid is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _NOT_READY)
     for inbound in adapter.parse_webhook(payload):
-        await _gateway(request).submit(inbound)
-    return {"ok": True}  # 200 dès que c'est authentique : la passerelle réessaierait sinon
+        if not await _gateway(request).submit(inbound):
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _NOT_READY)
+    return {"ok": True}  # traité, ou écarté exprès (autre conversation, notre propre écho) : pas de nouvel envoi
 
 
 # ------------------------------------------------------------------ webhook WhatsApp (public, signé par Meta)

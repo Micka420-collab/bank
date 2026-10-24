@@ -7,7 +7,8 @@
 # * « fiscal » est sur un réseau interne : aucun accès Internet, ta situation fiscale ne sort jamais.
 # * « app » est interne : seul nginx parle à l'API.
 # * Facultatif (profil « whatsapp ») : la passerelle WhatsApp par QR code, sur un 5e réseau interne avec l'API.
-# * Tous les conteneurs : non-root, système de fichiers en lecture seule, aucune capability, pas d'escalade.
+# * Tous les conteneurs : non-root, système de fichiers en lecture seule, aucune capability, pas d'escalade
+#   (seule exception : « whatsapp-bridge-init », root le temps d'un chown du volume de la passerelle, sans réseau).
 
 x-hardening: &hardening
   read_only: true
@@ -85,6 +86,9 @@ services:
     profiles: [whatsapp]
     image: aldinokemal2104/go-whatsapp-web-multidevice:v9.6.0@sha256:7739f074685e84b6587c15c289a689f68c3edc2cf5a44c2ac674260c338114a1
     command: ["rest"]
+    user: "65532:65532"  # l'image tourne en root par défaut : pas ici
+    depends_on:
+      whatsapp-bridge-init: { condition: service_completed_successfully }
     # APP_BASIC_AUTH=bank:… et WHATSAPP_WEBHOOK_SECRET=… (Bank refuse une passerelle qui répond sans mot de passe).
     env_file: [{ path: ./secrets/whatsapp-bridge.env, required: false }]
     environment:
@@ -105,10 +109,29 @@ services:
       WHATSAPP_PRESENCE_PULSE_ENABLED: "false"
     volumes:
       - whatsapp-storages:/app/storages
-      - whatsapp-statics:/app/statics
+    # Les QR codes et fichiers de passage : en mémoire, rien à garder.
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+      - /app/statics:size=32m,uid=65532,gid=65532,mode=0700
     networks: [whatsapp, egress]
     deploy:
       resources: { limits: { memory: 192m, pids: 64 } }
+
+  # Une seule fois avant la passerelle : rend son volume à l'utilisateur 65532 (un volume neuf appartient à root).
+  # Seule capability : CHOWN ; aucun réseau ; s'arrête aussitôt.
+  whatsapp-bridge-init:
+    profiles: [whatsapp]
+    image: aldinokemal2104/go-whatsapp-web-multidevice:v9.6.0@sha256:7739f074685e84b6587c15c289a689f68c3edc2cf5a44c2ac674260c338114a1
+    entrypoint: ["chown", "-R", "65532:65532", "/app/storages"]
+    user: "0:0"
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: ["no-new-privileges:true"]
+    network_mode: none
+    restart: "no"
+    volumes:
+      - whatsapp-storages:/app/storages
 
 networks:
   # Sous-réseau fixe : nginx ne croit X-Forwarded-For que depuis sa passerelle 172.31.250.1 (frontend/nginx.conf).
@@ -123,7 +146,6 @@ networks:
 volumes:
   bank-data: {}
   whatsapp-storages: {}
-  whatsapp-statics: {}
 
 secrets:
   master_key: { file: ./secrets/master_key }

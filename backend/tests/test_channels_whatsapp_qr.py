@@ -12,6 +12,7 @@ import json
 import logging
 import time
 from collections.abc import Callable
+from datetime import timedelta
 from typing import Any
 
 import httpx
@@ -19,12 +20,15 @@ import pytest
 from sqlalchemy import func, select
 from starlette.testclient import TestClient
 
+from app.api import channels as api_channels
 from app.channels.base import AdapterError, Inbound, SendError
 from app.channels.gateway import Gateway
 from app.channels.whatsapp_qr import MARK, WhatsAppQrAdapter, bare_jid, check_bridge_url, phone_hint
 from app.config import Settings
+from app.db import utcnow
 from app.main import create_app
 from app.models import AuditLog, ChannelConfig, ChannelLink, ChannelSeen
+from app.services.channels import QR_WINDOW
 from tests.conftest import PASSWORD
 
 BRIDGE = "http://bridge:3000"
@@ -47,12 +51,17 @@ class FakeBridge:
         self.presence: list[dict[str, Any]] = []
         self.no_auth = False
         self.qr_host = "127.0.0.1:3000"
+        self.qr_duration = 30
+        self.down = 0  # nombre de réponses 502 à donner (passerelle qui redémarre)
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
         if request.headers["host"] != "bridge:3000":
             return httpx.Response(599, text="hôte inattendu")
         path = request.url.path
+        if self.down:
+            self.down -= 1
+            return httpx.Response(502, text="Bad Gateway")
         if path.startswith("/statics/"):
             return httpx.Response(200, content=PNG, headers={"content-type": "image/png"})
         expected = "Basic " + base64.b64encode(f"{USER}:{PASS}".encode()).decode()
@@ -73,7 +82,9 @@ class FakeBridge:
         if path == "/app/login":
             self.logins += 1
             link = f"http://{self.qr_host}/statics/qrcode/scan-qr-{self.logins:08d}-aaaa-bbbb.png"
-            return httpx.Response(200, json={"code": "SUCCESS", "results": {"qr_link": link, "qr_duration": 30}})
+            return httpx.Response(
+                200, json={"code": "SUCCESS", "results": {"qr_link": link, "qr_duration": self.qr_duration}}
+            )
         if path == "/app/logout":
             self.logged_in, self.jid = False, ""
             return httpx.Response(200, json={"code": "SUCCESS", "results": {}})
@@ -90,6 +101,10 @@ class FakeBridge:
 
     def scan(self, jid: str = "33612345678:7@s.whatsapp.net") -> None:
         self.logged_in, self.jid = True, jid
+
+    def restart_empty(self) -> None:
+        """Relancée sur un volume neuf : plus d'appareil, plus de session."""
+        self.devices, self.logged_in, self.jid = [], False, ""
 
 
 def event(
@@ -139,6 +154,7 @@ async def _adapter(fake: FakeBridge, http: httpx.AsyncClient, *, paired: bool = 
         "http://192.168.1.20:3000",
         "https://wa.lan",
         "http://[::1]:3000",
+        "http://127.1:3000",
     ],
 )
 def test_bridge_address_on_your_network_is_accepted(url: str) -> None:
@@ -154,6 +170,12 @@ def test_bridge_address_on_your_network_is_accepted(url: str) -> None:
         "ftp://127.0.0.1",
         "http://user:pw@127.0.0.1:3000",
         "http://127.0.0.1:3000/app",
+        # Formes abrégées que le résolveur lit comme 8.8.8.8 (ou 0.0.0.0) : pas des noms locaux.
+        "http://134744072:3000",
+        "http://0x08080808:3000",
+        "http://0:3000",
+        "http://0.0.0.1:3000",
+        "http://[::ffff:8.8.8.8]:3000",
     ],
 )
 def test_bridge_address_on_the_internet_is_refused(url: str) -> None:
@@ -173,22 +195,26 @@ def test_qr_code_is_proxied_as_data_uri_cached_then_refreshed() -> None:
     fake.qr_host = "evil.example:80"  # l'hôte écrit dans le lien n'est jamais suivi
     clock = {"t": 0.0}
 
-    async def scenario() -> tuple[str | None, str | None, str | None, str | None]:
+    async def scenario() -> list[tuple[str, int] | None]:
         async with httpx.AsyncClient(transport=httpx.MockTransport(fake.handler)) as http:
             adapter = WhatsAppQrAdapter(BRIDGE, USER, PASS, SECRET, http, clock=lambda: clock["t"])
             with pytest.raises(AdapterError, match="pas relié"):
                 await adapter.check()
             first = await adapter.qr_image()
+            clock["t"] = 15.0
             again = await adapter.qr_image()
             clock["t"] = 25.0
+            fake.qr_duration = 20  # WhatsApp : 60 s pour le premier QR, 20 s pour les suivants
             refreshed = await adapter.qr_image()
             fake.scan()
             clock["t"] = 50.0
-            return first, again, refreshed, await adapter.qr_image()
+            return [first, again, refreshed, await adapter.qr_image()]
 
     first, again, refreshed, done = run(scenario())
-    assert first == "data:image/png;base64," + base64.b64encode(PNG).decode()
-    assert again == first and refreshed == first and fake.logins == 2, "un QR neuf toutes les 20 s, pas plus"
+    image = "data:image/png;base64," + base64.b64encode(PNG).decode()
+    assert first == (image, 20), "QR valable 30 s chez la passerelle : renouvelé 10 s avant"
+    assert again == (image, 5), "un QR sorti du cache : le temps qui LUI reste, pas une durée fixe"
+    assert refreshed == (image, 10) and fake.logins == 2, "la durée annoncée par la passerelle fait foi"
     assert done is None, "relié : plus de QR"
     assert fake.devices == ["bank"], "Bank crée son emplacement d'appareil une seule fois"
     assert all(r.headers["host"] == "bridge:3000" for r in fake.requests)
@@ -280,6 +306,26 @@ def test_logout_and_a_phone_unlinked_from_whatsapp_are_noticed() -> None:
             assert adapter.jid is None and not fake.logged_in
             with pytest.raises(SendError):
                 await adapter.send(ME, "x")
+
+    run(scenario())
+
+
+def test_a_bridge_restarted_or_down_for_a_moment_is_recovered() -> None:
+    fake = FakeBridge()
+
+    async def scenario() -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(fake.handler)) as http:
+            adapter = await _adapter(fake, http)
+            fake.down = 1
+            with pytest.raises(AdapterError):
+                await adapter.check()
+            assert (await adapter.check())["account"] == ME, "de retour : rien à refaire"
+            fake.restart_empty()
+            with pytest.raises(AdapterError):
+                await adapter.status()
+            fake.scan()
+            assert (await adapter.status())["logged_in"], "l'emplacement de Bank est recréé"
+            assert fake.devices == ["bank"]
 
     run(scenario())
 
@@ -427,3 +473,85 @@ def test_a_phone_scanned_outside_bank_is_not_linked(auth_client: TestClient, db:
     time.sleep(0.3)
     assert fake.sent == [], "un inconnu (même toi, sans mot de passe) n'obtient aucune réponse"
     assert db.scalar(select(func.count()).select_from(ChannelLink)) == 0
+
+
+def _on_loop(app: Any, coro: Any) -> Any:
+    """Exécute une coroutine sur la boucle de l'application (celle où tournent la messagerie et son client HTTP)."""
+    gateway: Gateway = app.state.channels
+    assert gateway._event_loop is not None
+    return asyncio.run_coroutine_threadsafe(coro, gateway._event_loop).result(10)
+
+
+def _link(client: TestClient, app: Any, fake: FakeBridge) -> WhatsAppQrAdapter:
+    """Réglages, fenêtre du QR ouverte avec le mot de passe, scan : la messagerie tourne, reliée à ton numéro."""
+    client.put("/api/consents/channels", json={"granted": True})
+    values = {"url": BRIDGE, "username": USER, "password": PASS, "webhook_secret": SECRET}
+    assert client.put("/api/channels/whatsapp_qr", json={"values": values, "enabled": True}).status_code == 200
+    assert client.post("/api/channels/whatsapp_qr/pairing", json={"password": PASSWORD}).status_code == 201
+    fake.scan()
+    assert client.get("/api/channels/whatsapp_qr/status").json()["linked"] is True
+    gateway: Gateway = app.state.channels
+    wait_for(lambda: getattr(gateway.adapters.get("whatsapp_qr"), "jid", None) == ME)
+    adapter = gateway.adapters["whatsapp_qr"]
+    assert isinstance(adapter, WhatsAppQrAdapter)
+    return adapter
+
+
+def test_unlinked_from_the_phone_then_rescanned_comes_back_without_losing_messages(  # type: ignore[no-untyped-def]
+    auth_client: TestClient, app, fake: FakeBridge
+) -> None:
+    client = auth_client
+    _link(client, app, fake)
+    fake.logged_in = False  # « Déconnecter » depuis WhatsApp › Appareils connectés…
+    _on_loop(app, app.state.channels.restart("whatsapp_qr"))  # …vu par Bank (la surveillance passe toutes les 30 s)
+    wait_for(lambda: _view(client)["status"] == "error")
+    st = client.get("/api/channels/whatsapp_qr/status").json()
+    assert st["paired"] is False and st["linked"] is True, "le compte relié reste : délier doit rester possible"
+
+    # Pendant que Bank ne sait pas qui tu es : 503, la passerelle renverra le message (un 200 le perdrait).
+    assert _post(client, event("/aide", mid="EARLY")).status_code == 503
+    assert fake.sent == []
+
+    # Tu rescannes le même numéro : la messagerie repart tout de suite, sans nouvelle fenêtre ni mot de passe.
+    fake.scan()
+    st = client.get("/api/channels/whatsapp_qr/status").json()
+    assert st["paired"] is True and st["linked"] is True and st["window"] is False
+    wait_for(lambda: _view(client)["status"] == "online")
+    wait_for(lambda: getattr(app.state.channels.adapters.get("whatsapp_qr"), "jid", None) == ME)
+    assert _post(client, event("/aide", mid="EARLY")).status_code == 200, "le renvoi passe"
+    wait_for(lambda: fake.sent)
+
+
+def test_the_qr_window_closes_after_ten_minutes(
+    auth_client: TestClient, fake: FakeBridge, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = auth_client
+    client.put("/api/consents/channels", json={"granted": True})
+    values = {"url": BRIDGE, "username": USER, "password": PASS, "webhook_secret": SECRET}
+    client.put("/api/channels/whatsapp_qr", json={"values": values, "enabled": True})
+    assert client.post("/api/channels/whatsapp_qr/pairing", json={"password": PASSWORD}).status_code == 201
+    assert client.get("/api/channels/whatsapp_qr/qr").status_code == 200
+    later = utcnow() + QR_WINDOW + timedelta(seconds=1)
+    monkeypatch.setattr(api_channels, "utcnow", lambda: later)
+    assert client.get("/api/channels/whatsapp_qr/qr").status_code == 409
+    fake.scan()
+    st = client.get("/api/channels/whatsapp_qr/status").json()
+    assert st["window"] is False and st["linked"] is False, "scanné trop tard : pas relié"
+
+
+def test_a_long_reply_is_split_and_no_piece_is_reread(  # type: ignore[no-untyped-def]
+    auth_client: TestClient, app, fake: FakeBridge
+) -> None:
+    client = auth_client
+    adapter = _link(client, app, fake)
+    long_text = "\n".join(f"Ligne {i} : " + "budget " * 12 for i in range(120))
+    assert len(long_text) > 4096 * 0.85
+    _on_loop(app, app.state.channels.send(adapter, ME, long_text, "standard"))
+    assert len(fake.sent) >= 2
+    assert all(m["phone"] == ME and m["message"].startswith(MARK) for m in fake.sent)
+    sent = len(fake.sent)
+    for i, m in enumerate(list(fake.sent), start=1):
+        assert _post(client, event(m["message"], mid=f"3EB0{i:04d}")).status_code == 200  # échos, par identifiant
+        assert _post(client, event(m["message"], mid=f"AUTRE{i}")).status_code == 200  # échos, par marqueur
+    time.sleep(0.3)
+    assert len(fake.sent) == sent, "aucun morceau relu : pas de boucle"

@@ -21,7 +21,9 @@ import base64
 import hashlib
 import hmac
 import ipaddress
+import math
 import re
+import socket
 import time
 from collections import OrderedDict
 from typing import Any
@@ -36,10 +38,12 @@ PLATFORM = "whatsapp_qr"
 DEVICE = "bank"  # emplacement d'appareil créé dans la passerelle pour Bank
 MARK = "⁣"  # séparateur invisible en tête de chaque réponse de Bank : on ne se relit jamais
 SELF_LABEL = "Toi (conversation « Moi »)"
-QR_TTL = 20.0  # la passerelle donne un QR valable 30 s : on le renouvelle avant
+QR_TTL = 20.0  # durée retenue quand la passerelle ne dit pas combien de temps son QR vaut
+QR_MARGIN = 10.0  # on le renouvelle avant qu'il n'expire chez WhatsApp
 MAX_QR_BYTES = 200_000
 MAX_SENT = 500
 _QR_PATH = re.compile(r"/statics/(?:images/)?qrcode/scan-qr-[A-Za-z0-9-]{8,64}\.png")
+_THIS_NETWORK = ipaddress.ip_network("0.0.0.0/8")
 _LOCAL_SUFFIXES = (".local", ".lan", ".internal", ".home.arpa", ".localhost")
 
 
@@ -53,18 +57,32 @@ def check_bridge_url(url: str) -> str:
         raise ValueError("Adresse de la passerelle : http(s)://hôte:port, sans identifiant dans l'adresse")
     if parts.query or parts.fragment or parts.path not in ("", "/"):
         raise ValueError("Adresse de la passerelle : juste http(s)://hôte:port, sans chemin")
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address | None
     try:
         ip = ipaddress.ip_address(host)
     except ValueError:
+        ip = _numeric_ipv4(host)
+    if ip is None:
         if host == "localhost" or "." not in host or host.endswith(_LOCAL_SUFFIXES):
             return url.rstrip("/")
         raise ValueError(
             "La passerelle WhatsApp doit rester sur ton réseau : localhost, une adresse privée ou un nom local "
             "(par exemple http://whatsapp-bridge:3000)"
-        ) from None
-    if ip.is_loopback or (ip.is_private and not ip.is_unspecified) or ip.is_link_local:
+        )
+    if ip.is_unspecified or ip in _THIS_NETWORK:
+        raise ValueError("Adresse de la passerelle : 0.0.0.0 (ou ::) ne désigne aucune machine où la joindre")
+    if ip.is_loopback or ip.is_private or ip.is_link_local:
         return url.rstrip("/")
     raise ValueError("La passerelle WhatsApp doit rester sur ton réseau : adresse privée ou localhost seulement")
+
+
+def _numeric_ipv4(host: str) -> ipaddress.IPv4Address | None:
+    """Les formes abrégées qu'ipaddress refuse mais que le résolveur du système accepte (« 134744072 »,
+    « 0x08080808 », « 0 », « 10.1 »…) : lues comme lui, pour qu'une adresse publique ne passe pas pour un nom local."""
+    try:
+        return ipaddress.IPv4Address(socket.inet_aton(host))
+    except (OSError, ValueError):
+        return None
 
 
 def bare_jid(jid: str) -> str:
@@ -117,7 +135,12 @@ class WhatsAppQrAdapter:
                 follow_redirects=False,
             )
         except httpx.HTTPError:
+            self._device_ready = False
             raise AdapterError("Passerelle WhatsApp injoignable : vérifie son adresse et qu'elle tourne") from None
+        if not resp.is_success:
+            # Passerelle relancée sans l'emplacement de Bank (volume recréé, appareil retiré à la main…) : on
+            # revérifie et on le recrée au prochain appel plutôt que d'échouer pour toujours.
+            self._device_ready = False
         if resp.status_code == 401:
             raise AdapterError("Passerelle WhatsApp : identifiant ou mot de passe refusé")
         try:
@@ -156,18 +179,21 @@ class WhatsAppQrAdapter:
         jid = bare_jid(str(results.get("jid") or "")) if isinstance(results, dict) else ""
         return {"logged_in": logged_in and bool(jid), "jid": jid if logged_in else ""}
 
-    async def qr_image(self) -> str | None:
-        """Le QR code à scanner, en data URI (la passerelle n'est jamais montrée au navigateur) ; None si déjà relié.
-        Gardé 20 s : chaque demande à la passerelle en fabrique un nouveau."""
+    async def qr_image(self) -> tuple[str, int] | None:
+        """Le QR code à scanner, en data URI (la passerelle n'est jamais montrée au navigateur), avec les secondes
+        qui lui restent avant d'être renouvelé ; None si déjà relié. Gardé en cache pendant sa durée de validité,
+        moins une marge : chaque demande à la passerelle en fabrique un nouveau."""
         now = self._clock()
         if self._qr is not None and self._qr[1] > now:
-            return self._qr[0]
+            return self._qr[0], max(1, math.ceil(self._qr[1] - now))
         st = await self.status()
         if st["logged_in"]:
             self._qr = None
             return None
         results = (await self._call("GET", "/app/login")).get("results") or {}
-        link = str(results.get("qr_link") or "") if isinstance(results, dict) else ""
+        if not isinstance(results, dict):
+            results = {}
+        link = str(results.get("qr_link") or "")
         path = urlsplit(link).path
         if not _QR_PATH.fullmatch(path):
             raise AdapterError("Passerelle WhatsApp : QR code introuvable")
@@ -180,8 +206,9 @@ class WhatsAppQrAdapter:
         if resp.status_code != 200 or len(png) > MAX_QR_BYTES or not png.startswith(b"\x89PNG\r\n\x1a\n"):
             raise AdapterError("Passerelle WhatsApp : image du QR code illisible")
         uri = "data:image/png;base64," + base64.b64encode(png).decode()
-        self._qr = (uri, now + QR_TTL)
-        return uri
+        ttl = _qr_ttl(results.get("qr_duration"))
+        self._qr = (uri, now + ttl)
+        return uri, math.ceil(ttl)
 
     async def logout(self) -> None:
         await self._ensure_device()
@@ -261,6 +288,14 @@ class WhatsAppQrAdapter:
         if not isinstance(text, str) or not text.strip() or text.startswith(MARK):
             return []
         return [Inbound(platform=PLATFORM, user_id=jid, chat_id=jid, text=text, message_id=mid, label=SELF_LABEL)]
+
+
+def _qr_ttl(duration: Any) -> float:
+    """Durée de validité annoncée par la passerelle (en secondes ; WhatsApp donne 60 s au premier QR, 20 s aux
+    suivants), moins la marge ; QR_TTL si elle n'en dit rien."""
+    if isinstance(duration, bool) or not isinstance(duration, (int, float)) or not 0 < duration <= 300:
+        return QR_TTL
+    return max(5.0, float(duration) - QR_MARGIN)
 
 
 def _is_self_chat(msg: dict[str, Any], jid: str) -> bool:
