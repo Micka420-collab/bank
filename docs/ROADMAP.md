@@ -32,6 +32,10 @@ qui vient », README), 13 (passkeys, SECURITY.md), 18 (« Un chat qui agit », R
 téléphone » et « Notifications sur ton téléphone », README ; [docs/CANAUX.md](CANAUX.md)), 4 (« Ton plan B », README
 et SECURITY.md), 6 (« Crédits », README), 16 (« Sauvegarde », README et SECURITY.md ; Renovate et SBOM en CI), 15 (« Boîte mail en lecture seule », README
 et SECURITY.md), 9 (« Retraite », README et SECURITY.md), 11 (« Plateformes reliées », README, [docs/CRYPTO.md](CRYPTO.md)
-et SECURITY.md). Deux sessions travaillent en parallèle : [docs/COORDINATION.md](COORDINATION.md). Les règles qui portent une
+et SECURITY.md) ; par la session nimbus : 14 (partage d'un papier par lien à usage unique, filigrané), 10 (import des
+exports Kraken, Binance et Coinbase pour le 2086), 12 (alertes de cours et « pilote vs consigne »), 8 (valeur du
+logement par les ventes DVF) — leurs suites de relecture vivent dans les issues #25 à #28. Reste 7 (en attente :
+l'initiation de paiement Enable Banking est réservée aux titulaires d'un agrément PISP) et 17. Deux sessions
+travaillent en parallèle : [docs/COORDINATION.md](COORDINATION.md). Les règles qui portent une
 date (fenêtres d'actualisation, plafonds, taux) sont sourcées et datées dans le code et dans `docs/`, et Bank dit
 quand les revérifier.
