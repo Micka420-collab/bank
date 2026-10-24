@@ -1,13 +1,16 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { Received, sharedToken } from "./pages/Received";
 import { initTheme } from "./theme";
 import "./styles.css";
 
 initTheme();
+// Lien de partage reçu par un tiers : sa propre page, sans session ni appel à l'application.
+const shared = sharedToken(window.location.hash);
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    {shared ? <Received token={shared} /> : <App />}
   </StrictMode>,
 );
 

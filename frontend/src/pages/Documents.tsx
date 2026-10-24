@@ -16,6 +16,7 @@ import {
 } from "../api";
 import { Icon } from "../components/Icon";
 import { MailProposals } from "../components/MailProposals";
+import { SharePaper } from "../components/SharePaper";
 import { ErrorNote, Loading, useAsyncAction, useToast } from "../components/ui";
 import { money, plural } from "../format";
 
@@ -281,6 +282,7 @@ function DocumentDetail({ id }: { id: number }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [assistNote, setAssistNote] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
   const toast = useToast();
   const reload = doc.reload;
 
@@ -359,6 +361,9 @@ function DocumentDetail({ id }: { id: number }) {
           {d.status !== "refused" && (
             <a className="btn quiet sm" href={`/api/vault/${d.id}/file?download=1`}><Icon name="download" /> Télécharger</a>
           )}
+          {d.status !== "refused" && d.status !== "processing" && (
+            <button type="button" className="btn quiet sm" aria-expanded={sharing} onClick={() => setSharing(true)}><Icon name="send" /> Partager</button>
+          )}
           <dl className="vault-facts">
             <div><dt>Lu par</dt><dd>{METHOD[d.method] ?? d.method}{d.method !== "none" ? ` · confiance ${Math.round(d.confidence * 100)} %` : ""}</dd></div>
             <div><dt>À garder</dt><dd>{d.retention.label}{d.retention_until ? `, au moins jusqu'au ${fullDate(d.retention_until)}` : ""}. <a href={d.retention.url} target="_blank" rel="noopener noreferrer">Service-Public.fr</a> <span className="faint">(vérifié le {fullDate(d.retention.verified_on)})</span></dd></div>
@@ -426,6 +431,8 @@ function DocumentDetail({ id }: { id: number }) {
           )}
         </section>
       </div>
+
+      {sharing && <SharePaper docId={d.id} onClose={() => setSharing(false)} />}
 
       <section className="card section vault-manage" aria-labelledby="manage-title">
         <h2 id="manage-title">Gérer</h2>

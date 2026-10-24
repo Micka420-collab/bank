@@ -136,6 +136,26 @@ d'opération qui lui donne des « consignes »). Bank ne lui fait donc confiance
 | Une « corrélation » qui n'est que du bruit | Au moins huit mois, corrélation de rang, test par permutation reproductible (p ≤ 0,05), deux pistes au plus, toujours formulées comme des pistes et rangées à part (`test_statistical_links_need_eight_months_and_survive_the_permutation_test`) |
 | Fuite des contrats vers l'agent ou les messageries | L'agent reçoit les pièces en mode complet seulement, les titres et enjeux en agrégats ; les messageries n'annoncent que les constats sérieux, une fois, et le détail seulement en confidentialité complète ; rien n'est stocké hors de ce que tu décides (écarté, démarche) (`test_the_lease_and_the_bank_insurance_meet_in_a_duplicate_everywhere`) |
 
+## Partage d'un papier par lien
+
+Un papier du coffre peut sortir de chez toi par un lien : c'est la seule route du coffre sans session
+(`POST /api/share/open`). Tout le reste (créer, lister, révoquer) exige ta session, le jeton CSRF et, pour créer,
+ton mot de passe.
+
+| Menace | Défense |
+|---|---|
+| Lien créé depuis une session volée | Mot de passe redemandé à chaque lien, limité en débit, refus audité `vault.share_denied` (`test_a_link_is_created_only_with_the_password`) |
+| Le lien trahit le document | Jeton aléatoire de 256 bits, sans identifiant ni nom ; placé dans le fragment (`/#/recu/<jeton>`), il n'atteint ni les journaux du serveur ni un `Referer` ; Bank ne garde que son empreinte SHA-256 ; réponse au nom générique `document.pdf`, `attachment`, `no-store`, `X-Robots-Tag: noindex`, `Referrer-Policy: no-referrer` (`test_one_download_with_the_watermark_then_nothing`) |
+| Aperçu de lien d'une messagerie qui « consomme » le téléchargement | La page du destinataire ne soumet le jeton qu'au clic, par `POST`, sans cookie (`credentials: omit`) ; un robot qui charge l'adresse ne reçoit que l'application |
+| Deux téléchargements du même lien | Consommation par une seule mise à jour conditionnelle (`used_at IS NULL`, ni révoqué ni expiré, nombre de lignes vérifié), sous le verrou d'écriture : un seul gagnant (`test_two_simultaneous_downloads_cannot_both_succeed`) |
+| Deviner si un lien a existé | Lien inconnu, expiré, consommé ou révoqué : même 404, même corps, aucun détail (`test_expired_revoked_used_and_unknown_look_the_same`) ; 10 ouvertures par IP et par 5 minutes côté API, 10 par minute côté nginx (`test_opening_links_is_rate_limited`) |
+| Le papier circule ensuite sans attache | Filigrane sur chaque page (en diagonale et en pied de page) : « Transmis à X le JJ/MM/AAAA par Bank — usage unique » ; une photo est d'abord mise en page en PDF ; le tout dans le processus enfant confiné qui lit déjà les PDF ; nom du destinataire nettoyé (contrôles et invisibles retirés, 60 caractères, police du filigrane) (`test_a_photo_is_shared_as_a_watermarked_pdf`, `test_recipient_names_are_cleaned_for_the_watermark`) |
+| Copie qui traîne | Copie filigranée chiffrée (AES-256-GCM, identifiant du partage en données associées), effacée au téléchargement, à la révocation, ou à l'entretien horaire après l'expiration ; supprimer le document emporte ses liens ; le journal (destinataire chiffré, dates) reste |
+| Partage à ton insu | Création, téléchargement (avec l'IP), révocation et tentatives sur un lien qui ne sert plus sont dans la chaîne d'audit (`vault.share_*`), sans jeton ni nom du destinataire |
+
+Pour un destinataire extérieur, ton reverse proxy n'a à exposer que `/`, `/assets/`, `/icon.svg`, `/sw.js` et
+`/api/share/open` : sans session, tout le reste de `/api` répond 401.
+
 ## Crypto et pilote automatique
 
 Le pilote automatique est le seul chemin par lequel un agent bouge de l'argent sans te redemander : il est
