@@ -173,6 +173,8 @@ export const ACTIONS: Record<string, string> = {
   "obligation.enable": "Déclaration récurrente activée",
   "obligation.undo": "Déclaration remise à faire",
   "obligation.update": "Déclaration récurrente modifiée",
+  "rates.update": "Barèmes mis à jour (sources officielles)",
+  "rates.revert": "Barème : retour à la valeur du fichier",
   "watch.all_seen": "Veille : tout marqué lu",
   "watch.source_add": "Source de veille ajoutée",
   "watch.source_delete": "Source de veille supprimée",

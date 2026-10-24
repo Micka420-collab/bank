@@ -6,14 +6,13 @@ sont des données datées (rates.json), modifiables sans toucher au code.
 
 from __future__ import annotations
 
-import json
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_EVEN, Decimal
-from importlib import resources
-from typing import Any
+
+from app.domain import rates
 
 LIQUID = {"checking"}
 REGULATED = {"livret_a", "ldds", "lep", "cel", "savings"}
@@ -100,7 +99,7 @@ class RegulatedProduct:
 
 
 def load_regulated_products() -> list[RegulatedProduct]:
-    raw: dict[str, Any] = json.loads(resources.files("app.domain").joinpath("rates.json").read_text("utf-8"))
+    raw = rates.current()  # fichier daté, recouvert des taux relevés par Bank s'ils sont plus récents
     return [
         RegulatedProduct(
             kind=p["kind"],

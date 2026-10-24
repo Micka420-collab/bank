@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
-from importlib import resources
 from typing import Any
 
 from sqlalchemy import delete, func, select
@@ -16,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.db import utcnow
 from app.domain import procedures as dp
+from app.domain import rates
 from app.domain import watch as dw
 from app.domain.opportunities import FEE_SOURCES
 from app.models import (
@@ -189,7 +189,8 @@ def refresh(
         report["skipped"] = 1
         return report
     ensure_sources(db)
-    query = select(WatchSource).where(WatchSource.enabled.is_(True)).order_by(WatchSource.id)
+    # Les sources « bareme » (CRE, Caisse des Dépôts, INSEE, OpenFisca) sont relues par services.baremes.
+    query = select(WatchSource).where(WatchSource.enabled.is_(True), WatchSource.kind == "rss").order_by(WatchSource.id)
     if source_id is not None:
         query = query.where(WatchSource.id == source_id)
     for source in db.scalars(query).all():
@@ -307,8 +308,7 @@ def _engine(db: Session, items: list[WatchItem], engine_source: WatchSource | No
 
 
 def _rates() -> dict[str, Any]:
-    raw: dict[str, Any] = json.loads(resources.files("app.domain").joinpath("rates.json").read_text("utf-8"))
-    return raw
+    return rates.current()
 
 
 def references(today: date) -> list[dict[str, Any]]:
@@ -432,7 +432,8 @@ def mark_all_seen(db: Session, *, actor: str) -> int:
 def due_now(db: Session) -> bool:
     """Au moins une source à relever : pour déclencher une relève à l'ouverture de l'écran."""
     now = utcnow()
-    return any(_due(s, now) for s in db.scalars(select(WatchSource).where(WatchSource.enabled.is_(True))))
+    rss = select(WatchSource).where(WatchSource.enabled.is_(True), WatchSource.kind == "rss")
+    return any(_due(s, now) for s in db.scalars(rss))
 
 
 def summary(db: Session, today: date) -> dict[str, Any]:

@@ -26,6 +26,7 @@ from app.api import (
     backups,
     bank_setup,
     banks,
+    baremes,
     channels,
     consents,
     copilot,
@@ -64,6 +65,7 @@ from app.api import (
 from app.channels.gateway import Gateway
 from app.config import Settings
 from app.db import Base, make_engine, make_sessionmaker, upgrade_schema, utcnow
+from app.domain import rates
 from app.fiscal.client import FiscalClient
 from app.mcp_server import AgentGate, McpDispatch, McpMount, build_mcp, mcp_asgi, silence_sdk_logs
 from app.models import CryptoHolding, CryptoWallet, ExchangeKey
@@ -76,6 +78,7 @@ from app.services import assistant as assistant_service
 from app.services import autonomy as autonomy_service
 from app.services import backup as backup_service
 from app.services import bank_setup as bank_setup_service
+from app.services import baremes as baremes_service
 from app.services import consents as consent_service
 from app.services import crypto as crypto_service
 from app.services import energy as energy_service
@@ -223,6 +226,10 @@ def _housekeeping_once(app: FastAPI, today: date) -> dict[str, int]:
         fetch = home_value_service.default_fetch(http=app.state.dvf_http, resolver=app.state.dvf_resolver)
         report.update(home_value_service.tick(db, today=today, now=utcnow(), fetch=fetch))
         db.commit()
+    with app.state.sessionmaker() as db:  # barèmes et indices publics : une relève par mois, avec ton accord
+        fetch_rates = baremes_service.default_fetch(http=app.state.baremes_http, resolver=app.state.baremes_resolver)
+        report.update(baremes_service.tick(db, now=utcnow(), today=today, fetch=fetch_rates))
+        db.commit()
     return report
 
 
@@ -292,6 +299,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.powens = powens_service.client_from_db(
                 db, http=app.state.powens_http, resolver=app.state.powens_resolver
             )
+            baremes_service.install(db)  # valeurs relevées par Bank, posées au-dessus de rates.json
         tasks = []
         if settings.sync_interval_hours > 0:
             tasks.append(asyncio.create_task(_sync_loop(app)))
@@ -325,6 +333,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
+        rates.install({})  # une autre app (tests) ne doit pas hériter de cette couche
         engine.dispose()
 
     is_dev = settings.env == "dev"
@@ -355,6 +364,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "share": SlidingWindowLimiter(10, 300),  # ouvertures de liens de partage (route publique) par adresse
         "home": SlidingWindowLimiter(30, 600),  # recherches de commune et extractions DVF à la demande
         "bank_setup": SlidingWindowLimiter(10, 600),  # assistant Enable Banking : saisie, vérification, retrait
+        "baremes": SlidingWindowLimiter(6, 3600),  # « Vérifier maintenant » des barèmes (sources publiques)
     }
     app.state.enablebanking = _build_enablebanking(settings)
     app.state.enablebanking_http = None  # transport netfetch du client saisi dans l'assistant (remplaçable en test)
@@ -375,6 +385,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.exchange_transport = exchanges_provider.default_transport  # plateformes, par la porte sûre
     app.state.dvf_http = None  # client HTTP des fichiers DVF et de geo.api.gouv.fr (remplaçable en test)
     app.state.dvf_resolver = None
+    app.state.baremes_http = None  # client HTTP des barèmes publics (CRE, CDC, INSEE, OpenFisca ; remplaçable en test)
+    app.state.baremes_resolver = None
     app.state.channels_options = {}  # surcharges de la passerelle (tests : fabrique d'adaptateurs, horloge…)
 
     routers = (
@@ -419,6 +431,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         price_alerts,
         system,
         home,
+        baremes,
     )
     for r in routers:
         app.include_router(r.router)

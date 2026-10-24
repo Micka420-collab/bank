@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from dataclasses import asdict
 from datetime import date, timedelta
-from importlib import resources
 from typing import Any
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db import utcnow
+from app.domain import rates
 from app.domain.energy import (
     MAX_WH_PER_DAY,
     PRM_RE,
@@ -23,7 +22,7 @@ from app.domain.energy import (
     is_electricity_supplier,
     typical_monthly_payment,
 )
-from app.models import Category, EnergyConnection, EnergyReading, Transaction
+from app.models import AppSetting, Category, EnergyConnection, EnergyReading, Transaction
 from app.providers.conso_api import ConsoApiClient, ConsoApiError, looks_like_token
 from app.security import audit
 from app.services.settings_store import get_setting, set_setting
@@ -42,12 +41,21 @@ def default_client(token: str) -> ConsoApiClient:
 
 # ------------------------------------------------------------------ tarif
 def trv_options() -> list[dict[str, Any]]:
-    raw: dict[str, Any] = json.loads(resources.files("app.domain").joinpath("rates.json").read_text("utf-8"))
+    raw = rates.current()  # grille du fichier, recouverte de celle relevée à la CRE si elle est au moins aussi récente
     trv = raw["electricity_trv"]
     return [{**o, "as_of": trv["as_of"], "source": trv["source"]} for o in trv["options"]]
 
 
 def current_tariff(db: Session) -> Tariff:
+    if all(db.get(AppSetting, k) is None for k in ("elec_cents_per_100kwh", "elec_subscription_cents_per_year")):
+        # Jamais réglé : le tarif par défaut (Base 6 kVA) suit la grille en vigueur, mise à jour par Bank s'il le faut.
+        base6 = next((o for o in trv_options() if o["id"] == "base_6"), None)
+        if base6 is not None:
+            return Tariff(
+                int(base6["cents_per_100kwh"]),
+                int(base6["yearly_subscription_cents"]),
+                str(get_setting(db, "elec_tariff_label")),
+            )
     return Tariff(
         int(get_setting(db, "elec_cents_per_100kwh")),
         int(get_setting(db, "elec_subscription_cents_per_year")),

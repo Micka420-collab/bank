@@ -42,6 +42,8 @@ DEFAULTS: dict[str, Any] = {
     "web_search_counter": {"day": "", "count": 0},  # recherches web du jour (plafond réglable)
     # Assistant de connexion bancaire : dernier résultat de vérification par agrégateur (jamais un secret).
     "bank_setup_check": {},
+    # Barèmes relus aux sources publiques : ce que la dernière relève n'a pas pu changer, dit en clair.
+    "baremes_notes": [],
 }
 
 

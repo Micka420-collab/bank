@@ -111,6 +111,18 @@ PURPOSES: dict[str, dict[str, Any]] = {
         "default": True,
         "version": 1,
     },
+    "baremes": {
+        "title": "Barèmes tenus à jour",
+        "text": (
+            "Une fois par mois, et quand tu cliques « Vérifier maintenant », Bank relit des données publiques : les "
+            "tarifs réglementés de l'électricité (CRE), les taux du Livret A, du LDDS et du LEP (Caisse des Dépôts), "
+            "l'inflation et l'indice de référence des loyers (INSEE), le SMIC et le barème de l'impôt (OpenFisca). "
+            "Rien te concernant n'est envoyé : ces serveurs voient seulement l'adresse de ton serveur. Chaque valeur "
+            "changée est datée, sourcée et notée dans la Veille ; le fichier livré avec Bank reste le repli."
+        ),
+        "default": False,
+        "version": 1,
+    },
     "home_value": {
         "title": "Valeur de ton logement (ventes DVF)",
         "text": (
