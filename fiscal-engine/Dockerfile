@@ -5,11 +5,13 @@ RUN python -m venv /venv
 COPY requirements.txt /tmp/requirements.txt
 RUN --mount=type=secret,id=extra_ca,required=false \
     if [ -s /run/secrets/extra_ca ]; then export PIP_CERT=/run/secrets/extra_ca; fi; \
-    /venv/bin/pip install --upgrade pip && /venv/bin/pip install -r /tmp/requirements.txt
+    /venv/bin/pip install --upgrade pip && /venv/bin/pip install -r /tmp/requirements.txt \
+    && /venv/bin/pip uninstall -y pip
 
 FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/venv/bin:$PATH"
-RUN groupadd --system --gid 10002 fiscal && useradd --system --uid 10002 --gid fiscal --home /nonexistent fiscal
+RUN groupadd --system --gid 10002 fiscal && useradd --system --uid 10002 --gid fiscal --home /nonexistent fiscal \
+    && python -m pip uninstall -y pip && rm -rf /usr/local/lib/python3.13/ensurepip /usr/local/bin/pip*
 COPY --from=build /venv /venv
 WORKDIR /srv
 COPY engine.py ./

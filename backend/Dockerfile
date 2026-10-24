@@ -9,7 +9,8 @@ COPY app ./app
 # Derrière un proxy TLS d'entreprise : docker build --secret id=extra_ca,src=ca.crt (jamais copié dans l'image).
 RUN --mount=type=secret,id=extra_ca,required=false \
     if [ -s /run/secrets/extra_ca ]; then export PIP_CERT=/run/secrets/extra_ca; fi; \
-    /venv/bin/pip install --upgrade pip && /venv/bin/pip install .
+    /venv/bin/pip install --upgrade pip && /venv/bin/pip install . \
+    && /venv/bin/pip uninstall -y pip  # l'image finale n'installe rien : pas d'outil d'installation à bord
 
 # ---------------------------------------------------------------- runtime : minimal, non-root, FS en lecture seule
 FROM python:3.13-slim
@@ -22,6 +23,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 RUN groupadd --system --gid 10001 bank && useradd --system --uid 10001 --gid bank --home /nonexistent bank \
     && mkdir -p /data && chown bank:bank /data && chmod 700 /data
+# Pas de pip ni d'ensurepip dans l'image qui tourne : rien ne s'y installe, et leurs bibliothèques embarquées
+# (urllib3, msgpack, setuptools) ne sont plus là pour porter des failles que personne n'exécute.
+RUN python -m pip uninstall -y pip && rm -rf /usr/local/lib/python3.13/ensurepip /usr/local/bin/pip*
 COPY --from=build /venv /venv
 WORKDIR /srv
 COPY --chown=root:root app ./app
