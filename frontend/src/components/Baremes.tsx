@@ -54,7 +54,7 @@ export type BaremesView = {
   in_effect: BaremeGroup[];
   updates: BaremeUpdate[];
   indices: BaremeIndex[];
-  irl: { checked: number; gaps: string[]; missing: string[] } | null;
+  irl: { checked: number; gaps: string[]; missing: string[]; applied: boolean } | null;
   notes: { at: string; text: string }[];
 };
 export type BaremesRefresh = { status: "checked" | "failed" | "fresh"; message: string; changes: unknown[] };
@@ -163,9 +163,13 @@ export function Baremes() {
               {data.irl && (
                 <p className="faint">
                   {data.irl.gaps.length === 0
-                    ? `IRL : les ${data.irl.checked} trimestres relus à l'INSEE concordent avec ceux qui vérifient ton loyer.`
-                    : `IRL : écart avec l'INSEE — ${data.irl.gaps.join(" ; ")}.`}
+                    ? `IRL : les ${data.irl.checked} trimestres relus à l'INSEE concordent avec la table livrée avec Bank.`
+                    : `IRL : la table livrée avec Bank différait de l'INSEE (${data.irl.gaps.join(" ; ")}).`}
                   {data.irl.missing.length > 0 && ` Nouveaux trimestres publiés : ${data.irl.missing.join(", ")}.`}
+                  {(data.irl.gaps.length > 0 || data.irl.missing.length > 0) &&
+                    (data.irl.applied
+                      ? " Ton loyer est vérifié avec les indices de l'INSEE."
+                      : " Ton loyer sera vérifié avec les indices de l'INSEE à la prochaine relève.")}
                 </p>
               )}
             </>

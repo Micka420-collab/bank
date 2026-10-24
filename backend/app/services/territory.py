@@ -115,6 +115,9 @@ def remove_place(db: Session, *, actor: str) -> None:
     school = db.get(PublicCalendar, "scolaire")
     if school is not None:
         db.delete(school)  # les vacances de ton académie disent où tu habites
+    for cal in db.scalars(select(PublicCalendar).where(PublicCalendar.key.like("feries:%"))):
+        if _data(cal).get("zone") != dom.holiday_zone(None):
+            db.delete(cal)  # les fériés d'Alsace-Moselle ou d'outre-mer le disent aussi : relus pour la métropole
     db.flush()
     audit.record(db, actor, "place.remove")
 
@@ -202,7 +205,7 @@ def refresh_calendar(db: Session, *, now: datetime, today: date, fetch: Fetch, f
         url = dom.holidays_url(plan.zone, year)
         try:
             holidays[year] = (url, dom.parse_holidays(fetch(url), year))
-        except (netfetch.FetchError, dom.TerritoryError) as exc:
+        except (netfetch.FetchError, ValueError, RecursionError) as exc:  # TerritoryError est une ValueError
             holidays[year] = exc
     academy, school, school_error = plan.academy, None, None
     if plan.school and plan.depcode:
@@ -214,7 +217,7 @@ def refresh_calendar(db: Session, *, now: datetime, today: date, fetch: Fetch, f
             else:
                 url = dom.school_url(academy, today - timedelta(days=31))
                 school = (url, *dom.parse_school(fetch(url), academy))
-        except (netfetch.FetchError, dom.TerritoryError) as exc:
+        except (netfetch.FetchError, ValueError, RecursionError) as exc:  # TerritoryError est une ValueError
             school_error = str(exc)
 
     write_lock(db)

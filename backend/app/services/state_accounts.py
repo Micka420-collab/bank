@@ -7,6 +7,7 @@ et la date des documents déposés. Bank ne garde aucun identifiant d'un compte 
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
@@ -25,6 +26,7 @@ from app.services import analytics
 # Ce que la lecture d'un PDF dans Comptes de l'État (services.documents) range sous chaque organisme.
 FACT_KINDS = {"impots": "avis_impot", "caf": "caf", "france_travail": "france_travail"}
 READABLE = ("verified", "to_review")
+log = logging.getLogger(__name__)
 
 
 class StateAccountsError(ValueError):
@@ -40,9 +42,16 @@ def _aware(d: datetime | None) -> datetime | None:
 # ------------------------------------------------------------------ le crochet de la boîte mail
 def on_mail(db: Session, headers: mail_domain.Headers, *, has_pdf: bool, now: datetime) -> bool:
     """Appelé par la lecture IMAP pour chaque message retenu : un avis d'organisme sans PDF devient une tâche.
-    Rien d'autre que l'expéditeur, l'objet, la date et l'identifiant du message n'est utilisé."""
-    received = _aware(headers.received_at) or now
-    notice = dom.notice_from_mail(headers.domain, headers.subject, received.date(), headers.message_id, has_pdf)
+    Rien d'autre que l'expéditeur, l'objet, la date et l'identifiant du message n'est utilisé.
+
+    Le message vient de n'importe qui (l'en-tête Date se forge) : une date future est ramenée à maintenant, et une
+    erreur en lisant ce qu'il annonce n'interrompt jamais la lecture de la boîte (le message est ignoré ici)."""
+    try:
+        received = min(_aware(headers.received_at) or now, now)
+        notice = dom.notice_from_mail(headers.domain, headers.subject, received.date(), headers.message_id, has_pdf)
+    except Exception:  # une tâche en moins, jamais une boîte mail bloquée
+        log.warning("state_accounts.on_mail : message ignoré", exc_info=True)
+        return False
     if notice is None or db.scalar(select(DocumentTask.id).where(DocumentTask.key == notice.key)) is not None:
         return False
     db.add(
@@ -97,10 +106,19 @@ def _filed(db: Session, body: str, since: datetime) -> tuple[str, int | None] | 
 def sync(db: Session, *, today: date, now: datetime) -> dict[str, int]:
     """Crée les attentes de saison du moment, ferme les tâches dont le PDF est arrivé. Local, sans réseau."""
     write_lock(db)
-    created = closed = 0
+    created = closed = expired = 0
     for e in dom.seasonal(today, _paid_months(db, today)):
         if today < e.opens or db.scalar(select(DocumentTask.id).where(DocumentTask.key == e.key)) is not None:
             continue
+        # L'attestation du mois remplace celle du mois d'avant, encore ouverte : une seule à récupérer.
+        for old in db.scalars(
+            select(DocumentTask).where(
+                DocumentTask.origin == "season", DocumentTask.body == e.body, DocumentTask.status == "open"
+            )
+        ):
+            if dom.same_expectation(old.key, e.key):
+                old.status, old.closed_at = "expired", now
+                expired += 1
         db.add(
             DocumentTask(
                 key=e.key,
@@ -116,6 +134,10 @@ def sync(db: Session, *, today: date, now: datetime) -> dict[str, int]:
         created += 1
     db.flush()
     for t in db.scalars(select(DocumentTask).where(DocumentTask.status == "open")):
+        if t.origin == "season" and today > dom.season_expires(t.key, t.due):
+            t.status, t.closed_at = "expired", now  # la saison est passée : elle ne reste pas « en retard » à vie
+            expired += 1
+            continue
         spec = dom.BY_SLUG.get(t.body)
         if spec is None or t.expected in dom.NO_PDF:
             continue
@@ -128,7 +150,7 @@ def sync(db: Session, *, today: date, now: datetime) -> dict[str, int]:
     db.flush()
     if closed:
         audit.record(db, "system", "papers.task_done", count=closed)
-    return {"doc_tasks_created": created, "doc_tasks_closed": closed}
+    return {"doc_tasks_created": created, "doc_tasks_closed": closed, "doc_tasks_expired": expired}
 
 
 def close(db: Session, task_id: int, *, status: str, actor: str, now: datetime) -> None:

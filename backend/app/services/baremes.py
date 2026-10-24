@@ -10,6 +10,7 @@ accord « Barèmes tenus à jour »."""
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 from collections.abc import Callable, Iterable
@@ -42,6 +43,14 @@ class Feed:
     url: str
     accept: str
     parse: Callable[[bytes, str, date], list[dom.Observation]]
+    label: str  # ce que ce fichier apporte, pour dire lequel a échoué
+
+
+# Ce qu'un fichier de source peut lever sur une réponse inattendue : jamais une panne de toute la relève.
+FEED_ERRORS = (netfetch.FetchError, ValueError, csv.Error, RecursionError)
+CRE_LABELS = {"base": "option Base", "hphc": "option Heures creuses", "tempo": "option Tempo"}
+INSEE_LABELS = {"011814056": "IPC", "011814133": "inflation sur un an", "001515333": "IRL"}
+OPENFISCA_LABELS = {"openfisca.smic_horaire": "SMIC horaire", "openfisca.smic_mensuel": "SMIC mensuel"}
 
 
 @dataclass(frozen=True)
@@ -57,19 +66,24 @@ SOURCES: tuple[Spec, ...] = (
         "bareme-cre",
         "CRE — tarifs réglementés de l'électricité",
         dom.cre_url("base"),
-        tuple(Feed(dom.cre_url(o), dom.CSV_ACCEPT, partial(dom.parse_cre, option=o)) for o in dom.CRE_FILES),
+        tuple(
+            Feed(dom.cre_url(o), dom.CSV_ACCEPT, partial(dom.parse_cre, option=o), CRE_LABELS[o]) for o in dom.CRE_FILES
+        ),
     ),
     Spec(
         "bareme-cdc",
         "Caisse des Dépôts — taux du Livret A, du LDDS et du LEP",
         dom.CDC_URL,
-        (Feed(dom.CDC_URL, dom.JSON_ACCEPT, dom.parse_cdc),),
+        (Feed(dom.CDC_URL, dom.JSON_ACCEPT, dom.parse_cdc, "taux des livrets"),),
     ),
     Spec(
         "bareme-insee",
         "INSEE — inflation (IPC base 2025) et indice de référence des loyers",
         dom.INSEE_URL.format(idbank="011814056"),
-        tuple(Feed(dom.INSEE_URL.format(idbank=i), dom.XML_ACCEPT, dom.parse_insee) for i in dom.INSEE_SERIES),
+        tuple(
+            Feed(dom.INSEE_URL.format(idbank=i), dom.XML_ACCEPT, dom.parse_insee, INSEE_LABELS[i])
+            for i in dom.INSEE_SERIES
+        ),
     ),
     Spec(
         "bareme-openfisca",
@@ -77,10 +91,20 @@ SOURCES: tuple[Spec, ...] = (
         dom.OPENFISCA_URL.format(name=dom.OPENFISCA_SCALE),
         (
             *(
-                Feed(dom.OPENFISCA_URL.format(name=p), dom.JSON_ACCEPT, partial(dom.parse_openfisca_values, series=s))
+                Feed(
+                    dom.OPENFISCA_URL.format(name=p),
+                    dom.JSON_ACCEPT,
+                    partial(dom.parse_openfisca_values, series=s),
+                    OPENFISCA_LABELS[s],
+                )
                 for p, s in dom.OPENFISCA_VALUES.items()
             ),
-            Feed(dom.OPENFISCA_URL.format(name=dom.OPENFISCA_SCALE), dom.JSON_ACCEPT, dom.parse_openfisca_scale),
+            Feed(
+                dom.OPENFISCA_URL.format(name=dom.OPENFISCA_SCALE),
+                dom.JSON_ACCEPT,
+                dom.parse_openfisca_scale,
+                "barème de l'impôt",
+            ),
         ),
     ),
 )
@@ -290,29 +314,41 @@ def refresh(
     for spec in todo:
         sources[spec.slug].last_checked_at = now
     db.commit()
-    fetched: dict[str, list[dom.Observation] | Exception] = {}
+    # Chaque fichier à part : un fichier en échec (le Tempo de la CRE, l'IPC…) n'écarte que ses propres valeurs.
+    fetched: dict[str, tuple[list[dom.Observation], list[str]]] = {}
     for spec in todo:
-        try:
-            obs: list[dom.Observation] = []
-            for feed in spec.feeds:
+        obs: list[dom.Observation] = []
+        failures: list[str] = []
+        for feed in spec.feeds:
+            try:
                 obs += feed.parse(fetch(feed.url, feed.accept), feed.url, today)
-            fetched[spec.slug] = obs
-        except (netfetch.FetchError, dom.BaremeError) as exc:
-            fetched[spec.slug] = exc
+            except FEED_ERRORS as exc:
+                failures.append(f"{feed.label} : {_reason(exc)}")
+        fetched[spec.slug] = (obs, failures)
     write_lock(db)
     db.expire_all()
     sources = ensure_sources(db)
     errors: list[str] = []
+    failed = 0
     observations: list[dom.Observation] = []
-    for slug, result in fetched.items():
+    for slug, (obs, failures) in fetched.items():
         source = sources[slug]
-        if isinstance(result, Exception):
-            source.last_error = str(result)[:300]
-            errors.append(f"{source.name} : {result} ; les valeurs précédentes restent en vigueur.")
+        if failures:
+            # Pas de last_ok_at : la source est relue le lendemain, jusqu'à ce que tous ses fichiers passent.
+            source.last_error = " ; ".join(failures)[:300]
+            kept = (
+                "les valeurs précédentes restent en vigueur"
+                if not obs
+                else "les valeurs précédentes de ce fichier restent, le reste de la source est lu"
+            )
+            errors.append(f"{source.name} : {' ; '.join(failures)} ; {kept}.")
+            failed += not obs
+        if not obs:
             continue
-        _store(db, result, now)
-        observations += result
-        source.last_ok_at, source.last_error = now, None
+        _store(db, obs, now)
+        observations += obs
+        if not failures:
+            source.last_ok_at, source.last_error = now, None
     proposal = dom.propose(effective(db), observations, today)
     applied, refused = _apply(db, proposal.changes, now)
     _journal(db, applied, sources, now)
@@ -331,18 +367,25 @@ def refresh(
     if applied:
         message = f"{len(applied)} valeur{'s' if len(applied) > 1 else ''} mise{'s' if len(applied) > 1 else ''} à jour"
         message += " : détail ci-dessous et dans la Veille."
-    elif errors and len(errors) == len(todo):
+    elif failed == len(todo):
         message = "Relève en échec : les valeurs en vigueur restent celles d'avant."
     else:
         message = "Tout est à jour : aucune valeur n'a changé."
     return {
-        "status": "failed" if errors and len(errors) == len(todo) else "checked",
+        "status": "failed" if failed == len(todo) else "checked",
         "checked": len(todo),
         "errors": len(errors),
         "changes": [_change_view(c) for c in applied],
         "notes": notes,
         "message": message,
     }
+
+
+def _reason(exc: BaseException) -> str:
+    """Le message d'une erreur attendue ; une erreur de format brute n'est pas recopiée (elle ne dirait rien)."""
+    if isinstance(exc, (netfetch.FetchError, dom.BaremeError)):
+        return str(exc)[:200]
+    return "réponse illisible"
 
 
 def _change_view(c: dom.Change) -> dict[str, Any]:
@@ -430,20 +473,26 @@ def _indices(db: Session) -> list[dict[str, Any]]:
 
 
 def _irl_check(db: Session) -> dict[str, Any] | None:
-    """L'IRL relu à l'INSEE face à la table que Bank utilise pour vérifier ton loyer (domain.contracts)."""
+    """L'IRL relu à l'INSEE face à la table livrée avec Bank (domain.contracts.IRL). Les valeurs relues priment déjà
+    sur cette table pour vérifier ton loyer (install_irl) : un écart dit que la table était en retard ou fausse, pas
+    que la vérification l'est."""
     rows = list(db.scalars(select(RateObservation).where(RateObservation.series == "insee.irl")))
     if not rows:
         return None
     gaps, missing = [], []
     for r in sorted(rows, key=lambda r: r.period):
-        start = dom.period_start(r.period)
-        quarter = (start.year, (start.month - 1) // 3 + 1)
-        known = contracts.IRL.get(quarter)
+        known = contracts.IRL.get(_quarter(r.period))
         if known is None:
             missing.append(period_label(r.period))
         elif abs(known - float(r.value)) > 0.005:
-            gaps.append(f"{period_label(r.period)} : INSEE {r.value}, Bank {known}")
-    return {"checked": len(rows), "gaps": gaps, "missing": missing}
+            gaps.append(f"{period_label(r.period)} : INSEE {r.value}, table livrée {known}")
+    applied = all(contracts.irl_table().get(_quarter(r.period)) == float(r.value) for r in rows)
+    return {"checked": len(rows), "gaps": gaps, "missing": missing, "applied": applied}
+
+
+def _quarter(period: str) -> tuple[int, int]:
+    start = dom.period_start(period)
+    return start.year, (start.month - 1) // 3 + 1
 
 
 def _in_effect(eff: dict[str, Any], base: dict[str, Any]) -> list[dict[str, Any]]:

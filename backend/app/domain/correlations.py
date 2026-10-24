@@ -285,6 +285,9 @@ def _fr2(x: float) -> str:
     return f"{x:.2f}".replace(".", ",")
 
 
+IRL_WINDOW_DAYS = 45
+
+
 def _applied_irl(
     lease: Doc,
     rent: Series,
@@ -310,10 +313,10 @@ def _applied_irl(
     if i == 0 or abs(history[i - 1][1] - (loyer + charges)) > CENTS_TOLERANCE:
         return None  # pas de hausse vue, ou l'ancien loyer n'est pas celui du bail : on ne sait pas
     changed_on = history[i][0]
-    years = 0
-    while add_months(start, 12 * (years + 1)) <= changed_on:
-        years += 1
-    if years < 1 or loyer <= 0:
+    # La hausse doit tomber à l'anniversaire du bail (à IRL_WINDOW_DAYS près, prélèvement en avance ou en retard) :
+    # une hausse ailleurs dans l'année (régularisation des charges…) n'est pas lue comme une révision.
+    years = round((changed_on - start).days / 365.25)
+    if years < 1 or loyer <= 0 or abs((changed_on - add_months(start, 12 * years)).days) > IRL_WINDOW_DAYS:
         return None
     prev_q, cur_q = (ref[0] + years - 1, ref[1]), (ref[0] + years, ref[1])
     previous, published = contracts.irl_value(prev_q), contracts.irl_value(cur_q)

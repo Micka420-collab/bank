@@ -20,7 +20,7 @@ from app.domain import territory as dom
 from app.domain.forecast import CategoryInfo, build_forecast
 from app.domain.recurring import RecurringSeries
 from app.domain.yearahead import build_year_ahead
-from app.models import AuditLog, HouseholdPlace
+from app.models import AuditLog, DocumentTask, HouseholdPlace, PublicCalendar
 from app.services import territory as svc
 
 FIXTURES = Path(__file__).parent / "fixtures" / "calendrier"
@@ -329,3 +329,38 @@ def test_background_tick_fetches_only_what_is_due(app, net: tuple[TestClient, Fa
     with app.state.sessionmaker() as db:
         assert svc.tick(db, now=now + timedelta(hours=1), today=TODAY, fetch=fetch) == {}, "frais : rien à relire"
     assert len(fake.requests) == 2
+
+
+def test_export_carries_the_place_calendars_and_document_tasks(app, net: tuple[TestClient, FakeNet]) -> None:  # type: ignore[no-untyped-def]
+    """Portabilité : l'adresse et ce que Bank en a tiré, les calendriers, les documents à récupérer."""
+    from tests.conftest import PASSWORD
+
+    client, _fake = net
+    for purpose in ("geocoding", "calendar"):
+        client.put(f"/api/consents/{purpose}", json={"granted": True})
+    client.post("/api/territory/geocode", json={"query": QUERY})
+    client.post("/api/territory/calendar/refresh")
+    with app.state.sessionmaker() as db:
+        db.add(
+            DocumentTask(key="season:avis_ir:2026", body="impots", origin="season", expected="avis d'impôt", due=TODAY)
+        )
+        db.commit()
+    body = client.post("/api/export", json={"password": PASSWORD}).json()
+    assert body["territory"]["place"]["citycode"] == "80021" and body["territory"]["place"]["query"] == QUERY
+    assert {c["key"] for c in body["territory"]["calendars"]} >= {"feries:2026", "scolaire"}
+    (task,) = body["document_tasks"]
+    assert task["status"] == "open" and task["expected"] == "avis d'impôt"
+
+
+def test_forgetting_the_address_forgets_the_regional_holidays(app, net: tuple[TestClient, FakeNet]) -> None:  # type: ignore[no-untyped-def]
+    """Les fériés d'Alsace-Moselle disent où tu habites : « oublier mon adresse » les efface, la métropole reste."""
+    client, _fake = net
+    client.put("/api/consents/geocoding", json={"granted": True})
+    client.post("/api/territory/geocode", json={"query": QUERY})
+    with app.state.sessionmaker() as db:
+        db.add(PublicCalendar(key="feries:2026", data='{"zone": "alsace-moselle", "days": {}}'))
+        db.add(PublicCalendar(key="feries:2027", data='{"zone": "metropole", "days": {}}'))
+        db.commit()
+    assert client.delete("/api/territory/place").status_code == 200
+    with app.state.sessionmaker() as db:
+        assert db.get(PublicCalendar, "feries:2026") is None and db.get(PublicCalendar, "feries:2027") is not None

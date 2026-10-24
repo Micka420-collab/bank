@@ -184,6 +184,22 @@ def seasonal(today: date, paid_months: dict[str, set[str]]) -> list[Expectation]
     return out
 
 
+SEASON_GRACE_DAYS = 60  # une attestation mensuelle non récupérée se ferme seule deux mois après son échéance
+
+
+def same_expectation(old_key: str, new_key: str) -> bool:
+    """Deux attentes de saison du même genre (« season:caf:2026-08 » et « season:caf:2026-09 »)."""
+    return old_key != new_key and old_key.rsplit(":", 1)[0] == new_key.rsplit(":", 1)[0]
+
+
+def season_expires(key: str, due: date) -> date:
+    """Le dernier jour où une attente de saison reste ouverte : le 31 décembre pour l'avis d'impôt (rappelé jusque-là),
+    deux mois après l'échéance pour une attestation mensuelle."""
+    if key.startswith("season:avis_ir:"):
+        return date(due.year, 12, 31)
+    return due + timedelta(days=SEASON_GRACE_DAYS)
+
+
 def closes(expected: str, body: str, doc_kind: str) -> bool:
     """Ce papier déposé ferme-t-il la tâche ? Même organisme (genre de papier), sauf une réponse sans PDF."""
     spec = BY_SLUG.get(body)

@@ -94,7 +94,7 @@ class SchoolBreak:
 def _json(body: bytes, who: str) -> Any:
     try:
         return json.loads(body)
-    except ValueError as exc:
+    except (ValueError, RecursionError) as exc:  # RecursionError : JSON imbriqué à l'excès
         raise TerritoryError(f"{who} : réponse illisible (JSON attendu)") from exc
 
 

@@ -114,6 +114,26 @@ def test_parsers_are_defensive(call, message: str) -> None:  # type: ignore[no-u
         call()
 
 
+def test_float_noise_impossible_dates_and_hostile_bodies_are_handled() -> None:
+    """Le Livret A de janvier 2026 arrive en 1.7000000000000002 dans le JSON de la Caisse des Dépôts : c'est 1,70 %.
+    Une date impossible, un JSON trop imbriqué, un champ CSV démesuré : une erreur lisible, jamais une panne."""
+    from decimal import Decimal
+
+    assert dom.decimal_of(1.7000000000000002) == Decimal("1.7")
+    row = {"date": "2026-09", "tla_tldds_percent": 1.7000000000000002, "tlep_percent": 2.7}
+    obs = dom.latest(dom.parse_cdc(json.dumps({"results": [row]}).encode(), "u", TODAY))
+    assert obs["cdc.livret_a"].value == "1.70" and obs["cdc.lep"].value == "2.70"
+    with pytest.raises(dom.BaremeError, match="Date illisible"):
+        dom.parse_cdc(b'{"results": [{"date": "2026-13", "tla_tldds_percent": 1.5, "tlep_percent": 2.5}]}', "u", TODAY)
+    with pytest.raises(dom.BaremeError, match="JSON attendu"):
+        dom.parse_openfisca_scale(b"[" * 100_000 + b"]" * 100_000, "u", TODAY)
+    with pytest.raises(dom.BaremeError, match="Date illisible"):
+        dom.parse_openfisca_values(b'{"values": {"2026-02-30": 12.0}}', "u", TODAY, "s")
+    huge = b"DATE_DEBUT;P_SOUSCRITE;PART_FIXE_TTC;PART_VARIABLE_TTC\n01/08/2026;6;" + b"1" * 200_000 + b";0,2\n"
+    with pytest.raises(dom.BaremeError, match="CSV attendu"):
+        dom.parse_cre(huge, "u", TODAY, "base")
+
+
 # ------------------------------------------------------------------ différence datée
 def test_proposal_fixes_the_subscription_gap_and_nothing_else() -> None:
     prop = dom.propose(rates.static(), all_observations(), TODAY)
@@ -180,6 +200,55 @@ def test_newer_sources_propose_dated_and_sourced_values() -> None:
     assert dom.propose(rates.static(), odd, date(2027, 3, 1)).changes == []
 
 
+def test_a_livret_rate_is_dated_from_the_month_it_changed() -> None:
+    """La Caisse des Dépôts publie janvier 1,70 %, février et mars 1,50 % : le taux vaut 1,50 % depuis février (pas
+    depuis mars, le dernier mois publié) ; un nouveau mois au même taux ne déplace rien."""
+    raw = rates.static()
+    raw["as_of"] = "2026-01-01"
+    by = {c.path: c for c in dom.propose(raw, all_observations(), TODAY).changes if c.section == "livrets"}
+    assert by["products:livret_a/rate_percent"].effective_from == "2026-02-01"
+    assert by["as_of"].new == "2026-02-01" and "02/2026" in by["source"].new
+    assert "products:lep/rate_percent" not in by, "LEP : 2,50 % comme dans le fichier"
+    for p in raw["products"]:
+        p["rate_percent"] = "1.50" if p["kind"] != "lep" else "2.50"
+    raw["as_of"] = "2026-02-01"
+    same = [c for c in dom.propose(raw, all_observations(), TODAY).changes if c.section == "livrets"]
+    assert same == [], "mars au même taux que février : ni taux, ni date, ni source ne changent"
+
+
+def test_each_electricity_option_is_dated_by_its_own_grid() -> None:
+    """Base est publiée avec la grille de février 2027, le fichier Heures creuses est encore celui de février 2026 :
+    Base est appliquée et date la section, Heures creuses est gardée et c'est dit."""
+    from dataclasses import replace
+
+    base = [
+        replace(o, period="2027-02-01", value="200" if o.series == "cre.base.6.fixe_ttc" else o.value)
+        for o in dom.parse_cre(read("Option_Base.csv"), dom.cre_url("base"), TODAY, "base")
+    ]
+    hphc = dom.parse_cre(read("Option_HPHC.csv"), dom.cre_url("hphc"), date(2026, 7, 15), "hphc")
+    prop = dom.propose(rates.static(), base + hphc, date(2027, 3, 1))
+    paths = {c.path: c for c in prop.changes if c.section == "electricity"}
+    assert paths["electricity_trv/options:base_6/yearly_subscription_cents"].new == 20000
+    assert not any("hphc" in p for p in paths), "grille Heures creuses plus ancienne que celle en vigueur"
+    assert paths["electricity_trv/as_of"].new == "2027-02-01" and "01/02/2027" in paths["electricity_trv/source"].new
+    assert any("Heures pleines / creuses 6 kVA" in n and "01/02/2026" in n for n in prop.notes)
+
+
+def test_a_new_income_year_with_the_same_scale_has_its_own_entry() -> None:
+    scale = dom.latest(all_observations())["openfisca.bareme_ir"]
+    newer = replace_obs(scale, period="2026-01-01")
+    by = {c.path: c for c in dom.propose(rates.static(), [newer], date(2027, 3, 1)).changes}
+    assert "income_tax/brackets" not in by
+    year = by["income_tax/incomes_year"]
+    assert year.label and (year.shown_old, year.shown_new) == ("revenus 2025", "revenus 2026")
+
+
+def replace_obs(o: dom.Observation, **kw: Any) -> dom.Observation:
+    from dataclasses import replace
+
+    return replace(o, **kw)
+
+
 def test_overlay_never_beats_a_newer_file_and_ignores_unknown_paths() -> None:
     layer = {
         "electricity_trv/options:base_6/yearly_subscription_cents": (19081, "2026-08-01"),
@@ -219,6 +288,7 @@ class FakeSources:
     def __init__(self) -> None:
         self.requests: list[httpx.Request] = []
         self.down: set[str] = set()
+        self.gone: set[str] = set()  # fichiers qui répondent 404
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -226,6 +296,8 @@ class FakeSources:
         if host in self.down or "*" in self.down:
             return httpx.Response(503, stream=Chunks(b""))
         name = request.url.path.rsplit("/", 1)[-1]
+        if name in self.gone:
+            return httpx.Response(404, stream=Chunks(b""))
         if host == "www.cre.fr":
             body = read(name)
         elif host == "opendata.caissedesdepots.fr":
@@ -328,7 +400,7 @@ def test_monthly_check_fixes_the_6_and_9_kva_subscriptions(app, net: tuple[TestC
         indices["insee.ipc_glissement"]["value"] == "3,1 %" and indices["openfisca.smic_horaire"]["value"] == "12,31 €"
     )
     assert indices["openfisca.smic_mensuel"]["value"] == "1 867,02 €"
-    assert view["irl"] == {"checked": 3, "gaps": [], "missing": []}, "l'IRL de Bank concorde avec l'INSEE"
+    assert view["irl"] == {"checked": 3, "gaps": [], "missing": [], "applied": True}, "concorde avec l'INSEE"
     assert contracts.irl_source((2026, 3)).startswith("INSEE, série 001515333"), "ton loyer : l'IRL relu (#32)"
     assert any("Caisse des Dépôts" in n["text"] for n in view["notes"])
 
@@ -348,9 +420,23 @@ def test_failed_fetch_keeps_the_previous_values_and_says_so(net: tuple[TestClien
     assert r["result"]["message"] == "Relève en échec : les valeurs en vigueur restent celles d'avant."
     assert _options(client)["base_6"]["yearly_subscription_cents"] == 19081
     cre = next(s for s in r["view"]["sources"] if s["slug"] == "bareme-cre")
-    assert cre["last_error"] == "La source répond 503" and cre["last_ok_at"] is not None
+    assert cre["last_error"].startswith("option Base : La source répond 503") and cre["last_ok_at"] is not None
     assert any("les valeurs précédentes restent en vigueur" in n["text"] for n in r["view"]["notes"])
     assert r["view"]["indices"], "les indices déjà relevés restent affichés"
+
+
+def test_one_failing_file_keeps_the_others_of_its_source(net: tuple[TestClient, FakeSources]) -> None:
+    """Le fichier Tempo de la CRE disparaît : Base et Heures creuses sont tout de même appliquées, l'échec est dit et
+    la source est relue le lendemain."""
+    client, fake = net
+    _agree(client)
+    fake.gone = {"Option_Tempo.csv"}
+    r = client.post("/api/baremes/refresh").json()
+    assert r["result"]["status"] == "checked" and r["result"]["errors"] == 1
+    assert _options(client)["base_6"]["yearly_subscription_cents"] == 19081
+    cre = next(s for s in r["view"]["sources"] if s["slug"] == "bareme-cre")
+    assert cre["last_error"].startswith("option Tempo :") and cre["last_ok_at"] is None
+    assert any("option Tempo" in n["text"] and "le reste de la source est lu" in n["text"] for n in r["view"]["notes"])
 
 
 def test_revert_returns_to_the_file_and_is_not_reapplied(net: tuple[TestClient, FakeSources]) -> None:

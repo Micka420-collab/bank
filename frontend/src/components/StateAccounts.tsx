@@ -28,7 +28,7 @@ export type DocTask = {
   received_at: string | null;
   due: string;
   late: boolean;
-  status: "open" | "done" | "dismissed";
+  status: "open" | "done" | "dismissed" | "expired";
   entry_url: string | null;
   path: string | null;
   document_id: number | null;
@@ -109,7 +109,7 @@ export function StateAccounts() {
       )}
       {data.recent.length > 0 && (
         <p className="faint">
-          Récemment : {data.recent.slice(0, 3).map((t) => `${t.expected} (${t.status === "done" ? "reçu" : "écarté"})`).join(", ")}.
+          Récemment : {data.recent.slice(0, 3).map((t) => `${t.expected} (${t.status === "done" ? "reçu" : t.status === "expired" ? "saison passée" : "écarté"})`).join(", ")}.
         </p>
       )}
       <p className="faint">{data.note} Pages d'entrée vérifiées le {data.checked_on}.</p>

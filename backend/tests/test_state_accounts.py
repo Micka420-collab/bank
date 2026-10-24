@@ -175,3 +175,52 @@ def test_seasonal_reminders_and_renewal(world: TestClient, app) -> None:  # type
         db.commit()
     caf = next(b for b in world.get("/api/state-accounts").json()["bodies"] if b["slug"] == "caf")
     assert caf["status"] == "renew"
+
+
+def test_a_forged_far_future_date_never_blocks_the_mailbox(world: TestClient, imap: FakeImapServer, app) -> None:  # type: ignore[no-untyped-def]
+    """« Date: Fri, 31 Dec 9999 » d'un expéditeur qui se dit les impôts : la date est ramenée à aujourd'hui, la
+    lecture de la boîte avance."""
+    app.dependency_overrides[deps.today] = lambda: date(2026, 6, 15)
+    _link(world, imap)
+    forged = make_mail(sender="DGFiP <x@impots.gouv.fr>", subject="Votre avis est disponible", pdf=None)
+    del forged["Date"]
+    forged["Date"] = "Fri, 31 Dec 9999 23:00:00 -0500"
+    imap.add(forged)
+    r = world.post("/api/mail/scan")
+    assert r.status_code == 200 and r.json()["report"]["scanned"] == 1
+    (task,) = world.get("/api/state-accounts").json()["tasks"]
+    assert date.fromisoformat(task["due"]) <= date.today() + timedelta(days=dom.DUE_DAYS)
+
+
+def test_season_tasks_do_not_pile_up(world: TestClient, app) -> None:  # type: ignore[no-untyped-def]
+    """L'attestation CAF du mois remplace celle du mois d'avant ; l'avis d'impôt de l'été se ferme le 31 décembre."""
+    from app.models import Account
+    from app.services import state_accounts as svc
+
+    with app.state.sessionmaker() as db:
+        acc = Account(name="Compte courant", kind="checking", balance_cents=0)
+        db.add(acc)
+        db.flush()
+        for n, day in enumerate((date(2026, 7, 5), date(2026, 8, 5))):
+            db.add(
+                Transaction(
+                    account_id=acc.id,
+                    booking_date=day,
+                    amount_cents=25_829,
+                    raw_label="CAF DU LOIRET PRIME ACTIVITE",
+                    aid_kind="caf_ppa",
+                    fingerprint=f"t-caf-{n}",
+                )
+            )
+        db.commit()
+        now = datetime(2026, 8, 2, 9, tzinfo=UTC)
+        svc.sync(db, today=date(2026, 8, 2), now=now)
+        svc.sync(db, today=date(2026, 9, 2), now=now + timedelta(days=31))
+        status = {t.key: t.status for t in db.query(DocumentTask).all()}
+        assert status["season:caf:2026-07"] == "expired" and status["season:caf:2026-08"] == "open"
+        assert status["season:avis_ir:2026"] == "open"
+        svc.sync(db, today=date(2027, 1, 2), now=now + timedelta(days=153))
+        status = {t.key: t.status for t in db.query(DocumentTask).all()}
+        assert status["season:avis_ir:2026"] == "expired" and status["season:caf:2026-08"] == "expired"
+        db.commit()
+    assert dom.season_expires("season:caf:2026-08", date(2026, 9, 30)) == date(2026, 11, 29)

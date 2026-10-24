@@ -15,7 +15,7 @@ import json
 import math
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 from typing import Any
@@ -32,7 +32,7 @@ HP_SHARE = Decimal("0.65")
 CRE_DIR = "https://www.cre.fr/fileadmin/Documents/Open_data/Marches_de_detail"
 CDC_URL = (
     "https://opendata.caissedesdepots.fr/api/explore/v2.1/catalog/datasets/flux-et-taux-la-ldds-lep/records"
-    "?order_by=date%20desc&limit=3"
+    "?order_by=date%20desc&limit=6"
 )
 INSEE_URL = "https://api.insee.fr/series/BDM/data/SERIES_BDM/{idbank}?lastNObservations=6"
 OPENFISCA_URL = "https://api.fr.openfisca.org/latest/parameter/{name}"
@@ -59,6 +59,7 @@ class Observation:
     value: str  # décimal en texte, ou JSON (barème)
     source_url: str
     note: str | None = None
+    since: str | None = None  # début de la suite de périodes à la même valeur (posé par `latest`)
 
 
 @dataclass(frozen=True)
@@ -83,13 +84,17 @@ class Proposal:
 
 # ------------------------------------------------------------------ petits outils
 def period_start(period: str) -> date:
-    """Le premier jour de la période : « 2026-08-01 », « 2026-03 » (mois), « 2026-Q3 » (trimestre)."""
+    """Le premier jour de la période : « 2026-08-01 », « 2026-03 » (mois), « 2026-Q3 » (trimestre). Une date
+    impossible (« 2026-13 ») est une erreur de la source, pas une panne."""
     m = re.fullmatch(r"(\d{4})-Q([1-4])", period)
     if m:
         return date(int(m[1]), (int(m[2]) - 1) * 3 + 1, 1)
-    if re.fullmatch(r"\d{4}-\d{2}", period):
-        return date.fromisoformat(f"{period}-01")
-    return date.fromisoformat(period)
+    try:
+        if re.fullmatch(r"\d{4}-\d{2}", period):
+            return date.fromisoformat(f"{period}-01")
+        return date.fromisoformat(period)
+    except ValueError as exc:
+        raise BaremeError(f"Date illisible : {period[:20]!r}") from exc
 
 
 def decimal_of(raw: object) -> Decimal:
@@ -98,6 +103,8 @@ def decimal_of(raw: object) -> Decimal:
         raise BaremeError("Valeur absente")
     if isinstance(raw, float) and not math.isfinite(raw):
         raise BaremeError("Valeur non finie")
+    if isinstance(raw, float):
+        raw = repr(round(raw, 10))  # le bruit binaire (1.7000000000000002) n'est pas une décimale de la source
     text = str(raw).strip().replace(" ", "").replace(",", ".")
     if not re.fullmatch(r"-?\d{1,9}(?:\.\d{1,12})?(?:[eE]-?\d{1,2})?", text):
         raise BaremeError(f"Valeur illisible : {text[:20]!r}")
@@ -167,15 +174,30 @@ def cre_url(option: str) -> str:
 def parse_cre(body: bytes, url: str, today: date, option: str) -> list[Observation]:
     """La grille en vigueur aujourd'hui (la plus récente dont la date de début est passée) : une observation par
     puissance et par composante, TTC. Une grille annoncée pour plus tard n'est pas encore lue."""
-    columns = CRE_OPTIONS[option]
+    try:
+        rows = _cre_rows(body, CRE_OPTIONS[option])
+    except csv.Error as exc:  # champ démesuré, guillemet orphelin…
+        raise BaremeError("CRE : fichier illisible (CSV attendu)") from exc
+    return _cre_grid(rows, url, today, option)
+
+
+def _cre_rows(body: bytes, columns: Mapping[str, str]) -> list[dict[str, str]]:
     reader = csv.DictReader(io.StringIO(_decode(body)), delimiter=";")
     missing = {"DATE_DEBUT", "P_SOUSCRITE", *columns} - set(reader.fieldnames or [])
     if missing:
         raise BaremeError(f"CRE : colonnes absentes ({', '.join(sorted(missing))})")
-    grids: dict[date, list[dict[str, str]]] = {}
+    rows = []
     for n, row in enumerate(reader):
         if n >= MAX_ROWS:
             raise BaremeError("CRE : fichier trop long")
+        rows.append(row)
+    return rows
+
+
+def _cre_grid(rows: list[dict[str, str]], url: str, today: date, option: str) -> list[Observation]:
+    columns = CRE_OPTIONS[option]
+    grids: dict[date, list[dict[str, str]]] = {}
+    for row in rows:
         m = re.fullmatch(r"(\d{2})/(\d{2})/(\d{4})", (row.get("DATE_DEBUT") or "").strip())
         try:
             start = date(int(m[3]), int(m[2]), int(m[1])) if m else None
@@ -205,25 +227,23 @@ def parse_cre(body: bytes, url: str, today: date, option: str) -> list[Observati
 
 # ------------------------------------------------------------------ Caisse des Dépôts : livrets réglementés
 def parse_cdc(body: bytes, url: str, today: date) -> list[Observation]:
-    """Le mois le plus récent publié (le jeu a souvent plusieurs mois de retard : c'est la comparaison des dates qui
-    décide). Livret A et LDDS partagent leur taux."""
-    try:
-        data = json.loads(body)
-    except ValueError as exc:
-        raise BaremeError("Caisse des Dépôts : réponse illisible (JSON attendu)") from exc
-    rows = data.get("results") if isinstance(data, dict) else None
+    """Les derniers mois publiés, une observation par mois (le jeu a souvent plusieurs mois de retard : c'est la
+    comparaison des dates qui décide ; plusieurs mois disent depuis quand un taux est en vigueur). Livret A et LDDS
+    partagent leur taux."""
+    data = _json(body, "Caisse des Dépôts")
+    rows = data.get("results")
     months = [r for r in rows or [] if isinstance(r, dict) and re.fullmatch(r"\d{4}-\d{2}", str(r.get("date") or ""))]
     months = [r for r in months if period_start(str(r["date"])) <= today]
     if not months:
         raise BaremeError("Caisse des Dépôts : aucun mois publié")
-    row = max(months, key=lambda r: str(r["date"]))
-    period = str(row["date"])
     out = []
-    for key, series in (("tla_tldds_percent", ("cdc.livret_a", "cdc.ldds")), ("tlep_percent", ("cdc.lep",))):
-        value = _q(decimal_of(row.get(key)))
-        if not Decimal(0) <= value <= Decimal(20):
-            raise BaremeError("Caisse des Dépôts : taux hors bornes")
-        out += [Observation(s, period, str(value), url) for s in series]
+    for row in sorted(months, key=lambda r: str(r["date"]))[-12:]:
+        period = str(row["date"])
+        for key, series in (("tla_tldds_percent", ("cdc.livret_a", "cdc.ldds")), ("tlep_percent", ("cdc.lep",))):
+            value = _q(decimal_of(row.get(key)))
+            if not Decimal(0) <= value <= Decimal(20):
+                raise BaremeError("Caisse des Dépôts : taux hors bornes")
+            out += [Observation(s, period, str(value), url) for s in series]
     return out
 
 
@@ -269,7 +289,7 @@ def _reference(meta: Mapping[str, Any], key: str) -> str | None:
 def _json(body: bytes, who: str) -> dict[str, Any]:
     try:
         data = json.loads(body)
-    except ValueError as exc:
+    except (ValueError, RecursionError) as exc:  # RecursionError : JSON imbriqué à l'excès
         raise BaremeError(f"{who} : réponse illisible (JSON attendu)") from exc
     if not isinstance(data, dict):
         raise BaremeError(f"{who} : réponse inattendue")
@@ -282,7 +302,7 @@ def parse_openfisca_values(body: bytes, url: str, today: date, series: str) -> l
     values = data.get("values")
     if not isinstance(values, dict):
         raise BaremeError("OpenFisca : paramètre sans valeurs")
-    keys = sorted(k for k in values if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(k)) and date.fromisoformat(k) <= today)
+    keys = sorted(k for k in values if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(k)) and period_start(k) <= today)
     out = [
         Observation(series, k, str(decimal_of(values[k])), url, _reference(data.get("metadata") or {}, k))
         for k in keys[-4:]
@@ -300,7 +320,7 @@ def parse_openfisca_scale(body: bytes, url: str, today: date) -> list[Observatio
     brackets = data.get("brackets")
     if not isinstance(brackets, dict):
         raise BaremeError("OpenFisca : barème sans tranches")
-    keys = sorted(k for k in brackets if re.fullmatch(r"\d{4}-01-01", str(k)) and date.fromisoformat(k) <= today)
+    keys = sorted(k for k in brackets if re.fullmatch(r"\d{4}-01-01", str(k)) and period_start(k) <= today)
     if not keys:
         raise BaremeError("OpenFisca : aucun barème en vigueur")
     key = keys[-1]
@@ -316,11 +336,20 @@ def parse_openfisca_scale(body: bytes, url: str, today: date) -> list[Observatio
 
 # ------------------------------------------------------------------ différence avec ce qui est en vigueur
 def latest(observations: Iterable[Observation]) -> dict[str, Observation]:
-    """La dernière observation de chaque série."""
-    out: dict[str, Observation] = {}
+    """La dernière observation de chaque série, avec `since` : la plus ancienne période de la suite d'observations
+    consécutives à la même valeur (« 1,50 % depuis 02/2026 » quand février et mars donnent 1,50 %)."""
+    by: dict[str, list[Observation]] = {}
     for o in observations:
-        if o.series not in out or period_start(o.period) > period_start(out[o.series].period):
-            out[o.series] = o
+        by.setdefault(o.series, []).append(o)
+    out: dict[str, Observation] = {}
+    for series, items in by.items():
+        items.sort(key=lambda o: period_start(o.period), reverse=True)
+        since = items[0].period
+        for o in items[1:]:
+            if o.value != items[0].value:
+                break
+            since = o.period
+        out[series] = replace(items[0], since=since)
     return out
 
 
@@ -345,13 +374,23 @@ def _meta(
     return out
 
 
+def _cre_source(period: str, fetched_on: date) -> str:
+    return (
+        f"CRE, tarifs réglementés de vente de l'électricité (données ouvertes), grille TTC en vigueur depuis le "
+        f"{fr_date(period)}, relue le {fetched_on:%d/%m/%Y}"
+    )
+
+
 def electricity(rates: Mapping[str, Any], obs: Mapping[str, Observation], fetched_on: date) -> Proposal:
     """Les options Base et Heures creuses de rates.json face à la grille de la CRE : abonnement annuel TTC et prix du
-    kWh TTC (moyenne à 65 % d'heures pleines pour l'option Heures creuses, comme dans le libellé)."""
+    kWh TTC (moyenne à 65 % d'heures pleines pour l'option Heures creuses, comme dans le libellé). Base et Heures
+    creuses viennent de deux fichiers : chacune est datée par sa propre grille, et une grille en retard n'écarte
+    qu'elle."""
     prop = Proposal()
     trv = rates.get("electricity_trv") or {}
     as_of = str(trv.get("as_of") or "")
-    period: str | None = None
+    periods: list[str] = []
+    behind: dict[str, list[str]] = {}
     values: list[Change] = []
     for opt in trv.get("options") or []:
         m = re.fullmatch(r"(base|hphc)_(\d+)", str(opt.get("id") or ""))
@@ -365,19 +404,18 @@ def electricity(rates: Mapping[str, Any], obs: Mapping[str, Observation], fetche
         else:
             hp, hc = obs.get(f"cre.hphc.{kva}.hp_ttc"), obs.get(f"cre.hphc.{kva}.hc_ttc")
             price = HP_SHARE * Decimal(hp.value) + (1 - HP_SHARE) * Decimal(hc.value) if hp and hc else None
+        label = str(opt.get("label") or opt["id"])
         if fixe is None or price is None:
-            prop.notes.append(f"{opt.get('label')} : absent de la grille de la CRE, valeur en vigueur gardée.")
+            prop.notes.append(f"{label} : absent de la grille de la CRE, valeur en vigueur gardée.")
             continue
         period = fixe.period
         if period < as_of:
+            behind.setdefault(period, []).append(label)
             continue
-        label = str(opt.get("label") or opt["id"])
+        periods.append(period)
         new_sub = cents(Decimal(fixe.value))
         new_kwh = int((price * 10_000).quantize(Decimal(1), rounding=ROUND_HALF_EVEN))
-        source = (
-            f"CRE, tarifs réglementés de vente de l'électricité (données ouvertes), grille TTC en vigueur depuis le "
-            f"{fr_date(period)}, relue le {fetched_on:%d/%m/%Y}"
-        )
+        source = _cre_source(period, fetched_on)
         old_sub, old_kwh = int(opt["yearly_subscription_cents"]), int(opt["cents_per_100kwh"])
         base = f"electricity_trv/options:{opt['id']}"
         if new_sub != old_sub:
@@ -410,24 +448,23 @@ def electricity(rates: Mapping[str, Any], obs: Mapping[str, Observation], fetche
                     "electricity",
                 )
             )
-    if period is None:
-        return prop
-    if period < as_of:
+    for period, labels in sorted(behind.items()):
         prop.notes.append(
-            f"CRE : la grille lue date du {fr_date(period)}, plus ancienne que celle en vigueur dans Bank "
-            f"({fr_date(as_of)}) : rien de changé."
+            f"CRE : la grille lue pour {', '.join(labels)} date du {fr_date(period)}, plus ancienne que celle en "
+            f"vigueur dans Bank ({fr_date(as_of)}) : rien de changé pour ces options."
         )
+    if not periods:
         return prop
-    if values or period > as_of:
-        source = values[0].source if values else f"CRE, grille TTC en vigueur depuis le {fr_date(period)}"
+    newest = max(periods)  # la section est datée par la grille la plus récente réellement appliquée
+    if values or newest > as_of:
         prop.changes += values + _meta(
             "electricity",
             "electricity_trv/as_of",
             "electricity_trv/source",
             as_of,
-            period,
+            newest,
             str(trv.get("source") or ""),
-            source,
+            _cre_source(newest, fetched_on),
             cre_url("base"),
         )
     return prop
@@ -437,48 +474,66 @@ SAVINGS = {"livret_a": "cdc.livret_a", "ldds": "cdc.ldds", "lep": "cdc.lep"}
 
 
 def savings(rates: Mapping[str, Any], obs: Mapping[str, Observation], fetched_on: date) -> Proposal:
-    """Taux du Livret A, du LDDS et du LEP face au dernier mois publié par la Caisse des Dépôts."""
+    """Taux du Livret A, du LDDS et du LEP face aux derniers mois publiés par la Caisse des Dépôts. Un taux changé
+    est daté du premier mois lu où il apparaît (pas du dernier mois publié) ; un nouveau mois au même taux ne change
+    rien, pas même la date de la section."""
     prop = Proposal()
     as_of = str(rates.get("as_of") or "")
     found = [o for o in (obs.get(s) for s in SAVINGS.values()) if o is not None]
     if not found:
         return prop
     month = max(found, key=lambda o: o.period).period
-    start = period_start(month).isoformat()
-    if start < as_of:
+    if period_start(month).isoformat() < as_of:
         prop.notes.append(
             f"Caisse des Dépôts : dernier mois publié {period_start(month):%m/%Y}, plus ancien que les taux en vigueur "
             f"dans Bank (depuis le {fr_date(as_of)}) : rien de changé."
         )
         return prop
-    source = (
-        f"Caisse des Dépôts, flux et taux du Livret A, du LDDS et du LEP (données ouvertes), mois de "
-        f"{period_start(month):%m/%Y}, relu le {fetched_on:%d/%m/%Y}"
-    )
     values = []
     for product in rates.get("products") or []:
         o = obs.get(SAVINGS.get(str(product.get("kind")), ""))
         if o is None:
             continue
         old, new = Decimal(str(product["rate_percent"])), Decimal(o.value)
-        if old != new:
-            values.append(
-                Change(
-                    f"products:{product['kind']}/rate_percent",
-                    f"Taux du {product['name']}",
-                    str(product["rate_percent"]),
-                    str(_q(new)),
-                    percent(old),
-                    percent(new),
-                    start,
-                    source,
-                    CDC_URL,
-                    "livrets",
-                )
+        if old == new:
+            continue
+        since = period_start(o.since or o.period)
+        start = since.isoformat()
+        if start < as_of:
+            prop.notes.append(
+                f"Caisse des Dépôts : {percent(new)} pour le {product['name']} depuis {since:%m/%Y}, avant la date des "
+                f"taux en vigueur dans Bank ({fr_date(as_of)}) : rien de changé."
             )
-    if values or start > as_of:
+            continue
+        source = (
+            f"Caisse des Dépôts, flux et taux du Livret A, du LDDS et du LEP (données ouvertes), taux lu depuis le "
+            f"mois de {since:%m/%Y}, relu le {fetched_on:%d/%m/%Y}"
+        )
+        values.append(
+            Change(
+                f"products:{product['kind']}/rate_percent",
+                f"Taux du {product['name']}",
+                str(product["rate_percent"]),
+                str(_q(new)),
+                percent(old),
+                percent(new),
+                start,
+                source,
+                CDC_URL,
+                "livrets",
+            )
+        )
+    if values:
+        newest = max(values, key=lambda c: c.effective_from)
         prop.changes += values + _meta(
-            "livrets", "as_of", "source", as_of, start, str(rates.get("source") or ""), source, CDC_URL
+            "livrets",
+            "as_of",
+            "source",
+            as_of,
+            newest.effective_from,
+            str(rates.get("source") or ""),
+            newest.source,
+            CDC_URL,
         )
     return prop
 
@@ -552,11 +607,23 @@ def income_tax(rates: Mapping[str, Any], obs: Mapping[str, Observation], fetched
             )
         )
     if year > current:
-        for path, old_v, new_v in (
-            ("income_tax/incomes_year", current, year),
-            ("income_tax/year", int(tax.get("year") or current + 1), year + 1),
-        ):
-            prop.changes.append(Change(path, None, old_v, new_v, "", "", start, source, url, section))
+        # L'année du barème est un chiffre montré : elle a son entrée (ancienne → nouvelle), même à tranches égales.
+        prop.changes.append(
+            Change(
+                "income_tax/incomes_year",
+                "Année des revenus du barème de l'impôt",
+                current,
+                year,
+                f"revenus {current}",
+                f"revenus {year}",
+                start,
+                source,
+                url,
+                section,
+            )
+        )
+        old_year = int(tax.get("year") or current + 1)
+        prop.changes.append(Change("income_tax/year", None, old_year, year + 1, "", "", start, source, url, section))
     if source != str(tax.get("source") or ""):
         prop.changes.append(
             Change("income_tax/source", None, tax.get("source"), source, "", "", start, source, url, section)

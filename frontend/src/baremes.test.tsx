@@ -52,7 +52,7 @@ const AFTER: BaremesView = {
     { key: "insee.irl", label: "Indice de référence des loyers (IRL)", value: "148,06", period: "2026-Q3", period_label: "3e trimestre 2026", note: null,
       source_url: "https://api.insee.fr/series/BDM/data/SERIES_BDM/001515333?lastNObservations=6", fetched_at: "2026-10-24T09:00:00+00:00" },
   ],
-  irl: { checked: 3, gaps: [], missing: [] },
+  irl: { checked: 3, gaps: [], missing: [], applied: true },
   notes: [{ at: "2026-10-24T09:00:00+00:00", text: "Caisse des Dépôts : dernier mois publié 03/2026, plus ancien que les taux en vigueur dans Bank (depuis le 01/08/2026) : rien de changé." }],
 };
 

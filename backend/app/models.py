@@ -1354,7 +1354,7 @@ class DocumentTask(Base):
     subject: Mapped[str | None] = mapped_column(EncryptedText("doctask.subject"))
     received_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     due: Mapped[date] = mapped_column(Date)
-    status: Mapped[str] = mapped_column(String(10), default="open", index=True)  # open | done | dismissed
+    status: Mapped[str] = mapped_column(String(10), default="open", index=True)  # open | done | dismissed | expired
     document_id: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     closed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())

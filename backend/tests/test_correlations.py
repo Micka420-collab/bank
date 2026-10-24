@@ -132,6 +132,9 @@ def test_a_revision_is_checked_against_the_published_irl_without_guessing() -> N
         assert dom.rent_findings([revised], [vague], today)[0].kind != "rent_irl_misapplied"
         other = rent(66_000, history=[64_000, 64_000, 64_000, 66_000, 66_000, 66_000])
         assert dom.rent_findings([other], [doc], today)[0].kind != "rent_irl_misapplied"
+        # Une hausse loin de l'anniversaire du bail (régularisation des charges…) n'est pas lue comme la révision.
+        off = lease(loyer=65_000, date_debut="2025-05-01", revision="IRL 2e trimestre 2025")
+        assert dom.rent_findings([revised], [off], today)[0].kind != "rent_irl_misapplied"
     finally:
         contracts.install_irl({}, None)
     assert contracts.irl_source((2026, 2)) == contracts.IRL_SOURCE, "sans relève, la table livrée et sa date"
