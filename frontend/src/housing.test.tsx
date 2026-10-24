@@ -37,7 +37,7 @@ const RULE = {
 };
 const MARKET_EMPTY: HousingView["market"] = {
   missing: null, file_label: "appartement (toutes tailles)", row: null, reliable: null,
-  rule: "Fiable seulement avec un R² ajusté d'au moins 0,5 et au moins 30 annonces dans la commune (ANIL).", year: null,
+  rule: "L'ANIL invite à la prudence quand le R² est inférieur à 0,5 ou que la commune compte moins de 30 annonces (carte des loyers, data.gouv.fr) : Bank ne compare pas ton loyer dans ce cas.", year: null,
   published: null, page: null, credit: "Estimations ANIL, à partir des données du Groupe SeLoger et de leboncoin", source: null,
 };
 const LIST = {

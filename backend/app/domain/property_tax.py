@@ -139,15 +139,18 @@ class Known:
 
 def from_payments(payments: Sequence[tuple[date, int]], today: date) -> Known | None:
     """Le dernier exercice complet vu dans tes prélèvements « taxe foncière » (une année civile entière, close).
-    Une année en cours n'est comptée que si son paiement unique est passé (pas de mensualisation en cours)."""
+    Une année en cours n'est comptée que si son paiement unique est passé : deux prélèvements ou plus, ou une année
+    d'avant mensualisée, c'est une mensualisation en cours dont le total n'est pas encore connu."""
     by_year: dict[int, list[tuple[date, int]]] = {}
     for d, cents in payments:
         by_year.setdefault(d.year, []).append((d, cents))
     for year in sorted(by_year, reverse=True):
         rows = sorted(by_year[year])
         monthly = len(rows) >= MONTHLY_MIN
-        if year >= today.year and monthly:
-            continue  # mensualisée, année pas finie : le total n'est pas connu
+        if year >= today.year:
+            before = by_year.get(year - 1, [])
+            if len(rows) > 1 or len(before) >= MONTHLY_MIN:
+                continue  # mensualisée, année pas finie : le total n'est pas connu
         return Known(year, sum(c for _, c in rows), "prelevements", None, rows[-1][0], monthly, "txns", len(rows))
     return None
 
@@ -185,7 +188,13 @@ class Forecast:
 
 
 def target_year(base: Known, today: date) -> int:
-    return base.year + 1 if base.year >= today.year else today.year
+    """L'exercice qui vient : jamais un exercice dont l'échéance est déjà passée (un paiement non vu, réglé depuis
+    un autre compte ou sous un autre libellé, ne fait pas d'une échéance passée celle qui vient)."""
+    target = base.year + 1 if base.year >= today.year else today.year
+    if base.due is not None:
+        while add_months(base.due, 12 * (target - base.year)) < today:
+            target += 1
+    return target
 
 
 def forecast(base: Known, rates: Mapping[int, Rates], today: date) -> Forecast:

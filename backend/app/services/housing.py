@@ -12,6 +12,7 @@ et le dit. Tout passe par netfetch."""
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -30,6 +31,8 @@ from app.models import HousingSource, Transaction, VaultDocument, VaultField
 from app.security import audit, netfetch
 from app.services import consents, home_value, territory
 
+log = logging.getLogger(__name__)
+
 CONSENT = "housing"
 DPE_EVERY = timedelta(days=90)  # un nouveau DPE dans l'immeuble est rare : relu chaque trimestre
 MARKET_EVERY = timedelta(days=30)  # la fiche du jeu est relue chaque mois ; le CSV seulement s'il a changé
@@ -47,6 +50,13 @@ class HousingError(ValueError):
     def __init__(self, message: str, status: int = 409) -> None:
         super().__init__(message)
         self.status = status
+
+
+def _unexpected(who: str) -> Exception:
+    """Une réponse qu'aucun contrôle n'a prévue : la relève échoue avec un message lisible (et l'erreur est notée,
+    donc la source se repose), jamais une erreur 500 ni un entretien interrompu. Le détail reste dans le journal."""
+    log.exception("logement : réponse inattendue de %s", who)
+    return dom.HousingError(f"{who} : réponse inattendue")
 
 
 def default_fetch(http: Any = None, resolver: netfetch.Resolver | None = None) -> Fetch:
@@ -145,6 +155,8 @@ def refresh_dpe(db: Session, *, fetch: Fetch, now: datetime, actor: str) -> dict
         found, total = dom.parse_dpe(fetch(url, MAX_JSON), ban)
     except (netfetch.FetchError, dom.HousingError) as exc:
         error = exc
+    except Exception:
+        error = _unexpected("ADEME")
     write_lock(db)
     db.expire_all()
     row = _row(db, "dpe") or HousingSource(key="dpe")
@@ -298,6 +310,8 @@ def refresh_market(db: Session, *, fetch: Fetch, now: datetime, today: date, act
             found = dom.parse_market(fetch(url, MAX_CSV), code, file_key, year)
     except (netfetch.FetchError, dom.HousingError) as exc:
         error = exc
+    except Exception:
+        error = _unexpected("Carte des loyers")
     write_lock(db)
     db.expire_all()
     row = _row(db, "market") or HousingSource(key="market")
@@ -451,6 +465,8 @@ def refresh_control(db: Session, *, fetch: Fetch, now: datetime, actor: str) -> 
                 }
     except (netfetch.FetchError, rc.RentControlError) as exc:
         error = exc
+    except Exception:
+        error = _unexpected("Service-Public ou opendata.paris.fr")
     row = _reopen(db, "rentctl")
     if _control(db) != found or (at is not None and _lonlat(db) != at):
         return CHANGED
@@ -562,6 +578,8 @@ def refresh_taxes(db: Session, *, fetch: Fetch, now: datetime, actor: str) -> di
         found = pt.parse_rates(fetch(url, pt.MAX_RATES), code)
     except (netfetch.FetchError, pt.PropertyTaxError) as exc:
         error = exc
+    except Exception:
+        error = _unexpected("data.economie.gouv.fr")
     row = _reopen(db, "taxes")
     try:
         if _tax_code(db) != code:
@@ -691,6 +709,8 @@ def refresh_risks(db: Session, *, fetch: Fetch, now: datetime, actor: str) -> di
         fetch(rc.GEORISQUES_PROBE, MAX_JSON)
     except netfetch.FetchError as exc:
         error = exc
+    except Exception:
+        error = _unexpected("Géorisques")
     row = _reopen(db, "risks")
     row.data = json.dumps({"reachable": error is None})
     row.source_url = rc.GEORISQUES_PROBE
@@ -733,21 +753,18 @@ def _due(row: HousingSource | None, now: datetime, every: timedelta, rest: timed
     return row is None or row.fetched_at is None or now - row.fetched_at >= every
 
 
-def tick(db: Session, *, now: datetime, today: date, fetch: Fetch) -> dict[str, int]:
-    """Tâche de fond : rien sans ton accord ; le DPE relu chaque trimestre (ou à un changement d'adresse), la fiche
-    de la carte des loyers chaque mois, la fiche F1314 (et le jeu parisien) chaque mois si ta commune est encadrée,
-    les taux locaux chaque mois si une taxe foncière est connue, Géorisques sondé chaque mois (chaque semaine s'il
-    est injoignable). Une donnée manquante n'est pas une erreur : le panneau la dit."""
-    if not consents.granted(db, CONSENT):
-        return {}
-    report: dict[str, int] = {}
+def _tick_dpe(db: Session, now: datetime, today: date, fetch: Fetch) -> str | None:
     row = _row(db, "dpe")
     ban = _ban_id(db)
-    if ban and not _resting(row, now):
-        data = _data(row)
-        if data.get("ban_id") != ban or row is None or row.fetched_at is None or now - row.fetched_at >= DPE_EVERY:
-            result = refresh_dpe(db, fetch=fetch, now=now, actor="system")
-            report[f"housing_dpe_{result['status']}"] = 1
+    if not ban or _resting(row, now):
+        return None
+    data = _data(row)
+    if data.get("ban_id") != ban or row is None or row.fetched_at is None or now - row.fetched_at >= DPE_EVERY:
+        return str(refresh_dpe(db, fetch=fetch, now=now, actor="system")["status"])
+    return None
+
+
+def _tick_market(db: Session, now: datetime, today: date, fetch: Fetch) -> str | None:
     row = _row(db, "market")
     try:
         code, file_key = _market_target(db)
@@ -759,28 +776,66 @@ def tick(db: Session, *, now: datetime, today: date, fetch: Fetch) -> dict[str, 
             or now - row.fetched_at >= MARKET_EVERY
         )
         if stale and not _resting(row, now):
-            result = refresh_market(db, fetch=fetch, now=now, today=today, actor="system")
-            report[f"housing_market_{result['status']}"] = 1
+            return str(refresh_market(db, fetch=fetch, now=now, today=today, actor="system")["status"])
     except HousingError:
         pass
+    return None
+
+
+def _tick_control(db: Session, now: datetime, today: date, fetch: Fetch) -> str | None:
     found = _control(db)
-    if found is not None:
-        moved = found[0].key == "paris" and _lonlat(db) is not None and paris(db) is None
-        if (moved and not _resting(_row(db, "rentctl"), now)) or _due(_row(db, "rentctl"), now, PUBLIC_EVERY):
-            result = refresh_control(db, fetch=fetch, now=now, actor="system")
-            report[f"housing_control_{result['status']}"] = 1
+    if found is None:
+        return None
+    moved = found[0].key == "paris" and _lonlat(db) is not None and paris(db) is None
+    if (moved and not _resting(_row(db, "rentctl"), now)) or _due(_row(db, "rentctl"), now, PUBLIC_EVERY):
+        return str(refresh_control(db, fetch=fetch, now=now, actor="system")["status"])
+    return None
+
+
+def _tick_taxes(db: Session, now: datetime, today: date, fetch: Fetch) -> str | None:
     f, _notes, _m = tax_forecast(db, today)
-    if f is not None:
-        try:
-            stale_code = _data(_row(db, "taxes")).get("code") != _tax_code(db)
-            if (stale_code and not _resting(_row(db, "taxes"), now)) or _due(_row(db, "taxes"), now, PUBLIC_EVERY):
-                result = refresh_taxes(db, fetch=fetch, now=now, actor="system")
-                report[f"housing_taxes_{result['status']}"] = 1
-        except HousingError:
-            pass
+    if f is None:
+        return None
+    try:
+        stale_code = _data(_row(db, "taxes")).get("code") != _tax_code(db)
+        if (stale_code and not _resting(_row(db, "taxes"), now)) or _due(_row(db, "taxes"), now, PUBLIC_EVERY):
+            return str(refresh_taxes(db, fetch=fetch, now=now, actor="system")["status"])
+    except HousingError:
+        pass
+    return None
+
+
+def _tick_risks(db: Session, now: datetime, today: date, fetch: Fetch) -> str | None:
     if _due(_row(db, "risks"), now, PUBLIC_EVERY, RISKS_RETRY):
-        result = refresh_risks(db, fetch=fetch, now=now, actor="system")
-        report[f"housing_risks_{result['status']}"] = 1
+        return str(refresh_risks(db, fetch=fetch, now=now, actor="system")["status"])
+    return None
+
+
+def tick(db: Session, *, now: datetime, today: date, fetch: Fetch) -> dict[str, int]:
+    """Tâche de fond : rien sans ton accord ; le DPE relu chaque trimestre (ou à un changement d'adresse), la fiche
+    de la carte des loyers chaque mois, la fiche F1314 (et le jeu parisien) chaque mois si ta commune est encadrée,
+    les taux locaux chaque mois si une taxe foncière est connue, Géorisques sondé chaque mois (chaque semaine s'il
+    est injoignable). Une donnée manquante n'est pas une erreur : le panneau la dit."""
+    if not consents.granted(db, CONSENT):
+        return {}
+    report: dict[str, int] = {}
+    for key, step in (
+        ("dpe", _tick_dpe),
+        ("market", _tick_market),
+        ("control", _tick_control),
+        ("taxes", _tick_taxes),
+        ("risks", _tick_risks),
+    ):
+        try:
+            status = step(db, now, today, fetch)
+        except Exception:  # une source en panne ne bloque ni les autres, ni la suite de l'entretien
+            log.exception("logement : relève %s en échec", key)
+            db.rollback()
+            report[f"housing_{key}_error"] = 1
+            continue
+        db.commit()  # chaque source gardée à part : l'échec d'une suivante ne la défait pas
+        if status:
+            report[f"housing_{key}_{status}"] = 1
     return report
 
 
@@ -854,8 +909,8 @@ def view(db: Session, today: date) -> dict[str, Any]:
             "row": m.to_dict() if m else None,
             "reliable": m.reliable if m else None,
             "rule": (
-                f"Fiable seulement avec un R² ajusté d'au moins 0,5 et au moins {dom.MIN_OBS} annonces dans la commune "
-                "(ANIL)."
+                f"L'ANIL invite à la prudence quand le R² est inférieur à 0,5 ou que la commune compte moins de "
+                f"{dom.MIN_OBS} annonces (carte des loyers, data.gouv.fr) : Bank ne compare pas ton loyer dans ce cas."
             ),
             "year": mdata.get("year") if m else None,
             "published": mdata.get("published") if m else None,

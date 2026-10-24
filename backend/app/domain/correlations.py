@@ -1127,17 +1127,17 @@ def _dpe_frozen(
 
 
 def _rent_market(link: HousingLink, lease: Doc | None, rent: Series | None, notes: list[str]) -> list[Finding]:
-    """Ton loyer au m² face à l'intervalle des annonces de ta commune : seulement si l'indicateur est fiable selon
-    la règle de l'ANIL (R² ajusté ≥ 0,5 et au moins 30 annonces dans la commune). Une position, jamais un jugement."""
+    """Ton loyer au m² face à l'intervalle des annonces de ta commune : pas quand l'ANIL invite à la prudence (R²
+    inférieur à 0,5 ou moins de 30 annonces dans la commune). Une position, jamais un jugement."""
     m = link.market
     if m is None:
         notes.append("Carte des loyers : ta commune n'est pas encore lue.")
         return []
     if not m.reliable:
         notes.append(
-            f"Carte des loyers : indicateur trop fragile pour {m.commune} (R² {hz.fr2(m.r2)}, {m.obs} annonces dans "
-            f"la commune ; l'ANIL demande un R² d'au moins 0,5 et au moins {hz.MIN_OBS} annonces) : pas de "
-            "comparaison."
+            f"Carte des loyers : indicateur à lire avec prudence pour {m.commune} (R² {hz.fr2(m.r2)}, {m.obs} "
+            f"annonces dans la commune ; l'ANIL invite à la prudence quand le R² est inférieur à 0,5 ou que la "
+            f"commune compte moins de {hz.MIN_OBS} annonces) : pas de comparaison."
         )
         return []
     if lease is not None and str(lease.fields.get("meuble") or "") == "oui":

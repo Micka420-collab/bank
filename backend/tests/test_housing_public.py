@@ -59,6 +59,20 @@ def test_the_f1314_list_is_dated_and_says_when_it_is_outdated() -> None:
     assert rc.territory_of("31555") is None
 
 
+def test_malformed_public_files_fail_closed_with_a_readable_error() -> None:
+    impossible = read("f1314_extrait.html").replace(
+        "Vérifié le 01 août 2026".encode(), "Vérifié le 31 février 2026".encode()
+    )
+    with pytest.raises(rc.RentControlError, match="impossible"):
+        rc.parse_page(impossible)
+    empty = {"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id_quartier": 1,
+             "nom_quartier": "X"}, "geometry": {"type": "Polygon", "coordinates": []}}]}  # fmt: skip
+    with pytest.raises(rc.RentControlError, match="contour illisible"):
+        rc.parse_quartiers(json.dumps(empty).encode())
+    with pytest.raises(rc.RentControlError, match="aucune année"):
+        rc.dataset_years([{"annee": "1999"}])
+
+
 # ------------------------------------------------------------------ Paris : quartiers et loyers de référence
 def test_paris_quartier_is_found_here_and_references_are_read_without_guessing() -> None:
     quartiers = rc.parse_quartiers(read("paris_quartiers_extrait.geojson"))
@@ -225,6 +239,23 @@ def test_payments_tell_the_last_complete_year_and_monthly_plans() -> None:
     monthly = [(date(2026, m, 15), 10_000) for m in range(1, 11)] + [(date(2025, m, 15), 9_800) for m in range(1, 11)]
     k = pt.from_payments(monthly, TODAY)
     assert k is not None and (k.year, k.amount_cents, k.monthly) == (2025, 98_000, True), "2026 pas fini"
+    # Mensualisée depuis janvier, 4 prélèvements au 10/04 : l'année n'est pas un paiement unique.
+    started = [(date(2025, 10, 15), 120_000)] + [(date(2026, m, 15), 12_000) for m in range(1, 5)]
+    k = pt.from_payments(started, date(2026, 4, 10))
+    assert k is not None and (k.year, k.amount_cents) == (2025, 120_000)
+    # Premier prélèvement de l'année quand l'an passé était mensualisé : pas un paiement unique non plus.
+    first = [(date(2025, m, 15), 10_000) for m in range(1, 11)] + [(date(2026, 1, 15), 10_500)]
+    k = pt.from_payments(first, date(2026, 2, 1))
+    assert k is not None and k.year == 2025
+
+
+def test_a_past_due_date_is_never_announced_as_the_coming_one() -> None:
+    """Le 24/10/2026, seul l'avis 2025 (échéance 15/10/2025) est connu et le paiement 2026 n'a pas été vu : la
+    prévision porte sur 2027, jamais sur une échéance 2026 déjà passée."""
+    base = pt.Known(2025, 120_000, "avis", None, date(2025, 10, 15))
+    f = pt.forecast(base, {}, TODAY)
+    assert (f.target, f.due, f.unknown_rates) == (2027, date(2027, 10, 15), (2026, 2027))
+    assert pt.forecast(base, {}, date(2026, 10, 1)).due == date(2026, 10, 15), "échéance encore à venir"
 
 
 def test_the_property_tax_notice_is_read_in_papers() -> None:

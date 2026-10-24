@@ -9,8 +9,9 @@ inattendue lève une erreur lisible, jamais une valeur devinée. Adresses et rè
 * Service-Public, fiche F1311 (« Vérifié le 08 août 2025 ») : pas de révision ni de majoration du loyer d'un logement
   classé F ou G quand le bail est signé, renouvelé ou tacitement reconduit depuis le 24 août 2022 en métropole,
   depuis le 1er juillet 2024 en Guadeloupe, Guyane, Martinique, à La Réunion et à Mayotte ;
-* ANIL, « carte des loyers » 2025 (data.gouv.fr) : loyer d'annonce charges comprises au m², logements vides ; à lire
-  avec prudence quand le R² ajusté est sous 0,5 ou quand la commune compte moins de 30 annonces.
+* ANIL, « carte des loyers » 2025 (data.gouv.fr) : loyer d'annonce charges comprises au m², logements vides ; l'ANIL
+  invite à la prudence quand le R² est inférieur à 0,5 ou que la commune compte moins de 30 annonces (Bank ne
+  compare pas dans ce cas).
 """
 
 from __future__ import annotations
@@ -266,17 +267,23 @@ def overpaid(
 ) -> Overpaid | None:
     """Ce qui a été payé au-dessus du loyer d'avant la première révision gelée encore contestable, mois par mois.
     Service-Public (F1311) : le juge se saisit dans les 3 ans qui suivent la révision ; une révision plus ancienne
-    n'est pas comptée, ni ce qu'elle a ajouté."""
+    n'est pas comptée, ni ce qu'elle a ajouté. Chaque mois, l'écart est borné par les révisions gelées déjà
+    appliquées : une hausse hors anniversaire (provision de charges, régularisation) n'est pas comptée."""
     recent = [s for s in frozen_steps(steps, frozen_from) if s.day >= add_months(today, -PRESCRIPTION_MONTHS)]
     if not recent:
         return None
     first = recent[0]
-    extra = [(d, a - first.before) for d, a in history if d >= first.day and a - first.before > CENTS_TOLERANCE]
+
+    def excess(d: date, a: int) -> int:
+        revised = sum(s.after - s.before for s in recent if s.day <= d)
+        return max(0, min(a - first.before, revised))
+
+    extra = [(d, x) for d, a in history if d >= first.day and (x := excess(d, a)) > CENTS_TOLERANCE]
     if not extra:
         return None
     return Overpaid(
         first=first,
-        monthly_cents=max(0, history[-1][1] - first.before),
+        monthly_cents=excess(*history[-1]),
         total_cents=sum(x for _, x in extra),
         months=len(extra),
         since=extra[0][0],
@@ -353,16 +360,24 @@ def parse_market(body: bytes, code: str, file_key: str, year: int) -> Market | N
         text = body.decode("utf-8")
     except UnicodeDecodeError:
         text = body.decode("cp1252", errors="replace")
-    reader = csv.DictReader(io.StringIO(text), delimiter=";")
+    try:
+        return _market_row(csv.DictReader(io.StringIO(text), delimiter=";"), code, file_key, year)
+    except csv.Error as exc:  # champ démesuré, guillemet non fermé…
+        raise HousingError("Carte des loyers : fichier illisible") from exc
+
+
+def _market_row(reader: csv.DictReader[str], code: str, file_key: str, year: int) -> Market | None:
     if not reader.fieldnames or any(c not in reader.fieldnames for c in MARKET_COLUMNS):
         raise HousingError("Carte des loyers : colonnes inattendues")
     for row in reader:
         if (row.get("INSEE_C") or "").strip() != code:
             continue
+        if any(row.get(c) is None for c in MARKET_COLUMNS):  # ligne courte : colonnes manquantes
+            raise HousingError("Carte des loyers : ligne incomplète")
         try:
             m2, low, high = _decimal(row["loypredm2"]), _decimal(row["lwr.IPm2"]), _decimal(row["upr.IPm2"])
             obs, r2 = int(row["nbobs_com"]), _decimal(row["R2_adj"])
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, AttributeError) as exc:
             raise HousingError("Carte des loyers : valeur illisible") from exc
         level = _text(row.get("TYPPRED"), 10)
         if not (1 <= low <= m2 <= high <= 150) or not 0 <= r2 <= 1 or obs < 0 or level not in ("commune", "maille"):

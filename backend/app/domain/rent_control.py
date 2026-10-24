@@ -139,7 +139,10 @@ def parse_page(body: bytes) -> PageCheck:
     m = _VERIFIED.search(text)
     if not m:
         raise RentControlError("Service-Public : date de vérification introuvable")
-    verified = date(int(m.group(3)), _MONTHS.index(m.group(2)) + 1, int(m.group(1)))
+    try:
+        verified = date(int(m.group(3)), _MONTHS.index(m.group(2)) + 1, int(m.group(1)))
+    except ValueError as exc:  # « 31 février »
+        raise RentControlError("Service-Public : date de vérification impossible") from exc
     missing = tuple(t.name for t in TERRITORIES if t.marker not in text)
     return PageCheck(verified, missing)
 
@@ -222,7 +225,7 @@ def parse_quartiers(body: bytes) -> list[Quartier]:
             qid, name = int(props["id_quartier"]), " ".join(str(props["nom_quartier"]).split())[:80]
             polys = geom["coordinates"] if geom["type"] == "MultiPolygon" else [geom["coordinates"]]
             rings = tuple(tuple((float(x), float(y)) for x, y in poly[0]) for poly in polys)
-        except (KeyError, TypeError, ValueError) as exc:
+        except (KeyError, TypeError, ValueError, IndexError) as exc:
             raise RentControlError("opendata.paris.fr : contour illisible") from exc
         if not 1 <= qid <= 80 or any(len(r) < 4 for r in rings):
             raise RentControlError("opendata.paris.fr : contour hors bornes")
@@ -276,7 +279,10 @@ def dataset_years(rows: Sequence[dict[str, Any]]) -> list[int]:
             years.add(int(str(r["annee"])))
         except (KeyError, ValueError) as exc:
             raise RentControlError("opendata.paris.fr : année illisible") from exc
-    return sorted(y for y in years if 2019 <= y <= 2100)
+    out = sorted(y for y in years if 2019 <= y <= 2100)
+    if not out:
+        raise RentControlError("opendata.paris.fr : aucune année exploitable")
+    return out
 
 
 def parse_references(rows: Sequence[dict[str, Any]], quartier: int) -> list[Reference]:

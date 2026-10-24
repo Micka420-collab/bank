@@ -267,12 +267,14 @@ def _housekeeping_once(app: FastAPI, today: date) -> dict[str, int]:
         except Exception:
             db.rollback()
             log.exception("météo : relève en échec")
-    with (
-        app.state.sessionmaker() as db
-    ):  # DPE de ton immeuble et carte des loyers : relus quand c'est dû, avec ton accord
-        fetch_home = housing_service.default_fetch(http=app.state.housing_http, resolver=app.state.housing_resolver)
-        report.update(housing_service.tick(db, now=utcnow(), today=today, fetch=fetch_home))
-        db.commit()
+    with app.state.sessionmaker() as db:  # ton logement face aux données publiques : relu quand c'est dû
+        try:  # une source publique inattendue n'arrête pas les documents à récupérer qui suivent
+            fetch_home = housing_service.default_fetch(http=app.state.housing_http, resolver=app.state.housing_resolver)
+            report.update(housing_service.tick(db, now=utcnow(), today=today, fetch=fetch_home))
+            db.commit()
+        except Exception:
+            log.exception("logement : relève en échec")
+            db.rollback()
     with app.state.sessionmaker() as db:  # documents à récupérer : attentes de saison, tâches fermées par le PDF
         report.update(state_accounts_service.sync(db, today=today, now=utcnow()))
         db.commit()

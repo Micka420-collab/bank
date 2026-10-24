@@ -137,6 +137,14 @@ def test_market_parser_reads_the_real_files_and_the_reliability_rule() -> None:
     assert dom.market_file(None, 2) is None, "type inconnu : on ne devine pas"
 
 
+def test_a_malformed_market_file_fails_closed() -> None:
+    head = b'"INSEE_C";"LIBGEO";"loypredm2";"lwr.IPm2";"upr.IPm2";"TYPPRED";"nbobs_com";"R2_adj"\n'
+    with pytest.raises(dom.HousingError, match="incomplète"):
+        dom.parse_market(head + b'"31555";"Toulouse";13,9\n', "31555", "app", 2025)
+    with pytest.raises(dom.HousingError, match="illisible"):
+        dom.parse_market(head + b'"31555";"' + b"x" * 200_000 + b'"\n', "31555", "app", 2025)
+
+
 def test_the_csv_is_picked_from_the_dataset_page_on_static_data_gouv_only() -> None:
     page = read("carte_des_loyers_2025.json")
     for key, name in (("app", "pred-app-mef"), ("app12", "pred-app12-"), ("app3", "pred-app3-"), ("mai", "pred-mai-")):
@@ -249,6 +257,18 @@ def test_only_revisions_less_than_three_years_old_are_counted() -> None:
     )  # meublé signé avant la règle, reconduit le 01/07/2023
     found, notes = checks(corr.HousingLink(depcode="31"), old, series=series)
     assert found == [] and any("plus de trois ans" in n for n in notes)
+
+
+def test_a_charge_increase_after_the_frozen_revision_is_not_counted_as_overpaid() -> None:
+    """Révision gelée de +20 € au 05/06/2026, puis provision de charges +15 € en janvier (hors anniversaire) :
+    seuls les 20 € de la révision sont comptés, chaque mois."""
+    hist = [(add_months(date(2025, 10, 5), i), 63_000) for i in range(8)]
+    hist += [(add_months(date(2026, 6, 5), i), 65_000) for i in range(7)]
+    hist += [(add_months(date(2027, 1, 5), i), 66_500) for i in range(3)]
+    steps = dom.anniversary_steps(hist, date(2023, 6, 1))
+    assert [(s.day, s.after - s.before) for s in steps] == [(date(2026, 6, 5), 2_000)]
+    o = dom.overpaid(hist, steps, date(2023, 6, 1), date(2027, 3, 10))
+    assert o is not None and (o.monthly_cents, o.months, o.total_cents) == (2_000, 10, 20_000)
 
 
 def test_rent_is_placed_in_the_market_range_only_when_the_indicator_is_reliable() -> None:
@@ -517,3 +537,34 @@ def test_background_tick_reads_only_what_is_due(app, net: tuple[TestClient, Fake
         db.commit()
     assert later == {"housing_dpe_refreshed": 1, "housing_market_refreshed": 1, "housing_risks_failed": 1}
     assert "static.data.gouv.fr" not in fake.hosts(), "même fichier publié : pas de nouveau téléchargement"
+
+
+def test_one_failing_source_neither_blocks_the_others_nor_retries_every_hour(  # type: ignore[no-untyped-def]
+    app, net: tuple[TestClient, FakeNet], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, _fake = net
+    client.put("/api/consents/housing", json={"granted": True})
+    client.put("/api/consents/geocoding", json={"granted": True})
+    client.post("/api/territory/geocode", json={"query": "14 rue Dalmatie Toulouse"})
+    home_value_profile(app)
+    base = svc.default_fetch(http=app.state.housing_http, resolver=app.state.housing_resolver)
+
+    def fetch(url: str, max_bytes: int) -> bytes:
+        if url.startswith(dom.DPE_URL):
+            raise RuntimeError("réponse imprévue")  # rien de ce que les contrôles attendent
+        return base(url, max_bytes)
+
+    now = utcnow()
+    with app.state.sessionmaker() as db:
+        report = svc.tick(db, now=now, today=TODAY, fetch=fetch)
+        db.commit()
+    assert report["housing_dpe_failed"] == 1 and report["housing_market_refreshed"] == 1
+    with app.state.sessionmaker() as db:
+        row = db.get(HousingSource, "dpe")
+        assert row is not None and row.last_error == "ADEME : réponse inattendue"
+        assert "housing_dpe_failed" not in svc.tick(db, now=now + timedelta(hours=1), today=TODAY, fetch=fetch)
+    # Une erreur que rien n'attrape dans une source : les suivantes passent quand même.
+    monkeypatch.setattr(svc, "_tick_dpe", lambda *a: (_ for _ in ()).throw(RuntimeError("boom")))
+    with app.state.sessionmaker() as db:
+        later = svc.tick(db, now=now + timedelta(days=40), today=TODAY, fetch=base)
+    assert later["housing_dpe_error"] == 1 and later["housing_market_refreshed"] == 1
