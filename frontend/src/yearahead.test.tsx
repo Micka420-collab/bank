@@ -115,4 +115,14 @@ describe("l'année qui vient", () => {
     const posted = body(calls.find((c) => c.url === "/api/forecast/year/spikes" && c.init?.method === "POST")!);
     expect(posted).toEqual({ label: "Assurance auto", amount_cents: 60_000, next_date: "2026-12-15", every_months: 12 });
   });
+  it("montre le solde d'impôt estimé par son mois, sans jour inventé ni bouton", async () => {
+    const estimated = { key: "estimated:2027-09:Solde", label: "Solde d'impôt 2026 estimé", amount_cents: 24_000, day: "2027-09-25", cadence: "planned" as const, source: "estimated" as const, category: null, occurrences: 0, confidence: 1 };
+    mockApi({ "/api/forecast/year": () => view({ spikes: [estimated] }) });
+    await render();
+    const row = [...host.querySelectorAll(".ya-spikes li")].find((li) => li.textContent?.includes("Solde d'impôt"));
+    expect(row?.textContent).toContain("septembre 2027");
+    expect(row?.textContent).toContain("estimation Bank");
+    expect(row?.textContent).not.toContain("25/09");
+    expect(row?.querySelector("button")).toBeNull();
+  });
 });

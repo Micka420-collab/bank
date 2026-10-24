@@ -49,7 +49,24 @@
         "up_to_cents": null,
         "rate_percent": 45
       }
-    ]
+    ],
+    "decote": {
+      "single_cents": 89700,
+      "couple_cents": 148300,
+      "rate_percent": "45.25",
+      "source": "CGI art. 197, I-4-a, LF 2026 n° 2026-103 art. 4 (revenus 2025), relu dans OpenFisca le 24/10/2026",
+      "url": "https://api.fr.openfisca.org/latest/parameter/impot_revenu.calcul_impot_revenu.plaf_qf.decote.seuil_celib"
+    },
+    "qf_cap_half_part_cents": 180700,
+    "qf_cap_source": "CGI art. 197, I-2 (cas général), LF 2026 art. 4 (revenus 2025), relu dans OpenFisca le 24/10/2026",
+    "professional_deduction": {
+      "rate_percent": 10,
+      "min_cents": 50400,
+      "max_cents": 1442600,
+      "incomes_year": 2024,
+      "source": "CGI art. 83, 3° : abattement de 10 % ; plancher et plafond des revenus 2024, les derniers relus dans OpenFisca le 24/10/2026",
+      "url": "https://api.fr.openfisca.org/latest/parameter/impot_revenu.calcul_revenus_imposables.deductions.abatpro.max"
+    }
   },
   "electricity_trv": {
     "as_of": "2026-08-01",
@@ -122,6 +139,221 @@
           "chauffage": {"abonnement_ttc": "360.79", "kwh_ttc": "0.15760", "kwh_low_ttc": "0.14798", "kwh_high_ttc": "0.17639"},
           "cuisson": {"abonnement_ttc": "152.46", "kwh_ttc": "0.19027", "kwh_low_ttc": "0.18560", "kwh_high_ttc": "0.19999"}
         }
+      }
+    ]
+  },
+  "withholding_tax": {
+    "decrease_gap_percent": 5,
+    "decrease_source": "CGI art. 204 J, III-1 ; BOFiP BOI-IR-PAS-20-30-20-10 § 80 (publié le 07/05/2025) : baisse possible si l'écart dépasse 5 %, sans seuil en euros (jusqu'au 31/12/2022 : plus de 10 % et plus de 200 €) ; relu le 24/10/2026",
+    "decrease_url": "https://bofip.impots.gouv.fr/bofip/11263-PGP.html/identifiant=BOI-IR-PAS-20-30-20-10-20250507",
+    "balance_single_max_cents": 30000,
+    "balance_source": "Service-Public F35898 (vérifié le 01/01/2026) : jusqu'à 300 € en une fois en septembre, au-delà en 4 fois de septembre à décembre",
+    "balance_url": "https://www.service-public.gouv.fr/particuliers/vosdroits/F35898",
+    "penalty_source": "CGI art. 1729 G : une modulation à la baisse qui se révèle excessive au vu des revenus réels peut être majorée ; taux et seuils non relus par Bank (Légifrance refuse les requêtes automatiques, essai du 24/10/2026), à lire avant de demander la baisse",
+    "penalty_url": "https://www.legifrance.gouv.fr/codes/texte_lc/LEGITEXT000006069577/"
+  },
+  "revaluations": {
+    "appeal_months": 2,
+    "appeal_source": "Service-Public F2500 (vérifié le 28/09/2026) : commission de recours amiable saisie dans les 2 mois qui suivent la notification",
+    "appeal_url": "https://www.service-public.gouv.fr/particuliers/vosdroits/F2500",
+    "items": [
+      {
+        "id": "prestations-2026",
+        "kind": "prestations",
+        "effective": "2026-04-01",
+        "rate_percent": "0.8",
+        "applies_to": [
+          "caf_ppa",
+          "caf_rsa",
+          "caf_af",
+          "caf_asf",
+          "caf_aah",
+          "cpam_invalidite"
+        ],
+        "source": "Instruction interministérielle DSS/2A/2026/36 du 26 mars 2026 (art. L. 161-25 du code de la sécurité sociale) ; BMAF 474,37 € puis 478,16 € (OpenFisca)",
+        "url": "https://legislation.lassuranceretraite.fr/Pdf/instruction_ministerielle_2026_36_26032026.pdf"
+      },
+      {
+        "id": "prestations-2025",
+        "kind": "prestations",
+        "effective": "2025-04-01",
+        "rate_percent": "1.7",
+        "applies_to": [
+          "caf_ppa",
+          "caf_rsa",
+          "caf_af",
+          "caf_asf",
+          "caf_aah",
+          "cpam_invalidite"
+        ],
+        "source": "BMAF 466,44 € puis 474,37 € au 1er avril 2025 (OpenFisca, instruction DSS/2A/2C/2025/32 du 7 mars 2025)",
+        "url": "https://api.fr.openfisca.org/latest/parameter/prestations_sociales.prestations_familiales.bmaf.bmaf"
+      },
+      {
+        "id": "pensions-2026",
+        "kind": "pensions",
+        "effective": "2026-01-01",
+        "rate_percent": "0.9",
+        "applies_to": [
+          "retraite_pension"
+        ],
+        "source": "Circulaire Cnav 2025-29 du 22 décembre 2025 : retraites de base revalorisées de 0,9 % (coefficient 1,009) ; pas les complémentaires",
+        "url": "https://legislation.lassuranceretraite.fr/Pdf/circulaire_cnav_2025_29_22122025.pdf"
+      }
+    ]
+  },
+  "usury": {
+    "source": "Avis trimestriels relatifs à l'usure (art. L. 314-6 du code de la consommation et L. 313-5-1 du code monétaire et financier), publiés au Journal officiel et relus dans ses archives quotidiennes (echanges.dila.gouv.fr/OPENDATA/JORF). Seuils applicables aux particuliers ; « averages » : taux effectifs moyens pratiqués au trimestre précédent.",
+    "items": [
+      {
+        "quarter": "2026-Q1",
+        "effective": "2026-01-01",
+        "thresholds": {
+          "conso_3000": "23.56",
+          "conso_6000": "15.87",
+          "conso_plus": "8.67",
+          "immo_fixe_lt10": "4.12",
+          "immo_fixe_10_20": "4.59",
+          "immo_fixe_20": "5.13",
+          "immo_variable": "4.99",
+          "immo_relais": "6.15"
+        },
+        "averages": {
+          "conso_3000": "17.67",
+          "conso_6000": "11.9",
+          "conso_plus": "6.5",
+          "immo_fixe_lt10": "3.09",
+          "immo_fixe_10_20": "3.44",
+          "immo_fixe_20": "3.85",
+          "immo_variable": "3.74",
+          "immo_relais": "4.61"
+        },
+        "source": "Avis du 22/12/2025 relatif à l'usure (art. L. 314-6 du code de la consommation), JO n° 0301 du 24/12/2025 ; relu le 24/10/2026 dans les archives du Journal officiel de la DILA",
+        "url": "https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000053160376"
+      },
+      {
+        "quarter": "2026-Q2",
+        "effective": "2026-04-01",
+        "thresholds": {
+          "conso_3000": "23.52",
+          "conso_6000": "15.73",
+          "conso_plus": "8.61",
+          "immo_fixe_lt10": "4",
+          "immo_fixe_10_20": "4.48",
+          "immo_fixe_20": "5.19",
+          "immo_variable": "5",
+          "immo_relais": "6.2"
+        },
+        "averages": {
+          "conso_3000": "17.64",
+          "conso_6000": "11.8",
+          "conso_plus": "6.46",
+          "immo_fixe_lt10": "3",
+          "immo_fixe_10_20": "3.36",
+          "immo_fixe_20": "3.89",
+          "immo_variable": "3.75",
+          "immo_relais": "4.65"
+        },
+        "source": "Avis du 26/03/2026 relatif à l'usure (art. L. 314-6 du code de la consommation), JO n° 0074 du 27/03/2026 ; relu le 24/10/2026 dans les archives du Journal officiel de la DILA",
+        "url": "https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000053724000"
+      },
+      {
+        "quarter": "2026-Q3",
+        "effective": "2026-07-01",
+        "thresholds": {
+          "conso_3000": "23.53",
+          "conso_6000": "15.67",
+          "conso_plus": "8.56",
+          "immo_fixe_lt10": "4.07",
+          "immo_fixe_10_20": "4.57",
+          "immo_fixe_20": "5.29",
+          "immo_variable": "5.28",
+          "immo_relais": "6.39"
+        },
+        "averages": {
+          "conso_3000": "17.65",
+          "conso_6000": "11.75",
+          "conso_plus": "6.42",
+          "immo_fixe_lt10": "3.05",
+          "immo_fixe_10_20": "3.43",
+          "immo_fixe_20": "3.97",
+          "immo_variable": "3.96",
+          "immo_relais": "4.79"
+        },
+        "source": "Avis du 26/06/2026 relatif à l'usure (art. L. 314-6 du code de la consommation), JO n° 0150 du 28/06/2026 ; relu le 24/10/2026 dans les archives du Journal officiel de la DILA",
+        "url": "https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000054323743"
+      },
+      {
+        "quarter": "2026-Q4",
+        "effective": "2026-10-01",
+        "thresholds": {
+          "conso_3000": "23.6",
+          "conso_6000": "15.76",
+          "conso_plus": "8.56",
+          "immo_fixe_lt10": "4.09",
+          "immo_fixe_10_20": "4.68",
+          "immo_fixe_20": "5.4",
+          "immo_variable": "5.52",
+          "immo_relais": "6.49"
+        },
+        "averages": {
+          "conso_3000": "17.7",
+          "conso_6000": "11.82",
+          "conso_plus": "6.42",
+          "immo_fixe_lt10": "3.07",
+          "immo_fixe_10_20": "3.51",
+          "immo_fixe_20": "4.05",
+          "immo_variable": "4.14",
+          "immo_relais": "4.87"
+        },
+        "source": "Avis du 25/09/2026 relatif à l'usure (art. L. 314-6 du code de la consommation), JO n° 0225 du 26/09/2026 ; relu le 24/10/2026 dans les archives du Journal officiel de la DILA",
+        "url": "https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000054903528"
+      }
+    ]
+  },
+  "mileage_allowance": {
+    "incomes_year": 2025,
+    "source": "Barème kilométrique fixé par l'arrêté du 27 mars 2023 (CGI, ann. IV, art. 6 B), toujours celui que cite Service-Public F1989 pour les revenus 2025 (fiche vérifiée le 15/04/2026) ; BOFiP BOI-BAREME-000001 (version en vigueur depuis le 20/07/2023), relu le 24/10/2026. Barème des revenus 2026 pas encore publié à cette date.",
+    "url": "https://bofip.impots.gouv.fr/bofip/2185-PGP.html/identifiant=BOI-BAREME-000001-20230720",
+    "rules_source": "BOFiP BOI-RSA-BASE-30-50-30-20, relu le 24/10/2026 : un aller et retour par jour (§ 180), 40 km par trajet au plus sauf circonstances particulières, barème plafonné à 7 CV (§ 450) ; +20 % pour un véhicule électrique (CGI, ann. IV, art. 6 B, II, cité par BOI-BAREME-000001)",
+    "rules_url": "https://bofip.impots.gouv.fr/bofip/2161-PGP.html/identifiant=BOI-RSA-BASE-30-50-30-20-20170224",
+    "max_one_way_km": 40,
+    "electric_uplift_percent": 20,
+    "cars": [
+      {
+        "hp": 3,
+        "upto_5000": "0.529",
+        "mid_rate": "0.316",
+        "mid_fixed_cents": 106500,
+        "over_20000": "0.370"
+      },
+      {
+        "hp": 4,
+        "upto_5000": "0.606",
+        "mid_rate": "0.340",
+        "mid_fixed_cents": 133000,
+        "over_20000": "0.407"
+      },
+      {
+        "hp": 5,
+        "upto_5000": "0.636",
+        "mid_rate": "0.357",
+        "mid_fixed_cents": 139500,
+        "over_20000": "0.427"
+      },
+      {
+        "hp": 6,
+        "upto_5000": "0.665",
+        "mid_rate": "0.374",
+        "mid_fixed_cents": 145700,
+        "over_20000": "0.447"
+      },
+      {
+        "hp": 7,
+        "upto_5000": "0.697",
+        "mid_rate": "0.394",
+        "mid_fixed_cents": 151500,
+        "over_20000": "0.470"
       }
     ]
   }

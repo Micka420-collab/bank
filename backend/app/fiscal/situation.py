@@ -40,6 +40,7 @@ FAMILLE_OUTPUTS = (
     "css_cmu_acs_eligibilite",
 )
 INDIVIDU_OUTPUTS = ("livret_epargne_populaire_eligibilite",)
+MENAGE_YEAR_OUTPUTS = ("cheque_energie",)  # montant annuel, demandé pour l'année en cours
 
 
 class HouseholdProfileIn(BaseModel):
@@ -137,7 +138,8 @@ def build_situation(
     famille.update({var: {p: None} for var in FAMILLE_OUTPUTS})
     menage: dict[str, Any] = {
         "personne_de_reference": ["moi"],
-        "statut_occupation_logement": {p: profile.housing},
+        # le chèque énergie (annuel) lit le logement au premier mois de l'année
+        "statut_occupation_logement": {f"{period.year:04d}-01": profile.housing, p: profile.housing},
         "loyer": {p: round(profile.rent_cents / 100, 2)},
         "depcom": {p: profile.postal_insee_code},
     }

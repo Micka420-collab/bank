@@ -5,6 +5,7 @@
 import { useState, type FormEvent } from "react";
 import { api, useApi, type EarlyRepayment, type LoanSchedule, type LoanView, type LoansResponse, type Renegotiation } from "../api";
 import { money, shortDate } from "../format";
+import { useRoute } from "../router";
 import { Icon } from "./Icon";
 import { Segmented } from "./Segmented";
 import { ErrorNote, EuroInput, Field, useAsyncAction, useToast } from "./ui";
@@ -22,6 +23,10 @@ export function rateText(bp: number): string {
 export function Loans({ onChange }: { onChange?: () => void }) {
   const view = useApi<LoansResponse>("/api/loans");
   const [adding, setAdding] = useState(false);
+  // Arrivée depuis « Ce qui est lié » (#/patrimoine?pret=3&taux=405) : ce prêt ouvert sur sa renégociation.
+  const { params } = useRoute();
+  const focusId = Number(params.get("pret"));
+  const focusRate = Number(params.get("taux"));
   if (view.error) return <ErrorNote message={view.error} onRetry={view.reload} />;
   const data = view.data;
   const reload = () => { view.reload(); onChange?.(); };
@@ -42,7 +47,10 @@ export function Loans({ onChange }: { onChange?: () => void }) {
         <p className="muted">Aucun prêt suivi. Ajoute-le avec ses chiffres de contrat : Bank calcule le tableau exact, retrouve la mensualité dans tes relevés et compte le restant dû dans ton patrimoine.</p>
       )}
       {adding && data && <AddLoan kinds={data.kinds} accounts={data.credit_accounts} onDone={() => { setAdding(false); reload(); }} />}
-      {data?.loans.map((l) => <LoanCard key={l.id} loan={l} rules={data.rules} onChange={reload} />)}
+      {data?.loans.map((l) => (
+        <LoanCard key={l.id} loan={l} rules={data.rules} onChange={reload}
+                  rateBp={l.id === focusId && focusRate > 0 ? focusRate : undefined} />
+      ))}
       {data && <p className="faint">{data.disclaimer}</p>}
     </section>
   );
@@ -104,8 +112,8 @@ function AddLoan({ kinds, accounts, onDone }: { kinds: LoansResponse["kinds"]; a
   );
 }
 
-function LoanCard({ loan, rules, onChange }: { loan: LoanView; rules: LoansResponse["rules"]; onChange: () => void }) {
-  const [open, setOpen] = useState(false);
+function LoanCard({ loan, rules, onChange, rateBp }: { loan: LoanView; rules: LoansResponse["rules"]; onChange: () => void; rateBp?: number }) {
+  const [open, setOpen] = useState(rateBp !== undefined);
   const [busy, error, run] = useAsyncAction();
   const remove = () => void run(async () => { await api(`/api/loans/${loan.id}`, { method: "DELETE" }); onChange(); });
   const pct = Math.round(loan.progress * 100);
@@ -140,7 +148,7 @@ function LoanCard({ loan, rules, onChange }: { loan: LoanView; rules: LoansRespo
       {loan.notes.map((n) => <p key={n} className="notice warn"><Icon name="alert" /><span>{n}</span></p>)}
       {open && (
         <div className="loan-detail">
-          <Simulators loan={loan} rules={rules} />
+          <Simulators loan={loan} rules={rules} rateBp={rateBp} />
           <ScheduleTable loanId={loan.id} />
           <div className="loan-foot">
             <button type="button" className="btn link" disabled={busy} onClick={remove}><Icon name="trash" /> Retirer ce prêt</button>
@@ -152,12 +160,12 @@ function LoanCard({ loan, rules, onChange }: { loan: LoanView; rules: LoansRespo
   );
 }
 
-function Simulators({ loan, rules }: { loan: LoanView; rules: LoansResponse["rules"] }) {
-  const [tab, setTab] = useState<"early" | "renegotiate">("early");
+function Simulators({ loan, rules, rateBp }: { loan: LoanView; rules: LoansResponse["rules"]; rateBp?: number }) {
+  const [tab, setTab] = useState<"early" | "renegotiate">(rateBp !== undefined ? "renegotiate" : "early");
   return (
     <div className="loan-sim">
       <Segmented value={tab} onChange={setTab} label="Simulateur" options={[{ value: "early", label: "Rembourser par anticipation" }, { value: "renegotiate", label: "Renégocier le taux" }]} />
-      {tab === "early" ? <Early loan={loan} rules={rules} /> : <Renegotiate loan={loan} rules={rules} />}
+      {tab === "early" ? <Early loan={loan} rules={rules} /> : <Renegotiate loan={loan} rules={rules} rateBp={rateBp} />}
     </div>
   );
 }
@@ -203,10 +211,11 @@ function Early({ loan, rules }: { loan: LoanView; rules: LoansResponse["rules"] 
   );
 }
 
-function Renegotiate({ loan, rules }: { loan: LoanView; rules: LoansResponse["rules"] }) {
-  const [rate, setRate] = useState("");
+function Renegotiate({ loan, rules, rateBp }: { loan: LoanView; rules: LoansResponse["rules"]; rateBp?: number }) {
+  // Venu d'un constat : le taux moyen du marché et le rachat par une autre banque, comme Bank l'a simulé.
+  const [rate, setRate] = useState(rateBp !== undefined ? (rateBp / 100).toLocaleString("fr-FR") : "");
   const [fees, setFees] = useState<number | null>(null);
-  const [buyout, setBuyout] = useState(false);
+  const [buyout, setBuyout] = useState(rateBp !== undefined);
   const [result, setResult] = useState<Renegotiation | null>(null);
   const [busy, error, run] = useAsyncAction();
   const rule = rules[loan.kind === "immobilier" ? "ira_immobilier" : "ira_consommation"];

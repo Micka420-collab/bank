@@ -278,6 +278,7 @@ OPENFISCA_FILES = {
     "marche_travail.salaire_minimum.smic.smic_b_horaire": "openfisca_smic_b_horaire.json",
     "marche_travail.salaire_minimum.smic.smic_b_mensuel": "openfisca_smic_b_mensuel.json",
     "impot_revenu.bareme_ir_depuis_1945.bareme": "openfisca_bareme_ir.json",
+    "prestations_sociales.prestations_familiales.bmaf.bmaf": "openfisca_bmaf.json",
 }
 
 
@@ -336,7 +337,13 @@ def test_nothing_leaves_without_consent(net: tuple[TestClient, FakeSources]) -> 
     client, fake = net
     view = client.get("/api/baremes").json()
     assert view["consent"] is False and view["updates"] == [] and view["indices"] == []
-    assert [s["slug"] for s in view["sources"]] == ["bareme-cre", "bareme-cdc", "bareme-insee", "bareme-openfisca"]
+    assert [s["slug"] for s in view["sources"]] == [
+        "bareme-cre",
+        "bareme-cdc",
+        "bareme-insee",
+        "bareme-openfisca",
+        "bareme-jorf",
+    ]
     r = client.post("/api/baremes/refresh")
     assert r.status_code == 409 and "Barèmes tenus à jour" in r.json()["detail"]
     assert fake.requests == []

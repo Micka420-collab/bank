@@ -1,6 +1,7 @@
 """Barèmes tenus à jour : une fois par mois (et à la demande), Bank relit les tarifs réglementés de l'électricité
 (CRE), les taux des livrets (Caisse des Dépôts), l'IPC et l'IRL (INSEE), le SMIC et le barème de l'impôt
-(OpenFisca) ; il garde chaque valeur relevée, datée et sourcée, compare avec ce qui est en vigueur et applique ce qui
+(OpenFisca), les seuils de l'usure et les taux moyens des crédits (avis trimestriel au Journal officiel, archives de
+la DILA) ; il garde chaque valeur relevée, datée et sourcée, compare avec ce qui est en vigueur et applique ce qui
 a changé par une couche au-dessus de rates.json (domain.rates), le fichier restant le repli.
 
 Rien ne change en silence : chaque mise à jour est notée dans la Veille (ancienne → nouvelle valeur, source) et au
@@ -13,6 +14,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -25,8 +27,9 @@ from sqlalchemy.orm import Session
 from app.db import write_lock
 from app.domain import baremes as dom
 from app.domain import contracts, rates
+from app.domain import credit_watch as cw
 from app.domain import watch as dw
-from app.models import RateObservation, RateOverride, WatchItem, WatchSource
+from app.models import PublicSourceKey, RateObservation, RateOverride, WatchItem, WatchSource
 from app.security import audit, netfetch
 from app.services import consents
 from app.services.settings_store import get_setting, set_setting
@@ -35,6 +38,7 @@ CONSENT = "baremes"
 INTERVAL = timedelta(days=30)  # une relève par mois
 RETRY_AFTER = timedelta(hours=20)  # une source en échec est réessayée le lendemain, pas dans un mois
 MAX_BYTES = 1_000_000
+ARCHIVE_MAX_BYTES = 20_000_000  # une archive quotidienne du Journal officiel : de 0,1 à 8 Mo compressée
 Fetch = Callable[[str, str], bytes]  # (adresse, Accept) → corps ; lève netfetch.FetchError
 
 
@@ -42,15 +46,92 @@ Fetch = Callable[[str, str], bytes]  # (adresse, Accept) → corps ; lève netfe
 class Feed:
     url: str
     accept: str
-    parse: Callable[[bytes, str, date], list[dom.Observation]]
+    parse: Callable[[bytes, str, date], list[dom.Observation]] | None
     label: str  # ce que ce fichier apporte, pour dire lequel a échoué
+    # Lecture en plusieurs pages (le Journal officiel : liste des archives, puis les archives) : reçoit la relève,
+    # le jour et les périodes déjà connues ; remplace `parse`.
+    read: Callable[[Fetch, date, frozenset[str]], list[dom.Observation]] | None = None
+
+    def observations(self, fetch: Fetch, today: date, known: frozenset[str]) -> list[dom.Observation]:
+        if self.read is not None:
+            return self.read(fetch, today, known)
+        if self.parse is None:
+            raise dom.BaremeError("fichier sans lecteur")
+        return self.parse(fetch(self.url, self.accept), self.url, today)
 
 
 # Ce qu'un fichier de source peut lever sur une réponse inattendue : jamais une panne de toute la relève.
 FEED_ERRORS = (netfetch.FetchError, ValueError, csv.Error, RecursionError)
 CRE_LABELS = {"base": "option Base", "hphc": "option Heures creuses", "tempo": "option Tempo"}
 INSEE_LABELS = {"011814056": "IPC", "011814133": "inflation sur un an", "001515333": "IRL"}
-OPENFISCA_LABELS = {"openfisca.smic_horaire": "SMIC horaire", "openfisca.smic_mensuel": "SMIC mensuel"}
+OPENFISCA_LABELS = {
+    "openfisca.smic_horaire": "SMIC horaire",
+    "openfisca.smic_mensuel": "SMIC mensuel",
+    "openfisca.bmaf": "base des allocations familiales",
+}
+
+
+# Une relève du Journal officiel a un budget pour tous les trimestres cherchés ensemble ; ce qui n'a pas pu être
+# ouvert l'est à la relève suivante (le lendemain), les archives déjà parcourues sans l'avis ne sont pas reprises.
+JORF_RUN_ARCHIVES = 12
+JORF_RUN_BYTES = 60_000_000
+JORF_RUN_SECONDS = 300.0
+SCANNED_SERIES = "jorf.parcourues"  # par trimestre : archives ouvertes sans y trouver l'avis
+SCANNED_PREFIX = "archive:"  # dans `known`, à côté des trimestres connus
+
+
+def read_jorf(
+    fetch: Fetch, today: date, known: frozenset[str], clock: Callable[[], float] = time.monotonic
+) -> list[dom.Observation]:
+    """L'avis trimestriel sur l'usure, cherché dans les archives quotidiennes du Journal officiel (DILA) pour le
+    trimestre en cours et le suivant, s'ils ne sont pas encore connus. Rien à chercher : aucun appel.
+
+    Une archive illisible ou un autre article « concernant l'usure » (rectificatif, avis voisin) ne coupe pas la
+    recherche : on passe à l'archive suivante. Les archives parcourues sans l'avis sont rendues (série
+    `jorf.parcourues`) pour ne pas être téléchargées de nouveau ; « introuvable » n'est dit qu'une fois la fenêtre
+    du trimestre close et toutes ses archives parcourues."""
+    wanted = cw.wanted_quarters(today, known)
+    if not wanted:
+        return []
+    listing = fetch(cw.DILA_JORF_URL, cw.HTML_ACCEPT)
+    out: list[dom.Observation] = []
+    opened = size = 0
+    started = clock()
+    for qid in wanted:
+        found = None
+        scanned: list[str] = []
+        names = [n for n in cw.archives_for(listing, qid, today) if f"{SCANNED_PREFIX}{n}" not in known]
+        for name in names:
+            if opened >= JORF_RUN_ARCHIVES or size >= JORF_RUN_BYTES or clock() - started >= JORF_RUN_SECONDS:
+                break  # budget de la relève épuisé : la suite au prochain passage
+            archive = fetch(cw.DILA_JORF_URL + name, cw.GZIP_ACCEPT)
+            opened += 1
+            size += len(archive)
+            try:
+                article = cw.usury_article(archive)
+                candidate = cw.parse_usury(article) if article is not None else None
+            except cw.UsuryError:
+                candidate = None  # archive abîmée ou autre texte sur l'usure : l'archive suivante
+            if candidate is not None and candidate.quarter == qid:
+                found = candidate
+                break
+            scanned.append(name)
+        if found is not None:
+            out.append(cw.usury_observation(found))
+            continue
+        if scanned:
+            window = set(cw.archives_for(listing, qid, today))
+            before = {k.removeprefix(SCANNED_PREFIX) for k in known if k.startswith(SCANNED_PREFIX)}
+            done = sorted(n for n in before | set(scanned) if n in window)
+            note = (
+                f"{len(done)} archive{'s' if len(done) > 1 else ''} parcourue{'s' if len(done) > 1 else ''} sans l'avis"
+            )
+            out.append(dom.Observation(SCANNED_SERIES, qid, json.dumps(done), cw.DILA_JORF_URL, note))
+        elif qid == cw.quarter_id(today) and today > cw.search_window(qid)[1] and not names:
+            raise dom.BaremeError(
+                f"avis sur l'usure du {cw.quarter_label(qid)} introuvable dans les archives du Journal officiel"
+            )
+    return out
 
 
 @dataclass(frozen=True)
@@ -59,6 +140,7 @@ class Spec:
     name: str
     url: str
     feeds: tuple[Feed, ...]
+    idle_ok: bool = False  # ne rien trouver à relire est un succès (le Journal officiel entre deux avis)
 
 
 SOURCES: tuple[Spec, ...] = (
@@ -87,7 +169,7 @@ SOURCES: tuple[Spec, ...] = (
     ),
     Spec(
         "bareme-openfisca",
-        "OpenFisca — SMIC et barème de l'impôt sur le revenu",
+        "OpenFisca — SMIC, base des allocations familiales et barème de l'impôt sur le revenu",
         dom.OPENFISCA_URL.format(name=dom.OPENFISCA_SCALE),
         (
             *(
@@ -107,6 +189,13 @@ SOURCES: tuple[Spec, ...] = (
             ),
         ),
     ),
+    Spec(
+        "bareme-jorf",
+        "Journal officiel — seuils de l'usure et taux moyens des crédits",
+        cw.DILA_JORF_URL,
+        (Feed(cw.DILA_JORF_URL, cw.HTML_ACCEPT, None, "avis sur l'usure", read=read_jorf),),
+        idle_ok=True,
+    ),
 )
 # La source qui porte, dans la Veille, la mise à jour d'une section ; le thème de veille qui la rend pertinente.
 SECTION_SOURCE = {"electricity": "bareme-cre", "livrets": "bareme-cdc", "income_tax": "bareme-openfisca"}
@@ -122,6 +211,7 @@ INDICES: tuple[tuple[str, str, str], ...] = (
     ("insee.irl", "Indice de référence des loyers (IRL)", ""),
     ("openfisca.smic_horaire", "SMIC brut horaire", " €"),
     ("openfisca.smic_mensuel", "SMIC brut mensuel (35 h)", " €"),
+    ("openfisca.bmaf", "Base mensuelle des allocations familiales (BMAF)", " €"),
     ("cdc.livret_a", "Livret A et LDDS, dernier mois publié par la Caisse des Dépôts", " %"),
     ("cdc.lep", "LEP, dernier mois publié par la Caisse des Dépôts", " %"),
 )
@@ -135,14 +225,22 @@ class BaremesError(ValueError):
 
 def default_fetch(http: Any = None, resolver: netfetch.Resolver | None = None) -> Fetch:
     def get(url: str, accept: str) -> bytes:
-        return netfetch.fetch(url, http=http, resolver=resolver, accept=accept, max_bytes=MAX_BYTES, seconds=30.0).body
+        archive = accept == cw.GZIP_ACCEPT
+        return netfetch.fetch(
+            url,
+            http=http,
+            resolver=resolver,
+            accept=accept,
+            max_bytes=ARCHIVE_MAX_BYTES if archive else MAX_BYTES,
+            seconds=90.0 if archive else 30.0,
+        ).body
 
     return get
 
 
 # ------------------------------------------------------------------ sources (dans la Veille)
 def ensure_sources(db: Session) -> dict[str, WatchSource]:
-    """Les quatre sources, visibles dans Veille › Sources (une source en pause n'est plus relue)."""
+    """Les sources, visibles dans Veille › Sources (une source en pause n'est plus relue)."""
     slugs = [s.slug for s in SOURCES]
     rows = {s.slug: s for s in db.scalars(select(WatchSource).where(WatchSource.slug.in_(slugs)))}
     for spec in SOURCES:
@@ -162,8 +260,32 @@ def ensure_sources(db: Session) -> dict[str, WatchSource]:
     return rows
 
 
-def _due(source: WatchSource, now: datetime) -> bool:
-    stale = source.last_ok_at is None or now - source.last_ok_at >= INTERVAL
+def _known_periods(db: Session) -> frozenset[str]:
+    """Les trimestres dont l'avis sur l'usure est déjà connu (fichier livré ou relu) : pas besoin de les chercher."""
+    observed = db.scalars(select(RateObservation.period).where(RateObservation.series == cw.USURY_SERIES))
+    known = {q.quarter for q in cw.load_usury(rates.static())} | set(observed)
+    # les archives du Journal officiel déjà parcourues sans l'avis : pas retéléchargées
+    for raw in db.scalars(select(RateObservation.value).where(RateObservation.series == SCANNED_SERIES)):
+        try:
+            names = json.loads(raw)
+        except ValueError:
+            continue
+        if isinstance(names, list):
+            known |= {f"{SCANNED_PREFIX}{n}" for n in names if isinstance(n, str)}
+    return frozenset(known)
+
+
+def _pending(slug: str, today: date, known: frozenset[str], obs: Iterable[dom.Observation] = ()) -> bool:
+    """Le Journal officiel attend encore un avis (fenêtre ouverte, pas encore paru ou pas encore trouvé) : la
+    source est relue le lendemain, pas dans un mois."""
+    if slug != "bareme-jorf":
+        return False
+    found = {o.period for o in obs if o.series == cw.USURY_SERIES}
+    return bool(cw.wanted_quarters(today, known | found))
+
+
+def _due(source: WatchSource, now: datetime, pending: bool = False) -> bool:
+    stale = pending or source.last_ok_at is None or now - source.last_ok_at >= INTERVAL
     resting = source.last_checked_at is not None and now - source.last_checked_at < RETRY_AFTER
     return stale and not resting
 
@@ -301,7 +423,12 @@ def refresh(
     consents.require(db, CONSENT)
     write_lock(db)
     sources = ensure_sources(db)
-    todo = [s for s in SOURCES if sources[s.slug].enabled and (force or _due(sources[s.slug], now))]
+    known = _known_periods(db)
+    todo = [
+        s
+        for s in SOURCES
+        if sources[s.slug].enabled and (force or _due(sources[s.slug], now, _pending(s.slug, today, known)))
+    ]
     if not todo:
         return {
             "status": "fresh",
@@ -321,7 +448,7 @@ def refresh(
         failures: list[str] = []
         for feed in spec.feeds:
             try:
-                obs += feed.parse(fetch(feed.url, feed.accept), feed.url, today)
+                obs += feed.observations(fetch, today, known)
             except FEED_ERRORS as exc:
                 failures.append(f"{feed.label} : {_reason(exc)}")
         fetched[spec.slug] = (obs, failures)
@@ -331,8 +458,19 @@ def refresh(
     errors: list[str] = []
     failed = 0
     observations: list[dom.Observation] = []
+    idle_ok = {s.slug for s in SOURCES if s.idle_ok}
+    idle = 0  # sources qui n'avaient rien à chercher (le Journal officiel entre deux avis) : pas comptées relues
     for slug, (obs, failures) in fetched.items():
         source = sources[slug]
+        pending = _pending(slug, today, known, obs)  # avis attendu : relu demain, pas dans un mois
+        values = [o for o in obs if o.series != SCANNED_SERIES]
+        if not values and not failures and slug in idle_ok:
+            _store(db, obs, now)  # les archives parcourues, s'il y en a
+            source.last_error = None
+            if not pending:
+                source.last_ok_at = now
+            idle += 1
+            continue
         if failures:
             # Pas de last_ok_at : la source est relue le lendemain, jusqu'à ce que tous ses fichiers passent.
             source.last_error = " ; ".join(failures)[:300]
@@ -346,13 +484,20 @@ def refresh(
         if not obs:
             continue
         _store(db, obs, now)
-        observations += obs
+        observations += values
         if not failures:
-            source.last_ok_at, source.last_error = now, None
+            source.last_error = None
+            if not pending:
+                source.last_ok_at = now
     proposal = dom.propose(effective(db), observations, today)
     applied, refused = _apply(db, proposal.changes, now)
     _journal(db, applied, sources, now)
     notes = errors + proposal.notes + refused
+    notes += [
+        f"Seuils de l'usure du {cw.quarter_label(o.period)} relus : {o.note}."
+        for o in observations
+        if o.series == cw.USURY_SERIES and o.period not in known
+    ]
     set_setting(db, "baremes_notes", [{"at": now.isoformat(), "text": n[:400]} for n in notes[:20]])
     if applied:
         audit.record(
@@ -367,13 +512,13 @@ def refresh(
     if applied:
         message = f"{len(applied)} valeur{'s' if len(applied) > 1 else ''} mise{'s' if len(applied) > 1 else ''} à jour"
         message += " : détail ci-dessous et dans la Veille."
-    elif failed == len(todo):
+    elif failed and failed == len(todo) - idle:
         message = "Relève en échec : les valeurs en vigueur restent celles d'avant."
     else:
         message = "Tout est à jour : aucune valeur n'a changé."
     return {
-        "status": "failed" if failed == len(todo) else "checked",
-        "checked": len(todo),
+        "status": "failed" if failed and failed == len(todo) - idle else "checked",
+        "checked": len(todo) - idle,
         "errors": len(errors),
         "changes": [_change_view(c) for c in applied],
         "notes": notes,
@@ -383,7 +528,7 @@ def refresh(
 
 def _reason(exc: BaseException) -> str:
     """Le message d'une erreur attendue ; une erreur de format brute n'est pas recopiée (elle ne dirait rien)."""
-    if isinstance(exc, (netfetch.FetchError, dom.BaremeError)):
+    if isinstance(exc, (netfetch.FetchError, dom.BaremeError, cw.UsuryError)):
         return str(exc)[:200]
     return "réponse illisible"
 
@@ -425,7 +570,8 @@ def tick(db: Session, *, now: datetime, today: date, fetch: Fetch) -> dict[str, 
     sources = ensure_sources(db)  # visibles dans Veille › Sources dès le démarrage, même sans accord
     if not consents.granted(db, CONSENT):
         return {}
-    if not any(s.enabled and _due(s, now) for s in sources.values()):
+    known = _known_periods(db)
+    if not any(s.enabled and _due(s, now, _pending(slug, today, known)) for slug, s in sources.items()):
         return {}
     result = refresh(db, now=now, today=today, fetch=fetch, actor="system")
     return {
@@ -533,6 +679,47 @@ def _in_effect(eff: dict[str, Any], base: dict[str, Any]) -> list[dict[str, Any]
     ]
 
 
+def _usury_group(db: Session) -> list[dict[str, Any]]:
+    """Le dernier avis sur l'usure connu (fichier livré ou relu au Journal officiel), et où en est Webstat."""
+    observed = [
+        q
+        for r in db.scalars(select(RateObservation).where(RateObservation.series == cw.USURY_SERIES))
+        if (q := cw.usury_from_observation(r.period, r.value, r.note, r.source_url)) is not None
+    ]
+    quarters = cw.merge_usury(cw.load_usury(rates.static()), observed)
+    if not quarters:
+        return []
+    q = quarters[max(quarters)]
+    items = [{"label": cw.CATEGORIES[k].capitalize(), "value": dom.percent(str(v))} for k, v in q.thresholds.items()]
+    items += [
+        {
+            "label": f"Taux moyen pratiqué au {cw.quarter_label(q.averages_quarter)}, {cw.CATEGORIES[k]}",
+            "value": dom.percent(str(v)),
+        }
+        for k, v in q.averages.items()
+        if k in cw.MATURITY
+    ]
+    webstat = db.get(PublicSourceKey, "webstat") is not None
+    items.append(
+        {
+            "label": "Webstat (Banque de France)",
+            "value": "clé enregistrée, pas encore utilisée (accès non vérifié sans compte)"
+            if webstat
+            else "compte non relié : les seuils viennent du Journal officiel",
+        }
+    )
+    return [
+        {
+            "key": "usury",
+            "title": f"Seuils de l'usure ({cw.quarter_label(q.quarter)})",
+            "as_of": q.effective.isoformat(),
+            "source": q.source,
+            "updated": any(o.quarter == q.quarter for o in observed),
+            "items": items,
+        }
+    ]
+
+
 def view(db: Session) -> dict[str, Any]:
     sources = ensure_sources(db)
     static = rates.static()
@@ -559,7 +746,7 @@ def view(db: Session) -> dict[str, Any]:
     return {
         "consent": consents.granted(db, CONSENT),
         "sources": [_source_view(spec, sources[spec.slug]) for spec in SOURCES],
-        "in_effect": _in_effect(effective(db), static),
+        "in_effect": _in_effect(effective(db), static) + _usury_group(db),
         "updates": updates,
         "indices": _indices(db),
         "irl": _irl_check(db),

@@ -40,6 +40,8 @@ INSEE_SERIES = {"011814056": "insee.ipc", "011814133": "insee.ipc_glissement", "
 OPENFISCA_VALUES = {
     "marche_travail.salaire_minimum.smic.smic_b_horaire": "openfisca.smic_horaire",
     "marche_travail.salaire_minimum.smic.smic_b_mensuel": "openfisca.smic_mensuel",
+    # base des allocations familiales : sa hausse au 1er avril dit le taux de revalorisation des prestations
+    "prestations_sociales.prestations_familiales.bmaf.bmaf": "openfisca.bmaf",
 }
 OPENFISCA_SCALE = "impot_revenu.bareme_ir_depuis_1945.bareme"
 

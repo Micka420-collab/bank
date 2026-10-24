@@ -35,7 +35,7 @@ voient pas : **GitHub est le seul point de rencontre**. Règles simples pour ne 
 | Session | Zones en cours | Issues |
 |---|---|---|
 | cloud (Claude Fable 5.1) | plan B, crédits, sauvegardes, boîte mail IMAP, retraite, clés de plateforme, accessibilité téléphone, journal en français, sommaire collant, CI ; #7 en attente de la décision de Micka (agrément PISP) ; relit les PR de nimbus | #4 ✔, #6 ✔, #16 ✔, #15 ✔, #9 ✔, #11 ✔ |
-| nimbus (Opus 5.5) | partage d'un papier (`services/shares`, `pages/Received`), import CSV crypto (`importers/crypto_csv`, `services/crypto_import`), alertes de cours et pilote vs consigne (`services/price_alerts`, `domain/pilot_track`), valeur du logement DVF (`domain/dvf`, `services/home_value`, `components/HomeValue`) ; suites de relecture #25 à #28 | #14 ✔, #10 ✔, #12 ✔, #8 ✔ |
+| nimbus (Opus 5.5) | partage d'un papier, import CSV crypto, alertes de cours et pilote vs consigne, valeur du logement DVF ; suites de relecture #25 à #28 ; design « Verre lumineux » (`styles.css`, `docs/DESIGN.md` §3, `components/Celebration`) ; assistant Enable Banking et Powens (`services/bank_setup`, `services/powens`, `providers/powens`) ; WhatsApp par QR (`channels/whatsapp_qr`) ; automatisations 1 à 4 (`services/baremes`, `domain/territory`, `services/state_accounts`, `domain/energy_signals`, `services/tempo`, `services/weather`, `domain/housing`, `domain/rent_control`, `domain/income_watch`) ; onboarding (#44) | #14 ✔, #10 ✔, #12 ✔, #8 ✔, #29 ✔, #30 ✔, #31 ✔, #32 à #35 ✔, #40 ✔ |
 
 Opus a maintenant son accès GitHub : chaque session pose ses commentaires d'issue, pousse ses branches et ouvre ses
 PR ; l'autre relit.
@@ -43,6 +43,14 @@ PR ; l'autre relit.
 Les fichiers partagés par tout le monde (`README.md`, `SECURITY.md`, `docs/ROADMAP.md`, `app/main.py`,
 `frontend/src/api.ts`, `frontend/src/styles.css`, `tests/test_mcp.py`, la compétence HERMÈS) se touchent par petites
 additions : un conflit s'y résout en gardant les deux ajouts.
+
+### Décision du 24 octobre 2026 (Micka)
+
+Les PR #36 à #43 et l'automatisation 4 (#35) sont restées sans relecture de la session cloud. Micka a demandé à nimbus
+de les fusionner sans l'attendre. Chacune avait eu une relecture croisée (correction et sécurité) par nimbus, et sa CI
+était verte. Elles ont été empilées sur une seule ligne, vérifiées en entier, puis fusionnées dans l'ordre par commits
+de fusion. La relecture de la session cloud reste bienvenue après coup : ses points vont dans des issues de suite,
+comme #25 à #28.
 
 ## Déploiement sur nimbus
 

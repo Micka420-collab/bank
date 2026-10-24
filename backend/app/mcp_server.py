@@ -441,6 +441,10 @@ def build_mcp(
             except FiscalEngineError as exc:
                 raise McpError("Moteur fiscal indisponible") from exc
             result = asdict(outcome)
+            result["inputs"] = {  # comme la page Aides : ce qui a nourri la simulation
+                "months_of_salary_history": len(inc["salary"]),
+                "used_declared_taxable_income": profile.annual_taxable_income_n2_cents is not None,
+            }
             db.add(FiscalSimulation(period=outcome.period, result=json.dumps(result)))
             return result
 

@@ -45,6 +45,8 @@ TOPICS = {
     "aides": "Aides",
     "energie": "Énergie",
     "habitudes": "Habitudes",
+    "credits": "Crédits",
+    "impots": "Impôts",
 }
 
 
@@ -124,6 +126,7 @@ class Inputs:
     paydays: Sequence[date] = ()
     category_names: Mapping[str, str] = field(default_factory=dict)
     housing: HousingLink | None = None
+    extra: Sequence[Finding] = ()  # constats calculés ailleurs (domain.income_watch, domain.credit_watch)
 
 
 # ------------------------------------------------------------------ sorties
@@ -1443,6 +1446,7 @@ def analyse(inputs: Inputs) -> list[Finding]:
         # « révisé dans la limite de l'IRL » rassurerait à tort : la révision elle-même n'était pas due.
         out = [f for f in out if f.kind != "rent_revised"]
     out += housing
+    out += inputs.extra
     seen: set[str] = set()
     unique = []
     for f in out:

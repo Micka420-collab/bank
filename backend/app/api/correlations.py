@@ -3,13 +3,14 @@ démarche à préparer. Bank n'envoie rien à personne."""
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.deps import AuthDep, DbDep, TodayDep
-from app.services import correlations, procedures
+from app.services import correlations, credit_watch, procedures
 
 router = APIRouter(prefix="/api/correlations", tags=["correlations"])
 
@@ -20,6 +21,12 @@ class KeyIn(BaseModel):
 
 class DecideIn(KeyIn):
     decision: str = Field(pattern="^(dismissed|new)$")
+
+
+class CommuteIn(BaseModel):
+    one_way_km: Decimal = Field(gt=0, le=500, max_digits=5, decimal_places=1)
+    fiscal_hp: int = Field(ge=1, le=50)
+    electric: bool = False
 
 
 @router.get("")
@@ -45,3 +52,24 @@ def start(body: KeyIn, ctx: AuthDep, db: DbDep, today: TodayDep) -> dict[str, An
     except procedures.ProcedureError as exc:
         raise HTTPException(exc.status, str(exc)) from None
     return {"procedure_id": proc_id}
+
+
+@router.put("/commute")
+def save_commute(body: CommuteIn, ctx: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
+    """Ton trajet domicile-travail (frais réels) : distance d'un aller, puissance fiscale, électrique. Chiffré."""
+    try:
+        credit_watch.save_commute(
+            db, one_way_km=body.one_way_km, fiscal_hp=body.fiscal_hp, electric=body.electric, actor=ctx.user.username
+        )
+    except credit_watch.CreditWatchError as exc:
+        raise HTTPException(exc.status, str(exc)) from None
+    return correlations.view(db, today)
+
+
+@router.delete("/commute")
+def clear_commute(ctx: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
+    try:
+        credit_watch.clear_commute(db, actor=ctx.user.username)
+    except credit_watch.CreditWatchError as exc:
+        raise HTTPException(exc.status, str(exc)) from None
+    return correlations.view(db, today)

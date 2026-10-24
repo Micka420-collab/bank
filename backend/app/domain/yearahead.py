@@ -64,7 +64,7 @@ class Spike:
     amount_cents: int
     day: date
     cadence: str  # quarterly | yearly | custom | planned
-    source: str  # detected | custom | planned | forecast
+    source: str  # detected | custom | planned | forecast | estimated (solde d'impôt estimé : seul le mois est connu)
     category: str | None = None
     occurrences: int = 0
     confidence: float = 1.0
@@ -178,6 +178,7 @@ def build_year_ahead(
     txns: Sequence[Txn],
     custom: Sequence[CustomSpike] = (),
     planned: Sequence[tuple[date, str, int]] = (),
+    estimated: Sequence[tuple[date, str, int]] = (),
     ignored: Sequence[str] = (),
     buffer_cents: int = 0,
     months: int = MONTHS,
@@ -206,6 +207,11 @@ def build_year_ahead(
     all_spikes += [
         Spike(f"planned:{d.isoformat()}:{c}", label, c, d, "planned", "planned")
         for d, label, c in planned
+        if today <= d <= until
+    ]
+    all_spikes += [
+        Spike(f"estimated:{d:%Y-%m}:{label}", label, c, d, "planned", "estimated")
+        for d, label, c in estimated
         if today <= d <= until
     ]
     kept = [s for s in all_spikes if s.key not in skip and s.day >= first]

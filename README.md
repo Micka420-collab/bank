@@ -382,6 +382,29 @@ consommation Linky. Les pistes statistiques (revenu ↔ catégorie, dépenses de
 qu'avec huit mois et un test par permutation, et jamais comme des causes. Détails :
 [docs/CORRELATIONS.md](docs/CORRELATIONS.md).
 
+Côté revenus, trois constats s'y ajoutent, chacun avec sa source. Une **revalorisation légale** qui ne se voit
+pas : prestations de la CAF au 1er avril (+0,8 % en 2026), retraites de base au 1er janvier (+0,9 %) ; l'ARE,
+allocation journalière dont le versement varie déjà avec le nombre de jours du mois, n'est pas vérifiée ; quand le premier versement d'après est identique au centime au précédent, Bank
+renvoie à la notification et au délai de recours (2 mois pour une caisse de sécurité sociale), sans jamais dire
+qu'un montant est dû. Le taux 2027 se date seul : la base des allocations familiales est relue dans OpenFisca avec
+les autres barèmes. Ton **taux de prélèvement à la source** (bulletin ou avis lu dans Papiers) face à tes salaires
+de l'année : impôt estimé au barème (abattement, décote, quotient familial), recoupé avec OpenFisca ; au-delà de
+5 % d'écart la baisse est possible et Bank chiffre l'effet par mois, en rappelant qu'une baisse excessive peut être
+majorée (CGI art. 1729 G) ; en couple sans revenu du conjoint indiqué, il le demande au lieu de comparer ; si tes revenus montent, le solde de
+septembre suivant est posé dans l'Année qui vient (en une fois jusqu'à 300 €, sinon de septembre à décembre). Le
+**chèque énergie** : éligible d'après la simulation des aides et rien vu dans tes relevés, Bank le dit sans
+prétendre qu'il manque (dates de campagne non relues) et renvoie à chequeenergie.gouv.fr ; si ton revenu fiscal de l'année N-2 lui manque, il dit lequel.
+
+Côté crédit et coûts, trois de plus. Le **seuil de l'usure** : les seuils du trimestre sont lus dans l'avis
+publié au Journal officiel (archives quotidiennes de la DILA, avec la relève des barèmes) ; tes agios rapportés à
+ton solde débiteur reconstitué jour par jour, et le taux actuariel de tes prêts suivis, sont comparés au seuil de
+leur catégorie, méthode à l'appui (Webstat de la Banque de France reste facultatif : sans compte, le Journal
+officiel suffit). La **renégociation** : quand le taux effectif moyen des nouveaux prêts immobiliers, publié dans
+le même avis, donne un gain net dans le simulateur après l'indemnité de remboursement anticipé, Bank le dit et le
+lien ouvre le simulateur à ce taux. Les **frais réels** : jours travaillés lus dans ton agenda, distance et
+puissance fiscale que tu indiques (chiffrées), barème kilométrique des revenus 2025 (celui des revenus 2026 n'est
+pas encore publié), comparés à l'abattement de 10 % avec l'effet sur l'impôt estimé.
+
 ## Déclarations à ne pas oublier
 
 Bank › Gagner › Aides › **Tes déclarations**. Un versement France Travail reconnu dans tes relevés fait proposer
@@ -708,7 +731,7 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 1101 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+Qualité au moment de la livraison : 1264 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
 aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, scénarios adverses du
 banc d'essai crypto de Minara rejoués contre le pilote automatique, demandes simultanées qui ne passent jamais
@@ -725,7 +748,7 @@ plateformes qui vérifient chaque signature et refusent les droits trop larges, 
 de référence — fins de mois, heures d'été et d'hiver, pauses, refus —, alertes de cours franchies une seule fois par
 deux relèves simultanées, barèmes relus sur les vraies réponses de la CRE, de la Caisse des Dépôts, de
 l'INSEE et d'OpenFisca, jours fériés, vacances scolaires et géocodage sur les vraies réponses des services publics),
-couverture 92 %, 178 tests front (parcours de première ouverture,
+couverture 92 %, 211 tests front (parcours de première ouverture,
 coffre et partage d'un papier, démarches, opportunités, veille, assistant, chat interactif et réponse en direct,
 notifications sur l'appareil, plan B, crédits, retraite, logement, sauvegardes, boîte mail, crypto et plateformes reliées,
 alertes de cours, pilote, pilote vs consigne, déclarations, corrélations, année qui vient, passkeys, erreurs qui

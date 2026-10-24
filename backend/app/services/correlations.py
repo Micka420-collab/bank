@@ -19,7 +19,7 @@ from app.domain.energy_analysis import ClimateCheck
 from app.domain.recurring import add_months, detect_recurring
 from app.models import Category, Obligation, ObligationDone, OpportunityState, Transaction, VaultDocument, VaultField
 from app.security import audit
-from app.services import analytics, procedures
+from app.services import analytics, credit_watch, income_watch, procedures
 from app.services import energy as energy_service
 from app.services import housing as housing_service
 from app.services import weather as weather_service
@@ -177,6 +177,7 @@ def build_inputs(db: Session, today: date) -> dom.Inputs:
         paydays=paydays,
         category_names=names,
         housing=housing_service.link(db, today),
+        extra=income_watch.findings(db, today) + credit_watch.findings(db, today),  # revenus, crédit et coûts
     )
 
 
@@ -223,6 +224,7 @@ def view(db: Session, today: date) -> dict[str, Any]:
         "findings": rows,
         "hidden": hidden,
         "irl_source": contracts.irl_source(contracts.latest_irl_quarter()),
+        "commute": credit_watch.commute_view(db),  # trajet indiqué pour les frais réels (#35)
         "disclaimer": (
             "Chaque constat renvoie à ses pièces (contrat, opération). Un lien statistique est une piste, jamais une "
             "cause ; un doublon est « probable » tant que les deux contrats ne sont pas lus. Bank n'envoie rien : "
