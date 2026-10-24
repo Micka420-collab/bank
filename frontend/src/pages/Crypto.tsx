@@ -88,7 +88,7 @@ export function Crypto() {
 
       {!empty && <Holdings assets={data.assets} />}
 
-      <PriceAlerts key={synced} />
+      <PriceAlerts key={`alerts-${synced}`} />
 
       <div className="split cx-split" style={{ marginTop: "1rem" }}>
         <Wallets data={data} onChange={reload} />
@@ -102,7 +102,7 @@ export function Crypto() {
         <Checker resources={data.resources} />
       </div>
 
-      <Taxes key={imported} initial={data.tax} currentValue={data.total_cents} />
+      <Taxes key={`tax-${imported}`} initial={data.tax} currentValue={data.total_cents} />
       <PlatformImport onImported={(next) => { setView(next); setImported((n) => n + 1); }} />
 
       <section className="card cx-pilot reveal" style={{ marginTop: "1rem" }} aria-labelledby="cx-pilot">
