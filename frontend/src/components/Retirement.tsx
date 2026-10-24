@@ -142,7 +142,7 @@ export function Retirement({ open = false }: { open?: boolean }) {
                         <div className="rt-detail">
                           <dl className="rt-stats">
                             <div><dt>Pension de base</dt><dd>{rangeText(d.base_monthly_low_cents, d.base_monthly_high_cents)}</dd></div>
-                            <div><dt>Complémentaire</dt><dd>{rangeText(d.complementary_monthly_low_cents, d.complementary_monthly_high_cents)}<small className="faint"> · {Number(d.points).toLocaleString("fr-FR", { maximumFractionDigits: 0 })} points</small></dd></div>
+                            <div><dt>Complémentaire</dt><dd>{rangeText(d.complementary_monthly_low_cents, d.complementary_monthly_high_cents)}<small className="faint">{Number(d.points).toLocaleString("fr-FR", { maximumFractionDigits: 0 })} points</small></dd></div>
                             <div><dt>Taux</dt><dd>{Number(d.rate_percent).toLocaleString("fr-FR", { maximumFractionDigits: 3 })} %</dd></div>
                             <div><dt>Trimestres</dt><dd>{d.quarters_total} / {d.quarters_required}</dd></div>
                             {d.replacement_percent !== null && <div><dt>De ton net actuel</dt><dd>≈ {d.replacement_percent} %</dd></div>}
