@@ -13,11 +13,13 @@ from pathlib import Path
 import httpx
 import pytest
 from sqlalchemy import select, text
+from sqlalchemy.exc import OperationalError
 from starlette.testclient import TestClient
 
 from app.api import deps
 from app.domain import dvf
-from app.models import AuditLog
+from app.models import Account, AuditLog, Loan
+from app.security import audit
 from app.services import consents
 from app.services import home_value as svc
 
@@ -64,6 +66,13 @@ def test_reader_is_defensive() -> None:
     assert sales == [dvf.Sale(date(2025, 2, 3), 150_000, "appartement", 50, None, "0A")]
     assert dvf.parse_commune(raw, since=date(2025, 3, 1)) == []
     assert dvf.Sale.from_row(sales[0].to_row()) == sales[0]
+    # Fichier venu du réseau : « nan », « inf », pièces absurdes ou champ démesuré ne font jamais planter la lecture.
+    head = b"id_mutation,date_mutation,nature_mutation,valeur_fonciere,type_local,surface_reelle_bati,"
+    odd = head + b"nombre_pieces_principales\nA,2025-02-03,Vente,150000,Appartement,50,nan\n"
+    odd += b"B,2025-02-04,Vente,inf,Appartement,50,3\nC,2025-02-05,Vente,150000,Appartement,50,1e300\n"
+    assert [(s.price_eur, s.rooms) for s in dvf.parse_commune(odd)] == [(150_000, None), (150_000, None)]
+    with pytest.raises(dvf.DvfError, match="illisible"):
+        dvf.parse_commune(head + b'nombre_pieces_principales\nA,"' + b"x" * 200_000 + b'",Vente,1,2,3,4\n')
 
 
 def test_commune_and_section_rules() -> None:
@@ -386,3 +395,104 @@ def test_agent_dossier_does_not_count_the_home_twice(app, home: tuple[TestClient
         w = advisor.build_dossier(db, TODAY)["wealth"]
     assert w["buckets"]["immobilier"] == 19_800_000 and w["outside_assets_cents"] == 250_000
     assert w["net_worth_cents"] == w["tracked_net_worth_cents"] + 250_000
+    # Un autre bien déclaré (des SCPI, un locatif) n'est pas ton logement : il reste compté.
+    scpi = {"label": "SCPI", "kind": "immobilier", "value_cents": 5_000_000}
+    rental = {"label": "Appartement locatif", "kind": "immobilier", "value_cents": 19_000_000}
+    with app.state.sessionmaker() as db:
+        advisor.set_answer(db, "outside_assets", [scpi, rental, flat], source="user:micka")
+        db.commit()
+        assert advisor.build_dossier(db, TODAY)["wealth"]["outside_assets_cents"] == 24_000_000
+        advisor.set_answer(
+            db, "outside_assets", [scpi, {**flat, "label": "Bien", "value_cents": 21_000_000}], source="user:micka"
+        )
+        db.commit()
+        assert advisor.build_dossier(db, TODAY)["wealth"]["outside_assets_cents"] == 5_000_000, "valeur proche"
+
+
+def test_removing_the_home_keeps_the_daily_cap(app, home: tuple[TestClient, FakeDvf]) -> None:  # type: ignore[no-untyped-def]
+    client, fake = home
+    _agree(client)
+    results = []
+    for _ in range(5):
+        results.append(client.put("/api/home/profile", json=HOME).json()["result"]["status"])
+        assert client.delete("/api/home/profile").status_code == 200
+    # Effacer puis redécrire ne remet pas le compteur à zéro : trois extractions au plus dans la journée.
+    assert results == ["refreshed"] * 3 + ["capped"] * 2 and len(fake.files) == 12
+    with app.state.sessionmaker() as db:
+        assert db.execute(text("SELECT data, result, quarter FROM dvf_cache")).one() == (None, None, None)
+
+
+def test_put_profile_goes_through_the_rate_limiter(app, home: tuple[TestClient, FakeDvf]) -> None:  # type: ignore[no-untyped-def]
+    client, fake = home
+    _agree(client)
+    limiter = app.state.limiters["home"]
+    while limiter.hit("testclient"):
+        pass
+    r = client.put("/api/home/profile", json=HOME).json()
+    assert r["result"]["status"] == "capped" and r["view"]["profile"]["code"] == "45234" and fake.files == []
+
+
+def test_download_happens_outside_the_write_lock(app, home: tuple[TestClient, FakeDvf]) -> None:  # type: ignore[no-untyped-def]
+    client, fake = home
+    _agree(client)
+    blocked: list[str] = []
+    serve = fake.__call__
+
+    def probe(request: httpx.Request) -> httpx.Response:
+        # Pendant le téléchargement, un autre écrivain (connexion, journal…) passe sans attendre.
+        with app.state.sessionmaker() as other:
+            other.execute(text("PRAGMA busy_timeout=200"))
+            try:
+                audit.record(other, "test", "probe")
+                other.commit()
+            except OperationalError as exc:
+                blocked.append(str(exc))
+        return serve(request)
+
+    app.state.dvf_http = httpx.Client(transport=httpx.MockTransport(probe))
+    assert client.put("/api/home/profile", json=HOME).json()["result"]["status"] == "refreshed"
+    assert len(fake.files) == 4 and blocked == []
+
+
+def test_loan_on_an_archived_account_counts_nowhere(home: tuple[TestClient, FakeDvf], app) -> None:  # type: ignore[no-untyped-def]
+    client, _fake = home
+    _agree(client)
+    client.put("/api/home/profile", json=HOME)
+    with app.state.sessionmaker() as db:
+        account = Account(name="Crédit immo", kind="credit", balance_cents=-12_000_000, archived=True)
+        db.add(account)
+        db.flush()
+        loan = Loan(
+            name="Prêt immo",
+            kind="immobilier",
+            principal_cents=15_000_000,
+            annual_rate_bp=300,
+            months=240,
+            first_payment=date(2024, 1, 5),
+            account_id=account.id,
+        )
+        db.add(loan)
+        db.commit()
+    view = client.get("/api/home").json()
+    nw = client.get("/api/wealth").json()["net_worth"]
+    assert view["loans"] == [] and view["net_cents"] == 19_800_000 and nw["by_bucket"].get("dettes", 0) == 0
+
+
+def test_description_changed_during_the_download_is_not_mixed_up(app, home: tuple[TestClient, FakeDvf]) -> None:  # type: ignore[no-untyped-def]
+    client, _fake = home
+    client.put("/api/home/profile", json=HOME)
+
+    def fetch(url: str) -> bytes | None:
+        with app.state.sessionmaker() as other:
+            svc.save_profile(
+                other, actor="test", **{**HOME, "code": "45000", "section": None, "rooms": None}, in_wealth=True
+            )
+            other.commit()
+        return None
+
+    with app.state.sessionmaker() as db:
+        consents.set_consent(db, svc.CONSENT, True, actor="test")
+        r = svc.refresh(db, today=TODAY, now=datetime(2026, 10, 24, 9, tzinfo=UTC), fetch=fetch, actor="test")
+        db.commit()
+        assert r["status"] == "failed" and "a changé" in r["message"]
+        assert db.execute(text("SELECT data, attempts FROM dvf_cache")).one() == (None, 1)

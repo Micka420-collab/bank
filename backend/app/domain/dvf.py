@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import csv
 import io
+import math
 import re
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import asdict, dataclass, field
@@ -112,20 +113,24 @@ def _number(raw: str | None) -> float | None:
     if not text:
         return None
     try:
-        return float(text)
+        value = float(text)
     except ValueError:
         return None
+    return value if math.isfinite(value) else None  # « nan », « inf » : du texte, pas un nombre
 
 
 def _rows(data: bytes) -> Iterator[dict[str, str]]:
     text = io.TextIOWrapper(io.BytesIO(data), encoding="utf-8-sig", errors="replace", newline="")
     header = text.readline()
     delimiter = "|" if header.count("|") > header.count(",") else ","
-    columns = [c.strip() for c in next(csv.reader([header], delimiter=delimiter), [])]
-    missing = [c for c in REQUIRED if c not in columns]
-    if missing:
-        raise DvfError(f"Fichier DVF illisible : colonnes absentes ({', '.join(missing)})")
-    yield from csv.DictReader(text, fieldnames=columns, delimiter=delimiter)
+    try:  # champ démesuré, guillemet orphelin : le fichier vient du réseau
+        columns = [c.strip() for c in next(csv.reader([header], delimiter=delimiter), [])]
+        missing = [c for c in REQUIRED if c not in columns]
+        if missing:
+            raise DvfError(f"Fichier DVF illisible : colonnes absentes ({', '.join(missing)})")
+        yield from csv.DictReader(text, fieldnames=columns, delimiter=delimiter)
+    except csv.Error as exc:
+        raise DvfError("Fichier DVF illisible") from exc
 
 
 def parse_commune(data: bytes, *, since: date | None = None) -> list[Sale]:
@@ -177,7 +182,8 @@ def _single_home(rows: list[dict[str, str]]) -> Sale | None:
     rooms = _number(rooms_raw)
     # id_parcelle : commune (5) + préfixe de section (3) + section (2) + numéro (4), ex. 75115000AB0012.
     section = parcel[8:10].upper() if len(parcel) == 14 else None
-    return Sale(day, round(price), DVF_TYPES[kind], round(surface), int(rooms) if rooms else None, section)
+    pieces = int(rooms) if rooms is not None and MIN_ROOMS <= rooms <= MAX_ROOMS else None
+    return Sale(day, round(price), DVF_TYPES[kind], round(surface), pieces, section)
 
 
 # ------------------------------------------------------------------ statistiques
