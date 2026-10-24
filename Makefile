@@ -1,7 +1,7 @@
 # Bank — commandes courantes.  make help
 SHELL := /bin/bash
 SP ?= backend/.venv/bin
-.PHONY: help secrets up down logs build test lint fiscal-test front-test dev-api dev-web demo backup check
+.PHONY: help secrets up down logs build test lint fiscal-test front-test dev-api dev-web demo backup restore-check check
 
 help: ## Liste des commandes
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -25,8 +25,11 @@ down: ## Arrête la pile
 logs: ## Journaux (dont l'ancrage de la chaîne d'audit)
 	docker compose logs -f --tail=100
 
-backup: ## Sauvegarde à chaud cohérente dans le volume (/data/backups)
+backup: ## Sauvegarde chiffrée à chaud dans le volume (/data/backups) et le second emplacement s'il est réglé
 	docker compose exec api python -m scripts.backup
+
+restore-check: ## Vérifie que la dernière sauvegarde se relit (FILE=bank-….bank pour en choisir une)
+	docker compose exec api sh -c 'python -m scripts.restore --check /data/backups/$${FILE:-$$(ls /data/backups/*.bank | tail -1 | xargs basename)}'
 
 lint: ## Ruff, mypy strict, bandit, shellcheck
 	cd backend && .venv/bin/ruff check app tests && .venv/bin/ruff format --check app tests && .venv/bin/mypy app && .venv/bin/bandit -q -r app -c pyproject.toml

@@ -299,6 +299,40 @@ class SavingsGoal(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 
+class Loan(Base):
+    """Un crédit suivi : ce qu'il faut pour le tableau d'amortissement (capital, taux, durée, assurance, première
+    échéance). Nom et prêteur chiffrés ; le capital restant dû entre dans le patrimoine net."""
+
+    __tablename__ = "loans"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(EncryptedText("loan.name"))
+    lender: Mapped[str | None] = mapped_column(EncryptedText("loan.lender"))
+    kind: Mapped[str] = mapped_column(String(16), default="consommation")
+    principal_cents: Mapped[int] = mapped_column(BigInteger)
+    annual_rate_bp: Mapped[int] = mapped_column(Integer)
+    months: Mapped[int] = mapped_column(Integer)
+    first_payment: Mapped[date] = mapped_column(Date)
+    insurance_monthly_cents: Mapped[int] = mapped_column(BigInteger, default=0)
+    account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class BackupRun(Base):
+    """Une sauvegarde ou une restauration d'essai : ce qui s'est passé, visible dans Bank. Jamais de secret :
+    noms de fichiers, tailles, nombre de lignes par table, message d'erreur."""
+
+    __tablename__ = "backup_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(12), index=True)  # backup | verify
+    status: Mapped[str] = mapped_column(String(8), index=True)  # ok | failed
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    details: Mapped[str] = mapped_column(Text, default="{}")  # JSON
+    trigger: Mapped[str] = mapped_column(String(10), default="auto")  # auto | manual
+
+
 class WealthSnapshot(Base):
     __tablename__ = "wealth_snapshots"
 

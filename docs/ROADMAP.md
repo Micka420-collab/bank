@@ -29,6 +29,8 @@ critères d'acceptation. Effort : S = une session, M = quelques-unes, L = un cha
 Ordre de développement : 1 → 2 → 3 → 5 → 13, puis le reste selon ce qui te sert d'abord. Livré le 22 octobre
 2026 : 1 et 2 ([docs/DECLARATIONS.md](DECLARATIONS.md)), 3 ([docs/CORRELATIONS.md](CORRELATIONS.md)), 5 (« L'année
 qui vient », README), 13 (passkeys, SECURITY.md), 18 (« Un chat qui agit », README et SECURITY.md), 19 (« Pensé pour le
-téléphone » et « Notifications sur ton téléphone », README ; [docs/CANAUX.md](CANAUX.md)). Les règles qui portent une
+téléphone » et « Notifications sur ton téléphone », README ; [docs/CANAUX.md](CANAUX.md)), 4 (« Ton plan B », README
+et SECURITY.md), 6 (« Crédits », README), 16 (« Sauvegarde », README et SECURITY.md ; Renovate et SBOM en CI). Deux
+sessions travaillent en parallèle : [docs/COORDINATION.md](COORDINATION.md). Les règles qui portent une
 date (fenêtres d'actualisation, plafonds, taux) sont sourcées et datées dans le code et dans `docs/`, et Bank dit
 quand les revérifier.

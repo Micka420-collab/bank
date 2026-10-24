@@ -20,6 +20,7 @@ from app.domain import watch as dw
 from app.domain.money import format_eur
 from app.models import ChannelConfig, ChannelLink, ChannelNotice, Procedure, WatchItem, WatchSource
 from app.services import analytics, autonomy, correlations, obligations, opportunities, procedures, yearahead
+from app.services import backup as backup_service
 from app.services import watch as watch_service
 from app.services.settings_store import get_setting
 
@@ -89,6 +90,10 @@ def collect(
     out += [
         Notice(key, text, urgent)
         for key, text, urgent in correlations.alerts(db, today=today, privacy=privacy, public_url=public_url)
+    ]
+    # Sauvegardes : un échec ou deux jours sans copie — la seule alerte qui parle du serveur, pas de l'argent.
+    out += [
+        Notice(key, text, urgent) for key, text, urgent in backup_service.alerts(db, now=now, public_url=public_url)
     ]
     forecast, _ = analytics.month_forecast(db, today)
     if forecast.overdraft_date is not None:

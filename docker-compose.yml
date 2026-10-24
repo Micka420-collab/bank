@@ -51,6 +51,8 @@ services:
     group_add: ["10010"]  # groupe « bank-secrets » : lecture des fichiers de ./secrets (mode 640)
     volumes:
       - bank-data:/data
+      # Second emplacement des sauvegardes chiffrées (BANK_BACKUP_REMOTE_DIR=/backups-usb) : un disque ou un NAS monté.
+      # - /mnt/usb/bank:/backups-usb
     # /tmp plus grand : un dépôt de plusieurs documents au coffre transite par là (40 Mo au plus).
     tmpfs: ["/tmp:size=64m,mode=1777"]
     networks: [app, fiscal, egress]

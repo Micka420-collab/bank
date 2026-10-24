@@ -139,7 +139,7 @@ export function App() {
           <HubTabs page={page} />
           <Suspense fallback={<Loading />}>
           {page === "operations" ? <Operations openImport={route.params.get("import") === "1"} />
-            : page === "aides" ? <Aids />
+            : page === "aides" ? <Aids planB={route.params.get("planb") === "1"} />
             : page === "patrimoine" ? <Wealth />
             : page === "crypto" ? <Crypto />
             : page === "pilote" ? <Pilot />

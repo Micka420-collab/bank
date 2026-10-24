@@ -21,7 +21,20 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
   habituelles), les pics trimestriels et annuels détectés à leur deuxième occurrence et posés à leur mois (assurance
   annuelle, impôts, eau), ceux que tu ajoutes, le point bas de l'année et la **provision mensuelle** qui lisse — que
   Bank propose de réserver avec ton épargne visée. Alerte deux mois avant un pic.
+- **Ton plan B « perte de revenu »** : si ton revenu principal s'arrête, baisse de X % ou si tes droits au chômage
+  s'épuisent — combien de mois ton épargne mobilisable tient face à tes charges réelles, ce que les aides
+  recalculées par OpenFisca rattrapent (RSA, prime d'activité, aide au logement), la fourchette d'allocation
+  chômage selon la règle officielle (jamais le centime : le simulateur de France Travail fait foi), et quoi faire la
+  première semaine, en démarches déjà dans le catalogue. Chaque chiffre dit d'où il vient ; rien ne part.
 - **Patrimoine** : valeur nette, matelas de sécurité, livrets réglementés (taux au 1er août 2026), objectifs, projection.
+- **Sauvegarde qui se vérifie** : copie chiffrée chaque nuit, second emplacement, restauration d'essai chaque semaine
+  dans un dossier jetable (intégrité, empreinte, lignes), réussites et échecs visibles dans Réglages, alerte sur
+  échec ; Renovate et SBOM en CI. Voir « Sauvegarde ».
+- **Crédits** : chaque prêt saisi avec ses chiffres de contrat donne son tableau d'amortissement exact au centime
+  (restant dû, intérêts restants, coût total, fin), sa mensualité reconnue dans les relevés, et deux simulateurs —
+  remboursement anticipé (finir plus tôt, payer moins, tout solder) avec l'indemnité plafonnée par la loi, datée, et
+  renégociation à un autre taux (frais, rachat). Le restant dû entre dans le patrimoine net et dans le dossier de
+  l'agent.
 - **Décider** : « je peux m'acheter ça ? » répond oui, oui mais, à partir de telle date, ou dans N mois d'épargne
   (matelas d'abord ou au plus vite) ; « où placer mon argent ? » donne un plan par priorité (mois d'avance, dette
   chère, matelas sur LEP / livrets, projets datés, long terme PEA / assurance vie / PER selon ta tranche d'impôt,
@@ -167,6 +180,42 @@ occurrence, ajouté par toi, dépense prévue à l'accueil), la provision mensue
 pic détecté à tort ; « Ajouter » pose une dépense annuelle ou trimestrielle que les relevés ne montrent pas encore.
 Quand la provision n'est pas couverte par ton épargne visée, Bank te propose de la réserver d'un geste (elle sort
 alors du reste à dépenser du jour, et le pic ne surprend plus). Ton agent lit la même projection (`get_year_ahead`).
+
+## Ton plan B « perte de revenu »
+
+Sur la page Aides, « Ton plan B » : trois scénarios en un écran — ton salaire (ou ton allocation, ta pension)
+s'arrête, il baisse de 20, 30 ou 50 %, fin de droits (plus de salaire ni de chômage). Pour chacun, le chiffre qui
+compte d'abord : **combien de mois tu tiens** et jusqu'à quand, à partir de ton épargne mobilisable (comptes
+courants et livrets — jamais un placement bloqué ni la crypto) et de ce qu'il faut sortir chaque mois (charges fixes
+détectées, dépenses habituelles, pics lissés : les mêmes chiffres que « L'année qui vient »). Puis ce que les aides
+rattrapent : si ton foyer est renseigné, OpenFisca recalcule RSA, prime d'activité, aide au logement et
+allocations avec le revenu du scénario installé depuis trois mois (c'est ainsi que la Caf calcule), et Bank montre
+avant → après. L'allocation chômage n'est pas simulée au centime : Bank applique la règle officielle (57 % à 75 %
+du salaire journalier de référence, plancher et partie fixe, règle datée dans le code) à un brut estimé depuis ton
+net, donne la fourchette et renvoie au simulateur de France Travail. Enfin la première semaine : s'inscrire à
+France Travail dès le lendemain, prévenir la Caf, demander la prime d'activité ou le RSA quand le moteur les voit,
+la Complémentaire santé solidaire, passer en revue les abonnements, demander un report d'échéance de crédit,
+prévenir le bailleur, vérifier l'ASS avant la fin des droits — chaque ligne est un bouton vers une démarche du
+catalogue (Bank prépare, tu transmets), un lien officiel ou une case à cocher. Rien ne part vers un organisme, et
+aucun droit n'est inventé : sans moteur fiscal, les prestations sont dites « supposées inchangées ». Le chat
+(« et si je perds mon travail ? ») et ton agent (`get_plan_b`) lisent le même calcul.
+
+## Crédits
+
+Sur la page Patrimoine, « Crédits » : ajoute un prêt avec ce que dit ton contrat (capital, taux nominal, durée,
+première échéance, assurance) et Bank calcule le tableau d'amortissement — mensualité constante, intérêts sur le
+capital restant dû, dernière échéance ajustée au centime (200 000 € à 3,5 % sur 20 ans : 1 159,92 € par mois, comme
+les simulateurs publics). Tu vois le restant dû du jour, la progression, la prochaine échéance, les intérêts qu'il
+reste à payer et le coût total ; la mensualité est reconnue dans tes relevés (même montant à ±3 %, catégorie
+« crédits » d'abord) et Bank prévient quand le prélèvement attendu n'est pas passé. Le restant dû entre dans ta
+valeur nette comme une dette (sauf si le prêt est relié à un compte « crédit » de ta banque : son solde fait foi,
+et Bank signale un écart). Deux simulateurs : **rembourser par anticipation** — finir plus tôt à mensualité égale,
+payer moins à durée égale, ou tout solder — avec l'indemnité maximale que la loi autorise (prêt immobilier : six
+mois d'intérêts sur le capital remboursé et au plus 3 % du restant dû ; crédit à la consommation : rien jusqu'à
+10 000 € sur douze mois, puis 1 % ou 0,5 %, jamais plus que les intérêts restants ; règles datées, ton contrat peut
+prévoir moins) ; **renégocier** — même durée restante, nouveau taux, frais et rachat par une autre banque compris,
+avec le gain net et un avis franc quand ça ne vaut pas le coup. Ton agent voit les prêts suivis dans `get_wealth`
+(dettes, source « amortization »).
 
 ## Ce qui est lié (corrélations)
 
@@ -442,7 +491,7 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 902 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+Qualité au moment de la livraison : 915 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
 aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, scénarios adverses du
 banc d'essai crypto de Minara rejoués contre le pilote automatique, demandes simultanées qui ne passent jamais
@@ -450,9 +499,11 @@ ensemble sous un plafond, Keccak-256 vérifié contre une implémentation de
 référence, intégration OpenFisca réelle, passkeys face à un authentificateur simulé, transaction validée avant
 l'envoi de chaque réponse, chat interactif face à un modèle simulé et à de faux moteurs de recherche, réponse en
 direct recomposée fragment par fragment, Web Push vérifié au bit près contre le vecteur de la RFC 8291 et déchiffré
-par un faux navigateur), couverture 92 %, 123 tests front (parcours de première ouverture, coffre, démarches,
-opportunités, veille, assistant, chat interactif et réponse en direct, notifications sur l'appareil, crypto,
-pilote, déclarations, corrélations, année qui vient, passkeys, erreurs qui disent quoi faire),
+par un faux navigateur, amortissement vérifié sur un cas de référence public, plan B contre un moteur fiscal
+simulé qui réagit au revenu, sauvegarde chiffrée altérée, tronquée ou rallongée refusée), couverture 91 %,
+129 tests front (parcours de première ouverture, coffre, démarches, opportunités, veille, assistant, chat
+interactif et réponse en direct, notifications sur l'appareil, plan B, crédits, sauvegardes, crypto, pilote,
+déclarations, corrélations, année qui vient, passkeys, erreurs qui disent quoi faire),
 mypy strict sans erreur,
 ruff et bandit propres, revue de sécurité indépendante du pilote et de la crypto (ses constats corrigés et
 testés), `pip-audit` et `npm audit` sans vulnérabilité connue, aucune erreur de console ni débordement
@@ -464,14 +515,29 @@ PublicNode, CoinGecko, alternative.me).
 
 ## Sauvegarde
 
+Bank se sauvegarde seul : chaque nuit (3 h, réglable `BANK_BACKUP_HOUR`) une copie à chaud cohérente de la base (API
+de sauvegarde SQLite), **chiffrée** au format `BANKBK1` (AES-256-GCM par morceaux, clé dérivée de la clé maîtresse, en-tête
+authentifié, dernier morceau marqué : un fichier tronqué, recollé ou altéré ne se relit pas), écrite dans `/data/backups`
+et, si tu montes un disque ou un NAS, dans un **second emplacement** (`BANK_BACKUP_REMOTE_DIR`) ; un manifeste à côté
+(taille, empreinte, lignes par table — rien de secret) ; quatorze copies gardées (`BANK_BACKUP_KEEP`). Chaque semaine
+(dimanche, `BANK_BACKUP_VERIFY_WEEKDAY`), **restauration d'essai** : la dernière sauvegarde est déchiffrée dans un
+dossier jetable, ouverte en lecture seule, vérifiée (intégrité SQLite, empreinte, lignes par table égales au
+manifeste), puis effacée. Réglages › Sauvegardes montre la dernière sauvegarde et la dernière restauration d'essai,
+réussies ou ratées, l'historique, les fichiers, et deux boutons (sauvegarder maintenant, tester la restauration) ;
+un échec ou deux jours sans copie alertent tes messageries et ton téléphone, et le chat le compte dans ce qui manque.
+
 ```bash
-make backup                                        # copie cohérente à chaud dans le volume
-docker compose cp api:/data/backups ./backups
-age -r <ta-clé-publique> -o bank.db.age backups/bank-*.db   # toujours chiffrer avant de sortir de nimbus
+make backup                                        # la même sauvegarde, à la main
+docker compose cp api:/data/backups ./backups      # déjà chiffré : peut sortir de nimbus tel quel
+docker compose run --rm api python -m scripts.restore --check /data/backups/bank-AAAAMMJJ-HHMMSS.bank   # vérifier
+docker compose run --rm api python -m scripts.restore /data/backups/bank-….bank /data/restored.db       # relire
 ```
 
-Restaurer : arrêter la pile, remplacer `/data/bank.db` dans le volume par la sauvegarde, relancer avec la **même**
-clé maîtresse.
+Restaurer : arrêter la pile, remplacer `/data/bank.db` dans le volume par le fichier restauré, relancer avec la **même**
+clé maîtresse. La clé maîtresse n'est jamais dans la sauvegarde : elle se garde à part (gestionnaire de mots de passe).
+Côté dépendances, Renovate groupe les mises à jour chaque dimanche et la CI publie une nomenclature CycloneDX (SBOM)
+que Trivy relit : une vulnérabilité connue met la CI au rouge (`pip-audit`, `npm audit`, Trivy sur les images et la
+nomenclature).
 
 ## Rotation de la clé maîtresse
 

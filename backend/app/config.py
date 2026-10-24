@@ -62,6 +62,16 @@ class Settings(BaseSettings):
     # Énergie (Linky via Conso API) : synchronisation quotidienne en tâche de fond.
     energy_enabled: bool = True
 
+    # Sauvegardes : copie chaude chiffrée (clé dérivée de la clé maîtresse) chaque jour à l'heure dite (heure locale),
+    # vers BANK_BACKUP_DIR et, si donné, un second emplacement (disque USB, NAS monté) ; restauration d'essai
+    # automatique une fois par semaine (déchiffrement dans un dossier jetable, intégrité, comptage des lignes).
+    backup_enabled: bool = True
+    backup_dir: Path = Path("/data/backups")
+    backup_remote_dir: Path | None = None
+    backup_hour: int = Field(default=3, ge=0, le=23)
+    backup_keep: int = Field(default=14, ge=1, le=365)
+    backup_verify_weekday: int = Field(default=6, ge=0, le=6)  # 6 = dimanche
+
     # Agents IA (serveur MCP sur /mcp) : désactivable d'un coup, débit borné par jeton.
     agents_enabled: bool = True
     agent_calls_per_minute: int = Field(default=120, ge=10, le=1000)

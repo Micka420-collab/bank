@@ -147,7 +147,7 @@ def build_context(db: Session, today: date) -> Context:
         )
     ]
     essentials = analytics.monthly_essentials(db, today)
-    ef = emergency_fund(analytics.account_balances(db), essentials)
+    ef = emergency_fund(analytics.account_balances(db, today), essentials)
     user = db.scalar(select(User).limit(1))
     energy_conn = energy_service.active_connection(db)
     last_energy = (

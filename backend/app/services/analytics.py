@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import upsert
+from app.domain import loans as loans_domain
 from app.domain.aids import AidPayment, AidsSummary, summarize_aids
 from app.domain.forecast import (
     CategoryInfo,
@@ -31,6 +32,7 @@ from app.models import (
     Category,
     FinancialProfile,
     HouseholdProfile,
+    Loan,
     SavingsGoal,
     Transaction,
     WealthSnapshot,
@@ -209,11 +211,30 @@ def monthly_income_series(db: Session, today: date) -> dict[str, dict[str, int]]
 CRYPTO_LINE = "Cryptos suivies dans Bank"
 
 
-def account_balances(db: Session) -> list[AccountBalance]:
+def _loan_domain(row: Loan) -> loans_domain.Loan:
+    return loans_domain.Loan(
+        principal_cents=row.principal_cents,
+        annual_rate_bp=row.annual_rate_bp,
+        months=row.months,
+        first_payment=row.first_payment,
+        insurance_monthly_cents=row.insurance_monthly_cents,
+        kind=row.kind if row.kind in loans_domain.KINDS else "autre",
+        name=row.name,
+    )
+
+
+def account_balances(db: Session, today: date | None = None) -> list[AccountBalance]:
     out = [
         AccountBalance(a.id, a.name, a.kind, a.balance_cents)
         for a in db.scalars(select(Account).where(Account.archived.is_(False)))
     ]
+    # Les prêts suivis sans compte « crédit » relié : leur capital restant dû (tableau d'amortissement) est une dette
+    # du patrimoine net, ligne à part (id négatif). Reliés à un compte, c'est le solde du compte qui compte.
+    on = today or date.today()  # noqa: DTZ011 - le jour civil du serveur suffit pour un restant dû
+    for loan in db.scalars(select(Loan).where(Loan.account_id.is_(None))):
+        remaining = loans_domain.position(loans_domain.schedule(_loan_domain(loan)), on).remaining_cents
+        if remaining > 0:
+            out.append(AccountBalance(-loan.id, loan.name, "credit", -remaining))
     # Le portefeuille crypto (adresses suivies, avoirs saisis) compte dans le patrimoine, comme une ligne à part
     # (id 0) : jamais dans l'argent disponible, et réglable (Crypto › « Compter dans mon patrimoine »).
     if get_setting(db, "crypto_in_wealth"):

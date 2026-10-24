@@ -8,6 +8,7 @@ import { TrendChart } from "../components/charts/TrendChart";
 import { CountUp } from "../components/CountUp";
 import { Icon } from "../components/Icon";
 import { InvestPlan } from "../components/InvestPlan";
+import { Loans } from "../components/Loans";
 import { Segmented } from "../components/Segmented";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { amountOnly, money, percent, plural, shortDate } from "../format";
@@ -148,6 +149,7 @@ export function Wealth() {
       </section>
 
       <Goals goals={w.data.goals} accounts={w.data.accounts} onChange={w.reload} />
+      <Loans onChange={w.reload} />
       <Projection initial={Math.max(0, savings)} />
       <InvestPlan />
       <p className="faint section">{w.data.disclaimer}</p>

@@ -6,6 +6,7 @@ import { api, useApi, type AidStream, type AidsResponse, type Profile, type Simu
 import { CountUp } from "../components/CountUp";
 import { Icon } from "../components/Icon";
 import { Obligations } from "../components/Obligations";
+import { PlanB } from "../components/PlanB";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { amountOnly, longDate, money, monthLabel, shortDate } from "../format";
 
@@ -33,7 +34,7 @@ const ACTIVITY: [string, string][] = [
   ["inactif", "Sans activité"],
 ];
 
-export function Aids() {
+export function Aids({ planB = false }: { planB?: boolean }) {
   const aids = useApi<AidsResponse>("/api/aids");
   if (aids.error) return <ErrorNote message={aids.error} onRetry={aids.reload} />;
   if (!aids.data) return <Loading />;
@@ -105,6 +106,8 @@ export function Aids() {
           </ul>
         </section>
       )}
+
+      <PlanB open={planB} />
 
       <Obligations />
 

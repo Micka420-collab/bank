@@ -169,7 +169,7 @@ class GoalIn(BaseModel):
 
 @router.get("/wealth")
 def wealth(_: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
-    balances = analytics.account_balances(db)
+    balances = analytics.account_balances(db, today)
     nw = net_worth(balances)
     analytics.snapshot_wealth(db, today, nw.assets_cents, nw.liabilities_cents)
     products = load_regulated_products()

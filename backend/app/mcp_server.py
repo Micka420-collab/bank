@@ -58,6 +58,7 @@ from app.services import crypto as crypto_service
 from app.services import energy as energy_service
 from app.services import obligations as obligations_service
 from app.services import opportunities as opportunities_service
+from app.services import planb as planb_service
 from app.services import procedures as procedures_service
 from app.services import yearahead as yearahead_service
 from app.services.categories import recategorize
@@ -105,6 +106,10 @@ patrimoine). Tu es son gestionnaire d'argent. Règles :
 14. Initiatives : get_coverage dit ce qui est relié à Bank et ce qui manque (banque, bail, assurances, bulletins,
    avis d'impôt, Linky, crypto…) avec ce que chaque connexion débloquerait. Quand la question touche quelque
    chose qui manque, propose de le relier — dans Bank, par la personne ; jamais un identifiant ni un code ici.
+15. « Et si je perds mon travail ? », « je tiens combien de temps ? », « fin de droits » -> get_plan_b : trois
+   scénarios (le revenu principal s'arrête, baisse de 30 %, fin de droits), mois d'autonomie sur les charges
+   réelles, prestations recalculées par OpenFisca, fourchette d'ARE (règle officielle, jamais le centime) et
+   démarches de la première semaine. Tu expliques dans l'ordre (J+1 d'abord) ; rien ne part sans la personne.
 Montants en entrée : en euros. Montants en sortie : en centimes (champ *_cents)."""
 
 
@@ -438,7 +443,8 @@ def build_mcp(
 
     @srv.tool(
         description="Patrimoine : valeur nette, matelas de sécurité vs objectif, livrets (place restante), "
-        "dettes, objectifs.",
+        "dettes (les prêts suivis dans Bank avec leur tableau d'amortissement — restant dû, mensualité, taux, "
+        "intérêts restants, fin — sinon la dette déclarée), objectifs.",
         annotations=ToolAnnotations(readOnlyHint=True),
     )
     async def get_wealth(ctx: Context) -> dict[str, Any]:
@@ -499,7 +505,7 @@ def build_mcp(
             t = today()
             inputs = analytics.forecast_inputs(db, t)
             values = advisor.plain_answers(db)
-            balances = analytics.account_balances(db)
+            balances = analytics.account_balances(db, t)
             essentials = analytics.monthly_essentials(db, t)
             ef = emergency_fund(balances, essentials)
             target = int(values.get("emergency_target_months") or 3) * essentials
@@ -764,6 +770,26 @@ def build_mcp(
             return coverage_service.agent_view(db, pilot_today())
 
         return enc(await call(ctx, "read", "get_coverage", fn))
+
+    planb_limiter = SlidingWindowLimiter(6, 3600)
+
+    @srv.tool(
+        description="Plan B « perte de revenu » : si le revenu principal s'arrête, baisse de 30 % ou si les droits au "
+        "chômage s'épuisent — mois d'autonomie (épargne mobilisable face aux charges fixes réelles, au rythme de "
+        "dépenses et aux pics lissés), prestations recalculées par OpenFisca (RSA, prime d'activité, aide au "
+        "logement) une fois la baisse installée, fourchette d'ARE selon la règle officielle (jamais le centime : le "
+        "simulateur de France Travail fait foi), et démarches de la première semaine, déjà dans le catalogue de "
+        "Bank. Chaque chiffre dit d'où il vient. Lecture seule ; rien ne part vers un organisme. Au plus six appels "
+        "par heure (le moteur fiscal tourne quatre fois).",
+        annotations=ToolAnnotations(readOnlyHint=True),
+    )
+    async def get_plan_b(ctx: Context) -> dict[str, Any]:
+        def fn(db: Session, p: AgentPrincipal) -> dict[str, Any]:
+            if not planb_limiter.hit(f"planb:{p.token_id}"):
+                raise McpError("Trop de plans B demandés : le dernier reste valable, réessaie plus tard.")
+            return planb_service.agent_view(db, today(), privacy=p.privacy, fiscal=fiscal())
+
+        return enc(await call(ctx, "simulate", "get_plan_b", fn))
 
     @srv.tool(
         description="L'année qui vient : projection mois par mois sur douze mois à partir de la fin du mois en cours "

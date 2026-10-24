@@ -345,6 +345,202 @@ export type AidsResponse = {
   disclaimer: string;
 };
 
+// ------------------------------------------------------------------ sauvegardes
+export type BackupRun = {
+  id: number;
+  kind: "backup" | "verify";
+  status: "ok" | "failed";
+  trigger: "auto" | "manual";
+  started_at: string;
+  finished_at: string | null;
+  details: {
+    file?: string;
+    cipher_bytes?: number;
+    plain_bytes?: number;
+    tables?: Record<string, number>;
+    copies?: string[];
+    pruned?: number;
+    seconds?: number;
+    warnings?: string[];
+    problems?: string[];
+    error?: string;
+  };
+};
+export type BackupStatus = {
+  enabled: boolean;
+  level: "ok" | "unverified" | "stale" | "none" | "failed";
+  directory: string;
+  remote_directory: string | null;
+  remote_reachable: boolean;
+  hour: number;
+  keep: number;
+  verify_weekday: number;
+  next_backup: string;
+  last_backup: BackupRun | null;
+  last_ok_backup: BackupRun | null;
+  last_verify: BackupRun | null;
+  runs: BackupRun[];
+  files: { name: string; bytes: number; modified_at: string; manifest: boolean }[];
+  remote_files: { name: string; bytes: number; modified_at: string; manifest: boolean }[];
+  restore_hint: string;
+  run?: BackupRun;
+};
+
+// ------------------------------------------------------------------ crédits
+export type LoanRule = { title: string; url: string | null; checked: string };
+export type LoanView = {
+  id: number;
+  name: string;
+  lender: string | null;
+  kind: "immobilier" | "consommation" | "auto" | "autre";
+  kind_label: string;
+  principal_cents: number;
+  annual_rate_bp: number;
+  months: number;
+  first_payment: string;
+  insurance_monthly_cents: number;
+  account_id: number | null;
+  bank_remaining_cents: number | null;
+  payment_cents: number;
+  monthly_with_insurance_cents: number;
+  total_interest_cents: number;
+  total_insurance_cents: number;
+  total_cost_cents: number;
+  end: string;
+  paid_rows: number;
+  remaining_cents: number;
+  paid_principal_cents: number;
+  paid_interest_cents: number;
+  paid_insurance_cents: number;
+  next_payment: string | null;
+  next_payment_cents: number;
+  months_left: number;
+  interest_left_cents: number;
+  progress: number;
+  rules_recheck: boolean;
+  notes: string[];
+  matched: { merchant: string; amount_cents: number; last_date: string; next_date: string; late: boolean; occurrences: number } | null;
+};
+export type LoansResponse = {
+  loans: LoanView[];
+  total_remaining_cents: number;
+  total_monthly_cents: number;
+  credit_accounts: { id: number; name: string; balance_cents: number }[];
+  kinds: { key: LoanView["kind"]; label: string }[];
+  rules: Record<string, LoanRule>;
+  disclaimer: string;
+  created_id?: number;
+};
+export type LoanSchedule = {
+  payment_cents: number;
+  rows: { index: number; day: string; payment_cents: number; interest_cents: number; principal_cents: number; insurance_cents: number; remaining_cents: number }[];
+  yearly: { year: number; payments_cents: number; interest_cents: number; principal_cents: number; insurance_cents: number; remaining_cents: number; months: number }[];
+  total_interest_cents: number;
+  total_insurance_cents: number;
+};
+export type EarlyRepayment = {
+  on: string;
+  amount_cents: number;
+  mode: "shorter" | "lower" | "full";
+  indemnity_cents: number;
+  indemnity_rule: LoanRule | null;
+  indemnity_explanation: string;
+  remaining_before_cents: number;
+  remaining_after_cents: number;
+  old_payment_cents: number;
+  new_payment_cents: number;
+  old_months_left: number;
+  new_months_left: number;
+  interest_saved_cents: number;
+  insurance_saved_cents: number;
+  net_gain_cents: number;
+  new_end: string | null;
+};
+export type Renegotiation = {
+  on: string;
+  old_rate_bp: number;
+  new_rate_bp: number;
+  remaining_cents: number;
+  months_left: number;
+  old_payment_cents: number;
+  new_payment_cents: number;
+  old_interest_left_cents: number;
+  new_interest_cents: number;
+  fees_cents: number;
+  indemnity_cents: number;
+  net_gain_cents: number;
+  worth_it: boolean;
+};
+
+// ------------------------------------------------------------------ plan B « perte de revenu »
+export type PlanBIncomes = {
+  salary_cents: number;
+  unemployment_cents: number;
+  pension_cents: number;
+  aids_cents: number;
+  other_cents: number;
+  total_cents: number;
+};
+export type PlanBRule = { key: string; title: string; url: string | null; checked: string; detail: string };
+export type PlanBAction = {
+  key: string;
+  title: string;
+  why: string;
+  when: string;
+  kind: "procedure" | "link" | "check";
+  amount_cents: number;
+  template?: string;
+  url?: string;
+  rule?: PlanBRule;
+};
+export type PlanBScenario = {
+  key: "stop" | "drop" | "end_of_rights";
+  title: string;
+  lead: string;
+  incomes_after: PlanBIncomes;
+  income_before_cents: number;
+  income_after_cents: number;
+  lost_cents: number;
+  needs_cents: number;
+  gap_cents: number;
+  cash_cents: number;
+  months: number | null;
+  runway_month: string | null;
+  runway_label: string | null;
+  status: "ok" | "tight" | "risk";
+  are: {
+    low_cents: number;
+    high_cents: number;
+    formula_cents: number;
+    sjr_day_cents: number;
+    floor_applied: boolean;
+    rule: PlanBRule;
+    simulator: PlanBRule;
+    note: string;
+  } | null;
+  aids: { variable: string; label: string; before_cents: number; after_cents: number; delta_cents: number }[];
+  aids_total_before_cents: number;
+  aids_total_after_cents: number;
+  aids_note: string;
+  css: string;
+  actions: PlanBAction[];
+  notes: string[];
+};
+export type PlanB = {
+  today: string;
+  drop_percent: number;
+  incomes: PlanBIncomes;
+  needs: { fixed_cents: number; variable_cents: number; provision_cents: number; total_cents: number };
+  cash_cents: number;
+  main_income: string;
+  scenarios: PlanBScenario[];
+  sources: ({ key: string; title: string; kind: string } & Partial<PlanBRule>)[];
+  rules_checked: string;
+  rules_recheck: boolean;
+  notes: string[];
+  disclaimer: string;
+};
+
 // ------------------------------------------------------------------ déclarations récurrentes
 export type ObligationState = "upcoming" | "open" | "soon" | "late" | "done" | "missed";
 export type ObligationPeriod = {

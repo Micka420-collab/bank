@@ -50,7 +50,7 @@ def _committed_monthly(db: Session, today: date, values: dict[str, Any], goals: 
 
 
 def _emergency(db: Session, today: date, values: dict[str, Any]) -> tuple[int, int, int, float]:
-    balances = analytics.account_balances(db)
+    balances = analytics.account_balances(db, today)
     essentials = analytics.monthly_essentials(db, today)
     ef = emergency_fund(balances, essentials)
     target_months = int(values.get("emergency_target_months") or recommended_emergency_months(values))
@@ -99,7 +99,7 @@ def investment_plan(db: Session, today: date) -> InvestmentPlan:
     values = advisor.plain_answers(db)
     household = analytics.load_profile(db) or {}
     liquid, target, essentials, months_covered = _emergency(db, today, values)
-    balances = analytics.account_balances(db)
+    balances = analytics.account_balances(db, today)
     products = load_regulated_products()
     debts = [
         DebtLine(

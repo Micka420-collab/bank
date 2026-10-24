@@ -42,6 +42,7 @@ def settings(tmp_path: Path) -> Settings:
         allowed_hosts=["testserver"],
         sync_interval_hours=0,
         fiscal_engine_url="http://fiscal.invalid",
+        backup_dir=tmp_path / "backups",
     )
 
 

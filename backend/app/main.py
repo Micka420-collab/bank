@@ -23,6 +23,7 @@ from app.api import (
     assistant,
     auth,
     autonomy,
+    backups,
     banks,
     channels,
     consents,
@@ -36,10 +37,12 @@ from app.api import (
     imports,
     initiatives,
     insights,
+    loans,
     memory,
     obligations,
     opportunities,
     passkeys,
+    planb,
     planning,
     procedures,
     push,
@@ -62,6 +65,7 @@ from app.security.crypto import Keyring, install_keyring
 from app.security.middleware import AccessLogMiddleware, BodyLimitMiddleware, SecurityHeadersMiddleware
 from app.services import assistant as assistant_service
 from app.services import autonomy as autonomy_service
+from app.services import backup as backup_service
 from app.services import consents as consent_service
 from app.services import crypto as crypto_service
 from app.services import energy as energy_service
@@ -185,6 +189,9 @@ def _housekeeping_once(app: FastAPI, today: date) -> dict[str, int]:
     with app.state.sessionmaker() as db:  # déclarations constatées par le versement qui a suivi
         report["obligations_detected"] = obligations_service.auto_detect(db, today)
         db.commit()
+    with app.state.sessionmaker() as db:  # sauvegarde chiffrée du jour, restauration d'essai de la semaine
+        report.update(backup_service.tick(db, app.state.settings))
+        db.commit()
     return report
 
 
@@ -252,6 +259,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 limiter=app.state.limiters["channel"],
                 push_http=app.state.push_http,
                 push_resolver=app.state.watch_resolver,
+                fiscal=lambda: app.state.fiscal_client,
                 **app.state.channels_options,
             )
             await gateway.start()
@@ -333,6 +341,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         passkeys,
         search,
         push,
+        planb,
+        loans,
+        backups,
         system,
     )
     for r in routers:

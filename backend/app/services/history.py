@@ -214,7 +214,7 @@ def net_worth_history(db: Session, today: date, days: int = 730) -> list[tuple[d
     opération, on retombe sur les instantanés pris à chaque visite de la page Patrimoine.
     """
     accounts = db.scalars(select(Account).where(Account.archived.is_(False))).all()
-    current = net_worth(analytics.account_balances(db)).net_cents
+    current = net_worth(analytics.account_balances(db, today)).net_cents
     ids = [a.id for a in accounts]
     rows = (
         db.execute(

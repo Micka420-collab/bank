@@ -52,6 +52,7 @@ from app.models import (
 from app.security import audit
 from app.services import analytics, autonomy, documents, initiatives, planning
 from app.services import energy as energy_service
+from app.services import loans as loans_service
 
 EXPENSIVE_DEBT_RATE = Decimal(5)  # au-delà, rembourser rapporte plus qu'un livret ou un placement prudent
 
@@ -493,12 +494,13 @@ def build_dossier(db: Session, today: date, privacy: str = "redacted") -> dict[s
     values = {k: v["value"] for k, v in raw.items()}
     inputs = analytics.forecast_inputs(db, today)
     f = inputs.run()
-    balances = analytics.account_balances(db)
+    balances = analytics.account_balances(db, today)
     nw = net_worth(balances)
     essentials = analytics.monthly_essentials(db, today)
     ef = emergency_fund(balances, essentials)
     target_months = int(values.get("emergency_target_months") or recommended_emergency_months(values))
-    debts = values.get("debts") or []
+    tracked_loans = loans_service.for_agent(db, today, privacy)
+    debts = tracked_loans or (values.get("debts") or [])  # les prêts suivis (tableau exact) priment sur le déclaré
     expensive = any(Decimal(str(d.get("rate_percent", 0))) >= EXPENSIVE_DEBT_RATE for d in debts)
     risk = risk_profile(values, ef.months_covered, expensive)
     products = load_regulated_products()
@@ -639,7 +641,10 @@ def build_dossier(db: Session, today: date, privacy: str = "redacted") -> dict[s
             else None,
         },
         "wealth": {
-            "net_worth_cents": nw.net_cents + sum(int(a.get("value_cents", 0)) for a in outside) - total_debt,
+            # Les prêts suivis sont déjà dans la valeur nette (restant dû en dette) : seule la dette déclarée s'ajoute.
+            "net_worth_cents": nw.net_cents
+            + sum(int(a.get("value_cents", 0)) for a in outside)
+            - (0 if tracked_loans else total_debt),
             "tracked_net_worth_cents": nw.net_cents,
             "buckets": nw.by_bucket,
             "outside_assets_cents": sum(int(a.get("value_cents", 0)) for a in outside),
@@ -661,7 +666,7 @@ def build_dossier(db: Session, today: date, privacy: str = "redacted") -> dict[s
             "weighted_rate_percent": str(weighted_rate) if weighted_rate is not None else None,
             "has_expensive_debt": expensive,
             "items": debts,
-            "source": "declared",
+            "source": "amortization" if tracked_loans else "declared",
         },
         "goals": {
             "tracked": analytics.savings_goals_status(db, today, products),

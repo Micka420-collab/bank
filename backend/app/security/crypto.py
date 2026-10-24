@@ -66,6 +66,7 @@ class Keyring:
         self._bidx_key = _derive(active_master, "blind-index")
         self._token_key = _derive(active_master, "signed-tokens")
         self.audit_key = _derive(active_master, "audit-chain")
+        self._backup = {kid: _derive(k, "backup-file") for kid, k in master_keys.items()}
 
     @property
     def active_kid(self) -> str:
@@ -112,6 +113,16 @@ class Keyring:
             return self._enc[kid].decrypt(body[:12], body[12:], context.encode())
         except (ValueError, KeyError, IndexError, InvalidTag, UnicodeDecodeError) as exc:
             raise CryptoError("Déchiffrement impossible") from exc
+
+    # ------------------------------------------------------------ sauvegardes
+    def backup_key(self, kid: str | None = None) -> tuple[str, bytes]:
+        """La clé de chiffrement des fichiers de sauvegarde (dérivée de la clé maîtresse, jamais la clé elle-même) :
+        une sauvegarde se relit avec la clé maîtresse qui l'a écrite, même après une rotation."""
+        k = kid or self._active
+        try:
+            return k, self._backup[k]
+        except KeyError as exc:
+            raise CryptoError("Clé maîtresse inconnue pour cette sauvegarde") from exc
 
     # ------------------------------------------------------------ index aveugle
     def blind_index(self, value: str, context: str) -> str:

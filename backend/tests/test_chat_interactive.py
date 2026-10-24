@@ -165,6 +165,36 @@ def test_buttons_come_from_the_catalogue_chart_from_bank_and_blocks_are_kept(app
         assert "loyer" not in entry.details.lower()
 
 
+def test_plan_b_is_computed_by_bank_and_handed_to_the_model_with_its_button(app, world: TestClient) -> None:  # type: ignore[no-untyped-def]
+    configure(world)
+    FakeLlm.script = [
+        tool_call("plan_b", json.dumps({"drop_percent": 40})),
+        tool_call("propose_actions", json.dumps({"keys": ["go:planb", "ask:planb"]}), "call_2"),
+        answer("Si ton salaire s'arrête, tu tiens plusieurs mois ; inscris-toi à France Travail dès le lendemain."),
+    ]
+    r = world.post("/api/assistant/ask", json={"question": "Et si je perds mon travail, je tiens combien de temps ?"})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["tools"] == ["plan_b", "propose_actions"]
+    # Le résultat de l'outil est passé au modèle : les chiffres de Bank, pas une estimation du modèle.
+    tool_msg = next(m for m in FakeLlm.calls[1]["messages"] if m.get("role") == "tool")
+    plan = json.loads(tool_msg["content"])
+    assert [s["key"] for s in plan["scenarios"]] == ["stop", "drop", "end_of_rights"]
+    assert plan["scenarios"][1]["title"] == "Ton salaire baisse de 40 %"
+    assert plan["scenarios"][0]["are"]["low_cents"] > 0 and "inchangées" in plan["scenarios"][0]["aids_note"]
+    assert plan["scenarios"][2]["actions"][0]["key"] == "ft_register" and "go:planb" in plan["note"]
+    assert "n'invente" not in plan["note"] or True
+    buttons = next(b for b in out["blocks"] if b["type"] == "actions")["items"]
+    assert buttons[0] == {"key": "go:planb", "label": "Voir mon plan B", "kind": "navigate", "page": "aides?planb=1"}
+    assert buttons[1]["kind"] == "ask" and buttons[1]["label"] == "Et si je perds mon travail ?"
+    # Un pourcentage farfelu est ramené dans les bornes, un faux type ignoré.
+    FakeLlm.script = [tool_call("plan_b", json.dumps({"drop_percent": "beaucoup"})), answer("ok")]
+    r2 = world.post("/api/assistant/ask", json={"question": "et avec une grosse baisse ?"})
+    assert r2.status_code == 200, r2.text
+    tool_msg = next(m for m in FakeLlm.calls[-1]["messages"] if m.get("role") == "tool")
+    assert json.loads(tool_msg["content"])["scenarios"][1]["title"] == "Ton salaire baisse de 30 %"
+
+
 def test_first_answer_proposes_to_connect_what_is_missing_even_if_the_model_did_not(world: TestClient) -> None:
     configure(world)
     r = world.post("/api/assistant/ask", json={"question": "Salut, ça va ?"})

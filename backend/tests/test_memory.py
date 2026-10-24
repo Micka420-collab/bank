@@ -314,6 +314,7 @@ def test_without_consent_nothing_is_learned_and_the_conversation_vanishes(app, w
     first = FakeLlm.calls[-1]
     assert first["tools"] == [
         "can_i_buy",
+        "plan_b",
         "propose_actions",
         "show_chart",
         "draw_diagram",
@@ -348,6 +349,7 @@ def test_live_memory_writes_are_visible_and_the_snapshot_stays_frozen(app, world
         "memory",
         "recall",
         "can_i_buy",
+        "plan_b",
         "propose_actions",
         "show_chart",
         "draw_diagram",
@@ -425,7 +427,7 @@ def test_a_model_without_tools_is_retried_and_remembered(app, world: TestClient)
     out = world.post("/api/assistant/ask", json={"question": "Salut"}).json()
     assert out["answer"] == "Sans outils, mais je réponds."
     assert (
-        FakeLlm.calls[0]["tools"] == ["can_i_buy", "propose_actions", "show_chart", "draw_diagram"]
+        FakeLlm.calls[0]["tools"] == ["can_i_buy", "plan_b", "propose_actions", "show_chart", "draw_diagram"]
         and FakeLlm.calls[1]["tools"] == []
     )
     world.post("/api/assistant/ask", json={"question": "Encore"})
@@ -547,6 +549,7 @@ def test_aggregates_privacy_turns_memory_off(world: TestClient) -> None:
     out = world.post("/api/assistant/ask", json={"question": "Bonjour"}).json()
     assert out["memory_on"] is False and FakeLlm.calls[-1]["tools"] == [
         "can_i_buy",
+        "plan_b",
         "propose_actions",
         "show_chart",
         "draw_diagram",
@@ -578,6 +581,7 @@ def test_revoking_consent_stops_memory_mid_conversation(world: TestClient) -> No
     out2 = world.post("/api/assistant/ask", json={"question": "Et ?", "conversation_id": out["conversation_id"]})
     assert out2.json()["memory_on"] is False and FakeLlm.calls[-1]["tools"] == [
         "can_i_buy",
+        "plan_b",
         "propose_actions",
         "show_chart",
         "draw_diagram",

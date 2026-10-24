@@ -31,6 +31,7 @@ from app.db import utcnow
 from app.domain import chatblocks
 from app.domain import procedures as dp
 from app.domain.money import format_eur
+from app.fiscal.client import FiscalClient
 from app.models import ChannelConfig, ChannelLink, ChannelSeen, Procedure
 from app.security import audit
 from app.security.auth import SlidingWindowLimiter
@@ -883,7 +884,14 @@ NO_ASSISTANT = (
 )
 
 
-def answer(db: Session, adm: Admission, *, today: date, make_client: assistant_service.ClientFactory) -> list[str]:
+def answer(
+    db: Session,
+    adm: Admission,
+    *,
+    today: date,
+    make_client: assistant_service.ClientFactory,
+    fiscal: FiscalClient | None = None,
+) -> list[str]:
     """La question à l'assistant, avec la confidentialité la plus stricte et la conversation de ce compte."""
     if adm.ask is None or adm.link_id is None:
         return []
@@ -902,6 +910,7 @@ def answer(db: Session, adm: Admission, *, today: date, make_client: assistant_s
             make_client=make_client,
             privacy=adm.privacy,
             channel=spec(link.platform).label,
+            fiscal=fiscal,
         )
     except assistant_service.AssistantError as exc:
         return [str(exc)]

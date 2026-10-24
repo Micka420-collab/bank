@@ -21,6 +21,7 @@ STATIC: tuple[tuple[str, str, str, str], ...] = (
     ("go:demarches", "Mes démarches", "demarches", "une démarche en cours ou à préparer"),
     ("go:patrimoine", "Mon épargne et mon patrimoine", "patrimoine", "épargne, objectifs, valeur nette"),
     ("go:situation", "Ma situation", "situation", "foyer, logement, droits simulés, corrélations"),
+    ("go:planb", "Voir mon plan B", "aides?planb=1", "perte de revenu, fin de droits, combien de temps je tiens"),
     ("go:crypto", "Mes crypto", "crypto", "actifs crypto, arnaques, impôts crypto"),
     ("go:connecteurs", "Connecteurs", "connecteurs", "banque, Linky, modèle, recherche web"),
 )  # fmt: skip
@@ -30,6 +31,7 @@ FOLLOW_UPS: tuple[tuple[str, str, str], ...] = (
     ("ask:year", "Et l'année qui vient ?", "À quoi ressemble l'année qui vient pour mon solde, avec les pics ?"),
     ("ask:aids", "Quelles aides je pourrais demander ?", "Quelles aides je pourrais demander, d'après ma situation ?"),
     ("ask:save", "Comment épargner plus ?", "Qu'est-ce que je devrais faire en priorité pour épargner plus ?"),
+    ("ask:planb", "Et si je perds mon travail ?", "Si mon revenu principal s'arrête, je tiens combien de temps ?"),
 )
 
 

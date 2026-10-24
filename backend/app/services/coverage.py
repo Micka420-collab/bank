@@ -3,12 +3,13 @@ laisse le domaine dire ce qui manque et ce que ça débloquerait."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.db import utcnow
 from app.domain import coverage as dom
 from app.domain.onboarding import completeness
 from app.domain.recurring import add_months
@@ -30,6 +31,7 @@ from app.models import (
     VaultDocument,
 )
 from app.services import advisor, consents
+from app.services import backup as backup_service
 
 
 def build_input(db: Session, today: date) -> dom.CoverageInput:
@@ -99,7 +101,22 @@ def build_input(db: Session, today: date) -> dom.CoverageInput:
             )
             or 0
         ),
+        backup=_backup_level(db),
     )
+
+
+def _backup_level(db: Session) -> str:
+    """none | unverified | ok | failed | stale — le même verdict que l'écran Réglages, sans toucher au disque."""
+    last_backup = backup_service.last_run(db, "backup")
+    last_ok = backup_service.last_run(db, "backup", "ok")
+    last_verify = backup_service.last_run(db, "verify")
+    if (last_backup and last_backup.status == "failed") or (last_verify and last_verify.status == "failed"):
+        return "failed"
+    if last_ok is None:
+        return "none"
+    if (utcnow() - last_ok.started_at) > timedelta(hours=backup_service.STALE_HOURS):
+        return "stale"
+    return "ok" if last_verify is not None and last_verify.status == "ok" else "unverified"
 
 
 def sources(db: Session, today: date) -> list[dom.Source]:

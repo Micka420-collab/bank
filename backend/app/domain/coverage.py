@@ -42,6 +42,7 @@ class CoverageInput:
     passkeys: int = 0
     goals: int = 0
     push_devices: int = 0  # appareils qui reçoivent les notifications du navigateur
+    backup: str = "none"  # none | unverified | ok | failed | stale : la sauvegarde chiffrée et sa restauration d'essai
 
 
 @dataclass(frozen=True)
@@ -308,6 +309,36 @@ def sources(inp: CoverageInput) -> list[Source]:
                 "reglages",
                 "Activer les notifications",
                 9,
+            )
+        )
+    if inp.backup == "ok":
+        out.append(
+            Source("backup", "Sauvegarde", "connected", "copie chiffrée relue avec succès", "", "reglages", "Voir", 95)
+        )
+    elif inp.backup in ("failed", "stale"):
+        out.append(
+            Source(
+                "backup",
+                "Sauvegarde",
+                "partial",
+                "la dernière sauvegarde a échoué" if inp.backup == "failed" else "aucune sauvegarde depuis deux jours",
+                "dormir tranquille : une copie chiffrée chaque nuit, relue chaque semaine",
+                "reglages",
+                "Voir mes sauvegardes",
+                3,
+            )
+        )
+    elif inp.backup in ("none", "unverified"):
+        out.append(
+            Source(
+                "backup",
+                "Sauvegarde",
+                "partial" if inp.backup == "unverified" else "missing",
+                "sauvegardée, restauration pas encore vérifiée" if inp.backup == "unverified" else "aucune sauvegarde",
+                "dormir tranquille : une copie chiffrée chaque nuit, relue chaque semaine, visible ici",
+                "reglages",
+                "Vérifier ma sauvegarde" if inp.backup == "unverified" else "Lancer une sauvegarde",
+                12,
             )
         )
     if not inp.totp:

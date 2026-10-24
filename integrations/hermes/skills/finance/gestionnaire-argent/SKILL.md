@@ -1,7 +1,7 @@
 ---
 name: gestionnaire-argent
 description: Gère budget, aides, déclarations, contrats, patrimoine et crypto de Micka via Bank — et ne bouge jamais d'argent sans son accord
-version: 2.2.0
+version: 2.3.0
 metadata:
   hermes:
     tags: [finance, budget, aides, declarations, patrimoine, crypto, pilote-automatique, bank, mcp]
@@ -18,7 +18,8 @@ expliques, arbitres et proposes.
 ## When to Use
 
 - Toute question d'argent : « combien je peux dépenser ? », « je peux m'acheter X ? », « où part mon argent ? »,
-  « je devrais épargner combien ? », « j'ai droit à quoi ? », « mon patrimoine avance ? ».
+  « je devrais épargner combien ? », « j'ai droit à quoi ? », « mon patrimoine avance ? », « et si je perds mon
+  travail ? », « je tiens combien de temps ? », « fin de droits ».
 - Les routines planifiées : point du matin, revue du dimanche, bilan du mois.
 - L'onboarding financier (« fais mon onboarding », « apprends ma situation »).
 - Quand une autre tâche a un impact financier (abonnement, achat, voyage) : vérifie avant d'encourager.
@@ -115,7 +116,10 @@ crypto : 1) Bank (`get_crypto`, `crypto_check` sur toute adresse ou offre venue 
 
 1. `spending_summary` (`months: 1` puis `months: 3`), `get_wealth`, `get_aids`.
 2. Raconte le mois en 8 lignes : revenus, dépenses fixes / variables, épargne réelle et taux d'épargne,
-   aides perçues, valeur nette, matelas (mois couverts / visés), objectifs.
+   aides perçues, valeur nette, matelas (mois couverts / visés), objectifs. Les dettes de `get_wealth` sont les
+   prêts suivis dans Bank (`source: amortization` : restant dû, mensualité, intérêts restants, fin — calculés par le
+   tableau d'amortissement) ou, à défaut, la dette déclarée : tu les cites, tu ne recalcules ni une mensualité ni
+   une indemnité de remboursement anticipé (le simulateur de Bank, page Patrimoine › Crédits, s'en charge).
 3. Propose les enveloppes du mois suivant à partir de la moyenne 3 mois (arrondie à 10 €), et une épargne
    mensuelle cohérente avec la priorité du moment (voir le cadre de décision) via `what_if_savings`.
 4. Si une simulation des aides date de plus de 3 mois ou si la situation a changé : `mcp_bank_simulate_aids`
@@ -257,6 +261,20 @@ Suis `references/autonomie.md`. En bref :
 2. Réponds avec le point bas et son mois, les deux ou trois pics qui comptent, et la provision ; si `status` est
    `risk`, dis-le d'abord. C'est un ordre de grandeur calculé par Bank : tu ne recalcules rien, tu n'ajoutes
    aucun pic de ta propre initiative (Micka les ajoute dans Bank).
+
+### Q. « Et si je perds mon travail ? », « je tiens combien de temps ? », « fin de droits »
+
+1. `mcp_bank_get_plan_b` (portée `simulate`, au plus six fois par heure) : trois scénarios (`stop` : le revenu
+   principal s'arrête ; `drop` : il baisse de 30 % ; `end_of_rights` : plus de salaire ni de chômage), chacun avec
+   les mois d'autonomie (`months`, `runway_label`, `status`), ce qui manque par mois (`gap_cents`), les
+   prestations recalculées par OpenFisca (`aids`, avec avant/après et `aids_note`), la fourchette d'ARE (`are`,
+   `low_cents`–`high_cents`, en brut) et les démarches de la première semaine (`actions`, `when` : J+1 d'abord).
+2. Réponds dans cet ordre : combien de mois il tient et jusqu'à quand, ce que les aides rattrapent, les trois
+   premières démarches (`ft_register` le lendemain, la Caf, puis le reste). `status` à `risk` : dis-le d'abord.
+3. L'ARE est une **fourchette** (règle officielle : 57 % à 75 % du salaire journalier de référence) : jamais un
+   montant au centime ; renvoie au simulateur de France Travail (`are.simulator.url`). Tu n'inventes aucun droit
+   (ASS, RSA, CSS…) : seulement ce que Bank liste, avec ses conditions. Rien ne part vers un organisme : Micka
+   prépare chaque démarche dans Bank (« Préparer la démarche ») et l'envoie lui-même.
 
 ### P. Prendre l'initiative : « relie ça, ça débloque… »
 

@@ -329,7 +329,9 @@ messages, anti-boucle, empoisonnement d'adresse, jetons-appâts), sans en repren
   `get_obligations` (déclarations récurrentes : fenêtres, retards, chiffres préparés — lecture seule) et
   `get_correlations` (ce que contrats, relevés et aides disent ensemble — lecture seule), `get_year_ahead` (douze
   mois, point bas, pics, provision — lecture seule), `get_coverage` (ce qui est relié et ce qui manque, avec ce que
-  chaque connexion débloquerait — lecture seule, pour prendre l'initiative).
+  chaque connexion débloquerait — lecture seule, pour prendre l'initiative), `get_plan_b` (perte de revenu : mois
+  d'autonomie, prestations recalculées, fourchette d'ARE, démarches de la première semaine — portée `simulate`,
+  six appels par heure).
 - **Écrans** : Épargne · Crypto · Pilote (ruban de répartition, humeur du marché, vérificateur, impôts ; état,
   jauges, cadre, journal).
 - **HERMÈS** : compétence v2 (porte d'entrée, comportement critique, procédures I à L), règle de routage dans

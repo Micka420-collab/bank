@@ -134,10 +134,12 @@ class Gateway:
         alert_first_delay: float = 60.0,
         push_http: httpx.Client | None = None,
         push_resolver: Callable[[str], list[str]] | None = None,
+        fiscal: Callable[[], Any] | None = None,
     ) -> None:
         self._db = factory_db
         self._push_http = push_http  # client synchrone des notifications Web Push (remplaçable en test)
         self._push_resolver = push_resolver
+        self._fiscal = fiscal  # moteur fiscal, pour le plan B demandé depuis une messagerie
         self._settings = settings
         self._llm_factory = llm_factory
         self._limiter = limiter
@@ -333,7 +335,13 @@ class Gateway:
 
     def _answer(self, adm: channels.Admission) -> list[str]:
         with self._db() as db:
-            out = channels.answer(db, adm, today=self.local_now().date(), make_client=self._llm_factory())
+            out = channels.answer(
+                db,
+                adm,
+                today=self.local_now().date(),
+                make_client=self._llm_factory(),
+                fiscal=self._fiscal() if self._fiscal else None,
+            )
             db.commit()
             return out
 

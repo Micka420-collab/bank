@@ -211,6 +211,7 @@ async def ask(
             history=[t.model_dump() for t in body.history],
             make_client=_factory(request),
             search_http=request.app.state.search_http,
+            fiscal=getattr(request.app.state, "fiscal_client", None),
             search_resolver=request.app.state.watch_resolver,
         )
     except assistant.AssistantError as exc:
@@ -250,6 +251,7 @@ async def ask_stream(body: AskIn, request: Request, ctx: AuthDep, today: TodayDe
                         history=history,
                         make_client=app.state.llm_client_factory,
                         search_http=app.state.search_http,
+                        fiscal=getattr(app.state, "fiscal_client", None),
                         search_resolver=app.state.watch_resolver,
                         events=lambda event, data: q.put((event, data)),
                     )

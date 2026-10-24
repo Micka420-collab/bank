@@ -1,0 +1,27 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Mises à jour de dépendances groupées, une fois par semaine, avec la CI (pip-audit, npm audit, Trivy) comme filet.",
+  "extends": ["config:recommended", ":semanticCommitsDisabled", "group:allNonMajor"],
+  "timezone": "Europe/Paris",
+  "schedule": ["before 7am on sunday"],
+  "labels": ["dependances"],
+  "prConcurrentLimit": 3,
+  "commitMessagePrefix": "Dépendances :",
+  "lockFileMaintenance": { "enabled": true, "schedule": ["before 7am on sunday"] },
+  "vulnerabilityAlerts": { "enabled": true, "labels": ["securite"], "schedule": ["at any time"] },
+  "osvVulnerabilityAlerts": true,
+  "pip_requirements": { "managerFilePatterns": ["/^fiscal-engine/requirements\\.txt$/"] },
+  "pep621": { "managerFilePatterns": ["/^backend/pyproject\\.toml$/"] },
+  "npm": { "managerFilePatterns": ["/^frontend/package\\.json$/"] },
+  "dockerfile": { "enabled": true },
+  "docker-compose": { "enabled": true },
+  "github-actions": { "enabled": true },
+  "packageRules": [
+    { "matchManagers": ["pep621", "pip_requirements"], "groupName": "python" },
+    { "matchManagers": ["npm"], "groupName": "front" },
+    { "matchManagers": ["dockerfile", "docker-compose"], "groupName": "images", "pinDigests": true },
+    { "matchManagers": ["github-actions"], "groupName": "actions", "pinDigests": true },
+    { "matchDepNames": ["openfisca-france", "openfisca-core"], "groupName": "openfisca", "schedule": ["before 7am on the first day of the month"] },
+    { "matchUpdateTypes": ["major"], "dependencyDashboardApproval": true }
+  ]
+}

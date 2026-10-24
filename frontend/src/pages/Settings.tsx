@@ -2,7 +2,7 @@
 // sont repliés tant qu'on n'en a pas besoin.
 
 import { useEffect, useState, type FormEvent } from "react";
-import { api, useApi, type Account, type AccountKind, type BudgetResponse, type ConsentView, type Me } from "../api";
+import { api, useApi, type Account, type AccountKind, type BackupRun, type BackupStatus, type BudgetResponse, type ConsentView, type Me } from "../api";
 import { Icon } from "../components/Icon";
 import { Segmented } from "../components/Segmented";
 import { EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
@@ -40,10 +40,113 @@ export function Settings({ me, onMeChange }: { me: Me; onMeChange: () => void })
       <BudgetSettings />
       <Appearance />
       <Notifications />
+      <Backups />
       <Privacy />
       <Security me={me} onChange={onMeChange} />
       <Audit />
     </>
+  );
+}
+
+// ------------------------------------------------------------------ sauvegardes
+const WEEKDAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+const LEVEL_TEXT: Record<BackupStatus["level"], string> = {
+  ok: "Sauvegardée et relue : tu peux dormir tranquille.",
+  unverified: "Sauvegardée, mais la restauration d'essai n'a pas encore tourné.",
+  stale: "Aucune sauvegarde réussie depuis deux jours.",
+  none: "Aucune sauvegarde pour l'instant.",
+  failed: "Le dernier passage a échoué : regarde le détail.",
+};
+
+export function bytesText(n: number): string {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1).replace(".", ",")} Go`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(".", ",")} Mo`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)} ko`;
+  return `${n} o`;
+}
+
+function whenText(iso: string): string {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} à ${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+function RunLine({ run, label }: { run: BackupRun | null; label: string }) {
+  if (!run) return <div><dt>{label}</dt><dd className="faint">jamais</dd></div>;
+  const d = run.details;
+  const what = run.kind === "backup"
+    ? run.status === "ok" ? `${d.file ?? ""}${d.cipher_bytes ? ` · ${bytesText(d.cipher_bytes)}` : ""}${d.copies && d.copies.length ? " · copiée sur le second emplacement" : ""}` : d.error ?? "échec"
+    : run.status === "ok" ? `${Object.values(d.tables ?? {}).reduce((a, b) => a + b, 0)} lignes relues, tout concorde` : (d.problems ?? [d.error ?? "échec"]).join(" ; ");
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd className={run.status === "ok" ? "is-positive" : "is-negative"}>
+        <Icon name={run.status === "ok" ? "check" : "alert"} size={14} /> {whenText(run.started_at)} <span className="faint">({run.trigger === "manual" ? "à la main" : "automatique"})</span>
+        <br /><small className="faint">{what}</small>
+      </dd>
+    </div>
+  );
+}
+
+export function Backups() {
+  const st = useApi<BackupStatus>("/api/system/backups");
+  const [busy, error, run] = useAsyncAction();
+  const toast = useToast();
+  const act = (path: string, done: string) =>
+    void run(async () => {
+      const out = await api<BackupStatus>(path, { method: "POST" });
+      toast(out.run?.status === "ok" ? done : "Échec : regarde le détail ci-dessous.");
+      st.reload();
+    });
+  const data = st.data;
+  return (
+    <section className="card section backups" aria-labelledby="backup-title" data-level={data?.level ?? "none"}>
+      <div className="card-head">
+        <h2 id="backup-title"><Icon name="vault" /> Sauvegardes</h2>
+        {data && (
+          <div className="backup-actions">
+            <button type="button" className={`btn sm${busy ? " is-loading" : ""}`} disabled={busy || !data.enabled} onClick={() => act("/api/system/backups/run", "Sauvegarde faite et chiffrée.")}>Sauvegarder maintenant</button>
+            <button type="button" className="btn sm secondary" disabled={busy || data.files.length === 0} onClick={() => act("/api/system/backups/verify", "Restauration d'essai réussie : la sauvegarde se relit.")}>Tester la restauration</button>
+          </div>
+        )}
+      </div>
+      <p className="muted">
+        Chaque nuit, Bank fait une copie cohérente de sa base, la chiffre avec une clé dérivée de ta clé maîtresse
+        et la range sur le serveur{data?.remote_directory ? " et sur le second emplacement" : ""} ; chaque semaine, il
+        la déchiffre dans un dossier jetable, vérifie l'intégrité et recompte les lignes. Un échec te prévient.
+      </p>
+      {st.error && <p className="error" role="alert">{st.error}</p>}
+      {data && (
+        <>
+          <p className={`notice ${data.level === "ok" ? "ok" : data.level === "failed" || data.level === "stale" ? "danger" : "warn"}`} role="status">
+            <Icon name={data.level === "ok" ? "check" : "alert"} /><span>{LEVEL_TEXT[data.level]}{data.enabled ? ` Prochaine sauvegarde automatique : ${whenText(data.next_backup)}.` : " Sauvegardes automatiques désactivées (BANK_BACKUP_ENABLED)."}</span>
+          </p>
+          <dl className="backup-stats">
+            <RunLine run={data.last_backup} label="Dernière sauvegarde" />
+            <RunLine run={data.last_verify} label="Dernière restauration d'essai" />
+            <div><dt>Où</dt><dd>{data.directory}{data.remote_directory ? <><br /><small className={data.remote_reachable ? "faint" : "is-negative"}>{data.remote_directory}{data.remote_reachable ? "" : " — injoignable"}</small></> : <><br /><small className="faint">Pas de second emplacement : règle BANK_BACKUP_REMOTE_DIR (disque USB, NAS monté).</small></>}</dd></div>
+            <div><dt>Rythme</dt><dd>chaque jour à {data.hour} h, {data.keep} copies gardées, restauration d'essai le {WEEKDAYS[data.verify_weekday]}</dd></div>
+          </dl>
+          {data.files.length > 0 && (
+            <details className="backup-files">
+              <summary>{data.files.length} {data.files.length > 1 ? "fichiers" : "fichier"} sur le serveur</summary>
+              <ul>
+                {data.files.map((f) => <li key={f.name}><code>{f.name}</code> <span className="faint">{bytesText(f.bytes)} · {whenText(f.modified_at)}{f.manifest ? "" : " · sans manifeste"}</span></li>)}
+              </ul>
+            </details>
+          )}
+          {data.runs.length > 0 && (
+            <details className="backup-files">
+              <summary>Historique des passages</summary>
+              <ul>
+                {data.runs.map((r) => <li key={r.id}><Icon name={r.status === "ok" ? "check" : "alert"} size={12} /> {whenText(r.started_at)} · {r.kind === "backup" ? "sauvegarde" : "restauration d'essai"} · {r.status === "ok" ? "réussie" : `échec : ${r.details.error ?? (r.details.problems ?? []).join(" ; ")}`}</li>)}
+              </ul>
+            </details>
+          )}
+          <p className="faint">{data.restore_hint}</p>
+        </>
+      )}
+      {error && <p className="error" role="alert">{error}</p>}
+    </section>
   );
 }
 
