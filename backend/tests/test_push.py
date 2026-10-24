@@ -63,14 +63,16 @@ def decrypt(body: bytes) -> bytes:
 
 def _push_service(request: httpx.Request) -> httpx.Response:
     assert request.method == "POST" and request.url.scheme == "https"
-    if str(request.url) in DEAD:
+    # Sans proxy, la connexion est épinglée sur l'adresse résolue : le nom du service reste dans Host.
+    url = str(request.url.copy_with(host=request.headers["host"]))
+    if url in DEAD:
         return _resp(410)
     auth = request.headers["authorization"]
     assert auth.startswith("vapid t=") and ", k=" in auth
     assert request.headers["content-encoding"] == "aes128gcm" and request.headers["ttl"] == "86400"
     PUSHES.append(
         {
-            "url": str(request.url),
+            "url": url,
             "urgency": request.headers["urgency"],
             "payload": json.loads(decrypt(request.content)),
         }
