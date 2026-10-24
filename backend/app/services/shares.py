@@ -93,11 +93,16 @@ def create(
         raise VaultError("Document introuvable", 404)
     if doc.status == "processing":
         raise VaultError("Lecture en cours : attends qu'elle soit finie pour le partager", 409)
-    raw, _, _ = vault.file_content(db, doc_id, actor=actor)
+    # Rien n'est écrit avant le filigrane (jusqu'à 25 s dans l'enfant confiné) : le journal d'audit prend le verrou
+    # d'écriture de SQLite, qui bloquerait sinon tout le reste de Bank — l'ouverture des liens comprise.
+    raw = vault.original(db, doc.id)
     try:
         stamped = reading.stamp_pdf(raw, watermark(name, today))
     except reading.ReadingError as exc:
         raise VaultError(str(exc)) from exc
+    audit.record(db, actor, "vault.file_read", document=doc.id)
+    if db.scalar(select(VaultDocument.id).where(VaultDocument.id == doc.id)) is None:
+        raise VaultError("Document introuvable", 404)  # effacé pendant le filigrane
     token = secrets.token_urlsafe(32)
     share = VaultShare(
         document_id=doc.id,

@@ -223,7 +223,7 @@ def _overlay(width: float, height: float, x0: float, y0: float, text: str) -> An
     import math
 
     from pypdf import PageObject
-    from pypdf.generic import ContentStream, DictionaryObject, FloatObject, NameObject
+    from pypdf.generic import ContentStream, DictionaryObject, FloatObject, NameObject, RectangleObject
 
     diagonal = math.hypot(width, height)
     size = max(8.0, min(34.0, diagonal * 0.8 / (0.52 * max(len(text), 1))))  # largeur moyenne d'Helvetica ~0,52 em
@@ -234,8 +234,10 @@ def _overlay(width: float, height: float, x0: float, y0: float, text: str) -> An
     matrix = f"{cos:.4f} {sin:.4f} {-sin:.4f} {cos:.4f} {tx:.2f} {ty:.2f}"
     ops = f"q /BkG gs 0.75 0.1 0.1 rg BT /BkF {size:.2f} Tf {matrix} Tm ".encode()
     ops += hexed + b" Tj ET Q\n"
-    ops += f"q 0.25 g BT /BkF 8 Tf 1 0 0 1 {x0 + 18:.2f} {y0 + 12:.2f} Tm ".encode() + hexed + b" Tj ET Q\n"
+    foot = min(8.0, (width - 36) / (0.52 * max(len(text), 1)))  # pied de page : tient dans la largeur, même étroite
+    ops += f"q 0.25 g BT /BkF {foot:.2f} Tf 1 0 0 1 {x0 + 18:.2f} {y0 + 12:.2f} Tm ".encode() + hexed + b" Tj ET Q\n"
     page = PageObject.create_blank_page(width=width, height=height)
+    page.mediabox = RectangleObject((x0, y0, x0 + width, y0 + height))  # merge_page découpe le calque à sa boîte
     font = DictionaryObject(
         {
             NameObject("/Type"): NameObject("/Font"),
@@ -270,8 +272,14 @@ def stamp(document: bytes, text: str) -> bytes:
         writer.append(reader, import_outline=False)
         for page in writer.pages:
             page.transfer_rotation_to_content()  # page tournée : le filigrane suit ce que l'on voit
-            box = page.mediabox
-            page.merge_page(_overlay(float(box.width), float(box.height), float(box.left), float(box.bottom), text))
+            # Placé dans la zone affichée (CropBox, rognée à la MediaBox), pas sur la feuille entière : un scan recadré
+            # garderait sinon un filigrane hors champ, invisible mais présent au texte.
+            media, crop = page.mediabox, page.cropbox
+            left, bottom = max(float(media.left), float(crop.left)), max(float(media.bottom), float(crop.bottom))
+            right, top = min(float(media.right), float(crop.right)), min(float(media.top), float(crop.top))
+            if right <= left or top <= bottom:
+                left, bottom, right, top = float(media.left), float(media.bottom), float(media.right), float(media.top)
+            page.merge_page(_overlay(right - left, top - bottom, left, bottom, text))
         writer.add_metadata({"/Producer": "Bank"})
         out = io.BytesIO()
         writer.write(out)
