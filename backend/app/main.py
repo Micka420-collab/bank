@@ -35,6 +35,7 @@ from app.api import (
     documents,
     energy,
     exchange_keys,
+    home,
     imports,
     initiatives,
     insights,
@@ -76,6 +77,7 @@ from app.services import consents as consent_service
 from app.services import crypto as crypto_service
 from app.services import energy as energy_service
 from app.services import exchange_keys as exchange_keys_service
+from app.services import home_value as home_value_service
 from app.services import mail as mail_service
 from app.services import obligations as obligations_service
 from app.services import planning as planning_service
@@ -213,6 +215,10 @@ def _housekeeping_once(app: FastAPI, today: date) -> dict[str, int]:
         factory = getattr(app.state, "mail_client_factory", None) or mail_service.default_client
         report.update(mail_service.tick(db, factory=factory))
         db.commit()
+    with app.state.sessionmaker() as db:  # ventes DVF de ta commune : une extraction par trimestre, avec ton accord
+        fetch = home_value_service.default_fetch(http=app.state.dvf_http, resolver=app.state.dvf_resolver)
+        report.update(home_value_service.tick(db, today=today, now=utcnow(), fetch=fetch))
+        db.commit()
     return report
 
 
@@ -322,6 +328,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "exchange_sync": SlidingWindowLimiter(6, 3600),  # relève d'une clé de plateforme à la demande
         "crypto": SlidingWindowLimiter(6, 600),  # relèves crypto à la demande (nœuds publics : on reste poli)
         "share": SlidingWindowLimiter(10, 300),  # ouvertures de liens de partage (route publique) par adresse
+        "home": SlidingWindowLimiter(30, 600),  # recherches de commune et extractions DVF à la demande
     }
     app.state.enablebanking = _build_enablebanking(settings)
     app.state.fiscal_client = FiscalClient(settings.fiscal_engine_url, settings.fiscal_token_value)
@@ -335,6 +342,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.channels = None
     app.state.crypto_net = crypto_service.default_net  # réseau réel (remplaçable en test)
     app.state.exchange_transport = exchanges_provider.default_transport  # plateformes, par la porte sûre
+    app.state.dvf_http = None  # client HTTP des fichiers DVF et de geo.api.gouv.fr (remplaçable en test)
+    app.state.dvf_resolver = None
     app.state.channels_options = {}  # surcharges de la passerelle (tests : fabrique d'adaptateurs, horloge…)
 
     routers = (
@@ -376,6 +385,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         shares,
         price_alerts,
         system,
+        home,
     )
     for r in routers:
         app.include_router(r.router)

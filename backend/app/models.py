@@ -1209,3 +1209,33 @@ class AutonomyEpoch(Base):
     stopped_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     trial: Mapped[bool] = mapped_column(Boolean, default=True)
     rules: Mapped[str] = mapped_column(EncryptedText("autonomy.epoch.rules"), default="[]")  # JSON
+
+
+# ---------------------------------------------------------------------------- valeur du logement (DVF)
+class HomeProfile(Base):
+    """Ton logement tel que tu l'as décrit (type, surface, commune, section et pièces facultatives) : chiffré, une
+    seule ligne (id = 1). Jamais d'adresse : la commune suffit, la section affine sur place."""
+
+    __tablename__ = "home_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    data: Mapped[str] = mapped_column(EncryptedText("home.profile"))
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+
+class DvfCache(Base):
+    """Les ventes de ta commune, réduites (date, prix, type, surface, pièces, section) et chiffrées — elles disent
+    où tu habites —, avec la date de l'extraction et l'estimation qui en découle. Une seule ligne (id = 1),
+    rafraîchie au plus une fois par trimestre ; un téléchargement raté garde la précédente."""
+
+    __tablename__ = "dvf_cache"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    data: Mapped[str | None] = mapped_column(EncryptedText("dvf.sales"))  # JSON : commune, ventes, années lues
+    result: Mapped[str | None] = mapped_column(EncryptedText("dvf.estimate"))  # JSON : dernière estimation
+    fetched_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    quarter: Mapped[str | None] = mapped_column(String(8))  # 2026-T4
+    last_attempt_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_error: Mapped[str | None] = mapped_column(String(300))
+    attempts_day: Mapped[str | None] = mapped_column(String(10))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)

@@ -7,6 +7,7 @@ import { Donut, type Slice } from "../components/charts/Donut";
 import { TrendChart } from "../components/charts/TrendChart";
 import { CountUp } from "../components/CountUp";
 import { Icon } from "../components/Icon";
+import { HomeValue } from "../components/HomeValue";
 import { InvestPlan } from "../components/InvestPlan";
 import { Loans } from "../components/Loans";
 import { Retirement } from "../components/Retirement";
@@ -36,6 +37,7 @@ const BUCKETS: Record<string, { label: string; color: string }> = {
   epargne_disponible: { label: "Épargne disponible", color: "var(--accent)" },
   epargne_long_terme: { label: "Épargne long terme", color: "var(--positive)" },
   autres_actifs: { label: "Autres actifs", color: "var(--warning)" },
+  immobilier: { label: "Logement (estimation DVF)", color: "var(--accent-ink)" },
 };
 
 export function bucketSlices(byBucket: Record<string, number>): Slice[] {
@@ -163,6 +165,7 @@ export function Wealth({ retraite = false }: { retraite?: boolean }) {
       </section>
 
       <Goals goals={w.data.goals} accounts={w.data.accounts} onChange={w.reload} />
+      <HomeValue onChange={w.reload} />
       <Loans onChange={w.reload} />
       <Retirement open={retraite} />
       <Projection initial={Math.max(0, savings)} />

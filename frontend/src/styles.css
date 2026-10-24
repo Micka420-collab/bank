@@ -7416,4 +7416,102 @@ label {
 .pl-outside ul {
   margin: 0;
   padding-left: 1rem;
+
+/* ------------------------------------------------------------------ patrimoine : ton logement (DVF) */
+.home-form {
+  margin-top: 0.75rem;
+}
+.home-search {
+  display: flex;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.home-search input {
+  flex: 1;
+  min-width: 0;
+}
+.home-hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+  grid-column: 1 / -1;
+}
+.home-result {
+  display: grid;
+  gap: 0.6rem;
+}
+.home-figure {
+  margin: 0;
+}
+.home-median {
+  font-size: var(--t-xl);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+.home-range {
+  position: relative;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.home-range i {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+}
+.home-range em {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.home-range-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: var(--t-xs);
+  font-variant-numeric: tabular-nums;
+}
+.home-notes {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+.home-net {
+  margin: 0;
+  display: grid;
+  gap: 0.3rem;
+  max-width: 28rem;
+}
+.home-net div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.home-net dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.home-net-total {
+  border-top: 1px solid var(--line);
+  padding-top: 0.3rem;
+}
+.home-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-top: 0.75rem;
+}
+.home-foot p {
+  margin: 0;
 }

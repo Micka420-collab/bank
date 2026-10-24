@@ -40,6 +40,10 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
   relevés), trois départs comparés en fourchette — âge légal, taux plein, 67 ans — plus un âge au choix au curseur,
   avec décote, surcote, base et Agirc-Arrco, taux de remplacement ; et ce qu'un versement PER change à ton impôt
   (plafond, tranche connue, effort réel). Un ordre de grandeur : le chiffre opposable est celui d'info-retraite.fr.
+- **Ton logement** : si tu es propriétaire, sa valeur estimée par les ventes voisines des 24 derniers mois (DVF,
+  données ouvertes Etalab / DGFiP) — une fourchette (1er et 3e quartiles) autour de la médiane, le nombre de ventes
+  et la période, la source et la date de l'extraction ; seule la commune part, une fois par trimestre. La médiane
+  entre dans le patrimoine net sur une ligne à part, le prêt immobilier en face. Voir « Ton logement ».
 - **Décider** : « je peux m'acheter ça ? » répond oui, oui mais, à partir de telle date, ou dans N mois d'épargne
   (matelas d'abord ou au plus vite) ; « où placer mon argent ? » donne un plan par priorité (mois d'avance, dette
   chère, matelas sur LEP / livrets, projets datés, long terme PEA / assurance vie / PER selon ta tranche d'impôt,
@@ -256,6 +260,29 @@ imposée ; à 0 % ou 11 %, la déduction rapporte peu). Rien n'est envoyé à un
 celui de ton relevé et du simulateur officiel (info-retraite.fr), et Bank le dit à chaque écran. Ton agent y accède
 avec `get_retirement` (lecture ; salaires et points masqués en mode agrégats), l'assistant avec l'outil
 `retirement` et le bouton « Ma retraite ».
+
+## Ton logement (ventes DVF)
+
+Sur la page Patrimoine, « Ton logement » : décris-le (appartement ou maison, surface habitable, commune — cherchée
+par son nom ou son code postal, ou son code INSEE ; à Paris, Lyon et Marseille celui de l'arrondissement —, section
+cadastrale et nombre de pièces facultatifs). Avec ton accord « Valeur de ton logement (ventes DVF) », Bank
+télécharge les fichiers communaux des [demandes de valeurs foncières géolocalisées](https://www.data.gouv.fr/fr/datasets/demandes-de-valeurs-foncieres-geolocalisees/)
+(`files.data.gouv.fr/geo-dvf/latest/csv/{année}/communes/{département}/{code INSEE}.csv`, DVF, Etalab / DGFiP,
+Licence Ouverte 2.0), par le téléchargeur durci (https, hôte public épinglé, 40 Mo et 60 s au plus par fichier),
+les lit ligne à ligne et n'en garde, chiffré, que l'utile : date, prix, type, surface, pièces, section — ni adresse
+ni parcelle. Une mutation qui couvre plusieurs logements ou un local d'activité est écartée (sa valeur foncière est
+celle de l'ensemble) ; une cave ou un garage avec l'appartement sont admis. Les ventes comparables : même type,
+surface à ±30 % (élargie à ±45 % puis ±60 % s'il en manque, et c'est dit), pièces à ±1 si tu les donnes, dans ta
+section si tu la donnes (sinon, ou s'il y en a trop peu, toute la commune, et c'est dit), sur les 24 mois qui
+précèdent la vente la plus récente de la base (DVF paraît avec plusieurs mois de retard : la date de cette vente et
+celle de l'extraction sont affichées). Les prix au m² hors des barrières de Tukey (1,5 écart interquartile) sont
+écartés ; l'estimation est surface × médiane, la fourchette surface × 1er et 3e quartiles, arrondies à la centaine.
+Moins de cinq ventes : « pas assez de ventes comparables », sans chiffre inventé. L'Alsace-Moselle et Mayotte ne
+sont pas dans DVF : Bank le dit. Les ventes sont relues au plus une fois par trimestre (bouton compris), trois
+essais par jour au plus ; un téléchargement raté garde l'extraction précédente et le dit. La médiane entre dans ta
+valeur nette sur la ligne « Logement (estimation DVF) » (décochable), le restant dû du prêt immobilier reste en
+dette en face, et la carte montre le net ; l'immobilier déclaré dans ta situation ne s'ajoute plus en double dans
+le dossier de l'agent. Un repère statistique, pas une expertise : l'état, l'étage ou les travaux comptent.
 
 ## Ce qui est lié (corrélations)
 
@@ -569,12 +596,13 @@ direct recomposée fragment par fragment, Web Push vérifié au bit près contre
 par un faux navigateur, amortissement vérifié sur un cas de référence public, plan B contre un moteur fiscal
 simulé qui réagit au revenu, sauvegarde chiffrée altérée, tronquée ou rallongée refusée, boîte mail contre un faux
 serveur IMAP qui journalise chaque commande, retraite vérifiée sur le cas de référence de service-public et contre
-les paliers de la LFSS 2026, lien de partage ouvert deux fois en même temps, clés de plateforme face à de fausses
+les paliers de la LFSS 2026, lien de partage ouvert deux fois en même temps, valeur du logement vérifiée à la main sur une commune DVF
+synthétique, clés de plateforme face à de fausses
 plateformes qui vérifient chaque signature et refusent les droits trop larges, pilote vs consigne sur un calendrier
 de référence — fins de mois, heures d'été et d'hiver, pauses, refus —, alertes de cours franchies une seule fois par
 deux relèves simultanées), couverture 91 %, 161 tests front (parcours de première ouverture,
 coffre et partage d'un papier, démarches, opportunités, veille, assistant, chat interactif et réponse en direct,
-notifications sur l'appareil, plan B, crédits, retraite, sauvegardes, boîte mail, crypto et plateformes reliées,
+notifications sur l'appareil, plan B, crédits, retraite, logement, sauvegardes, boîte mail, crypto et plateformes reliées,
 alertes de cours, pilote, pilote vs consigne, déclarations, corrélations, année qui vient, passkeys, erreurs qui
 disent quoi faire),
 mypy strict sans erreur,
