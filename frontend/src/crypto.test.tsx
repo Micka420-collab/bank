@@ -166,6 +166,21 @@ describe("écran Crypto", () => {
     expect(text).toContain("La crypto pèse 80 %");
   });
 
+  it("relit les alertes de cours après un relevé, qui peut en déclencher une", async () => {
+    mockApi({
+      "/api/crypto/sync": () => ({ result: { wallets_synced: 1, wallets_failed: 0, prices: 2, alerts: 1 }, view: cryptoView() }),
+      "/api/crypto": () => cryptoView(),
+      "/api/consents": () => [],
+    });
+    await act(async () => root.render(<ToastProvider><Crypto /></ToastProvider>));
+    await settle();
+    const reads = () => calls.filter((c) => c.url === "/api/crypto/alerts" && c.init?.method === "GET").length;
+    expect(reads()).toBe(1);
+    await click("Relever maintenant");
+    expect(sent("/api/crypto/sync", "POST")).toHaveLength(1);
+    expect(reads()).toBe(2);
+  });
+
   it("ne laisse jamais partir une phrase de récupération collée comme adresse", async () => {
     mockApi({ "/api/crypto": () => cryptoView({ wallets: [] }), "/api/consents": () => [] });
     await act(async () => root.render(<ToastProvider><Crypto /></ToastProvider>));
