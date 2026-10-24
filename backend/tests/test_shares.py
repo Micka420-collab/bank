@@ -84,7 +84,9 @@ def test_one_download_with_the_watermark_then_nothing(app, owner: TestClient) ->
     link, share = r.json()["link"], r.json()["share"]
     token = _token(link)
     assert link.startswith("https://testserver/#/recu/") and len(token) >= 40  # 256 bits, dans le fragment
-    assert "quittance" not in link and f"/{doc_id}" not in link  # le lien ne dit rien du document
+    # Le lien ne dit rien du document : ni son nom ni son identifiant avant le jeton (le jeton, aléatoire, peut
+    # commencer par n'importe quel caractère — un « 1 » n'y est pas un identifiant).
+    assert "quittance" not in link and f"/{doc_id}" not in link.rsplit("/", 1)[0] and token != str(doc_id)
     assert share["recipient"] == "Agence Dupont" and share["state"] == "active"
     with app.state.sessionmaker() as db:
         row = db.get(VaultShare, share["id"])
