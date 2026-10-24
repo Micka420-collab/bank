@@ -61,7 +61,7 @@ from app.config import Settings
 from app.db import Base, make_engine, make_sessionmaker, upgrade_schema, utcnow
 from app.fiscal.client import FiscalClient
 from app.mcp_server import AgentGate, McpDispatch, McpMount, build_mcp, mcp_asgi, silence_sdk_logs
-from app.models import CryptoHolding, CryptoWallet
+from app.models import CryptoHolding, CryptoWallet, ExchangeKey
 from app.providers import exchanges as exchanges_provider
 from app.providers.enablebanking import EnableBankingClient
 from app.security.auth import SlidingWindowLimiter
@@ -123,6 +123,7 @@ def _crypto_sync_once(app: FastAPI) -> int:
         if (
             db.scalar(select(func.count()).select_from(CryptoHolding)) == 0
             and db.scalar(select(func.count()).select_from(CryptoWallet)) == 0
+            and db.scalar(select(func.count()).select_from(ExchangeKey)) == 0
         ):
             return 0
         result = crypto_service.sync(db, net=app.state.crypto_net(), now=utcnow(), actor="system")
