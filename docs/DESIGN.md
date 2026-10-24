@@ -445,6 +445,228 @@ illustrés (`EmptyState.tsx`), action principale pleine largeur au téléphone. 
 côté serveur : rien n'est fêté là. Reste : mode tri rapide, filtres en pastilles des colonnes de démarches, une seule
 alerte dépliée par page, phrases « ce que ça veut dire pour toi », tuiles colorées de Plus.
 
+### 3.10 Démarrer avec Bank
+
+Retour de Micka (#44) : « l'interface est compliquée, il n'y a pas d'onboarding qui te guide sur l'utilisation et la
+configuration de tout, avec un beau design ». Réponse retenue : un **parcours de première ouverture plein écran**
+(on le quitte et on le reprend où on l'a laissé) puis une **liste « Bien démarrer »** avec son anneau sur
+Aujourd'hui, jusqu'à ce que tout soit configuré. Le § 5 (ancien parcours) est remplacé par celui-ci.
+
+#### Constat (code et captures à 390 px, base de démo, octobre 2026)
+
+Mesures prises sur la base de démo (hauteur de page ÷ 844 px d'écran de téléphone) :
+
+| Écran | Hauteur | Ce qui pèse |
+|---|---|---|
+| Accueil, étape « Connecte ta banque » | 3,6 écrans | Assistant Enable Banking en 6 sous-étapes affiché d'emblée (« Crée ton application », fichier `.pem`) avant même de savoir s'il existe un chemin plus simple ; **deux** boutons principaux (« J'y suis, étape suivante » et « Continuer sans connexion ») plus « Je connecterai mes comptes plus tard » en bas, qui fait la même chose que le second |
+| Accueil, étape « Qu'est-ce qui compte le plus pour toi ? » | **7,7 écrans** | Les 17 accords de `PURPOSES` empilés avec leur texte intégral (mémoire de l'assistant, courbe Linky, messageries…) alors que ni l'assistant, ni Linky, ni une messagerie ne sont reliés : on demande un accord sans contexte, ce qui pousse à tout refuser ou à tout accepter sans lire |
+| Réglages | 20 écrans, 29 champs | Un champ de solde éditable par compte, Confidentialité = la même liste de 17 interrupteurs |
+| Connecteurs | 10,7 écrans, 19 boutons | Neuf sections empilées sans sommaire ni état « relié / à faire » ; l'assistant Enable Banking s'ouvre en tête |
+| Ma situation | 8,7 écrans, 55 boutons | Le questionnaire complet (8 thèmes) est le seul endroit où dire son foyer |
+| Aujourd'hui | 2,3 écrans | Les initiatives de mise en route (`start:data`, `security:totp`, `planning:connect`) se mêlent aux vraies nouvelles : « 19 autres — voir » |
+| Plus | 1,3 écran | Descriptions tronquées par l'ellipse (« et reçois ses… », « documents de l'État,… ») |
+
+Et dans le code : l'état « onboarding en cours » vit dans `localStorage` (`bank:onboarding`) — faux sur un second
+appareil, perdu en navigation privée ; `Welcome.tsx` (trois chemins) n'apparaît que si le budget est vide, donc
+jamais après l'étape banque ; `Onboarding.tsx` pose des `style={{…}}` statiques (règle CSP du § 3.8).
+
+#### Principes du parcours
+
+1. **Une étape = un but, une action principale.** Une phrase de but, un écran, un bouton lumineux qui dit ce
+   qu'il fait ; « Passer » toujours visible en discret, jamais culpabilisant. (Charge cognitive : un seul appel à
+   l'action par point de décision.)
+2. **Le plus utile d'abord, le reste plus tard.** Sept étapes au plus avant le tableau de bord ; tout ce qui
+   est avancé (Powens, crypto, pilote, boîte mail, Linky, planning, assistant IA) va dans la liste, pas dans le
+   parcours.
+3. **Ne jamais redemander ce que Bank sait.** Les réponses déjà détectées (`suggestions` du questionnaire : salaire,
+   loyer, statut) sont pré-remplies et se valident d'un geste ; une étape déjà faite (banque déjà reliée sur un
+   autre appareil) est cochée et sautée.
+4. **Vrai partout.** Fait / passé / terminé se calculent **côté serveur** à partir de l'état réel, pas d'un drapeau
+   local : la liste dit la même chose sur le téléphone et sur l'ordinateur.
+5. **Un accord se donne en connaissance de cause.** On montre ce qui part et vers qui, au moment où ça sert ;
+   jamais d'accord coché d'avance, jamais d'accord accordé en silence (§ « Tes accords » ci-dessous).
+6. **Honnête.** Les gains affichés viennent du serveur (`/api/opportunities/top`), jamais d'un chiffre inventé ;
+   la durée annoncée est la durée réelle (l'application Enable Banking prend cinq minutes, on le dit).
+
+#### (a) Le parcours
+
+Entrée : juste après la création de l'accès (l'intro de trois écrans et le formulaire d'accès restent tels
+quels). Il s'ouvre **seul une seule fois** (état `new`) ; dès qu'on le quitte, il ne s'impose plus et se reprend
+depuis la liste (« Reprendre le parcours »). Adresse : `#/bienvenue`, `#/bienvenue/<étape>` (reprise et lien
+profond).
+
+Gabarit commun (plein écran, sans rail ni île) : en haut la marque, « Étape 2 sur 7 » en texte et une barre de
+sept segments, un bouton « Quitter » (retour à Aujourd'hui, l'étape en cours est gardée) ; au centre une carte de
+verre (`.card`) avec le titre de l'étape (`h1`, reçoit le focus), une phrase de but, le contenu, puis l'action
+principale pleine largeur au téléphone ; dessous, en `.btn.ghost`, « Passer cette étape ». Une coche verte se
+trace sur le segment quand le serveur confirme l'étape (2xx), sans gerbe : la fête est réservée à la fin.
+
+| # | Étape | But (une phrase) | Ce qu'on voit | Action principale | Passer | « Fait » calculé côté serveur | Durée | Pourquoi ça compte |
+|---|---|---|---|---|---|---|---|---|
+| 1 | **Ta banque** | Que Bank connaisse ton argent sans que tu saisisses rien. | Trois chemins en cartes (repris de `Welcome.tsx`) : « Relier ma banque » (recommandé · 5 min une fois), « Importer un relevé » (3 min), « Trois chiffres » (30 s). L'assistant Enable Banking (`BankSetup`) ne s'ouvre qu'après le choix ; s'il est déjà configuré, on va droit aux tuiles de banques. Retour de la banque : synchronisation visible (existante) puis comptes reliés | Le chemin choisi, puis « Relier ma banque » | « Plus tard » | Une `BankConnection` active **ou** une opération importée **ou** un compte saisi avec un solde | 30 s à 5 min | Sans ça, pas de chiffre du jour ; relié, il n'y a plus jamais de relevé à pointer à la main |
+| 2 | **Ton foyer** | Que Bank sache qui vit de ce budget, pour simuler tes droits. | Cinq questions du questionnaire, une par ligne, pré-remplies quand Bank les a lues dans tes relevés (« Lu dans tes relevés : 2 150 € — c'est juste ? ») : situation pro, revenu net, foyer, enfants à charge, logement (statut + loyer) ; puis, en option, ta commune ou ton adresse (voir l'accord « géocodage » en ligne, décoché) | « Enregistrer mon foyer » | « Plus tard » | Les réponses `employment`, `net_monthly_income`, `household`, `dependents`, `housing_status` existent (même endpoint `PUT /api/onboarding/{question}`) | 1 min | C'est ce qui permet de simuler prime d'activité, aides au logement, impôt : un droit non demandé, c'est de l'argent perdu chaque mois. Le montant estimé s'affiche s'il est calculé |
+| 3 | **Tes accords** | Choisir ce que Bank peut aller chercher pour toi, en sachant ce qui part. | Les accords **utiles maintenant**, groupés par ce qu'ils envoient (tableau suivant), chacun avec une ligne « Envoie : … » et le texte complet dépliable ; « Tout activer pour les données publiques » en action principale ; interrupteurs individuels à côté | « Tout activer pour les données publiques » | « Pas maintenant » | Chaque accord listé a été **décidé** (`consents.decided`), oui ou non | 1 min | Barèmes à jour, jours fériés, Tempo : des prévisions justes sans rien saisir |
+| 4 | **Ton premier papier** | Ranger un premier document que Bank lit pour toi. | La zone de dépôt lumineuse de Documents (photo ou PDF), avec trois idées : avis d'impôt, bulletin de paie, attestation CAF | « Prendre en photo ou déposer » | « Plus tard » | Au moins un `VaultDocument` | 1 min | Un avis d'impôt suffit à préremplir revenu fiscal, parts, échéances : moins de questions ensuite |
+| 5 | **Tes priorités** | Dire par quoi Bank commence à chercher. | Les cinq pastilles actuelles (« Récupérer ce à quoi j'ai droit »…) ; dessous, les trois premières pistes du serveur | « Garder ces priorités » | « Plus tard » | `opportunity_priorities` non vide | 20 s | Les pistes qui comptent pour toi remontent en premier dans Gagner |
+| 6 | **Où te prévenir** | Recevoir les alertes importantes (découvert, échéance) là où tu es. | Deux cartes : « Sur ce téléphone » (notifications : l'accord `push` s'affiche ici, avec son texte) et « Dans ta messagerie » (WhatsApp par QR code, Telegram… : ouvre Messageries) | « Activer les notifications » | « Plus tard » | Un appareil `push` actif **ou** un `ChannelLink` | 1 min | Un découvert vu trois jours avant coûte 0 € ; vu après, des frais et un rejet |
+| 7 | **La visite** | Savoir où est quoi, en cinq écrans. | Voir (c) | « Suivant », puis « Voir mon tableau de bord » | « Passer la visite » | `tour_done_at` posé | 40 s | On ne cherche plus Papiers dans Plus |
+
+Les étapes déjà faites quand on arrive (banque reliée ailleurs, foyer répondu dans Ma situation) apparaissent
+cochées dans la barre et sont sautées. La dernière étape franchie déclenche **le** moment de fête du parcours
+(gerbe `done` existante, toast `.is-success` « Bank est prêt. ») — uniquement si au moins une étape a été faite
+pendant ce passage (rien à fêter si tout a été passé).
+
+**Tes accords, groupés par ce qu'ils envoient.** Seuls les groupes 1 et 2 sont proposés dans le parcours ; les
+autres se demandent **là où ils servent**, comme aujourd'hui (Messageries, notifications, boîte mail, crypto,
+Linky, documents) : on ne demande pas « Mémoire de l'assistant » avant qu'il y ait un assistant.
+
+| Groupe (titre affiché) | Accords | Ce qui part (ligne « Envoie : ») | Dans « Tout activer pour les données publiques » |
+|---|---|---|---|
+| Rien te concernant | `watch` (déjà actif par défaut), `baremes`, `tempo` | Seulement l'adresse de ton serveur ; des dates pour Tempo | Oui |
+| Ta zone, pas ton adresse | `calendar` (zone, département ou académie), `home_value` (commune), `meteo` (coordonnées arrondies à ~10 km, si ton adresse est connue) | La zone, la commune ou la maille de 10 km | Oui |
+| Ton adresse | `geocoding` (adresse tapée → IGN), `housing` (identifiant d'adresse BAN → ADEME) | Ton adresse, ou celle de ton immeuble | Non : `geocoding` à côté du champ adresse (étape 2), `housing` dans Ma situation › logement |
+| Tes contenus, vers un service tiers | `ai_memory`, `ai_documents`, `web_search`, `channels`, `push`, `mail`, `crypto_network`, `linky_curve`, `sensitive_documents` | Ce que tu écris, tes documents, tes adresses crypto, ta courbe de charge… | Non : demandés au moment où tu relies le service |
+
+« Tout activer pour les données publiques » : le bouton est **sous** la liste des six accords concernés, chacun
+avec sa ligne « Envoie : … » et son texte complet dépliable ; un clic les accorde **tous ceux-là et eux seuls**
+(le serveur refuse toute autre finalité dans cet appel), chacun journalisé comme un accord ordinaire
+(`consent.grant`, version du texte). Le toast dit « 6 accords donnés — modifiables dans Réglages › Confidentialité ».
+Les interrupteurs individuels restent à côté pour qui veut choisir. Rien n'est coché d'avance.
+
+#### (b) La liste « Bien démarrer »
+
+Place : sur Aujourd'hui, **sous** le héros (le chiffre du jour reste le premier contenu) et au-dessus de « La
+prochaine chose à faire ». Carte de verre `.card` avec, à gauche, l'anneau `Ring` (48 px au téléphone, 64 au
+bureau) « 5 sur 8 », titre `h2` « Bien démarrer », et **les trois prochains éléments** non faits ; « Voir les 3
+autres » déplie le reste. Chaque élément : icône, titre court, une phrase « pourquoi » (gain ou temps), durée
+(« 2 min »), et un lien qui va **directement** au bon endroit (étape du parcours ou section d'une page, ex.
+`#/connecteurs` + ancre `energie`). Un élément fait passe en bas, coché, barré non (texte `--ink-2`, coche
+`--positive`). En tête de carte : « Reprendre le parcours » tant que le parcours n'est pas `finished`.
+
+Éléments comptés par l'anneau (ce qui sert à tout le monde), dans cet ordre :
+
+1. Relier ta banque (ou importer) — étape 1
+2. Décrire ton foyer — étape 2
+3. Tes accords pour les données publiques — étape 3
+4. Ranger un premier papier — étape 4
+5. Choisir tes priorités — étape 5
+6. Être prévenu (notifications ou messagerie) — étape 6
+7. Protéger ton accès (double authentification **ou** une clé d'accès) — `User.totp_enabled` ou un `Passkey`
+8. Vérifier ta sauvegarde — dernière `BackupRun` de type `verify` en `ok` (la sauvegarde automatique existe déjà ;
+   la vérifier prouve qu'elle se restaure)
+
+« Pour aller plus loin » (repli `<details>` fermé, **non compté** dans l'anneau, pour que 100 % soit atteignable
+par tout le monde) : assistant IA (clé OpenRouter, `LlmProvider`), Linky (`EnergyConnection`), boîte mail
+(`MailAccount`), planning de travail (`WorkPlan` ; montré en premier si la situation pro est à horaires variables),
+banque via Powens (si aucune banque Enable Banking), crypto (si `outside_assets` mentionne de la crypto, sinon en
+dernier), pilote automatique (proposé seulement quand banque + foyer + priorités sont faits).
+
+Cycle de vie :
+- **Visible** tant qu'au moins un élément compté n'est pas fait et que tu ne l'as pas masquée.
+- **Terminée** : quand le serveur constate 8 sur 8 pour la première fois, il pose `checklist_completed_at`. Si
+  c'est la conséquence d'une action faite dans la liste ou le parcours, l'anneau se ferme avec l'étincelle du
+  § 3.6 et le toast « Bank est prêt. » ; jamais au simple chargement de la page.
+- **Repliée** : pendant 7 jours après `checklist_completed_at`, la carte devient une pilule d'une ligne
+  « Bien démarrer : terminé · Pour aller plus loin » (ouvre le repli).
+- **Disparue pour de bon** : après ces 7 jours, ou dès « Masquer » (bouton discret, confirmation intégrée « Tu
+  la retrouveras dans Réglages »), `dismissed_at` est posé. La liste reste accessible dans Réglages › « Bien
+  démarrer » (ligne avec l'anneau), jamais plus sur Aujourd'hui.
+- Un élément qui redevient faux (banque coupée) ne rouvre pas la liste masquée : c'est le rôle des initiatives
+  (« Ta banque n'est plus reliée »).
+
+#### (c) La visite, cinq écrans
+
+Une carte par écran, l'île d'onglets dessinée en SVG inline au bas de la carte avec l'onglet concerné allumé
+(bulle `--accent-grad`), un petit aperçu en CSS au-dessus (pas de capture : rien d'externe, rien de faux).
+« Suivant » / « Précédent », points d'étape, « Passer la visite ». Pas d'avance automatique.
+
+| Écran | Phrase |
+|---|---|
+| Jour | « Chaque matin, ce que tu peux dépenser aujourd'hui, et la prochaine chose à faire. » |
+| Opérations | « Tout ce qui entre et sort, rangé pour toi ; tu corriges d'un geste. » |
+| Gagner | « Les aides et économies que Bank a trouvées pour toi, et ta tirelire. » |
+| Papiers | « Prends un papier en photo : Bank le lit, le range et prépare tes démarches. » |
+| Plus | « Épargne, réglages, connecteurs et messageries : tout le reste est ici. » |
+
+Le bouton flottant « Demande à Bank » est montré sur le dernier écran (« Une question ? Demande à Bank, en bas à
+droite. ») sans sixième écran.
+
+#### (d) API et données
+
+`GET /api/onboarding` est **déjà pris** par le questionnaire de Ma situation (`api/agents.py`, utilisé par
+Situation et les initiatives) : le parcours vit sous **`/api/start`** pour ne rien casser.
+
+- `GET /api/start` →
+  ```
+  { "journey": { "status": "new" | "in_progress" | "finished", "current": "foyer" | null,
+                 "steps": [{ "key": "banque", "title": "Ta banque", "done": true, "skipped": false,
+                             "minutes": 5, "href": "#/bienvenue/banque" }, …] },
+    "checklist": { "visible": true, "collapsed": false, "done": 5, "total": 8,
+                   "completed_at": null,
+                   "items": [{ "key": "securite", "title": "Protéger ton accès", "why": "…", "minutes": 2,
+                               "done": false, "group": "essentiel" | "plus", "href": "#/reglages#sec-title",
+                               "value_cents": null }, …] },
+    "public_consents": [{ "purpose": "baremes", "title": "…", "sends": "…", "text": "…", "granted": false,
+                          "decided": false }, …] }
+  ```
+  Tout `done` est recalculé à chaque appel à partir des tables réelles (requêtes `count`/`exists` légères, aucune
+  lecture réseau) ; `value_cents` ne vient que d'une estimation déjà calculée par le serveur.
+- `POST /api/start/steps/{key}` `{ "action": "skip" | "resume" | "current" }` → l'état ; `skip` sur une étape
+  faite est sans effet.
+- `POST /api/start/finish` → `status = finished` (fin de la visite ou « Voir mon tableau de bord »).
+- `POST /api/start/checklist` `{ "action": "dismiss" | "restore" }`.
+- `POST /api/start/public-consents` `{ "purposes": [...] }` → refuse (422) toute finalité hors du groupe public ;
+  appelle `consents.set_consent(…, True, actor="user")` pour chacune, renvoie la liste à jour.
+- Toutes en session humaine (`AuthDep`) avec CSRF, jamais exposées aux jetons d'agent ni au serveur MCP.
+
+Données : **aucune table, aucune colonne**. Une clé `start_journey` dans `app_settings` (déjà là, JSON), lue et
+écrite par `services/start.py` :
+`{ "started_at", "current", "skipped": [clés], "finished_at", "tour_done_at", "checklist_completed_at",
+"dismissed_at" }` — des dates et des clés d'étape, **jamais** une réponse, un montant, une adresse ou un secret.
+Compte existant sans cette clé : si une banque ou des opérations existent déjà, le parcours est considéré
+`finished` (on n'impose pas l'accueil à Micka) mais la liste s'affiche avec ce qui manque. Le drapeau
+`localStorage` `bank:onboarding` disparaît : `App.tsx` lit `GET /api/start` après la connexion et n'ouvre
+`#/bienvenue` que si `status == "new"`. Les initiatives de mise en route (`start:data`, `security:totp`,
+`planning:connect`) sont tues tant que la liste est visible, pour ne pas poser deux fois la même question.
+
+Tests : un test par règle « fait » (table vide → faux, une ligne → vrai), skip/resume/finish, migration d'un compte
+existant, refus d'une finalité non publique dans `public-consents`, journal d'audit écrit ; côté front, focus sur le
+`h1` de chaque étape, reprise à l'étape `current`, la liste masquée ne revient pas.
+
+#### (e) Accessibilité et mouvement
+
+- Chaque changement d'étape déplace le focus sur le `h1` de l'étape (`tabIndex={-1}`) et met à jour
+  `document.title` (« Ton foyer · Bank ») ; la barre de progression est un `<ol>` avec `aria-current="step"` et un
+  texte « Étape 2 sur 7 » ; une région `aria-live="polite"` annonce « Étape faite » / « Étape passée ».
+- L'anneau garde `role="img"` + `aria-label` (« 5 éléments sur 8 faits ») ; l'élément « fait » est dit par le
+  texte (« fait »), pas par la seule coche verte.
+- Interrupteurs d'accords : `role="switch"` existant, nom = titre de l'accord, état dit ; le texte complet est dans
+  un `<details>` relié par `aria-describedby` à la ligne « Envoie : … ».
+- Cibles ≥ 44 px, action principale pleine largeur au téléphone, « Passer » et « Quitter » toujours atteignables au
+  clavier, Échap = « Quitter » (avec la même conservation d'état). Aucune limite de temps : la visite n'avance
+  jamais seule (l'intro actuelle à 3,6 s par écran garde son « Suivant » et s'arrête sur le dernier écran).
+- Mouvement : entrée d'étape en `opacity` + `translateY(8px)` 200 ms `--ease-out`, coche qui se trace 400 ms,
+  anneau qui avance 320 ms ; tout est coupé par `prefers-reduced-motion` (état final directement) ; la seule fête
+  est celle de fin (§ 3.6), sous une seconde.
+- Verre et contrastes du § 3.3 : texte des étapes sur `.card` (`--glass-strong`), jamais `--ink-3` sur le fond nu ;
+  replis transparence réduite / contraste renforcé / couleurs forcées hérités des primitives.
+- CSP : aucun `style` statique (les marges en ligne d'`Onboarding.tsx` deviennent des classes), aperçus de la
+  visite en CSS et SVG inline ; section `/* ---- démarrer */` ajoutée à `styles.css` avec les jetons existants.
+
+#### Cinq simplifications bon marché, incluses
+
+| # | Où | Changement | Effort | Gain |
+|---|---|---|---|---|
+| 1 | Accueil › accords (7,7 écrans) et Réglages › Confidentialité | Un seul composant `ConsentGroups` : groupes par ce qui part, ligne « Envoie : … », texte complet replié ; le parcours n'en montre que deux groupes, Réglages tous | Faible (le texte est déjà dans `PURPOSES`, on ajoute `group` et `sends`) | La page la plus longue de l'accueil tombe à ~1 écran ; un accord se comprend en une ligne |
+| 2 | Accueil › banque | Trois chemins d'abord, l'assistant Enable Banking après le choix ; **un** bouton principal par écran ; « Continuer sans connexion » et « Je connecterai mes comptes plus tard » fusionnés en « Plus tard » | Faible (réutilise `Welcome.tsx` et `BankSetup`) | Plus de mur technique en première impression ; 30 s possibles au lieu de 5 min |
+| 3 | Connecteurs (10,7 écrans) | `SectionNav` en tête (déjà utilisé par Réglages) avec une pastille par section « relié » (`--positive`) / « à faire » ; les sections non reliées repliées sur une ligne « Relier » | Faible à moyen | On voit d'un coup d'œil ce qui est branché ; la page se lit en un écran |
+| 4 | Aujourd'hui | Initiatives de mise en route tues tant que « Bien démarrer » est visible ; « 19 autres — voir » devient « Voir les 19 autres » | Faible | Une seule liste de choses à configurer, le bouton dit ce qu'il fait |
+| 5 | Plus | Descriptions de tuiles en six mots au plus (« Écris à Bank sur WhatsApp, Signal… », « Banques, Linky, État, IA ») ; pas d'ellipse au téléphone | Faible (texte seul) | La tuile se lit entière, sans deviner la fin |
+
+Hors de ce lot (déjà prévus ou plus gros) : mode tri rapide d'Opérations (16,5 écrans, 103 listes), champs de
+solde de Réglages › Comptes en lecture avec « Modifier », Ma situation allégée maintenant que le foyer se dit dans
+le parcours.
+
 ## 4. Architecture des composants
 
 ```
@@ -483,6 +705,8 @@ Thème : `:root` clair par défaut, sombre via `prefers-color-scheme` **ou** `da
 `theme.ts` (choix dans Réglages → Apparence, mémorisé dans `localStorage`, appliqué avant le premier rendu).
 
 ## 5. Parcours de première ouverture
+
+*Remplacé par le § 3.10 « Démarrer avec Bank » (#44) ; gardé comme historique.*
 
 1. Intro animée (3 écrans, 8 s au total, passables) : « Combien tu peux dépenser aujourd'hui » (le chiffre se
    compte), « Tes aides et ta paie, prévues » (la courbe se trace), « Ton agent, gouverné » (une carte qui se
