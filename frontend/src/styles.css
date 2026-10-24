@@ -8745,3 +8745,18 @@ label {
   border-top: 1px solid var(--line);
   padding-top: 0.75rem;
 }
+
+/* WhatsApp par QR code (Messageries) */
+.ch-whatsapp_qr { --ch-tint: #1f9d55; }
+.wa-qr-risk { margin: 0 0 1rem; }
+.wa-qr-frame {
+  display: grid;
+  place-items: center;
+  width: min(100%, 17rem);
+  aspect-ratio: 1;
+  margin: 0.75rem 0;
+  padding: 0.6rem;
+  border-radius: var(--r-m);
+  background: #fff; /* un QR se lit noir sur blanc, même en thème sombre */
+}
+.wa-qr-frame img { width: 100%; height: auto; image-rendering: pixelated; }

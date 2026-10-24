@@ -474,7 +474,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     # localhost reste accepté pour la sonde de santé interne : une attaque par DNS rebinding arrive avec
     # le nom de domaine de l'attaquant dans Host, jamais « localhost ».
-    hosts = [*settings.allowed_hosts, "localhost", "127.0.0.1"]
+    # « api » : le nom du service dans le compose, par lequel la passerelle WhatsApp (QR) appelle son webhook interne.
+    hosts = [*settings.allowed_hosts, "localhost", "127.0.0.1", "api"]
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)
     app.add_middleware(AccessLogMiddleware)
     return app

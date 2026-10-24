@@ -576,6 +576,22 @@ nouveauté officielle pour toi, point du dimanche soir — regroupées, une seul
   est refusé avant d'aller où que ce soit, et les identifiants (IBAN, carte, n° fiscal…) sont retirés de chaque
   message sortant. Confidentialité réglable par messagerie (Signal : chiffré de bout en bout).
 
+- **WhatsApp par QR code, sur ton numéro** (au choix, à côté de l'API officielle) : une passerelle « appareil lié »
+  ([GOWA](https://github.com/aldinokemal/go-whatsapp-web-multidevice), MIT) tourne à côté de Bank, tu scannes le QR
+  affiché dans Messageries, puis tu t'écris dans ta conversation « Moi » : Bank répond là, et **seulement** là — le
+  reste est écarté sans être lu ni gardé. Client non officiel : WhatsApp peut suspendre le compte, et la passerelle
+  voit toutes tes conversations. À lancer toi-même :
+  - **Docker** : `secrets/whatsapp-bridge.env` avec `APP_BASIC_AUTH=bank:<mot de passe>` et
+    `WHATSAPP_WEBHOOK_SECRET=<secret>` (deux `openssl rand -hex 24`), puis `docker compose --profile whatsapp up -d`.
+    Dans Messageries : adresse `http://whatsapp-bridge:3000`, ce mot de passe et ce secret. Aucun port publié.
+  - **Sans Docker** : le binaire de la [version 9.6.0](https://github.com/aldinokemal/go-whatsapp-web-multidevice/releases/tag/v9.6.0)
+    (vérifie `checksums.txt`), **lié à 127.0.0.1** :
+    `./whatsapp rest --host=127.0.0.1 --port=3000 --basic-auth="bank:<mot de passe>" --webhook-secret="<secret>"
+    --webhook="http://127.0.0.1:8000/api/channels/whatsapp_qr/webhook" --webhook-events=message
+    --webhook-ignore-jids="@g.us,@newsletter,@broadcast,status@broadcast" --mcp-enabled=false --ui-enabled=false
+    --ui-auto-update=false --auto-download-media=false --ignore-status-media=true --presence-pulse-enabled=false`,
+    puis l'adresse `http://127.0.0.1:3000` dans Messageries.
+
 Guide pas à pas par messagerie, exposition du webhook WhatsApp et service signal-cli : [docs/CANAUX.md](docs/CANAUX.md).
 
 ## Crypto et pilote automatique

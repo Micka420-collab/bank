@@ -29,6 +29,7 @@ DEFAULTS: dict[str, Any] = {
     "channel_pairing": {},
     "channel_quiet_hours": [21, 8],
     "channel_weekly": True,
+    "whatsapp_qr_window": {},  # WhatsApp par QR code : fenêtre ouverte avec ton mot de passe (échéance seule)
     # Crypto : nœuds personnalisés par réseau (vide = nœuds publics par défaut), dernière humeur du marché,
     # et le portefeuille compté dans le patrimoine.
     "crypto_endpoints": {},

@@ -144,7 +144,15 @@ def pair(client: TestClient, adapter: FakeAdapter, *, user: str = "42", mid: str
 def test_settings_are_validated_encrypted_and_never_returned(auth_client: TestClient, app, db) -> None:  # type: ignore[no-untyped-def]
     view = auth_client.get("/api/channels").json()
     assert view["consent"] is False and view["server_enabled"] is True
-    assert [p["key"] for p in view["platforms"]] == ["telegram", "whatsapp", "signal", "discord", "slack", "ntfy"]
+    assert [p["key"] for p in view["platforms"]] == [
+        "telegram",
+        "whatsapp",
+        "whatsapp_qr",
+        "signal",
+        "discord",
+        "slack",
+        "ntfy",
+    ]
     bad = auth_client.put("/api/channels/telegram", json={"values": {"token": "pas-un-jeton"}})
     assert bad.status_code == 422 and "format inattendu" in bad.json()["detail"]
     assert auth_client.put("/api/channels/telegram", json={"values": {"nope": "x"}}).status_code == 422

@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.channels.base import Inbound
 from app.channels.text import secret_kind
+from app.channels.whatsapp_qr import check_bridge_url
 from app.db import utcnow, write_lock
 from app.domain import chatblocks
 from app.domain import procedures as dp
@@ -75,6 +76,7 @@ class PlatformSpec:
 
 
 _HOST = r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::\d{1,5})?"
+_BRIDGE_KEY_PATTERN = r"[A-Za-z0-9_.~+/=-]{16,200}"  # ni « : » ni espace : identifiants HTTP Basic
 PLATFORMS: dict[str, PlatformSpec] = {
     "telegram": PlatformSpec(
         "telegram",
@@ -91,6 +93,20 @@ PLATFORMS: dict[str, PlatformSpec] = {
                 "app_secret", "Clé secrète de l'application", True, r"[a-f0-9]{32}", "32 caractères hexadécimaux"
             ),
         ),
+    ),
+    # Ton numéro personnel relié par QR code (appareil lié), par une passerelle locale : conversation « Moi » seule.
+    "whatsapp_qr": PlatformSpec(
+        "whatsapp_qr",
+        "WhatsApp (QR, ton numéro)",
+        (
+            FieldSpec("url", "Adresse de la passerelle", False, rf"https?://{_HOST}/?", "http://whatsapp-bridge:3000"),
+            FieldSpec(
+                "username", "Identifiant de la passerelle", False, r"[A-Za-z0-9_.-]{1,64}", "bank", required=False
+            ),
+            FieldSpec("password", "Mot de passe de la passerelle", True, _BRIDGE_KEY_PATTERN, "16 caractères ou plus"),
+            FieldSpec("webhook_secret", "Secret du webhook", True, _BRIDGE_KEY_PATTERN, "16 caractères ou plus"),
+        ),
+        e2e=True,
     ),
     "signal": PlatformSpec(
         "signal",
@@ -200,6 +216,11 @@ def configure(
         if not re.fullmatch(f.pattern, raw):
             raise ChannelError(f"{f.label} : format inattendu (exemple : {f.example})")
         value = raw.rstrip("/") if f.key in ("url", "server") else raw
+        if platform == "whatsapp_qr" and f.key == "url":
+            try:
+                value = check_bridge_url(value)
+            except ValueError as exc:
+                raise ChannelError(str(exc)) from None
         if f.secret:
             if sec.get(f.key) != value:
                 sec[f.key] = value
@@ -382,6 +403,8 @@ def view(
             extra = {"app_id": opt.get("app_id")}
         elif key == "signal":
             extra = {"account": opt.get("account")}
+        elif key == "whatsapp_qr":
+            extra = {"qr_window": "open" if qr_window_open(db, now) else None}
         elif key == "ntfy" and sec.get("topic"):
             # Le sujet est l'adresse d'abonnement : tu dois le recopier dans l'application ntfy de ton téléphone.
             extra = {"subscribe_url": f"{opt.get('server', 'https://ntfy.sh')}/{sec['topic']}"}
@@ -498,6 +521,71 @@ def normalize_code(text: str) -> str | None:
     t = re.sub(r"^/(?:start|lier|link|pair)(?:@\w+)?\s*", "", text.strip(), flags=re.IGNORECASE)
     t = re.sub(r"[\s\-]", "", t).upper()
     return t if re.fullmatch(f"[{_ALPHABET}]{{8}}", t) else None
+
+
+# ------------------------------------------------------------------ WhatsApp par QR code (appareil lié)
+QR_WINDOW = timedelta(minutes=10)
+_QR_KEY = "whatsapp_qr_window"
+
+
+def open_qr_window(db: Session, *, now: datetime, actor: str) -> dict[str, Any]:
+    """Montrer le QR code, c'est laisser un téléphone se relier à Bank : comme le code d'appairage, il faut ton
+    mot de passe (vérifié par l'API), et la fenêtre se ferme seule au bout de 10 minutes."""
+    if not consents.granted(db, "channels"):
+        raise consents.ConsentError("channels")
+    expires = now + QR_WINDOW
+    set_setting(db, _QR_KEY, {"expires_at": expires.isoformat()})
+    audit.record(db, actor, "channel.qr_window_opened", platform="whatsapp_qr", expires_at=expires.isoformat())
+    return {"expires_at": expires.isoformat()}
+
+
+def qr_window_open(db: Session, now: datetime) -> bool:
+    try:
+        expires = datetime.fromisoformat(str((get_setting(db, _QR_KEY) or {})["expires_at"]))
+    except (KeyError, ValueError, TypeError):
+        return False
+    return expires > now
+
+
+def close_qr_window(db: Session) -> None:
+    set_setting(db, _QR_KEY, {})
+
+
+def qr_link_of(db: Session) -> ChannelLink | None:
+    return db.scalar(select(ChannelLink).where(ChannelLink.platform == "whatsapp_qr", ChannelLink.revoked_at.is_(None)))
+
+
+def qr_paired(db: Session, jid: str, label: str, *, now: datetime) -> ChannelLink | None:
+    """La passerelle est reliée au numéro ``jid``. S'il est déjà ton compte relié : rien à faire. Sinon, on ne le
+    relie que pendant une fenêtre ouverte avec ton mot de passe (un téléphone relié en dehors de Bank n'obtient
+    rien) ; un autre numéro relié avant est délié. Renvoie le compte nouvellement relié, sinon None."""
+    write_lock(db)
+    index = get_keyring().blind_index(jid, "channel.whatsapp_qr")
+    current = qr_link_of(db)
+    if current is not None and current.user_index == index:
+        return None
+    if not qr_window_open(db, now):
+        return None
+    _revoke_links(db, "whatsapp_qr", now=now)
+    link = db.scalar(select(ChannelLink).where(ChannelLink.platform == "whatsapp_qr", ChannelLink.user_index == index))
+    if link is None:
+        link = ChannelLink(platform="whatsapp_qr", user_index=index, user_ref=jid, chat_ref=jid, label=label)
+        db.add(link)
+    link.revoked_at, link.failures, link.last_error, link.notify = None, 0, None, True
+    link.chat_ref, link.label, link.linked_at, link.last_seen_at = jid, label, now, now
+    close_qr_window(db)
+    db.flush()
+    audit.record(db, "canal:whatsapp_qr", "channel.linked", link=link.id, by="qr")
+    return link
+
+
+def qr_unpaired(db: Session, *, now: datetime, actor: str) -> int:
+    """« Délier » : l'appareil a été déconnecté de la passerelle ; le compte relié l'est aussi."""
+    write_lock(db)
+    revoked = _revoke_links(db, "whatsapp_qr", now=now)
+    close_qr_window(db)
+    audit.record(db, actor, "channel.qr_logout", platform="whatsapp_qr", links=revoked)
+    return revoked
 
 
 def _try_pair(db: Session, code: str, now: datetime) -> str:
