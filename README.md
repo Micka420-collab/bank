@@ -68,6 +68,10 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
   droits sont vérifiés à la connexion), la valeur, la courbe et la répartition, l'impôt de l'année
   (305 €, 2086, 3916-bis) rempli depuis tes exports Kraken, Binance ou Coinbase, un vérificateur d'arnaques — et aucune phrase de récupération ni clé acceptée, nulle
   part. Voir [docs/CRYPTO.md](docs/CRYPTO.md).
+- **Alertes de cours** : un seuil haut, un seuil bas ou une variation sur 24 h, envoyés dans tes messageries et
+  sur ton téléphone une fois par franchissement — un constat, jamais un conseil ; et, sur l'écran Pilote,
+  **pilote vs consigne** : chaque rendez-vous prévu face à ce que l'agent a fait (à temps, en retard, manqué,
+  montant différent), le total prévu face au total fait.
 - **Pilote automatique** (éteint par défaut) : ton agent peut acheter ou envoyer seul, mais seulement dans ton
   cadre — un jeton précis, tes actifs, tes adresses, tes consignes, des plafonds glissants, une perte maximale,
   une durée ; Bank autorise ou refuse chaque mouvement avant qu'il parte et coupe tout à la première anomalie.
@@ -565,10 +569,11 @@ direct recomposée fragment par fragment, Web Push vérifié au bit près contre
 par un faux navigateur, amortissement vérifié sur un cas de référence public, plan B contre un moteur fiscal
 simulé qui réagit au revenu, sauvegarde chiffrée altérée, tronquée ou rallongée refusée, boîte mail contre un faux
 serveur IMAP qui journalise chaque commande, retraite vérifiée sur le cas de référence de service-public et contre
-les paliers de la LFSS 2026, lien de partage ouvert deux fois en même temps, clés de plateforme face à de fausses plateformes qui vérifient chaque signature et
+les paliers de la LFSS 2026, lien de partage ouvert deux fois en même temps, pilote vs consigne sur un calendrier de référence — fins de mois,
+heures d'été et d'hiver, pauses, refus —, alertes de cours franchies une seule fois par deux relèves simultanées, clés de plateforme face à de fausses plateformes qui vérifient chaque signature et
 refusent les droits trop larges), couverture 91 %, 154 tests front (parcours de première ouverture,
 coffre et partage d'un papier, démarches, opportunités, veille, assistant, chat interactif et réponse en direct, notifications sur
-l'appareil, plan B, crédits, retraite, sauvegardes, boîte mail, crypto et plateformes reliées, pilote, déclarations, corrélations, année qui vient,
+l'appareil, plan B, crédits, retraite, sauvegardes, boîte mail, crypto et plateformes reliées, alertes de cours, pilote, pilote vs consigne, déclarations, corrélations, année qui vient,
 passkeys, erreurs qui disent quoi faire),
 mypy strict sans erreur,
 ruff et bandit propres, revue de sécurité indépendante du pilote et de la crypto (ses constats corrigés et

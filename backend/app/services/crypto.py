@@ -35,7 +35,7 @@ from app.security import audit
 from app.security.crypto import CryptoError as KeyringError
 from app.security.crypto import get_keyring
 from app.security.netfetch import FetchError, check_url, get_json, post_json
-from app.services import analytics, autonomy, consents
+from app.services import analytics, autonomy, consents, price_alerts
 from app.services.crypto_value import holdings_value, latest_prices
 from app.services.settings_store import get_setting, set_setting
 
@@ -368,10 +368,11 @@ def sync(db: Session, *, net: CryptoNet, now: datetime, actor: str) -> dict[str,
         synced += 1
     db.flush()
     priced = refresh_prices(db, net=net, now=now, force=True)
+    fired = price_alerts.evaluate(db, now=now) if priced else 0  # tes alertes de cours, sur les cours tout frais
     mood = refresh_sentiment(db, net=net, now=now)
     snapshot(db, now.date())
     audit.record(db, actor, "crypto.sync", wallets=synced, failed=failed, priced=priced)
-    return {"wallets_synced": synced, "wallets_failed": failed, "prices": priced, "sentiment": mood}
+    return {"wallets_synced": synced, "wallets_failed": failed, "prices": priced, "sentiment": mood, "alerts": fired}
 
 
 def _ids(db: Session) -> dict[str, str]:

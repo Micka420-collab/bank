@@ -1173,3 +1173,39 @@ class ExchangeKey(Base):
     synced_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     sync_error: Mapped[str | None] = mapped_column(String(200))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+# ---------------------------------------------------------------------------- alertes de cours, suivi du pilote
+class PriceAlert(Base):
+    """Une alerte de cours que tu as fixée : seuil haut, seuil bas ou variation sur 24 h. Armée, elle se déclenche
+    une fois au franchissement (mise à jour conditionnelle : deux relèves simultanées n'envoient rien deux fois) ;
+    elle se réarme quand le cours revient de l'autre côté avec une marge, ou quand tu la réarmes."""
+
+    __tablename__ = "price_alerts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    asset: Mapped[str] = mapped_column(String(16), index=True)
+    kind: Mapped[str] = mapped_column(String(8))  # above | below | change
+    threshold: Mapped[str] = mapped_column(String(32))  # euros (above, below) ou points de % (change), en décimal
+    label: Mapped[str | None] = mapped_column(String(60))
+    state: Mapped[str] = mapped_column(String(10), default="armed")  # armed | triggered
+    fires: Mapped[int] = mapped_column(Integer, default=0)  # nombre de déclenchements : la clé de l'envoi
+    triggered_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    triggered_price: Mapped[str | None] = mapped_column(String(48))
+    triggered_change: Mapped[str | None] = mapped_column(String(24))
+    rearmed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class AutonomyEpoch(Base):
+    """Une période où le pilote était allumé, avec les consignes de ce moment-là : le suivi « pilote vs consigne »
+    sait quand une consigne était due, et quand elle ne l'était pas (pilote en pause, arrêté, échu)."""
+
+    __tablename__ = "autonomy_epochs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime(), index=True)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    stopped_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    trial: Mapped[bool] = mapped_column(Boolean, default=True)
+    rules: Mapped[str] = mapped_column(EncryptedText("autonomy.epoch.rules"), default="[]")  # JSON

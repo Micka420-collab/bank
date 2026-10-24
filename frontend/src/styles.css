@@ -7335,3 +7335,85 @@ label {
     transition: none;
   }
 }
+
+/* ---------------------------------------------------------------- alertes de cours, pilote vs consigne */
+.cx-alert-list li > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.6rem;
+  min-width: 0;
+}
+.cx-alert-list li.is-triggered {
+  border-left: 3px solid var(--warning);
+  padding-left: 0.6rem;
+}
+.cx-alert-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.pl-track-rule {
+  padding: 1rem 0;
+  border-top: 1px solid var(--line);
+}
+.pl-track-rule:first-of-type {
+  border-top: 0;
+}
+.pl-track-rule h3,
+.pl-outside h3 {
+  font-size: var(--t-md);
+  margin: 0 0 0.25rem;
+}
+.pl-track-totals {
+  font-variant-numeric: tabular-nums;
+}
+.pl-track-totals .down {
+  color: var(--negative);
+}
+.pl-track-totals .up {
+  color: var(--positive);
+}
+.pl-track-strip {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0.75rem 0;
+  padding: 0;
+}
+.pl-track-strip li {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+.pl-track-strip li.is-on_time {
+  background: var(--positive);
+}
+.pl-track-strip li.is-late,
+.pl-track-strip li.is-different {
+  background: var(--warning);
+}
+.pl-track-strip li.is-missed {
+  background: var(--negative);
+}
+.pl-track-strip li.is-waiting,
+.pl-track-strip li.is-in_progress {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.pl-track-strip li.is-off {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.pl-track-rule td .tag + .tag {
+  margin-left: 0.25rem;
+}
+.pl-outside {
+  margin-top: 1rem;
+}
+.pl-outside ul {
+  margin: 0;
+  padding-left: 1rem;
+}

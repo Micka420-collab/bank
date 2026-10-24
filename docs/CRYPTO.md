@@ -73,6 +73,29 @@ clé) quand la plateforme ne répond pas. Les noms Kraken (`XXBT`, `ETH.F`, `SOL
 au symbole usuel ; les devises (EUR, USD…) ne sont pas des avoirs crypto. Retirer la clé supprime ses lignes ;
 supprime-la aussi côté plateforme. Dix clés au plus. Un compte tenu hors de France se coche pour le 3916-bis.
 
+## Alertes de cours
+
+Sur l'écran Crypto, la carte **Alertes de cours** : un actif dont Bank suit déjà le cours, un type (seuil bas,
+seuil haut en euros, ou variation sur 24 h en %, à la hausse comme à la baisse) et une valeur ; un repère
+facultatif (60 caractères). 20 alertes au plus ; un seuil jusqu'à un milliard d'euros (huit décimales au plus),
+une variation de 2 à 90 %. Un seuil déjà franchi au moment où tu le fixes est refusé (il n'y aurait pas de
+franchissement à signaler).
+
+- **Quand** : à chaque relève des cours (toutes les 30 minutes environ, ou « Relever maintenant »), sur le
+  cours tout frais ; aucune autre source, aucun appel en plus. Un cours de plus de 2 h ne déclenche rien.
+- **Une fois par franchissement** : armée, l'alerte passe « déclenchée » (avec le cours et l'heure) par une
+  mise à jour conditionnelle — deux relèves en même temps ne la déclenchent qu'une fois. Elle se réarme seule
+  quand le cours revient de l'autre côté avec une marge (1 % du seuil, ou 1 point de variation), ou quand tu la
+  réarmes (refusé tant que le cours est encore du mauvais côté). L'état est en base : un redémarrage ne renvoie
+  rien.
+- **Où** : dans tes messageries et sur ton téléphone (notifications du navigateur), par le circuit commun des
+  alertes : une fois par compte relié, jamais pendant tes heures calmes, regroupées avec les autres. En
+  confidentialité « agrégats », le message ne dit que « une alerte de cours s'est déclenchée ».
+- **Ce qu'elle dit** : un constat — « 📉 BTC est passé sous 50 000 € (49 812 € à 14 h 05) — seuil que tu as
+  fixé. Une information, pas un conseil. » Jamais « c'est le moment », jamais une invitation à acheter ou à
+  vendre : un test relit chaque modèle de message et refuse ces mots-là.
+- **Qui** : toi seul. Aucun outil d'agent ne crée, ne change ni ne supprime une alerte.
+
 ## Ce que Bank refuse
 
 - **Une phrase de récupération ou une clé privée**, partout : champ d'adresse, nom, note, messagerie,
@@ -182,6 +205,18 @@ autorisé n'est pas rapporté dans les 10 minutes (il est alors compté comme d�
 chaque minute), si la perte maximale est atteinte, si l'agent essuie 5 refus en une heure ou rapporte 3 échecs en
 24 h, à l'échéance et si le jeton n'est plus valable. Les demandes d'un autre agent sont refusées sans remplir
 ton journal (elles restent dans l'audit) et ne peuvent pas arrêter ton pilote à sa place.
+
+**Pilote vs consigne** (écran Pilote) : pour chaque consigne, les rendez-vous prévus sur trois mois (un par
+jour, semaine ou mois civil, dans ton fuseau) face à ce que l'agent a rapporté — fait à temps, en retard (de
+combien de jours), manqué, montant différent (écart en euros et en %), en cours, attendu — avec le total prévu et
+le total fait, puis les mouvements faits hors consigne (mode libre, consigne retirée, deuxième mouvement sur une
+même période). Une consigne peut porter un **jour prévu** (« chaque lundi », « le 15 de chaque mois » ; un 31
+tombe le dernier jour des mois courts) : il ne change rien à ce que Bank autorise, il sert à dire « en retard ».
+Un rendez-vous n'est attendu que si le pilote était allumé avec cette consigne à partir du jour prévu : une
+semaine de pause, d'arrêt ou après l'échéance s'affiche « pilote éteint », pas « manqué ». Un mouvement refusé
+par Bank ne compte pas comme fait (la raison du refus s'affiche), un échec rapporté ou un mouvement jamais
+rapporté non plus. Les jours se comptent en dates civiles de Paris : un passage à l'heure d'été ou d'hiver ne
+décale rien (testé sur un calendrier de référence, `backend/tests/test_pilot_track.py`).
 
 **Tout arrêter** : le bouton de l'écran Pilote (sans mot de passe), ou depuis une messagerie reliée
 `/pilote stop`, `/stop`, ou simplement « stop pilote », « arrête le pilote ». `/pilote` seul donne l'état.

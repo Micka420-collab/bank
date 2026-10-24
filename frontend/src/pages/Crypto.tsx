@@ -19,6 +19,7 @@ import { TrendChart } from "../components/charts/TrendChart";
 import { CountUp } from "../components/CountUp";
 import { ExchangeKeys } from "../components/ExchangeKeys";
 import { Icon } from "../components/Icon";
+import { PriceAlerts } from "../components/PriceAlerts";
 import { Segmented } from "../components/Segmented";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { amountOnly, money, plural, safeHref, shortDate } from "../format";
@@ -84,6 +85,8 @@ export function Crypto() {
       {!data.network_consent && <NetworkConsent onDone={reload} />}
 
       {!empty && <Holdings assets={data.assets} />}
+
+      <PriceAlerts />
 
       <div className="split cx-split" style={{ marginTop: "1rem" }}>
         <Wallets data={data} onChange={reload} />

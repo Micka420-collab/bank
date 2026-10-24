@@ -46,6 +46,7 @@ from app.api import (
     passkeys,
     planb,
     planning,
+    price_alerts,
     procedures,
     push,
     retirement,
@@ -135,6 +136,8 @@ def _crypto_sync_once(app: FastAPI) -> int:
         )
         crypto_service.snapshot(db, date.today())  # noqa: DTZ011 - date locale du serveur
         db.commit()
+        if result.get("alerts") and app.state.channels is not None:
+            app.state.channels.nudge_threadsafe()  # une alerte de cours franchie part tout de suite
         return int(result["wallets_synced"]) + int(result["prices"]) + int(keys["exchanges_synced"])
 
 
@@ -371,6 +374,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         retirement,
         exchange_keys,
         shares,
+        price_alerts,
         system,
     )
     for r in routers:

@@ -155,6 +155,9 @@ def sync(request: Request, ctx: AuthDep, db: DbDep, today: TodayDep) -> dict[str
             db, transport=request.app.state.exchange_transport(), now=utcnow(), actor=ctx.user.username
         )
     )
+    if result.get("alerts") and request.app.state.channels is not None:
+        db.commit()  # l'alerte déclenchée est en base avant que la passerelle ne la lise
+        request.app.state.channels.nudge_threadsafe()
     return {"result": result, "view": svc.view(db, today=today, now=utcnow())}
 
 

@@ -325,6 +325,11 @@ messages, anti-boucle, empoisonnement d'adresse, jetons-appâts), sans en repren
   vérificateur ; ligne à part dans le patrimoine.
 - **Pilote** (`app/services/autonomy.py`) : mandat lié à un jeton, essai, consignes à cadence, plafonds
   glissants, ticket unique, arrêts automatiques, journal, alertes urgentes, `/pilote stop`.
+- **Pilote vs consigne** (`app/domain/pilot_track.py`, `app/services/pilot_track.py`) : périodes d'activité
+  notées à chaque mise en route et à chaque arrêt, rendez-vous prévus par consigne (jour prévu facultatif),
+  mouvements rapprochés, écarts de date et de montant ; lecture seule.
+- **Alertes de cours** (`app/services/price_alerts.py`) : seuils et variations fixés par toi, lus à chaque relève
+  des cours, une fois par franchissement (mise à jour conditionnelle, réarmement avec marge) ; aucun outil MCP.
 - **MCP** : `get_crypto`, `crypto_check`, `autonomy_status`, `request_autonomous_move`, `report_autonomous_move`,
   `get_obligations` (déclarations récurrentes : fenêtres, retards, chiffres préparés — lecture seule) et
   `get_correlations` (ce que contrats, relevés et aides disent ensemble — lecture seule), `get_year_ahead` (douze
