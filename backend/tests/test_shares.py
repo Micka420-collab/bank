@@ -4,17 +4,19 @@ expiré, consommé ou révoqué indiscernable, débit limité, journal et audit,
 from __future__ import annotations
 
 import io
+import re
 import sys
 from datetime import date, timedelta
 from typing import Any
 
 import pypdf
 import pytest
+from PIL import Image
 from sqlalchemy import select
 from starlette.testclient import TestClient
 
 from app.api import deps
-from app.db import utcnow
+from app.db import utcnow, write_lock
 from app.domain import pdf_text, reading
 from app.models import AuditLog, VaultDocument, VaultShare
 from app.services import shares
@@ -129,7 +131,7 @@ def test_expired_revoked_used_and_unknown_look_the_same(
 
     later = utcnow() + timedelta(hours=2)
     monkeypatch.setattr("app.api.shares.utcnow", lambda: later)
-    responses = [_open(anonymous, t) for t in (used, revoked, expired, "inconnu", "x" * 500, "")]
+    responses = [_open(anonymous, t) for t in (used, revoked, expired, "inconnu", "x" * 513, "")]
     assert {r.status_code for r in responses} == {404}
     assert len({r.content for r in responses}) == 1  # un seul corps, quel que soit le refus
     states = {s["id"]: s["state"] for s in owner.get(f"/api/vault/{doc_id}/shares").json()["shares"]}
@@ -139,6 +141,16 @@ def test_expired_revoked_used_and_unknown_look_the_same(
         db.commit()
         assert all(s.payload is None for s in db.scalars(select(VaultShare)))
         assert "vault.share_revoke" in [a.action for a in db.scalars(select(AuditLog))]
+
+
+def test_a_malformed_request_gets_the_same_answer(app, owner: TestClient) -> None:  # type: ignore[no-untyped-def]
+    anonymous = TestClient(app, base_url="https://testserver")
+    expected = _open(anonymous, "inconnu")
+    bodies: list[Any] = [{"token": "x" * 513}, {"token": 123}, {"token": None}, ["x"], {}]
+    responses = [anonymous.post("/api/share/open", json=b) for b in bodies]  # ni 422, ni la règle de validation
+    responses += [anonymous.post("/api/share/open", content=raw) for raw in (b"nope", b"", b"[" * 5000)]
+    assert [r.status_code for r in responses] == [404] * 8
+    assert {r.content for r in responses} == {expected.content}
 
 
 def test_two_simultaneous_downloads_cannot_both_succeed(
@@ -193,6 +205,56 @@ def test_what_cannot_be_shared(app, owner: TestClient, monkeypatch: pytest.Monke
     token = _token(_share(owner, doc_id).json()["link"])
     assert owner.delete(f"/api/vault/{doc_id}").status_code == 204  # le document effacé emporte ses liens
     assert _open(TestClient(app, base_url="https://testserver"), token).status_code == 404
+
+
+def test_the_rest_of_bank_can_write_while_a_copy_is_stamped(
+    app, owner: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:  # type: ignore[no-untyped-def]
+    doc_id = _upload(owner, "quittance.pdf", make_pdf(LEASE))
+    real, seen = reading.stamp_pdf, []
+
+    def slow(raw: bytes, text: str) -> bytes:
+        with (
+            app.state.sessionmaker() as other
+        ):  # un autre écrivain pendant le filigrane : pas de « database is locked »
+            write_lock(other)
+            other.commit()
+            seen.append("écrit")
+        return real(raw, text)
+
+    monkeypatch.setattr(reading, "stamp_pdf", slow)
+    assert _share(owner, doc_id).status_code == 201 and seen == ["écrit"]
+    with app.state.sessionmaker() as db:
+        assert "vault.file_read" in [a.action for a in db.scalars(select(AuditLog))]
+
+    def gone(raw: bytes, text: str) -> bytes:
+        with app.state.sessionmaker() as other:
+            other.delete(other.get(VaultDocument, doc_id))
+            other.commit()
+        return real(raw, text)
+
+    monkeypatch.setattr(reading, "stamp_pdf", gone)
+    assert _share(owner, doc_id).status_code == 404  # effacé pendant le filigrane : pas de lien vers rien
+
+
+def _placements(pdf: bytes) -> list[tuple[float, float, float]]:
+    """(taille, x, y) de chaque texte posé par le filigrane."""
+    data = pypdf.PdfReader(io.BytesIO(pdf)).pages[0].get_contents().get_data().decode("latin-1")  # type: ignore[union-attr]
+    found = re.findall(r"/BkF ([\d.]+) Tf\s+[-\d.]+ [-\d.]+ [-\d.]+ [-\d.]+ ([-\d.]+) ([-\d.]+) Tm", data)
+    return [(float(a), float(b), float(c)) for a, b, c in found]
+
+
+def test_the_watermark_stays_in_the_visible_part_of_the_page() -> None:
+    cropped = make_pdf(LEASE).replace(b"/MediaBox", b"/CropBox [0 421 300 842] /MediaBox")
+    marks = _placements(pdf_text.stamp(cropped, "Transmis à Agence Dupont le 15/10/2026 par Bank — usage unique"))
+    assert len(marks) == 2 and all(0 <= x <= 300 and 421 <= y <= 842 for _, x, y in marks)
+    text = "Transmis à " + "A" * 60 + " le 15/10/2026 par Bank — usage unique"
+    photo = io.BytesIO()
+    Image.new("RGB", (600, 2000), "white").save(photo, "PNG")
+    narrow = pdf_text.stamp(photo.getvalue(), text)
+    width = float(pypdf.PdfReader(io.BytesIO(narrow)).pages[0].mediabox.width)
+    (_, *_), (foot, x, _) = _placements(narrow)
+    assert x + 0.52 * foot * len(text) <= width - 17  # le pied de page tient sur une photo étroite
 
 
 def test_recipient_names_are_cleaned_for_the_watermark() -> None:

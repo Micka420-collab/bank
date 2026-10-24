@@ -3,9 +3,10 @@ coffre ouverte sans session — l'ouverture du lien par son destinataire."""
 
 from __future__ import annotations
 
-from typing import Any
+import json
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
@@ -33,10 +34,6 @@ class ShareIn(BaseModel):
     recipient: str = Field(min_length=1, max_length=200)
     hours: int = Field(ge=1, le=48)
     password: str = Field(min_length=1, max_length=1024)
-
-
-class OpenIn(BaseModel):
-    token: str = Field(max_length=512)
 
 
 def _http(exc: VaultError) -> HTTPException:
@@ -80,12 +77,23 @@ def revoke(doc_id: int, share_id: int, ctx: AuthDep, db: DbDep) -> dict[str, Any
         raise _http(exc) from exc
 
 
+async def _token(request: Request) -> str:
+    # Corps lu à la main : un corps illisible, un jeton trop long ou qui n'est pas du texte reçoit le même 404 que
+    # les autres, pas le 422 détaillé de la validation.
+    try:
+        body = json.loads(await request.body())
+    except (ValueError, RecursionError):
+        return ""
+    token = body.get("token") if isinstance(body, dict) else None
+    return token if isinstance(token, str) else ""
+
+
 @router.post("/api/share/open")
-def open_link(body: OpenIn, request: Request, db: DbDep) -> Response:
+def open_link(request: Request, db: DbDep, token: Annotated[str, Depends(_token)]) -> Response:
     """Sans session : le jeton est la seule clé. Débit limité par adresse, réponse identique pour tout refus."""
     if not request.app.state.limiters["share"].hit(client_ip(request)):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Trop de tentatives : attends quelques minutes")
-    data = shares.open_link(db, body.token, now=utcnow(), ip=client_ip(request))
+    data = shares.open_link(db, token, now=utcnow(), ip=client_ip(request))
     if data is None:
         return JSONResponse(GONE, status_code=404, headers={"X-Robots-Tag": "noindex, nofollow, noarchive"})
     return Response(data, media_type="application/pdf", headers=PUBLIC_HEADERS)

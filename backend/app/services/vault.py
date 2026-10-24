@@ -373,12 +373,18 @@ def listing(db: Session, kind: str | None = None) -> dict[str, Any]:
 
 def file_content(db: Session, doc_id: int, *, actor: str) -> tuple[bytes, str, str]:
     doc = _get(db, doc_id)
-    blob = db.get(VaultBlob, doc.id)
-    if blob is None:
-        raise VaultError("Fichier non conservé", 404)
-    data = get_keyring().decrypt_bytes(blob.data, _blob_context(doc.id))
+    data = original(db, doc.id)
     audit.record(db, actor, "vault.file_read", document=doc.id)
     return data, doc.mime, download_name(doc)
+
+
+def original(db: Session, doc_id: int) -> bytes:
+    """Le fichier déchiffré, sans rien écrire : à l'appelant de le noter au journal (après un long traitement, pour
+    ne pas tenir le verrou d'écriture pendant ce temps)."""
+    blob = db.get(VaultBlob, doc_id)
+    if blob is None:
+        raise VaultError("Fichier non conservé", 404)
+    return get_keyring().decrypt_bytes(blob.data, _blob_context(doc_id))
 
 
 def download_name(doc: VaultDocument) -> str:
