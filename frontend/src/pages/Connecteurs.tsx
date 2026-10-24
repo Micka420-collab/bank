@@ -14,6 +14,7 @@ import {
 } from "../api";
 import { BankConnect, BankMark } from "../components/BankConnect";
 import { BankSetup, setupReady } from "../components/BankSetup";
+import { PowensSetup } from "../components/PowensSetup";
 import { Icon } from "../components/Icon";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useCelebrate, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
@@ -194,6 +195,7 @@ export function Banks({ result }: { result: string | null }) {
         </div>
       )}
       {error && <p className="error" role="alert" style={{ marginTop: "0.75rem" }}>{error}</p>}
+      <PowensSetup />
     </section>
   );
 }

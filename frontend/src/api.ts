@@ -875,6 +875,29 @@ export type BankSetupStatus = {
   connections: number;
 };
 
+/** Powens (sur contrat) : jamais le secret ni le jeton, seulement le domaine, un indice du client_id et une empreinte. */
+export type PowensIssue = { code: "bad_key" | "unreachable" | "sandbox"; message: string };
+export type PowensConnection = {
+  id: number;
+  aspsp_name: string;
+  status: "active" | "expired" | "revoked" | "error" | "pending";
+  last_sync_at: string | null;
+  last_error: string | null;
+  accounts: string[];
+};
+export type PowensStatus = {
+  configured: boolean;
+  domain: string | null;
+  client_id_hint: string | null;
+  secret_fingerprint: string | null;
+  sandbox: boolean;
+  updated_at: string | null;
+  redirect_url: string;
+  console_url: string;
+  check: { ok: boolean; issues: PowensIssue[]; environment: string; checked_at: string } | null;
+  connections: PowensConnection[];
+};
+
 // ------------------------------------------------------------------ agent IA (HERMÈS) et « Ma situation »
 export type QuestionKind = "choice" | "multi" | "money" | "int" | "text" | "list";
 

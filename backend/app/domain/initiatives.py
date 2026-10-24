@@ -164,6 +164,7 @@ class ConnectionInfo:
     id: int
     name: str
     valid_until: date | None
+    reconnect: str | None = None  # accès bloqué (authentification forte à refaire…) : ce que la banque attend
 
 
 @dataclass(frozen=True)
@@ -663,7 +664,19 @@ def gen_hygiene(ctx: Context) -> list[Card]:
         )
     soon = ctx.today + timedelta(days=10)
     for c in ctx.connections:
-        if c.valid_until and c.valid_until <= soon:
+        if c.reconnect:
+            out.append(
+                Card(
+                    f"consent:{c.id}:reconnect",
+                    "notice",
+                    8,
+                    f"{c.name} attend que tu te reconnectes",
+                    f"{c.reconnect} La mise à jour automatique reprend juste après.",
+                    (navigate("connecteurs", "Reconnecter"), snooze(2)),
+                    topic="operations",
+                )
+            )
+        elif c.valid_until and c.valid_until <= soon:
             out.append(
                 Card(
                     f"consent:{c.id}:{c.valid_until:%Y%m%d}",

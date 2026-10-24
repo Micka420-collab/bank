@@ -7,7 +7,7 @@ import secrets
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import utcnow
@@ -25,6 +25,11 @@ OVERLAP_DAYS = 7  # recouvrement : rattrape les opérations comptabilisées tard
 
 class BankFlowError(Exception):
     pass
+
+
+def enablebanking_only() -> ColumnElement[bool]:
+    """Les connexions Enable Banking : provider NULL (d'avant Powens) ou « enablebanking »."""
+    return or_(BankConnection.provider.is_(None), BankConnection.provider == Provider.ENABLEBANKING.value)
 
 
 def start_connection(db: Session, client: EnableBankingClient, aspsp_name: str, country: str, redirect_url: str) -> str:
@@ -103,7 +108,7 @@ class SyncReport:
 
 def sync_connection(db: Session, client: EnableBankingClient, conn: BankConnection, today: date) -> SyncReport:
     report = SyncReport()
-    if conn.status != ConnectionStatus.ACTIVE or not conn.session_id:
+    if conn.status != ConnectionStatus.ACTIVE or not conn.session_id or conn.provider == Provider.POWENS.value:
         return report
     if conn.valid_until and conn.valid_until < utcnow():
         conn.status = ConnectionStatus.EXPIRED
@@ -140,7 +145,11 @@ def sync_connection(db: Session, client: EnableBankingClient, conn: BankConnecti
 def sync_all(factory: sessionmaker[Session], client: EnableBankingClient, today: date) -> SyncReport:
     total = SyncReport()
     with factory() as db:
-        conns = list(db.scalars(select(BankConnection).where(BankConnection.status == ConnectionStatus.ACTIVE)))
+        conns = list(
+            db.scalars(
+                select(BankConnection).where(BankConnection.status == ConnectionStatus.ACTIVE, enablebanking_only())
+            )
+        )
         for conn in conns:
             try:
                 r = sync_connection(db, client, conn, today)

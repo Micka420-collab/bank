@@ -48,6 +48,7 @@ from app.api import (
     passkeys,
     planb,
     planning,
+    powens,
     price_alerts,
     procedures,
     push,
@@ -83,6 +84,7 @@ from app.services import home_value as home_value_service
 from app.services import mail as mail_service
 from app.services import obligations as obligations_service
 from app.services import planning as planning_service
+from app.services import powens as powens_service
 from app.services import shares as shares_service
 from app.services import vault as vault_service
 from app.services import watch as watch_service
@@ -245,14 +247,21 @@ async def _sync_loop(app: FastAPI) -> None:
         # Gigue aléatoire : pas de rafale toujours à la même minute côté banque.
         await asyncio.sleep(hours * 3600 + random.uniform(0, 600))  # noqa: S311  # nosec B311
         client = app.state.enablebanking  # relu à chaque tour : l'assistant de connexion peut l'avoir changé
-        if client is None:
-            continue
-        try:
-            today = date.today()  # noqa: DTZ011 - date locale du serveur
-            report = await asyncio.to_thread(sync_all, app.state.sessionmaker, client, today)
-            log.info("sync auto : %s comptes, %s nouvelles opérations", report.accounts, report.inserted)
-        except Exception:
-            log.exception("sync auto en échec")
+        today = date.today()  # noqa: DTZ011 - date locale du serveur
+        if client is not None:
+            try:
+                report = await asyncio.to_thread(sync_all, app.state.sessionmaker, client, today)
+                log.info("sync auto : %s comptes, %s nouvelles opérations", report.accounts, report.inserted)
+            except Exception:
+                log.exception("sync auto en échec")
+        if app.state.powens is not None:  # Powens (sur contrat), même rythme
+            try:
+                report = await asyncio.to_thread(
+                    powens_service.sync_all, app.state.sessionmaker, app.state.powens, today
+                )
+                log.info("sync Powens : %s comptes, %s nouvelles opérations", report.accounts, report.inserted)
+            except Exception:
+                log.exception("sync Powens en échec")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -276,6 +285,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 app.state.enablebanking = bank_setup_service.client_from_db(
                     db, settings, http=app.state.enablebanking_http, resolver=app.state.enablebanking_resolver
                 )
+            app.state.powens = powens_service.client_from_db(
+                db, http=app.state.powens_http, resolver=app.state.powens_resolver
+            )
         tasks = []
         if settings.sync_interval_hours > 0:
             tasks.append(asyncio.create_task(_sync_loop(app)))
@@ -343,6 +355,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.enablebanking = _build_enablebanking(settings)
     app.state.enablebanking_http = None  # transport netfetch du client saisi dans l'assistant (remplaçable en test)
     app.state.enablebanking_resolver = None
+    app.state.powens = None  # Powens (sur contrat) : identifiants saisis dans l'application, chargés au démarrage
+    app.state.powens_http = None  # transport netfetch de Powens (remplaçable en test)
+    app.state.powens_resolver = None
     app.state.fiscal_client = FiscalClient(settings.fiscal_engine_url, settings.fiscal_token_value)
     app.state.energy_client_factory = energy_service.default_client
     app.state.ics_fetcher = planning_service.fetch_ics
@@ -368,6 +383,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         imports,
         insights,
         bank_setup,  # avant banks : « /api/banks/setup » ne doit pas tomber sur « /{connection_id} »
+        powens,  # idem pour « /api/banks/powens »
         banks,
         agents,
         decisions,

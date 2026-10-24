@@ -191,6 +191,33 @@ Synchronisation automatique toutes les 8 h (la DSP2 limite à 4 accès non solli
 dure 90 jours ; Bank t'indique quand le renouveler. Un compte déjà importé en CSV est retrouvé par son IBAN
 (index aveugle) : l'historique est fusionné et les doublons rapprochés, pas recréés.
 
+### Powens (sur contrat)
+
+Powens (ex-Budget Insight) couvre plus de types de comptes : livrets, assurance-vie, PEA, PER et crédits. Son API de
+production n'est ouverte qu'aux clients **sous contrat** ; le bac à sable gratuit (domaine `…-sandbox`) ne montre que
+la banque de démonstration. Le connecteur est donc **prêt à brancher** : Connecteurs → Banques → « Configurer Powens ».
+
+1. **Ton contrat** : dans la console Powens, ton domaine (`monappli`) et une application cliente (client_id, secret).
+2. **Adresse de retour** : ajoute `BANK_PUBLIC_URL` + `/api/banks/powens/callback` aux adresses autorisées (Bank ne
+   peut pas le vérifier pour toi).
+3. **Identifiants** : domaine, client_id et secret, avec ton mot de passe Bank. Bank crée son utilisateur Powens
+   (`POST /auth/init`) ; secret et jeton sont chiffrés, seuls le domaine, un indice et une empreinte ressortent. Un
+   secret refusé n'est jamais gardé ; changer seulement le secret garde tes banques (`POST /auth/renew`).
+4. **Vérification** : un appel avec le jeton ; le bac à sable est signalé.
+5. **Tes banques** : la page de Powens (webview) s'ouvre, tu choisis ta banque, t'authentifies chez elle et coches les
+   comptes à suivre ; Bank ne voit jamais tes identifiants bancaires.
+
+Synchronisation au même rythme qu'Enable Banking : comptes et soldes, opérations dédoublonnées (identifiant Powens,
+puis empreinte), compte déjà importé retrouvé par son IBAN. Les cartes à débit différé sont ignorées (leurs opérations
+arrivent sur le compte courant) ; un crédit devient un compte « crédit » à solde négatif, à relier à un prêt dans
+Crédits (l'échéancier Powens n'est pas importé) ; pour l'assurance-vie et le PEA, Bank garde le solde (ou la
+valorisation totale des supports), pas le détail ligne à ligne. Quand ta banque redemande l'authentification forte
+(`SCARequired`, `decoupled`, mot de passe expiré…), la connexion passe « à reconnecter » et une carte te le rappelle :
+« Reconnecter » rouvre la webview sur la même connexion.
+
+**NON VÉRIFIÉ** contre l'API réelle (ni production ni bac à sable, faute de contrat) : écrit d'après docs.powens.com
+et testé contre un faux Powens fidèle aux charges documentées. Les points à confirmer sont listés dans SECURITY.md.
+
 ## Importer des relevés
 
 Opérations → Importer un relevé. Bank détecte seul l'encodage, le séparateur, les lignes d'en-tête parasites,

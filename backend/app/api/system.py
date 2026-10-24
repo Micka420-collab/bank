@@ -51,6 +51,7 @@ from app.services import bank_setup as bank_setup_service
 from app.services import exchange_keys as exchange_keys_service
 from app.services import home_value as home_value_service
 from app.services import obligations as obligations_service
+from app.services import powens as powens_service
 from app.services import retirement as retirement_service
 
 router = APIRouter(prefix="/api", tags=["system"])
@@ -400,6 +401,8 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
         },
         # Assistant Enable Banking : indice et empreinte seulement, jamais l'identifiant entier ni la clé privée.
         "bank_setup": bank_setup_service.export(db),
+        # Powens (sur contrat) : domaine, indice et empreinte ; jamais le secret ni le jeton de l'utilisateur Powens.
+        "powens_setup": powens_service.export(db),
     }
     audit.record(db, ctx.user.username, "export.done", transactions=len(payload["transactions"]))
     return Response(

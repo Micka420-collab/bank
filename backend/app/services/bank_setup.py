@@ -25,6 +25,7 @@ from app.db import write_lock
 from app.models import BankConnection, ConnectionStatus, ProviderCredential
 from app.providers.enablebanking import EnableBankingClient, ProviderError
 from app.security import netfetch
+from app.services.bank_sync import enablebanking_only
 from app.services.settings_store import get_setting, set_setting
 
 PROVIDER = "enablebanking"
@@ -240,7 +241,9 @@ def status(db: Session, settings: Settings, *, enabled: bool) -> dict[str, Any]:
         source, app_hint, fp = "app", row.client_hint, short_fingerprint(row.secret_fingerprint)
     else:
         source = app_hint = fp = None
-    active = db.scalars(select(BankConnection.id).where(BankConnection.status == ConnectionStatus.ACTIVE)).all()
+    active = db.scalars(
+        select(BankConnection.id).where(BankConnection.status == ConnectionStatus.ACTIVE, enablebanking_only())
+    ).all()
     return {
         "configured": source is not None and enabled,
         "source": source,
