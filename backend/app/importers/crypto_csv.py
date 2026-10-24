@@ -124,7 +124,7 @@ def number(cell: str | None, *, comma: bool = False) -> Decimal | None:
     ``comma``, la virgule est décimale (« -300,00 », « 1 234,56 »)."""
     raw = (cell or "").strip().replace(" ", "").replace(" ", "").replace("\u202f", "")  # espace fine des milliers
     neg = raw.startswith(("-", "("))
-    raw = raw.strip("()").lstrip("+-").lstrip("€$£").lstrip("+-")
+    raw = raw.strip("()").lstrip("+-").lstrip("€$£").lstrip("+-").rstrip("€$£")  # « 110,00€ » d'un tableur
     for sym in ("EUR", "USD", "GBP"):
         raw = raw.removesuffix(sym)
     plain = _plain(raw, comma)
@@ -152,10 +152,17 @@ def asset(raw: str | None, *, kraken: bool = False) -> str:
 
 
 def when(raw: str | None) -> datetime | None:
-    """Heure UTC des exports (« 2026-03-01 10:00:00 », « … UTC », ISO avec Z, ou l'année sur deux chiffres)."""
-    s = text(raw, 40).upper().removesuffix(" UTC").removesuffix("Z").replace("T", " ").strip()
-    s = s.split("+")[0].strip()
-    for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%y-%m-%d %H:%M:%S"):
+    """Heure des exports, ramenée en UTC (« 2026-03-01 10:00:00 », « … UTC », ISO avec Z ou un décalage
+    « +02:00 », ou l'année sur deux chiffres). Sans décalage, l'heure est en UTC."""
+    s = text(raw, 40).upper().removesuffix(" UTC").replace("T", " ").strip()
+    s = s[:-1] + "+00:00" if s.endswith("Z") else s
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}.*", s):
+        try:  # un décalage « +02:00 » ou « -05:00 » est appliqué, jamais ignoré (l'année fiscale en dépend)
+            at = datetime.fromisoformat(s)
+        except ValueError:
+            return None
+        return at.replace(tzinfo=UTC) if at.tzinfo is None else at.astimezone(UTC)
+    for fmt in ("%y-%m-%d %H:%M:%S",):
         try:
             return datetime.strptime(s, fmt).replace(tzinfo=UTC)
         except ValueError:
@@ -309,7 +316,7 @@ _KRAKEN_TRADES = {"trade", "spend", "receive", "sale", "conversion"}
 def _kraken_kind(kind: str) -> str | None:
     if kind in ("deposit", "withdrawal"):
         return TRANSFER if kind == "deposit" else SEND
-    if kind in ("staking", "earn", "dividend", "reward", "invite bonus", "airdrop", "credit"):
+    if kind in ("staking", "dividend", "reward", "invite bonus", "airdrop", "credit"):
         return REWARD
     if kind in ("margin", "rollover", "settled", "futures"):
         return DERIVATIVES
@@ -326,6 +333,10 @@ def _kraken_ledgers(body: Sequence[tuple[int, dict[str, str]]], comma: bool = Fa
         kind = text(row.get("type"), 24).lower()
         if not text(row.get("txid")):
             out.ignored.append(Ignored(line, PENDING))
+            continue
+        if kind == "earn":  # « earn » : une récompense, ou un placement (allocation, migration…) entre tes comptes
+            reward = text(row.get("subtype"), 24).lower() in ("", "reward")
+            out.ignored.append(Ignored(line, REWARD if reward else INTERNAL))
             continue
         if kind not in _KRAKEN_TRADES:
             out.ignored.append(
@@ -392,6 +403,9 @@ def _kraken_trades(body: Sequence[tuple[int, dict[str, str]]], comma: bool = Fal
             out.ignored.append(Ignored(line, "Ligne illisible (sens, paire, date, montant ou référence)"))
             continue
         base, quote = pair
+        if base in FIAT:  # ZUSDZEUR, EUR/USD : du change, pas une crypto achetée
+            out.ignored.append(Ignored(line, FIAT_ONLY))
+            continue
         g = _Group(line, at, ref)  # même empreinte que le grand livre : txid de l'échange = refid de ses lignes
         sign = 1 if side == "buy" else -1
         g.crypto[base] += sign * vol
@@ -410,9 +424,13 @@ _BINANCE_TRADES = {
     "buy", "sell", "fee", "transaction buy", "transaction spend", "transaction fee", "transaction revenue",
     "transaction sold", "binance convert", "small assets exchange bnb", "large otc trading", "buy crypto",
     "auto-invest transaction", "binance card spending", "p2p trading", "convert",
+    "transaction related",  # exports 2019-2023 : la contre-jambe d'un Buy ou d'un Sell (les euros payés ou reçus)
 }  # fmt: skip
 _BINANCE_FEES = {"fee", "transaction fee"}
-CRYPTO_FEE = "Frais payés en crypto (BNB…) : sans cours, Bank ne les chiffre pas — ajoute-les à la main au 2086"
+CRYPTO_FEE = (
+    "Frais payés en crypto (BNB…) : sans cours, Bank ne les chiffre pas — pour les compter, supprime l'opération "
+    "importée et ressaisis-la à la main avec ses frais (l'import ne la recréera pas)"
+)
 _BINANCE_WORDS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("futures", "margin", "realized profit", "funding fee", "insurance", "liquidation", "options"), DERIVATIVES),
     (("withdraw",), SEND),
@@ -493,6 +511,9 @@ def _coinbase(body: Sequence[tuple[int, dict[str, str]]], comma: bool = False) -
     out = CryptoImport("coinbase", "coinbase")
     cols = ("timestamp", "transaction type", "asset", "quantity transacted", "subtotal")
     raws = _ranked((line, "|".join(_CTRL.sub(" ", row.get(k) or "").strip()[:40] for k in cols)) for line, row in body)
+    heads = body[0][1].keys() if body else ()
+    old = next((m.group(1) for h in heads if (m := re.fullmatch(r"([a-z]{3}) spot price at transaction", h))), "")
+    old_currency = old.upper()
     for line, row in body:  # les notes (adresses d'envoi) ne servent qu'à lire la paire, jamais gardées
         kind = text(row.get("transaction type"), 40).lower()
         if kind not in _COINBASE_BUY | _COINBASE_SELL:
@@ -502,9 +523,18 @@ def _coinbase(body: Sequence[tuple[int, dict[str, str]]], comma: bool = False) -
         code = asset(row.get("asset"))
         currency = asset(row.get("price currency") or row.get("spot price currency"))
         at, qty = when(row.get("timestamp")), num(row.get("quantity transacted"))
-        # Les anciens rapports (années passées) disent « Fees » et « Total (inclusive of fees) ».
-        subtotal, fees = num(row.get("subtotal")), num(row.get("fees and/or spread") or row.get("fees") or "0")
-        total = num(row.get("total (inclusive of fees and/or spread)") or row.get("total (inclusive of fees)"))
+        # Les anciens rapports (années passées) disent « Fees » et « Total (inclusive of fees) » ; ceux de
+        # 2019-2020 mettent la devise dans l'en-tête (« EUR Subtotal », « EUR Fees »).
+        cur = (currency or old_currency).lower()
+        if not currency:
+            currency = old_currency
+        subtotal = num(row.get("subtotal") or row.get(f"{cur} subtotal"))
+        fees = num(row.get("fees and/or spread") or row.get("fees") or row.get(f"{cur} fees") or "0")
+        total = num(
+            row.get("total (inclusive of fees and/or spread)")
+            or row.get("total (inclusive of fees)")
+            or row.get(f"{cur} total (inclusive of fees)")
+        )
         if at is None or qty is None or not code or fees is None or (subtotal is None and total is None):
             out.ignored.append(Ignored(line, "Ligne illisible (date, quantité ou montant)"))
             continue

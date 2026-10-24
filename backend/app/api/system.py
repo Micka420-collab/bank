@@ -35,6 +35,7 @@ from app.models import (
     MerchantHint,
     OfficialFact,
     OpportunityState,
+    PriceAlert,
     Procedure,
     SavingsGoal,
     Transaction,
@@ -47,6 +48,7 @@ from app.models import (
 from app.security import audit
 from app.security.auth import verify_password
 from app.services import exchange_keys as exchange_keys_service
+from app.services import home_value as home_value_service
 from app.services import obligations as obligations_service
 from app.services import retirement as retirement_service
 
@@ -346,6 +348,8 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
             for loan in db.scalars(select(Loan).order_by(Loan.id))
         ],
         "retirement_profile": retirement_service.profile(db) or None,
+        # Logement : ta description (données déclarées) et la dernière estimation ; les ventes DVF se retéléchargent.
+        "home": {"profile": home_value_service.profile(db) or None, "estimate": home_value_service.view_estimate(db)},
         # Crypto : adresses publiques suivies, avoirs, opérations fiscales (aucune clé : Bank n'en a jamais).
         "crypto": {
             "wallets": [
@@ -375,6 +379,23 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
                 for e in db.scalars(select(CryptoTaxEvent).order_by(CryptoTaxEvent.day))
             ],
             "exchanges": exchange_keys_service.export(db),  # plateformes reliées : jamais la clé ni le secret
+            # Alertes de cours : tes seuils, tes repères (texte libre que tu as saisi) et quand elles ont sonné.
+            "price_alerts": [
+                {
+                    "asset": a.asset,
+                    "kind": a.kind,
+                    "threshold": a.threshold,
+                    "label": a.label,
+                    "state": a.state,
+                    "created_at": a.created_at.isoformat(),
+                    "fires": a.fires,
+                    "triggered_at": a.triggered_at.isoformat() if a.triggered_at else None,
+                    "triggered_price": a.triggered_price,
+                    "triggered_change": a.triggered_change,
+                    "rearmed_at": a.rearmed_at.isoformat() if a.rearmed_at else None,
+                }
+                for a in db.scalars(select(PriceAlert).order_by(PriceAlert.id))
+            ],
         },
     }
     audit.record(db, ctx.user.username, "export.done", transactions=len(payload["transactions"]))

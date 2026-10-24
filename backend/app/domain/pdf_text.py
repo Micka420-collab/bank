@@ -26,6 +26,7 @@ from typing import Any
 EXIT_OK = 0
 EXIT_UNREADABLE = 2
 EXIT_ENCRYPTED = 3
+EXIT_TOO_MANY_PAGES = 4  # filigrane : le nombre de pages est écrit sur la sortie standard
 
 MAX_PAGES = 20
 MAX_CHARS = 200_000
@@ -259,6 +260,14 @@ def _overlay(width: float, height: float, x0: float, y0: float, text: str) -> An
     return page
 
 
+class TooManyPagesError(ValueError):
+    """Papier trop long pour être filigrané : le parent dit combien de pages il fait."""
+
+    def __init__(self, pages: int) -> None:
+        super().__init__("trop de pages")
+        self.pages = pages
+
+
 def stamp(document: bytes, text: str) -> bytes:
     """Le document en PDF, chaque page marquée du texte : en diagonale, translucide, et en pied de page."""
     import pypdf
@@ -267,7 +276,7 @@ def stamp(document: bytes, text: str) -> bytes:
     with pypdf.apply_configuration(pypdf.get_configuration().with_overwrites(**IMAGE_LIMITS)):
         reader = _open(pdf)
         if len(reader.pages) > MAX_STAMP_PAGES:
-            raise ValueError("trop de pages")
+            raise TooManyPagesError(len(reader.pages))
         writer = pypdf.PdfWriter()
         writer.append(reader, import_outline=False)
         for page in writer.pages:
@@ -300,6 +309,10 @@ def main() -> int:
             payload = stamp(document, text)
         except PermissionError:
             return EXIT_ENCRYPTED
+        except TooManyPagesError as exc:
+            sys.stdout.buffer.write(str(exc.pages).encode("ascii"))
+            sys.stdout.buffer.flush()
+            return EXIT_TOO_MANY_PAGES
         except Exception as exc:
             sys.stderr.write(type(exc).__name__)
             return EXIT_UNREADABLE

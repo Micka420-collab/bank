@@ -18,7 +18,7 @@ crypto.exchange.add crypto.exchange.denied crypto.exchange.failed crypto.exchang
 crypto.exchange.sync crypto.holding.delete crypto.holding.set crypto.sync crypto.tax.add crypto.tax.delete
 crypto.wallet.add crypto.wallet.delete decision.purchase document.apply document.delete energy.connect
 energy.disconnect energy.sync energy.sync_failed energy.sync_manual energy.tariff export.denied export.done
-goal.create goal.delete import.file initiative.act loan.create loan.delete login.failed login.locked login.mfa_failed
+goal.create goal.delete home.dvf_refresh home.profile home.profile_removed import.file initiative.act loan.create loan.delete login.failed login.locked login.mfa_failed
 login.passkey_failed login.passkey_unknown login.success logout mail.configure mail.dismiss mail.import mail.remove
 mail.scan mcp.auth_failed mcp.denied mcp.refused memory.delete memory.edit memory.forget_all memory.forget_denied
 memory.proposal_approved memory.proposal_rejected memory.review memory.settings mfa.enabled obligation.add

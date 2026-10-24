@@ -19,7 +19,7 @@ from starlette.testclient import TestClient
 from app.api import deps
 from app.domain import dvf
 from app.models import Account, AuditLog, Loan
-from app.security import audit
+from app.security import audit, netfetch
 from app.services import consents
 from app.services import home_value as svc
 
@@ -379,6 +379,7 @@ def test_background_tick_refreshes_once_per_quarter(app, home: tuple[TestClient,
 
 
 def test_agent_dossier_does_not_count_the_home_twice(app, home: tuple[TestClient, FakeDvf]) -> None:  # type: ignore[no-untyped-def]
+    from app.models import HomeProfile
     from app.services import advisor
 
     client, _fake = home
@@ -388,25 +389,64 @@ def test_agent_dossier_does_not_count_the_home_twice(app, home: tuple[TestClient
         advisor.set_answer(db, "outside_assets", [flat, pea], source="user:micka")
         db.commit()
         declared = advisor.build_dossier(db, TODAY)["wealth"]
-    assert declared["outside_assets_cents"] == 25_250_000
+    assert declared["outside_assets_cents"] == 25_250_000 and declared["home"] is None
     _agree(client)
+    # Tu dis sous quel libellé ton logement est déjà déclaré : il n'est retiré que là, sans deviner.
+    view = client.put("/api/home/profile", json={**HOME, "declared_as": "Appartement"}).json()["view"]
+    assert view["declared_property"] == [{"label": "Appartement", "value_cents": 25_000_000}]
+    assert view["declared_match"] == "Appartement"
+    with app.state.sessionmaker() as db:
+        dossier = advisor.build_dossier(db, TODAY)
+    w = dossier["wealth"]
+    assert w["buckets"]["immobilier"] == 19_800_000 and w["outside_assets_cents"] == 250_000
+    assert w["net_worth_cents"] == w["tracked_net_worth_cents"] + 250_000
+    # Une estimation, pas un fait : fourchette, nombre de ventes, dates, et la ligne déclarée retirée.
+    h = w["home"]
+    assert h["source"] == "estimated_dvf" and h["estimate_cents"] == 19_800_000
+    assert h["low_cents"] < h["estimate_cents"] < h["high_cents"] and h["comparables"] > 0
+    assert h["window_end"] and h["fetched_at"]
+    assert h["declared_duplicate"] == {"label": "Appartement", "value_cents": 25_000_000, "rule": "chosen"}
+    assert "logement **estimé**" in advisor.render_markdown(dossier)
+    # Case décochée : rien n'est retiré, même un libellé qui ressemble à un logement.
     client.put("/api/home/profile", json=HOME)
     with app.state.sessionmaker() as db:
         w = advisor.build_dossier(db, TODAY)["wealth"]
-    assert w["buckets"]["immobilier"] == 19_800_000 and w["outside_assets_cents"] == 250_000
-    assert w["net_worth_cents"] == w["tracked_net_worth_cents"] + 250_000
-    # Un autre bien déclaré (des SCPI, un locatif) n'est pas ton logement : il reste compté.
+    assert w["outside_assets_cents"] == 25_250_000 and w["home"]["declared_duplicate"] is None
+
+    # Description d'avant la case : supposition par le libellé ou la valeur, dite comme telle. Un autre bien
+    # déclaré (des SCPI, un locatif) n'est pas ton logement : il reste compté.
+    def legacy(db) -> None:  # type: ignore[no-untyped-def]
+        row = db.get(HomeProfile, 1)
+        data = json.loads(row.data)
+        data.pop("declared_as")
+        row.data = json.dumps(data)
+
     scpi = {"label": "SCPI", "kind": "immobilier", "value_cents": 5_000_000}
     rental = {"label": "Appartement locatif", "kind": "immobilier", "value_cents": 19_000_000}
     with app.state.sessionmaker() as db:
+        legacy(db)
         advisor.set_answer(db, "outside_assets", [scpi, rental, flat], source="user:micka")
         db.commit()
-        assert advisor.build_dossier(db, TODAY)["wealth"]["outside_assets_cents"] == 24_000_000
+        w = advisor.build_dossier(db, TODAY)["wealth"]
+        assert w["outside_assets_cents"] == 24_000_000 and w["home"]["declared_duplicate"]["rule"] == "guessed"
         advisor.set_answer(
             db, "outside_assets", [scpi, {**flat, "label": "Bien", "value_cents": 21_000_000}], source="user:micka"
         )
         db.commit()
         assert advisor.build_dossier(db, TODAY)["wealth"]["outside_assets_cents"] == 5_000_000, "valeur proche"
+    assert client.get("/api/home").json()["declared_match"] == "Bien", "le formulaire coche la supposition"
+
+
+def test_export_carries_the_home_description_and_estimate(home: tuple[TestClient, FakeDvf]) -> None:
+    from tests.conftest import PASSWORD
+
+    client, _fake = home
+    _agree(client)
+    client.put("/api/home/profile", json={**HOME, "rooms": 3})
+    body = client.post("/api/export", json={"password": PASSWORD}).json()
+    assert body["home"]["profile"]["surface"] == 60 and body["home"]["profile"]["rooms"] == 3
+    assert body["home"]["profile"]["code"] == "45234" and body["home"]["estimate"]["ok"]
+    assert "sales" not in body["home"], "les ventes DVF se retéléchargent : elles ne sont pas tes données"
 
 
 def test_removing_the_home_keeps_the_daily_cap(app, home: tuple[TestClient, FakeDvf]) -> None:  # type: ignore[no-untyped-def]
@@ -496,3 +536,31 @@ def test_description_changed_during_the_download_is_not_mixed_up(app, home: tupl
         db.commit()
         assert r["status"] == "failed" and "a changé" in r["message"]
         assert db.execute(text("SELECT data, attempts FROM dvf_cache")).one() == (None, 1)
+
+
+def test_all_files_together_fit_under_the_nginx_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Pire cas de netfetch : 3 × seconds par fichier (2 × pour la lecture, plus un dernier morceau bloqué).
+    clock = [1000.0]
+    budgets: list[float] = []
+
+    def slow(url: str, **kw: object) -> netfetch.FetchResult:
+        seconds = float(kw["seconds"])  # type: ignore[arg-type]
+        budgets.append(seconds)
+        clock[0] += svc.WORST_FACTOR * seconds
+        return netfetch.FetchResult(200, b"", url, "text/csv", None, None)
+
+    monkeypatch.setattr(netfetch, "fetch", slow)
+    get = svc.default_fetch(clock=lambda: clock[0])
+
+    def every_year() -> None:
+        for year in range(svc.YEARS_BACK + 1):
+            get(f"{svc.BASE_URL}/{2023 + year}/communes/31/31555.csv")
+
+    with pytest.raises(netfetch.FetchError, match="trop lente"):  # l'échéance commune coupe avant nginx
+        every_year()
+    assert budgets and all(b <= svc.FILE_SECONDS for b in budgets)
+    assert clock[0] - 1000.0 <= svc.TOTAL_SECONDS
+    conf = (Path(__file__).parents[2] / "frontend" / "nginx.conf").read_text()
+    home = conf.split("location ~ ^/api/home/(profile|refresh)$", 1)[1].split("}", 1)[0]
+    assert f"proxy_read_timeout {int(svc.NGINX_SECONDS)}s;" in home
+    assert svc.TOTAL_SECONDS + 30 <= svc.NGINX_SECONDS, "marge pour les connexions et la lecture des ventes"

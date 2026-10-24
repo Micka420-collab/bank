@@ -10,6 +10,7 @@ import {
   useApi,
   type ConsentView,
   type CryptoAsset,
+  type CryptoImportEvent,
   type CryptoImportPreview,
   type CryptoTax,
   type CryptoView,
@@ -88,7 +89,7 @@ export function Crypto() {
 
       {!empty && <Holdings assets={data.assets} />}
 
-      <PriceAlerts key={`alerts-${synced}`} />
+      <PriceAlerts refresh={synced} />
 
       <div className="split cx-split" style={{ marginTop: "1rem" }}>
         <Wallets data={data} onChange={reload} />
@@ -585,31 +586,52 @@ function Taxes({ initial, currentValue }: { initial: CryptoTax; currentValue: nu
 
 // ------------------------------------------------------------------ import d'un export de plateforme
 const fullDate = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString("fr-FR");
+const IMPORT_STATE: Record<CryptoImportEvent["status"], string> = {
+  new: "nouvelle", duplicate: "déjà importée", to_complete: "à compléter", manual_match: "déjà notée à la main", excluded: "supprimée",
+};
 
 export function PlatformImport({ onImported }: { onImported: (view: CryptoView) => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<CryptoImportPreview | null>(null);
   const [values, setValues] = useState<Record<string, number | null>>({});
+  const [include, setInclude] = useState<Set<string>>(new Set()); // « importer quand même », coché ligne par ligne
   const [over, setOver] = useState(false);
   const [busy, error, run] = useAsyncAction();
   const toast = useToast();
-  const waiting = preview?.events.filter((e) => e.status === "to_complete") ?? [];
-  const filled = waiting.filter((e) => (values[e.key] ?? 0) >= e.amount_cents);
-  const ready = preview ? preview.counts.acquisitions + preview.counts.cessions + filled.length : 0;
+  const events = preview?.events ?? [];
+  // Déjà notée à la main, ou supprimée après un import : mise de côté, sauf si tu la coches.
+  const doubtful = events.filter((e) => e.status === "manual_match" || e.status === "excluded");
+  const kept = (e: CryptoImportEvent) => e.status === "new" || e.status === "to_complete" || include.has(e.key);
+  // Chaque vente gardée a sa valeur du portefeuille, pré-remplie depuis le suivi et toujours modifiable.
+  const sales = events.filter((e) => e.kind === "cession" && kept(e));
+  const valueOf = (e: CryptoImportEvent) => (e.key in values ? values[e.key] ?? null : e.portfolio_value_cents);
+  const filled = sales.filter((e) => (valueOf(e) ?? 0) >= e.amount_cents);
+  const forcedBuys = doubtful.filter((e) => e.kind === "acquisition" && include.has(e.key)).length;
+  const ready = preview ? preview.counts.acquisitions + forcedBuys + filled.length : 0;
 
   const body = (f: File) => {
     const form = new FormData();
     form.append("file", f);
-    const given = Object.fromEntries(filled.map((e) => [e.key, values[e.key]]));
+    // Toutes les valeurs, même trop basses : le serveur met alors la vente en attente plutôt que de reprendre le suivi.
+    const given = Object.fromEntries(sales.flatMap((e) => (valueOf(e) !== null ? [[e.key, valueOf(e)]] : [])));
     if (Object.keys(given).length) form.append("values", JSON.stringify(given));
+    if (include.size) form.append("include", JSON.stringify([...include]));
     return form;
   };
+  const toggle = (key: string, on: boolean) =>
+    setInclude((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(key);
+      else next.delete(key);
+      return next;
+    });
   const check = (f: File | undefined) => {
     if (!f) return;
     void run(async () => {
       setFile(f);
       setPreview(null);
       setValues({});
+      setInclude(new Set());
       const form = new FormData();
       form.append("file", f);
       setPreview(await api<CryptoImportPreview>("/api/crypto/import/preview", { method: "POST", form }));
@@ -623,7 +645,7 @@ export function PlatformImport({ onImported }: { onImported: (view: CryptoView) 
       toast(
         `${plural(created, "opération notée", "opérations notées")}` +
           (counts.duplicates ? `, ${plural(counts.duplicates, "déjà là", "déjà là")}` : "") +
-          (counts.to_complete ? `, ${plural(counts.to_complete, "vente attend", "ventes attendent")} sa valeur` : "") +
+          (counts.to_complete ? `, ${plural(counts.to_complete, "vente attend sa valeur", "ventes attendent leur valeur")}` : "") +
           ".",
       );
       setPreview(null);
@@ -650,7 +672,7 @@ export function PlatformImport({ onImported }: { onImported: (view: CryptoView) 
         <input className="sr-only" type="file" accept=".csv,text/csv" disabled={busy} aria-label="Export CSV de ta plateforme"
                onChange={(e) => { check(e.target.files?.[0]); e.target.value = ""; }} />
         <span className="btn quiet" aria-hidden="true">{busy && !preview ? "Lecture…" : "Choisir un fichier"}</span>
-        <span className="faint">Kraken : grand livre (ledgers.csv) ou trades.csv · Binance : historique des transactions · Coinbase : rapport d'historique des transactions. 5 Mo au plus.</span>
+        <span className="faint">Kraken : grand livre (ledgers.csv) ou trades.csv · Binance : historique des transactions · Coinbase : rapport d'historique des transactions. Kraken et Binance livrent un .zip : dézippe-le et dépose le .csv. 5 Mo au plus.</span>
       </label>
       {error && <ErrorNote message={error} />}
 
@@ -662,18 +684,39 @@ export function PlatformImport({ onImported }: { onImported: (view: CryptoView) 
             <div><dt>Ventes en euros</dt><dd>{c.cessions}</dd></div>
             <div><dt>À compléter</dt><dd>{c.to_complete}</dd></div>
             <div><dt>Déjà importées</dt><dd>{c.duplicates}</dd></div>
+            {c.manual_matches + c.excluded > 0 && <div><dt>Mises de côté</dt><dd>{c.manual_matches + c.excluded}</dd></div>}
             <div><dt>Écartées</dt><dd>{c.ignored}</dd></div>
           </dl>
 
-          {waiting.length > 0 && (
+          {doubtful.length > 0 && (
             <div className="stack">
-              <p className="notice warn"><Icon name="alert" /> <span>Pour une vente, il faut la valeur globale de ton portefeuille juste avant : Bank la reprend de son suivi quand il l'a, sinon c'est à toi de l'indiquer. Sans elle, la vente attend (un nouvel import la reprendra).</span></p>
-              {waiting.map((e) => (
-                <Field key={e.key} label={`Vente du ${fullDate(e.day)} : ${money(e.amount_cents)}${e.asset ? ` de ${e.asset}` : ""}`} hint={e.issue ?? undefined}>
-                  <EuroInput value={values[e.key] ?? null} onChange={(v) => setValues((prev) => ({ ...prev, [e.key]: v }))}
-                             aria-label={`Valeur du portefeuille avant la vente du ${fullDate(e.day)}`} />
-                </Field>
+              <p className="notice warn"><Icon name="alert" /> <span>Ces opérations ne seront pas importées : déjà notées à la main (même jour, même montant), ou supprimées après un import. Une vente comptée deux fois fausserait ton 2086 : ne coche que celles qui sont vraiment d'autres opérations.</span></p>
+              {doubtful.map((e) => (
+                <label key={e.key} className="check">
+                  <input type="checkbox" checked={include.has(e.key)} onChange={(x) => toggle(e.key, x.target.checked)} />
+                  {" "}Importer quand même : {e.kind === "acquisition" ? "achat" : "vente"} du {fullDate(e.day)}, {money(e.amount_cents)}{e.asset ? ` de ${e.asset}` : ""} ({IMPORT_STATE[e.status]})
+                </label>
               ))}
+            </div>
+          )}
+
+          {sales.length > 0 && (
+            <div className="stack">
+              <p className="notice warn"><Icon name="alert" /> <span>Pour chaque vente, il faut la valeur globale de ton portefeuille juste avant : toutes tes cryptos, sur toutes tes plateformes. Bank propose le relevé de son suivi (la veille, sinon celui du jour, pris après la vente) et ne compte que ce qu'il suit : vérifie-le. Sans valeur, la vente attend (un nouvel import la reprendra).</span></p>
+              {sales.map((e) => {
+                const v = valueOf(e);
+                const hint = v !== null && v < e.amount_cents
+                  ? `Au moins ${money(e.amount_cents)} (le prix de vente)`
+                  : !(e.key in values) && e.value_source === "suivi" && e.value_day
+                    ? `Relevé du suivi du ${fullDate(e.value_day)} : à vérifier`
+                    : e.issue ?? undefined;
+                return (
+                  <Field key={e.key} label={`Vente du ${fullDate(e.day)} : ${money(e.amount_cents)}${e.asset ? ` de ${e.asset}` : ""}`} hint={hint}>
+                    <EuroInput value={v} onChange={(n) => setValues((prev) => ({ ...prev, [e.key]: n }))}
+                               aria-label={`Valeur du portefeuille avant la vente du ${fullDate(e.day)}`} />
+                  </Field>
+                );
+              })}
             </div>
           )}
 
@@ -688,13 +731,13 @@ export function PlatformImport({ onImported }: { onImported: (view: CryptoView) 
                     <td className="num">{money(e.amount_cents)}</td>
                     <td className="num">{money(e.fees_cents)}</td>
                     <td className="num">{e.portfolio_value_cents !== null ? `${money(e.portfolio_value_cents, { whole: true })}${e.value_source === "suivi" ? " (suivi)" : ""}` : e.kind === "cession" ? "à indiquer" : "—"}</td>
-                    <td>{e.status === "duplicate" ? "déjà importée" : e.status === "to_complete" ? "à compléter" : "nouvelle"}</td>
+                    <td>{include.has(e.key) ? "reprise" : IMPORT_STATE[e.status]}</td>
                   </tr>
                 ))}
               </tbody>
             </table></div>
           )}
-          {(preview.events.length > 50 || preview.truncated) && <p className="faint">Les 50 premières opérations sont affichées ; toutes seront importées.</p>}
+          {(preview.events.length > 50 || preview.truncated) && <p className="faint">Les 50 premières opérations sont affichées ; toutes les nouvelles seront importées.</p>}
 
           {preview.reasons.length > 0 && (
             <details className="cx-details">

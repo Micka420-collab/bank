@@ -1113,6 +1113,16 @@ class CryptoTaxEvent(Base):
     import_key: Mapped[str | None] = mapped_column(String(64))
 
 
+class CryptoImportExcluded(Base):
+    """Une opération importée que tu as supprimée : le prochain import (un export qui chevauche) ne la recrée pas,
+    sauf si tu le demandes ligne par ligne. Seule l'empreinte est gardée."""
+
+    __tablename__ = "crypto_import_excluded"
+
+    import_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
 # ---------------------------------------------------------------------------- déclarations récurrentes
 class Obligation(Base):
     """Une déclaration récurrente dont dépend une aide (actualisation France Travail, déclaration trimestrielle

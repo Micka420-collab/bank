@@ -92,7 +92,7 @@ async def _token(request: Request) -> str:
 def open_link(request: Request, db: DbDep, token: Annotated[str, Depends(_token)]) -> Response:
     """Sans session : le jeton est la seule clé. Débit limité par adresse, réponse identique pour tout refus."""
     if not request.app.state.limiters["share"].hit(client_ip(request)):
-        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Trop de tentatives : attends quelques minutes")
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Trop de tentatives : réessayez dans quelques minutes")
     data = shares.open_link(db, token, now=utcnow(), ip=client_ip(request))
     if data is None:
         return JSONResponse(GONE, status_code=404, headers={"X-Robots-Tag": "noindex, nofollow, noarchive"})

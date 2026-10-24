@@ -8,9 +8,11 @@ from datetime import date
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
-from app.api.deps import AuthDep, DbDep, TodayDep, client_ip
+from app.api.deps import AuthDep, DbDep, SettingsDep, TodayDep, client_ip
+from app.config import Settings
 from app.db import utcnow
 from app.domain.crypto import CryptoError
 from app.importers import crypto_csv
@@ -210,22 +212,30 @@ def settings(body: SettingsIn, request: Request, ctx: AuthDep, db: DbDep, today:
 
 
 # ------------------------------------------------------------------ import d'un export de plateforme
-async def _export(file: UploadFile) -> bytes:
-    data = await file.read(crypto_csv.MAX_BYTES + 1)
-    if len(data) > crypto_csv.MAX_BYTES:
-        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "Fichier trop volumineux (5 Mo au plus)")
+async def _export(file: UploadFile, settings: Settings) -> bytes:
+    limit = min(crypto_csv.MAX_BYTES, settings.max_upload_bytes)  # la borne de l'instance, si elle est plus basse
+    data = await file.read(limit + 1)
+    if len(data) > limit:
+        raise HTTPException(
+            status.HTTP_413_CONTENT_TOO_LARGE, f"Fichier trop volumineux ({limit / 1_000_000:.2g} Mo au plus)"
+        )
     return data
 
 
-def _given(values: str | None) -> Any:
+def _given(values: str | None, start: str = "{", what: str = "Valeurs du portefeuille illisibles") -> Any:
     if not values:
         return None
     try:
-        if not values.lstrip().startswith("{"):
+        if not values.lstrip().startswith(start):
             raise ValueError
         return json.loads(values)
     except (ValueError, RecursionError):  # « {[[[[… » : une imbrication sans fin n'est qu'illisible
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Valeurs du portefeuille illisibles") from None
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, what) from None
+
+
+def _chosen(include: str | None) -> Any:
+    """Les empreintes cochées « importer quand même » : une liste JSON."""
+    return _given(include, "[", "Choix des opérations illisible")
 
 
 @router.post("/import/preview")
@@ -233,13 +243,19 @@ async def import_preview(
     _: AuthDep,
     db: DbDep,
     today: TodayDep,
+    settings: SettingsDep,
     file: Annotated[UploadFile, File()],
     values: Annotated[str | None, Form(max_length=2_000_000)] = None,
+    include: Annotated[str | None, Form(max_length=2_000_000)] = None,
 ) -> dict[str, Any]:
     # Lu ici, sur ton serveur : aucun cours n'est cherché, rien ne part.
-    data = await _export(file)
+    data = await _export(file, settings)
     try:
-        return crypto_import.preview(db, data, today=today, values=_given(values))
+        # Dans un fil à part : la lecture d'un gros export ne fige pas les autres requêtes.
+        result: dict[str, Any] = await run_in_threadpool(
+            crypto_import.preview, db, data, today=today, values=_given(values), include=_chosen(include)
+        )
+        return result
     except (ImportFormatError, CryptoError) as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
 
@@ -249,12 +265,22 @@ async def import_commit(
     ctx: AuthDep,
     db: DbDep,
     today: TodayDep,
+    settings: SettingsDep,
     file: Annotated[UploadFile, File()],
     values: Annotated[str | None, Form(max_length=2_000_000)] = None,
+    include: Annotated[str | None, Form(max_length=2_000_000)] = None,
 ) -> dict[str, Any]:
-    data = await _export(file)
+    data = await _export(file, settings)
     try:
-        result = crypto_import.commit(db, data, actor=ctx.user.username, today=today, values=_given(values))
+        result = await run_in_threadpool(
+            crypto_import.commit,
+            db,
+            data,
+            actor=ctx.user.username,
+            today=today,
+            values=_given(values),
+            include=_chosen(include),
+        )
     except (ImportFormatError, CryptoError) as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
     return {"result": result, "view": svc.view(db, today=today, now=utcnow())}

@@ -89,6 +89,7 @@ describe("partager un papier", () => {
     expect(host.querySelector(".vault-share")).toBeNull();
     await click("Partager");
     await settle();
+    expect(document.activeElement).toBe(host.querySelector(".vault-share-form input")); // à l'écran, prêt à écrire
     expect(host.textContent).toContain("Téléchargé le"); // le journal : ce qui a déjà été transmis
     expect(button("Créer le lien").disabled).toBe(true); // ni destinataire ni mot de passe
     const [recipient, password] = [
@@ -147,8 +148,35 @@ describe("page du destinataire", () => {
     expect(JSON.parse(String(call.init!.body))).toEqual({ token: "jeton-de-test-assez-long-0123" });
     expect(call.init!.credentials).toBe("omit");
     expect(createObjectURL).toHaveBeenCalled();
-    expect(host.querySelector("h1")?.textContent).toBe("Document téléchargé");
+    expect(host.querySelector("h1")?.textContent).toBe("Document reçu");
     expect(window.location.hash).not.toContain("jeton");
+  });
+
+  it("keeps the PDF for a second try until the page is closed", async () => {
+    mockApi({ "/api/share/open": () => new Response("%PDF-1.7", { status: 200, headers: { "content-type": "application/pdf" } }) });
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn(() => "blob:x"), revokeObjectURL }));
+    const attached: boolean[] = [];
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      attached.push(this.isConnected); // Safari iOS ignore le clic sur une ancre hors du document
+    });
+    try {
+      await render(<Received token="jeton-de-test-assez-long-0123" />);
+      await click("Télécharger le document");
+      await settle();
+      expect(attached).toEqual([true]);
+      expect(document.querySelectorAll("a[hidden]")).toHaveLength(0); // retirée après le clic
+      expect(revokeObjectURL).not.toHaveBeenCalled(); // le premier téléchargement a pu être ignoré
+      const save = host.querySelector<HTMLAnchorElement>("a[download]")!;
+      expect(save.getAttribute("href")).toBe("blob:x");
+      expect(save.getAttribute("download")).toBe("document.pdf");
+      expect(save.textContent).toContain("Enregistrer le PDF");
+      await act(async () => root.unmount());
+      expect(revokeObjectURL).toHaveBeenCalledWith("blob:x"); // libéré quand la page se ferme
+      root = createRoot(host);
+    } finally {
+      clickSpy.mockRestore();
+    }
   });
 
   it("explains a spent, expired or revoked link the same way, and rate limits", async () => {
@@ -156,7 +184,7 @@ describe("page du destinataire", () => {
     await render(<Received token="jeton-de-test-assez-long-0123" />);
     await click("Télécharger le document");
     await settle();
-    expect(host.querySelector("h1")?.textContent).toBe("Lien plus valable");
+    expect(host.querySelector("h1")?.textContent).toBe("Ce lien n'est plus valable");
     await act(async () => root.unmount());
     root = createRoot(host);
     mockApi({ "/api/share/open": () => new Response("", { status: 429 }) });

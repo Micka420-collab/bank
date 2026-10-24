@@ -69,9 +69,9 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
   Voir [docs/CANAUX.md](docs/CANAUX.md).
 - **Crypto, sous verre** : tes adresses publiques suivies en lecture seule (sommes de contrôle vérifiées, jetons
   inconnus ignorés), tes avoirs de plateforme (saisis, ou relevés par une clé d'API en lecture seule dont les
-  droits sont vérifiés à la connexion), la valeur, la courbe et la répartition, l'impôt de l'année
-  (305 €, 2086, 3916-bis) rempli depuis tes exports Kraken, Binance ou Coinbase, un vérificateur d'arnaques — et aucune phrase de récupération ni clé acceptée, nulle
-  part. Voir [docs/CRYPTO.md](docs/CRYPTO.md).
+  droits sont vérifiés à la connexion), la valeur, la courbe et la répartition, l'impôt de l'année (seuil de
+  305 €, 3916-bis) et le 2086 rempli depuis tes exports Kraken, Binance ou Coinbase, un vérificateur
+  d'arnaques — et aucune phrase de récupération ni clé acceptée, nulle part. Voir [docs/CRYPTO.md](docs/CRYPTO.md).
 - **Alertes de cours** : un seuil haut, un seuil bas ou une variation sur 24 h, envoyés dans tes messageries et
   sur ton téléphone une fois par franchissement — un constat, jamais un conseil ; et, sur l'écran Pilote,
   **pilote vs consigne** : chaque rendez-vous prévu face à ce que l'agent a fait (à temps, en retard, manqué,
@@ -464,9 +464,9 @@ scans, reconnaissance de texte (Tesseract, en français), le tout dans des proce
   jamais lu ni gardé, les identifiants ne sortent ni dans l'API, ni dans le journal, ni dans une erreur.
 - **Partager un papier** : « Partager » sur un document donne un lien à usage unique, valable 1 h, 24 h ou 48 h,
   créé avec ton mot de passe. Le destinataire reçoit un PDF marqué « Transmis à … le … par Bank — usage unique » ;
-  le lien ne dit rien du document, et le journal montre qui l'a téléchargé et quand — révocable tant qu'il n'a pas
+  le lien ne dit rien du document, et le journal montre quand il a été téléchargé — révocable tant qu'il n'a pas
   servi. Pour un destinataire hors de chez toi, ton reverse proxy n'a à ouvrir que `/`, `/assets/`,
-  `/icon.svg`, `/sw.js` et `/api/share/open` (voir [SECURITY.md](SECURITY.md#partage-dun-papier-par-lien)).
+  `/icon.svg` et `/api/share/open` (voir [SECURITY.md](SECURITY.md#partage-dun-papier-par-lien)).
 
 ## Opportunités : ce que tu pourrais gagner, chiffré honnêtement
 
@@ -585,7 +585,7 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 1021 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+Qualité au moment de la livraison : 1039 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
 aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, scénarios adverses du
 banc d'essai crypto de Minara rejoués contre le pilote automatique, demandes simultanées qui ne passent jamais
@@ -600,7 +600,7 @@ les paliers de la LFSS 2026, lien de partage ouvert deux fois en même temps, va
 synthétique, clés de plateforme face à de fausses
 plateformes qui vérifient chaque signature et refusent les droits trop larges, pilote vs consigne sur un calendrier
 de référence — fins de mois, heures d'été et d'hiver, pauses, refus —, alertes de cours franchies une seule fois par
-deux relèves simultanées), couverture 91 %, 167 tests front (parcours de première ouverture,
+deux relèves simultanées), couverture 92 %, 172 tests front (parcours de première ouverture,
 coffre et partage d'un papier, démarches, opportunités, veille, assistant, chat interactif et réponse en direct,
 notifications sur l'appareil, plan B, crédits, retraite, logement, sauvegardes, boîte mail, crypto et plateformes reliées,
 alertes de cours, pilote, pilote vs consigne, déclarations, corrélations, année qui vient, passkeys, erreurs qui

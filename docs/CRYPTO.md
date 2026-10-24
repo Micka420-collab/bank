@@ -83,11 +83,12 @@ franchissement à signaler).
 
 - **Quand** : à chaque relève des cours (toutes les 30 minutes environ, ou « Relever maintenant »), sur le
   cours tout frais ; aucune autre source, aucun appel en plus. Un cours de plus de 2 h ne déclenche rien.
-- **Une fois par franchissement** : armée, l'alerte passe « déclenchée » (avec le cours et l'heure) par une
+- **Au plus une fois par franchissement** : armée, l'alerte passe « déclenchée » (avec le cours et l'heure) par une
   mise à jour conditionnelle — deux relèves en même temps ne la déclenchent qu'une fois. Elle se réarme seule
   quand le cours revient de l'autre côté avec une marge (1 % du seuil, ou 1 point de variation), ou quand tu la
-  réarmes (refusé tant que le cours est encore du mauvais côté). L'état est en base : un redémarrage ne renvoie
-  rien.
+  réarmes (refusé tant que le cours, ou la variation, est encore au-delà ; de même à la création). L'état est
+  en base : un redémarrage ne renvoie rien. « Au plus » : si elle tire, se réarme et tire de nouveau pendant tes
+  heures calmes, seul le dernier franchissement t'est annoncé — avec le jour, s'il n'est plus aujourd'hui.
 - **Où** : dans tes messageries et sur ton téléphone (notifications du navigateur), par le circuit commun des
   alertes : une fois par compte relié, jamais pendant tes heures calmes, regroupées avec les autres. En
   confidentialité « agrégats », le message ne dit que « une alerte de cours s'est déclenchée ».
@@ -122,7 +123,7 @@ exemple) : ce sont des soldes distincts.
 - **Calcul** (formule du portefeuille) : plus-value = prix de cession − frais − prix total d'acquisition ×
   prix de cession ÷ valeur globale du portefeuille juste avant la vente. Le prix d'acquisition « consommé »
   par chaque vente est retiré pour les suivantes. Bank note tes achats en euros et tes ventes (avec la valeur
-  globale du portefeuille, qu'il peut reprendre de son suivi le jour même) et refuse une vente sans valeur
+  globale du portefeuille, qu'il peut te proposer depuis son suivi, à vérifier) et refuse une vente sans valeur
   globale plutôt que d'en inventer une.
 - **Taux** : pour les cessions de 2026, prélèvement forfaitaire de **31,4 %** (12,8 % d'impôt sur le revenu +
   18,6 % de prélèvements sociaux, la CSG étant portée à 10,6 % par l'article 12 de la loi n° 2025-1403 du
@@ -148,7 +149,8 @@ l'export CSV de ta plateforme. Le format est reconnu à ses en-têtes :
 | Coinbase | rapport **Historique des transactions** (CSV) | les lignes après l'en-tête (les lignes du dessus, avec ton nom, sont sautées) ; la paire de la note (`on ETH-BTC`) pour reconnaître un achat payé en crypto |
 
 Tu vois d'abord un **aperçu** : achats en euros, ventes en euros, ventes à compléter, opérations déjà importées
-et lignes écartées, chacune avec sa raison. Rien n'est noté avant « Importer ».
+ou déjà notées à la main, et lignes écartées, chacune avec sa raison. Rien n'est noté avant « Importer ».
+Kraken et Binance livrent l'export dans une archive `.zip` : dézippe-la et dépose le `.csv`.
 
 - **Acquisition** : un achat payé en euros (prix et frais en euros). **Cession** : une vente contre des euros.
 - **Écartés, avec leur raison** : les échanges crypto contre crypto, stablecoins compris (pas imposables, sursis
@@ -156,18 +158,27 @@ et lignes écartées, chacune avec sa raison. Rien n'est noté avant « Importer
   est imposable : note-le à la main) ; récompenses de staking et intérêts ; marge et produits dérivés ; ce que
   l'export ne chiffre pas en euros (achat par carte, P2P). Une contrepartie dans une **autre monnaie** (USD…)
   est signalée : Bank ne la convertit pas avec un cours inventé.
-- **Valeur globale du portefeuille** : reprise du suivi de Bank le jour de la vente (date à Paris, l'export est
-  en UTC). Sans relevé ce jour-là, ou si le relevé est plus bas que le prix de vente, Bank te la demande dans
-  l'aperçu ; sans elle, la vente attend — un nouvel import la reprendra.
+- **Valeur globale du portefeuille** : pour chaque vente, une case pré-remplie et modifiable dans l'aperçu.
+  Bank y propose le relevé de son suivi de **la veille** (date à Paris, l'export est en UTC), sinon celui du
+  jour même — mais celui-là est la dernière valeur de la journée, prise **après** la vente. Vérifie-la : la
+  valeur attendue est celle de **toutes** tes cryptos, sur toutes tes plateformes et tous tes portefeuilles,
+  **juste avant** la vente ; le suivi ne compte que ce que Bank connaît. Une valeur trop basse sous-estime la
+  plus-value. Sans relevé, ou si le relevé est plus bas que le prix de vente, la case est vide ; sans valeur,
+  la vente attend — un nouvel import la reprendra.
+- **Déjà notée à la main** : une opération de l'export qui a le même jour, le même type et le même montant
+  qu'une saisie à la main n'est pas recréée (sinon la vente compterait deux fois au 2086) ; coche-la dans
+  l'aperçu seulement si c'en est vraiment une autre.
 - **Doublons écartés** : chaque ligne laisse une empreinte (SHA-256 de la plateforme et de l'identifiant de
   l'échange, ou de la ligne et de son rang quand l'export n'a pas d'identifiant) ; réimporter le même fichier,
-  ou un export qui chevauche le précédent, ne crée rien. Supprime une opération importée : le prochain import
-  la reproposera.
+  ou un export qui chevauche le précédent, ne crée rien. Une opération importée que tu supprimes n'est plus
+  recréée par les imports suivants (seule son empreinte est gardée) ; l'aperçu la montre « supprimée » et tu
+  peux la cocher pour la reprendre. Pour corriger une opération importée (des frais payés en BNB, que Bank ne
+  chiffre pas), supprime-la puis ressaisis-la à la main avec ses frais.
 - **Garde-fous** : lu sur ton serveur, aucun appel réseau (pas même un cours) ; 5 Mo et 20 000 lignes au plus ;
   nombres lus en décimal exact sous une forme stricte (une cellule « =FORMULE » n'est qu'un texte) ; ne sont
   gardés que la date, le type, l'actif, la quantité, les montants en euros et l'empreinte — jamais un
   identifiant de compte, de transaction, une adresse ni une note de la plateforme. Chaque import est journalisé
-  (nombre d'opérations créées, doublons, écartées).
+  (nombre d'opérations créées, doublons, déjà notées à la main, supprimées, écartées).
 
 Bank estime pour t'aider à remplir le 2086 ; la déclaration et l'option pour le barème restent ton choix, et
 Bank n'est pas un conseiller fiscal. Si tu trades comme un professionnel, d'autres règles peuvent s'appliquer.

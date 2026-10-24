@@ -6,7 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PilotSlot, PilotTrack as PilotTrackData, PriceAlert, PriceAlertsView } from "./api";
 import { PilotTrack, gapText, slotLabel, statusText } from "./components/PilotTrack";
-import { PriceAlerts, alertText, eurText, firedText } from "./components/PriceAlerts";
+import { PriceAlerts, alertText, changeText, eurText, firedText } from "./components/PriceAlerts";
 import { ToastProvider } from "./components/ui";
 import { ruleText } from "./pages/Pilot";
 
@@ -133,6 +133,22 @@ describe("alertes de cours", () => {
     expect(sent("/api/crypto/alerts/2/rearm", "POST")).toHaveLength(1);
     await click("Supprimer l'alerte BTC sous");
     expect(sent("/api/crypto/alerts/1", "DELETE")).toHaveLength(1);
+  });
+
+  it("montre la variation pour une alerte « variation » et se relit après un relevé sans effacer la saisie", async () => {
+    expect(changeText("-7.25")).toMatch(/^-7,25\s%$/);
+    expect(changeText(null)).toBe("—");
+    let view = alertsView([ARMED]);
+    mockApi({ "/api/crypto/alerts": () => view });
+    await act(async () => root.render(<ToastProvider><PriceAlerts refresh={0} /></ToastProvider>));
+    await settle();
+    await typeInto(host.querySelector<HTMLInputElement>("input[inputmode=decimal]")!, "45000");
+    view = alertsView([ARMED, { ...ARMED, id: 4, asset: "ETH", kind: "change", threshold_text: "5 %", change_24h: "-7.25" }]);
+    await act(async () => root.render(<ToastProvider><PriceAlerts refresh={1} /></ToastProvider>));
+    await settle();
+    expect(calls.filter((c) => c.url === "/api/crypto/alerts")).toHaveLength(2);
+    expect(host.textContent).toMatch(/Variation sur 24 h : -7,25\s%/);
+    expect(host.querySelector<HTMLInputElement>("input[inputmode=decimal]")!.value).toBe("45000");
   });
 
   it("invite à suivre un actif avant d'armer une alerte", async () => {

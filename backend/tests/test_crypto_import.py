@@ -19,7 +19,7 @@ from starlette.testclient import TestClient
 from app.api import deps
 from app.importers import crypto_csv as cc
 from app.importers.base import ImportFormatError
-from app.models import AuditLog, CryptoSnapshot, CryptoTaxEvent
+from app.models import AuditLog, CryptoImportExcluded, CryptoSnapshot, CryptoTaxEvent
 from app.services import crypto_import
 
 TODAY = date(2026, 10, 24)
@@ -184,9 +184,18 @@ def test_preview_then_import_then_reimport_creates_nothing(c: TestClient, db: Se
     assert p.status_code == 200, p.text
     body = p.json()
     assert body["platform_label"] == "Kraken" and body["years"] == [2026]
-    assert body["counts"] == {"acquisitions": 2, "cessions": 1, "to_complete": 0, "duplicates": 0, "ignored": 6}
+    assert body["counts"] == {
+        "acquisitions": 2,
+        "cessions": 1,
+        "to_complete": 0,
+        "duplicates": 0,
+        "manual_matches": 0,
+        "excluded": 0,
+        "ignored": 6,
+    }
     sale = next(e for e in body["events"] if e["kind"] == "cession")
     assert sale["portfolio_value_cents"] == 2_000_000 and sale["value_source"] == "suivi"
+    assert sale["value_day"] == "2026-07-01", "pas de relevé la veille : celui du jour, à vérifier"
     assert {r["reason"] for r in body["reasons"]} >= {cc.SWAP, cc.REWARD}
     assert db.scalars(select(CryptoTaxEvent)).first() is None, "l'aperçu n'écrit rien"
 
@@ -398,3 +407,168 @@ def test_same_export_imported_twice_at_once_answers_cleanly(
     assert r.status_code == 422 and "vient d'être importé" in r.json()["detail"]
     db.expire_all()
     assert len(db.scalars(select(CryptoTaxEvent)).all()) == created
+
+
+# ------------------------------------------------------------------ suite de relecture (#26)
+def manual_sale(c: TestClient, day: str = "2026-07-01", amount: int = 30_000) -> Any:
+    r = c.post(
+        "/api/crypto/tax",
+        json={"day": day, "kind": "cession", "amount_cents": amount, "portfolio_value_cents": 2_000_000},
+    )
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+def test_sale_already_noted_by_hand_is_not_counted_twice(c: TestClient, db: Session) -> None:
+    snapshot(db, date(2026, 7, 1), 2_000_000)
+    assert manual_sale(c)["tax"]["total_price_cents"] == 30_000
+    data = export("kraken_ledgers.csv")
+    body = send(c, "l.csv", data).json()
+    sale = next(e for e in body["events"] if e["kind"] == "cession")
+    assert sale["status"] == "manual_match" and "à la main" in sale["issue"]
+    assert body["counts"]["manual_matches"] == 1 and body["counts"]["cessions"] == 0
+
+    r = send(c, "l.csv", data, confirm=True).json()
+    assert r["result"]["created"] == 2, "les deux achats, pas la vente"
+    assert r["view"]["tax"]["total_price_cents"] == 30_000, "60 000 si la vente était recréée"
+    db.expire_all()
+    assert len(db.scalars(select(CryptoTaxEvent).where(CryptoTaxEvent.kind == "cession")).all()) == 1
+
+    # Une autre vente, vraiment : elle n'entre que cochée, et avec ta valeur (deux ventes ce jour-là : pas de relevé).
+    forced = c.post(
+        "/api/crypto/import",
+        files={"file": ("l.csv", data, "text/csv")},
+        data={"include": json.dumps([sale["key"]]), "values": json.dumps({sale["key"]: 1_970_000})},
+    ).json()
+    assert forced["result"]["created"] == 1 and forced["view"]["tax"]["total_price_cents"] == 60_000
+
+
+def test_two_identical_sales_match_one_manual_entry_only(c: TestClient, db: Session) -> None:
+    snapshot(db, date(2026, 5, 19), 1_000_000)
+    manual_sale(c, "2026-05-20", 14_000)
+    data = BINANCE_HEAD + (
+        "1,2026-05-20 09:00:00,Spot,Transaction Sold,BTC,-0.002,\n"
+        "1,2026-05-20 09:00:00,Spot,Transaction Revenue,EUR,140,\n"
+        "1,2026-05-20 15:00:00,Spot,Transaction Sold,BTC,-0.002,\n"
+        "1,2026-05-20 15:00:00,Spot,Transaction Revenue,EUR,140,\n"
+    )
+    body = send(c, "b.csv", data.encode()).json()
+    assert [e["status"] for e in body["events"]] == ["manual_match", "to_complete"], "deux ventes ce jour-là"
+
+
+def test_tracked_value_prefers_the_day_before_and_yours_wins(c: TestClient, db: Session) -> None:
+    snapshot(db, date(2026, 6, 30), 1_500_000)  # la veille : avant la vente
+    snapshot(db, date(2026, 7, 1), 1_470_000)  # le soir de la vente : après
+    data = export("kraken_ledgers.csv")
+    sale = next(e for e in send(c, "l.csv", data).json()["events"] if e["kind"] == "cession")
+    assert (sale["portfolio_value_cents"], sale["value_source"], sale["value_day"]) == (
+        1_500_000,
+        "suivi",
+        "2026-06-30",
+    )
+    mine = send(c, "l.csv", data, confirm=True, values={sale["key"]: 4_000_000}).json()
+    assert mine["result"]["created"] == 3
+    db.expire_all()
+    row = db.scalars(select(CryptoTaxEvent).where(CryptoTaxEvent.kind == "cession")).one()
+    assert row.portfolio_value_cents == 4_000_000
+
+
+def test_no_tracked_value_when_the_same_day_has_a_buy_or_another_sale(c: TestClient, db: Session) -> None:
+    # Le relevé de la veille ignore l'achat du matin, que le 2086 compte : proposé, il sous-évaluerait la plus-value.
+    snapshot(db, date(2026, 5, 19), 2_600_000)
+    data = BINANCE_HEAD + (
+        "1,2026-05-20 08:00:00,Spot,Transaction Spend,EUR,-20000,\n"
+        "1,2026-05-20 08:00:00,Spot,Transaction Buy,BTC,0.3,\n"
+        "1,2026-05-20 15:00:00,Spot,Transaction Sold,BTC,-0.3,\n"
+        "1,2026-05-20 15:00:00,Spot,Transaction Revenue,EUR,25000,\n"
+    )
+    sale = next(e for e in send(c, "b.csv", data.encode()).json()["events"] if e["kind"] == "cession")
+    assert (sale["status"], sale["portfolio_value_cents"], sale["value_source"]) == ("to_complete", None, None)
+    assert "même jour" in sale["issue"]
+
+    # Une seule vente, sans achat ce jour-là : le relevé de la veille reste proposé.
+    alone = BINANCE_HEAD + (
+        "1,2026-05-20 15:00:00,Spot,Transaction Sold,BTC,-0.3,\n"
+        "1,2026-05-20 15:00:00,Spot,Transaction Revenue,EUR,25000,\n"
+    )
+    sale = next(e for e in send(c, "b.csv", alone.encode()).json()["events"] if e["kind"] == "cession")
+    assert (sale["status"], sale["portfolio_value_cents"]) == ("new", 2_600_000)
+
+    # Un achat du même jour déjà enregistré compte aussi.
+    manual_buy = c.post("/api/crypto/tax", json={"day": "2026-05-20", "kind": "acquisition", "amount_cents": 2_000_000})
+    assert manual_buy.status_code == 201, manual_buy.text
+    sale = next(e for e in send(c, "b.csv", alone.encode()).json()["events"] if e["kind"] == "cession")
+    assert sale["status"] == "to_complete"
+
+
+def test_value_below_the_price_is_refused_not_replaced_by_the_tracked_one(c: TestClient, db: Session) -> None:
+    snapshot(db, date(2026, 6, 30), 1_500_000)
+    data = export("kraken_ledgers.csv")
+    key = next(e for e in send(c, "l.csv", data).json()["events"] if e["kind"] == "cession")["key"]
+    sale = next(e for e in send(c, "l.csv", data, values={key: 100}).json()["events"] if e["kind"] == "cession")
+    assert sale["status"] == "to_complete" and "au moins 300,00" in sale["issue"].replace("\u202f", " ")
+
+
+def test_deleted_import_stays_deleted_until_you_take_it_back(c: TestClient, db: Session) -> None:
+    snapshot(db, date(2026, 7, 1), 2_000_000)
+    data = export("kraken_ledgers.csv")
+    tax = send(c, "l.csv", data, confirm=True).json()["view"]["tax"]
+    sale = next(e for e in tax["events"] if e["kind"] == "cession")
+    assert c.delete(f"/api/crypto/tax/{sale['id']}").status_code == 204
+    body = send(c, "l.csv", data).json()
+    gone = next(e for e in body["events"] if e["kind"] == "cession")
+    assert gone["status"] == "excluded" and body["counts"]["excluded"] == 1
+    assert send(c, "l.csv", data, confirm=True).json()["result"]["created"] == 0
+
+    back = c.post(
+        "/api/crypto/import", files={"file": ("l.csv", data, "text/csv")}, data={"include": json.dumps([gone["key"]])}
+    ).json()
+    assert back["result"]["created"] == 1
+    db.expire_all()
+    assert db.scalars(select(CryptoImportExcluded)).all() == [], "reprise exprès : plus écartée"
+    for bad in ("[1]", '["court"]', "{}", "[" * 1000):
+        r = c.post("/api/crypto/import/preview", files={"file": ("l.csv", data, "text/csv")}, data={"include": bad})
+        assert r.status_code == 422, bad
+
+
+def test_binance_old_export_reads_transaction_related() -> None:
+    r = cc.parse(export("binance_2021.csv"))
+    assert [(m.day.isoformat(), m.kind, m.asset, m.amount_cents, m.fees_cents) for m in r.movements] == [
+        ("2021-03-02", "acquisition", "BTC", 40_000, 0),
+        ("2021-11-09", "cession", "BTC", 29_000, 29),
+    ]
+    reasons = [i.reason for i in r.ignored]
+    assert reasons == [cc.TRANSFER, cc.CRYPTO_FEE] and cc.SWAP not in reasons
+    assert "supprime" in cc.CRYPTO_FEE and "ajoute-les à la main au 2086" not in cc.CRYPTO_FEE
+
+
+def test_offsets_currency_suffix_fiat_pairs_and_earn_allocations() -> None:
+    assert cc.when("2026-12-31 23:30:00+02:00") == cc.when("2026-12-31 21:30:00")
+    assert cc.when("2026-03-01 10:00:00-05:00") == cc.when("2026-03-01 15:00:00")
+    assert cc.when("2026-03-01 10:00:00.1234") is not None and cc.when("2026-13-01 10:00:00") is None
+    assert cc.number("110,00€", comma=True) == Decimal("110.00") and cc.number("-1,234.56 €") == Decimal("-1234.56")
+    trades = (
+        b"txid,ordertxid,pair,time,type,ordertype,price,cost,fee,vol,margin,misc,ledgers\n"
+        b"TU,OU,ZUSDZEUR,2026-04-01 10:00:00,buy,market,0.92,92,0.2,100,0,,\n"
+    )
+    assert cc.parse(trades).movements == [] and cc.parse(trades).ignored[0].reason == cc.FIAT_ONLY
+    ledgers = (
+        b"txid,refid,time,type,subtype,aclass,asset,amount,fee,balance\n"
+        b"L1,R1,2026-02-01 10:00:00,earn,allocation,currency,DOT,10,0,10\n"
+        b"L2,R2,2026-02-02 10:00:00,earn,reward,currency,DOT,0.01,0,10.01\n"
+    )
+    assert [i.reason for i in cc.parse(ledgers).ignored] == [cc.INTERNAL, cc.REWARD]
+
+
+def test_coinbase_2019_report_reads_its_currency_columns() -> None:
+    data = (
+        b"Timestamp,Transaction Type,Asset,Quantity Transacted,EUR Spot Price at Transaction,EUR Subtotal,"
+        b"EUR Total (inclusive of fees),EUR Fees,Notes\n"
+        b"2019-04-03T10:00:00Z,Buy,BTC,0.01,4500,45,46.99,1.99,Bought 0.01 BTC for 46.99 EUR\n"
+        b"2019-06-03T10:00:00Z,Sell,BTC,0.005,7000,35,34.48,0.52,Sold 0.005 BTC for 34.48 EUR\n"
+    )
+    r = cc.parse(data)
+    assert [(m.kind, m.amount_cents, m.fees_cents) for m in r.movements] == [
+        ("acquisition", 4_500, 199),
+        ("cession", 3_500, 52),
+    ]

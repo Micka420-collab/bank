@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import threading
 import unicodedata
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -26,6 +27,7 @@ from app.services import channel_alerts, consents
 from app.services import crypto as crypto_service
 from app.services import price_alerts as svc
 from app.services.settings_store import set_setting
+from tests.conftest import PASSWORD
 from tests.test_channels import CLOCK, FakeAdapter, _factory, _graph, _link, adapter_for, enable
 from tests.test_crypto import FakeNet
 
@@ -35,6 +37,7 @@ T0 = datetime(2026, 10, 21, 12, 5, tzinfo=UTC)  # 14 h 05 à Paris
 FORBIDDEN = (
     "achet", "achat", "vend", "profit", "maintenant", "opportunit", "occasion", "fonce", "urgent", "depeche",
     "signal", "recommand", "conseille", "investi", "rate pas", "dernier moment", "acquier", "renforce", "allege",
+    "moment",
 )  # fmt: skip
 
 
@@ -109,6 +112,7 @@ def test_bounds_and_guards(db: Session) -> None:
         ({"label": "abandon ability able about above absent absorb abstract absurd abuse access accident"}, "secret"),
         ({"value": "55000"}, "déjà au-dessus"),
         ({"kind": "below", "value": "65000"}, "déjà sous"),
+        ({"kind": "change", "value": "2.5"}, r"varie déjà de \+2,5\s% sur 24 h, au-delà de 2,5\s%"),
     ]
     for over, message in bad:
         args: dict[str, Any] = {"asset": "btc", "kind": "above", "value": "70000", "label": None, **over}
@@ -178,6 +182,37 @@ def test_manual_rearm_waits_for_the_other_side(db: Session) -> None:
     assert actions == ["price_alert.created", "price_alert.rearmed"]
 
 
+def test_change_alert_is_never_born_or_rearmed_beyond(db: Session) -> None:
+    """Variation : déjà au-delà = refusée, comme les seuils ; sinon elle tirerait au relevé suivant sans
+    franchissement, et un réarmement à la demande enverrait un second message pour le même état."""
+    price(db, "ETH", "3000", "-9")
+    with pytest.raises(svc.PriceAlertError, match=r"ETH varie déjà de −9\s% sur 24 h, au-delà de 5\s%"):
+        svc.create(db, asset="ETH", kind="change", value="5", label=None, actor="micka", now=T0)
+    assert svc.evaluate(db, now=T0) == 0
+    price(db, "ETH", "3000", "-3")
+    alert = svc.create(db, asset="ETH", kind="change", value="5", label=None, actor="micka", now=T0)
+    price(db, "ETH", "2800", "-7.25")
+    assert svc.evaluate(db, now=T0) == 1
+    with pytest.raises(svc.PriceAlertError, match=r"toujours de −7,25\s% sur 24 h, au-delà de 5\s%.*sous 4\s%"):
+        svc.rearm(db, alert.id, actor="micka", now=T0)
+    assert svc.evaluate(db, now=T0) == 0
+    price(db, "ETH", "2900", "-4.5")  # revenue sous le seuil, dans la marge : seule toi peux la réarmer
+    assert svc.rearm(db, alert.id, actor="micka", now=T0).state == "armed"
+    row = db.get(PriceAlert, alert.id)
+    assert row is not None and row.fires == 1
+
+
+def test_message_names_the_day_when_sent_later() -> None:
+    alert = PriceAlert(
+        id=5, asset="BTC", kind="above", threshold="61000", fires=1, triggered_at=T0, triggered_price="61500",
+        created_at=T0,
+    )  # fmt: skip
+    same_day = svc.text(alert, privacy="redacted", public_url="https://bank", tz=PARIS, now=T0 + timedelta(hours=6))
+    assert f"({svc.eur(Decimal(61500))} à 14 h 05)" in same_day
+    later = svc.text(alert, privacy="redacted", public_url="https://bank", tz=PARIS, now=T0 + timedelta(hours=18))
+    assert f"({svc.eur(Decimal(61500))} le 21 octobre à 14 h 05)" in later
+
+
 def test_two_refreshes_at_once_fire_only_once(app, client) -> None:  # type: ignore[no-untyped-def]
     with app.state.sessionmaker() as db:
         price(db, "BTC", "60000")
@@ -199,6 +234,33 @@ def test_two_refreshes_at_once_fire_only_once(app, client) -> None:  # type: ign
         keys = [k for k, _, _ in svc.alerts(db, now=T0, privacy="full", public_url="https://bank", tz=PARIS)]
         assert len(keys) == 1 and keys[0].startswith(f"price:{alert_id}:") and keys[0].endswith(":1")
         assert svc.alerts(db, now=T0 + timedelta(hours=49), privacy="full", public_url="https://bank", tz=PARIS) == []
+
+
+def test_two_threads_evaluating_together_fire_once(app, client) -> None:  # type: ignore[no-untyped-def]
+    """La vraie course : deux relèves lisent l'alerte armée en même temps ; une seule la déclenche."""
+    with app.state.sessionmaker() as db:
+        price(db, "BTC", "60000")
+        alert = svc.create(db, asset="BTC", kind="above", value="61000", label=None, actor="micka", now=T0)
+        price(db, "BTC", "62000")
+        db.commit()
+        alert_id = alert.id
+    barrier = threading.Barrier(2)
+    fired: list[int] = []
+
+    def worker() -> None:
+        with app.state.sessionmaker() as s:
+            barrier.wait()
+            fired.append(svc.evaluate(s, now=T0))
+            s.commit()
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+    assert sorted(fired) == [0, 1]
+    with app.state.sessionmaker() as db:
+        assert db.get(PriceAlert, alert_id).fires == 1  # type: ignore[union-attr]
 
 
 def test_alerts_are_collected_with_the_others(db: Session) -> None:
@@ -225,7 +287,7 @@ def test_api_create_list_rearm_delete(auth_client: TestClient, app) -> None:  # 
         price(db, "BTC", "60000", "2.5", at=utcnow())
         db.commit()
     r = auth_client.post(
-        "/api/crypto/alerts", json={"asset": "BTC", "kind": "below", "value": "50 000", "label": "Plancher"}
+        "/api/crypto/alerts", json={"asset": "BTC", "kind": "below", "value": "50\u00a0000", "label": "Plancher"}
     )
     assert r.status_code == 201, r.text
     (a,) = r.json()["alerts"]
@@ -236,6 +298,21 @@ def test_api_create_list_rearm_delete(auth_client: TestClient, app) -> None:  # 
     assert auth_client.post("/api/crypto/alerts", json={"asset": "BTC", "kind": "buy", "value": "1"}).status_code == 422
     assert auth_client.post(f"/api/crypto/alerts/{a['id']}/rearm").json()["alerts"][0]["state"] == "armed"
     assert auth_client.post("/api/crypto/alerts/999/rearm").status_code == 404
+    # L'export RGPD emporte tes alertes : ce sont des données saisies (le repère est en texte libre), avec leur
+    # historique (quand elles ont sonné, à quel cours, combien de fois).
+    fired, rearmed = datetime(2026, 10, 20, 8, tzinfo=UTC), datetime(2026, 10, 21, 9, tzinfo=UTC)
+    with app.state.sessionmaker() as db:
+        row = db.get(PriceAlert, a["id"])
+        assert row is not None
+        row.fires, row.triggered_at, row.triggered_price, row.triggered_change = 2, fired, "49000", "-3.1"
+        row.rearmed_at = rearmed
+        db.commit()
+    exported = auth_client.post("/api/export", json={"password": PASSWORD}).json()["crypto"]["price_alerts"]
+    assert exported == [
+        {"asset": "BTC", "kind": "below", "threshold": "50000", "label": "Plancher", "state": "armed",
+         "created_at": a["created_at"], "fires": 2, "triggered_at": fired.isoformat(), "triggered_price": "49000",
+         "triggered_change": "-3.1", "rearmed_at": rearmed.isoformat()}
+    ]  # fmt: skip
     assert auth_client.delete("/api/crypto/alerts/999").status_code == 404
     assert auth_client.delete(f"/api/crypto/alerts/{a['id']}").status_code == 204
     assert auth_client.get("/api/crypto/alerts").json()["alerts"] == []

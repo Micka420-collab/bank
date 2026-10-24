@@ -5,10 +5,11 @@ messageries et sur ton téléphone par le circuit commun des alertes (heures cal
 Une alerte est un constat, jamais un conseil : le texte dit ce qui s'est passé et rappelle que le seuil est le
 tien — pas de « c'est le moment », pas d'invitation à acheter ou à vendre (un test relit chaque modèle).
 
-Une fois par franchissement : armée, elle passe « déclenchée » par une mise à jour conditionnelle (deux relèves en
-même temps ne la déclenchent qu'une fois) ; elle se réarme seule quand le cours revient de l'autre côté avec une
-marge (1 % du seuil, ou 1 point de variation), ou quand tu la réarmes. L'état est en base : un redémarrage ne
-renvoie rien. Seule la personne crée ses alertes (aucun outil d'agent n'en écrit)."""
+Au plus une fois par franchissement : armée, elle passe « déclenchée » par une mise à jour conditionnelle (deux
+relèves en même temps ne la déclenchent qu'une fois) ; elle se réarme seule quand le cours revient de l'autre côté
+avec une marge (1 % du seuil, ou 1 point de variation), ou quand tu la réarmes. L'état est en base : un redémarrage ne
+renvoie rien. « Au plus » : si elle tire, se réarme et retire pendant tes heures calmes, seul le dernier
+franchissement t'est annoncé. Seule la personne crée ses alertes (aucun outil d'agent n'en écrit)."""
 
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.domain import crypto as dc
+from app.domain.vault import MONTHS
 from app.models import CryptoPrice, PriceAlert
 from app.security import audit
 
@@ -35,9 +37,9 @@ WINDOW = timedelta(hours=48)  # un déclenchement s'annonce pendant 48 h au plus
 
 # Chaque phrase qu'une alerte peut envoyer : factuelle, sans verbe d'action (tests/test_price_alerts.py les relit).
 TEMPLATES = {
-    "above": "📈 {asset} est passé au-dessus de {threshold} ({price} à {time}) — seuil que tu as fixé.",
-    "below": "📉 {asset} est passé sous {threshold} ({price} à {time}) — seuil que tu as fixé.",
-    "change": "↕️ {asset} a varié de {change} sur 24 h ({price} à {time}) — variation de {threshold} que tu as fixée.",
+    "above": "📈 {asset} est passé au-dessus de {threshold} ({price} {time}) — seuil que tu as fixé.",
+    "below": "📉 {asset} est passé sous {threshold} ({price} {time}) — seuil que tu as fixé.",
+    "change": "↕️ {asset} a varié de {change} sur 24 h ({price} {time}) — variation de {threshold} que tu as fixée.",
     "label": " Ton repère : « {label} ».",
     "footer": " Une information, pas un conseil. {url}",
     "aggregates": "🔔 Une alerte de cours que tu as fixée s'est déclenchée. Une information, pas un conseil. {url}",
@@ -84,7 +86,8 @@ def threshold_text(alert: PriceAlert) -> str:
 # ------------------------------------------------------------------ règles
 def _parse(raw: Any, kind: str) -> Decimal:
     try:
-        value = Decimal(str(raw).strip().replace(",", ".").replace(" ", "").replace(" ", ""))
+        # Toute espace (simple, insécable, fine) : « 50 000 » copié depuis l'écran se lit comme 50000.
+        value = Decimal("".join(str(raw).split()).replace(",", "."))
     except (InvalidOperation, ValueError):
         raise PriceAlertError("Valeur illisible : un nombre est attendu") from None
     if not value.is_finite() or value <= 0:
@@ -150,8 +153,15 @@ def create(
         raise PriceAlertError(f"{MAX_ALERTS} alertes au plus : supprime celles qui ne servent plus")
     threshold = _parse(value, kind)
     clean = _clean_label(label)
-    price, _ = _price(row)
-    if kind != "change" and crossed(kind, threshold, price, None):
+    price, change = _price(row)
+    if crossed(kind, threshold, price, change):
+        # Déjà au-delà : l'alerte tirerait au relevé suivant sans franchissement.
+        if kind == "change":
+            assert change is not None  # garanti par crossed  # noqa: S101  # nosec B101
+            raise PriceAlertError(
+                f"{symbol} varie déjà de {percent(change, signed=True)} sur 24 h, au-delà de {percent(threshold)} : "
+                "choisis une variation plus grande"
+            )
         assert price is not None  # garanti par crossed  # noqa: S101  # nosec B101
         side = "au-dessus de" if kind == "above" else "sous"
         raise PriceAlertError(f"{symbol} est déjà {side} {eur(threshold)} ({eur(price)}) : choisis un autre seuil")
@@ -179,15 +189,23 @@ def rearm(db: Session, alert_id: int, *, actor: str, now: datetime) -> PriceAler
     if alert.state != "armed":
         price, change = _price(db.get(CryptoPrice, alert.asset))
         threshold = Decimal(alert.threshold)
-        if alert.kind != "change" and crossed(alert.kind, threshold, price, change):
+        if crossed(alert.kind, threshold, price, change):
+            # Toujours au-delà : réarmée, elle renverrait au relevé suivant un message pour le même état.
+            if alert.kind == "change":
+                assert change is not None  # garanti par crossed  # noqa: S101  # nosec B101
+                raise PriceAlertError(
+                    f"{alert.asset} varie toujours de {percent(change, signed=True)} sur 24 h, au-delà de "
+                    f"{percent(threshold)} : elle se réarmera seule sous {percent(threshold - CHANGE_MARGIN)}"
+                )
             assert price is not None  # garanti par crossed  # noqa: S101  # nosec B101
             raise PriceAlertError(
                 f"{alert.asset} est toujours {'au-dessus de' if alert.kind == 'above' else 'sous'} "
                 f"{eur(threshold)} ({eur(price)}) : elle se réarmera seule quand le cours repassera de l'autre côté"
             )
-        alert.state, alert.rearmed_at = "armed", now
-        db.flush()
-        audit.record(db, actor, "price_alert.rearmed", alert=alert_id)
+        # Même garde que la relève : si elle s'est réarmée ou a tiré entre-temps, on ne touche à rien.
+        if _rearm_if(db, alert, seen=alert.fires, now=now):
+            audit.record(db, actor, "price_alert.rearmed", alert=alert_id)
+        db.expire(alert)
     return alert
 
 
@@ -238,7 +256,7 @@ def fire(db: Session, alert: PriceAlert, *, seen: int, price: Decimal, change: D
     return bool(done.rowcount)  # type: ignore[attr-defined]
 
 
-def _rearm_auto(db: Session, alert: PriceAlert, *, seen: int, now: datetime) -> bool:
+def _rearm_if(db: Session, alert: PriceAlert, *, seen: int, now: datetime) -> bool:
     done = db.execute(
         update(PriceAlert)
         .where(PriceAlert.id == alert.id, PriceAlert.state == "triggered", PriceAlert.fires == seen)
@@ -266,23 +284,31 @@ def evaluate(db: Session, *, now: datetime) -> int:
             changed = fire(db, alert, seen=alert.fires, price=price, change=change, now=row.fetched_at)
             fired += changed
         elif alert.state == "triggered" and back(alert.kind, threshold, price, change):
-            changed = _rearm_auto(db, alert, seen=alert.fires, now=now)
+            changed = _rearm_if(db, alert, seen=alert.fires, now=now)
         if changed:
             db.expire(alert)  # la mise à jour conditionnelle est passée à côté de l'objet chargé
     return fired
 
 
-def text(alert: PriceAlert, *, privacy: str, public_url: str, tz: tzinfo) -> str:
+def _when(at: datetime, now: datetime | None, tz: tzinfo) -> str:
+    """« à 14 h 05 » ; « le 21 octobre à 14 h 05 » quand le message part un autre jour (après tes heures calmes)."""
+    local = at.astimezone(tz)
+    hour = f"à {local.hour} h {local.minute:02d}"
+    if now is None or now.astimezone(tz).date() == local.date():
+        return hour
+    return f"le {local.day} {MONTHS[local.month - 1]} {hour}"
+
+
+def text(alert: PriceAlert, *, privacy: str, public_url: str, tz: tzinfo, now: datetime | None = None) -> str:
     url = f"{public_url}/#/crypto"
     if privacy == "aggregates" or alert.triggered_at is None or alert.triggered_price is None:
         return TEMPLATES["aggregates"].format(url=url)
-    local = alert.triggered_at.astimezone(tz)
     change = Decimal(alert.triggered_change) if alert.triggered_change is not None else Decimal(0)
     out = TEMPLATES[alert.kind].format(
         asset=alert.asset,
         threshold=threshold_text(alert),
         price=eur(Decimal(alert.triggered_price)),
-        time=f"{local.hour} h {local.minute:02d}",
+        time=_when(alert.triggered_at, now, tz),
         change=percent(change, signed=True),
     )
     if alert.label and privacy == "full":
@@ -299,5 +325,5 @@ def alerts(db: Session, *, now: datetime, privacy: str, public_url: str, tz: tzi
     out = []
     for a in rows:
         key = f"price:{a.id}:{int(a.created_at.timestamp())}:{a.fires}"
-        out.append((key, text(a, privacy=privacy, public_url=public_url, tz=tz), False))
+        out.append((key, text(a, privacy=privacy, public_url=public_url, tz=tz, now=now), False))
     return out

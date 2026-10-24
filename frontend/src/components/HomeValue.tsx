@@ -105,6 +105,10 @@ function HomeForm({ view, onDone }: { view: HomeView; onDone: (r: HomeRefresh | 
   const [section, setSection] = useState(p?.section ?? "");
   const [rooms, setRooms] = useState(p?.rooms ? String(p.rooms) : "");
   const [inWealth, setInWealth] = useState(p?.in_wealth ?? true);
+  // Déjà déclaré à l'agent (placements hors Bank) : tu le dis, sinon il compterait deux fois dans son dossier.
+  const owned = view.declared_property;
+  const [declared, setDeclared] = useState(view.declared_match !== null);
+  const [declaredAs, setDeclaredAs] = useState(view.declared_match ?? owned[0]?.label ?? "");
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<CommuneHit[] | null>(null);
   const [busy, error, run] = useAsyncAction();
@@ -121,6 +125,7 @@ function HomeForm({ view, onDone }: { view: HomeView; onDone: (r: HomeRefresh | 
         body: {
           kind, surface: Number(surface), code: code.trim().toUpperCase(), commune: commune.trim() || null,
           section: section.trim() || null, rooms: rooms ? Number(rooms) : null, in_wealth: inWealth,
+          declared_as: declared && declaredAs ? declaredAs : null,
         },
       });
       onDone(r.result);
@@ -170,6 +175,18 @@ function HomeForm({ view, onDone }: { view: HomeView; onDone: (r: HomeRefresh | 
       <label className="check">
         <input type="checkbox" checked={inWealth} onChange={(e) => setInWealth(e.target.checked)} /> Compter dans mon patrimoine
       </label>
+      {owned.length > 0 && (
+        <label className="check">
+          <input type="checkbox" checked={declared} onChange={(e) => setDeclared(e.target.checked)} /> Déjà déclaré à ton agent (placements hors Bank)
+        </label>
+      )}
+      {owned.length > 0 && declared && (
+        <Field label="Sous le libellé" hint="cette ligne sort de son dossier : l'estimation la remplace">
+          <select value={declaredAs} onChange={(e) => setDeclaredAs(e.target.value)}>
+            {owned.map((a, i) => <option key={i} value={a.label}>{a.label} · {money(a.value_cents, { whole: true })}</option>)}
+          </select>
+        </Field>
+      )}
       {error && <ErrorNote message={error} />}
       <button className={`btn sm${busy ? " is-loading" : ""}`} disabled={busy}>Estimer mon logement</button>
     </form>
@@ -180,13 +197,20 @@ function HomeResult({ view }: { view: HomeView }) {
   const p = view.profile!;
   const e = view.estimate;
   const what = `${p.kind === "maison" ? "Maison" : "Appartement"} de ${p.surface} m²${p.rooms ? `, ${p.rooms} pièces` : ""} · ${p.commune ?? p.code}${p.section ? `, section ${p.section}` : ""}`;
-  if (!view.consent) return <p className="muted">{what}. L'estimation attend ton accord.</p>;
+  // Accord retiré : l'estimation déjà faite reste (elle est calculée ici, et compte dans le patrimoine) ; seules
+  // les nouvelles extractions attendent.
+  if (!view.consent && !e?.ok) return <p className="muted">{what}. L'estimation attend ton accord.</p>;
   if (!e) return <p className="muted">{what}. {view.data.error ? "Pas encore de ventes téléchargées." : "Ventes en cours de téléchargement : mets à jour."}</p>;
   if (!e.ok) return <><p className="muted">{what}.</p><p className="notice" role="status">{e.message}</p></>;
   const pos = medianPosition(e);
   return (
     <div className="home-result">
       <p className="muted">{what}.</p>
+      {!view.consent && (
+        <p className="notice" role="status">
+          Accord retiré : l'estimation garde {view.data.fetched_at ? `l'extraction du ${fullDate(view.data.fetched_at)}` : "la dernière extraction"}, sans mise à jour.
+        </p>
+      )}
       <p className="home-figure">
         <span className="home-median">{money(e.median_cents, { whole: true })}</span>{" "}
         <span className="faint">valeur médiane · fourchette {money(e.low_cents, { whole: true })} – {money(e.high_cents, { whole: true })}</span>

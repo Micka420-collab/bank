@@ -216,6 +216,16 @@ def test_rule_day_is_validated_labelled_and_keeps_old_ids(db: Session) -> None:
             )
 
 
+def test_the_planned_day_never_bounds_what_the_agent_may_do(db: Session) -> None:
+    """Le jour prévu sert au suivi, jamais à l'autorisation : une consigne « le lundi » passe aussi un jeudi."""
+    tok = token(db)
+    t0 = utc(2026, 10, 8, 8)  # jeudi 8 octobre
+    cfg = {**BASE, "mode": "rules", "rules": [RULE], "enabled": True, "agent_token_id": tok.id, "days": 30}
+    autonomy.configure(db, cfg, actor="micka", now=t0)
+    rid = autonomy.rule_id({**RULE, "to_asset": None, "destination": None})
+    assert ask(db, tok, now=t0 + timedelta(hours=1), rule=rid)["allowed"] is True
+
+
 def test_epochs_follow_enable_renew_and_stop_and_feed_the_view(db: Session) -> None:
     tok = token(db)
     t0 = utc(2026, 10, 5, 8)  # lundi 5 octobre, 10 h à Paris
