@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.channels.base import Inbound
 from app.channels.text import secret_kind
-from app.db import utcnow
+from app.db import utcnow, write_lock
 from app.domain import chatblocks
 from app.domain import procedures as dp
 from app.domain.money import format_eur
@@ -182,6 +182,7 @@ def configure(
     """Enregistre les réglages d'une messagerie. Un champ laissé vide garde la valeur enregistrée ; un secret
     n'est jamais renvoyé. Changer un jeton relance la connexion."""
     s = spec(platform)
+    write_lock(db)  # la passerelle réécrit aussi les options (record_check) : on lit la ligne déjà verrouillée
     row = db.get(ChannelConfig, platform)
     if row is None:
         row = ChannelConfig(platform=platform, secrets="{}", options="{}", hints="{}")
@@ -292,7 +293,11 @@ def remove(db: Session, platform: str, *, actor: str) -> None:
 
 
 def record_check(db: Session, platform: str, info: dict[str, Any], *, now: datetime) -> None:
-    """Ce que la plateforme dit du robot (son nom, de quoi bâtir un lien direct) : rien de secret."""
+    """Ce que la plateforme dit du robot (son nom, de quoi bâtir un lien direct) : rien de secret.
+
+    Les options sont réécrites en entier : on les lit sous le verrou d'écriture, sinon un contrôle lu avant que tu
+    enregistres tes réglages (le serveur ntfy, par exemple) remettrait les anciens en écrivant juste après."""
+    write_lock(db)
     row = db.get(ChannelConfig, platform)
     if row is None:
         return

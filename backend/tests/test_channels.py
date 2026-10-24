@@ -7,6 +7,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import threading
 import time
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
@@ -202,6 +203,30 @@ def test_whatsapp_and_ntfy_get_what_bank_generates(auth_client: TestClient, db) 
     assert {c["platform"] for c in export["channels"]} == {"whatsapp", "ntfy"}
     dumped = json.dumps(export)
     assert APP_SECRET not in dumped and WA_TOKEN not in dumped and url.rsplit("/", 1)[1] not in dumped
+
+
+def test_a_connection_check_never_overwrites_settings_saved_meanwhile(app, db) -> None:  # type: ignore[no-untyped-def]
+    """La passerelle note ce que la plateforme dit du robot pendant que tu enregistres tes réglages : ni l'un ni
+    l'autre ne réécrit les options lues avant l'autre (ce qui remettait l'ancien serveur ntfy, par intermittence)."""
+    channels.configure(db, "ntfy", values={}, privacy=None, enabled=None, actor="t")
+    db.commit()
+    with app.state.sessionmaker() as check:
+        channels.record_check(check, "ntfy", {"name": "ntfy.sh", "username": "bank"}, now=NOW)
+
+        def save() -> None:
+            with app.state.sessionmaker() as s:
+                server = {"server": "https://ntfy.example.org"}
+                channels.configure(s, "ntfy", values=server, privacy=None, enabled=None, actor="t")
+                s.commit()
+
+        saver = threading.Thread(target=save)
+        saver.start()
+        saver.join(timeout=0.5)  # sans verrou, l'enregistrement passe ici, entre la lecture et l'écriture du contrôle
+        check.commit()
+    saver.join()
+    db.expire_all()
+    opt = channels.options_of(db.get(ChannelConfig, "ntfy"))
+    assert opt["server"] == "https://ntfy.example.org" and opt["username"] == "bank"
 
 
 def test_pairing_needs_consent_and_password(auth_client: TestClient, db) -> None:  # type: ignore[no-untyped-def]
