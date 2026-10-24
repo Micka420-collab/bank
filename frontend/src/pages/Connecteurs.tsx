@@ -330,7 +330,7 @@ function EnergyPanel({ status, busy, onSync, onDisconnect, onChanged }: {
       )}
 
       {ins.months.length > 1 && (
-        <div className="table-scroll"><table className="plain">
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="Tableau, défile de côté"><table className="plain">
           <thead><tr><th>Mois</th><th className="num">kWh</th><th className="num">Coût estimé</th></tr></thead>
           <tbody>
             {ins.months.slice(-6).reverse().map((m) => (

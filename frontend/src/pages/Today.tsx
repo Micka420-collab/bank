@@ -71,7 +71,7 @@ export function Today() {
   return (
     <>
       <section className="card card-hero today reveal" style={{ ["--i" as string]: 0 }} aria-labelledby="today-title">
-        <p className="today-lead" id="today-title">{perDay > 0 ? "Tu peux dépenser" : "Plus de marge ce mois-ci"}</p>
+        <h1 className="today-lead" id="today-title">{perDay > 0 ? "Tu peux dépenser" : "Plus de marge ce mois-ci"}</h1>
         <p className={`today-figure${perDay > 0 ? "" : " is-zero"}`}>
           <CountUp value={Math.round(perDay / 100)} format={(n) => amountOnly(n * 100)} /> €<small>par jour</small>
         </p>
@@ -308,13 +308,15 @@ export function Stat({ label, value, delta, deltaLabel, goodWhen = "up" }: {
   return (
     <div className="stat">
       <dt>{label}</dt>
-      <dd>{value}</dd>
-      {delta !== undefined && delta !== 0 && (
-        <span className={`trend ${good ? "up" : "down"}`} title={deltaLabel} aria-label={`${delta > 0 ? "plus" : "moins"} ${money(Math.abs(delta), { whole: true })} ${deltaLabel ?? ""}`}>
-          <Icon name={delta > 0 ? "trendUp" : "trendDown"} />
-          {delta > 0 ? "+" : "−"}{money(Math.abs(delta), { whole: true })}
-        </span>
-      )}
+      <dd>
+        <span>{value}</span>
+        {delta !== undefined && delta !== 0 && (
+          <span className={`trend ${good ? "up" : "down"}`} title={deltaLabel} aria-label={`${delta > 0 ? "plus" : "moins"} ${money(Math.abs(delta), { whole: true })} ${deltaLabel ?? ""}`}>
+            <Icon name={delta > 0 ? "trendUp" : "trendDown"} />
+            {delta > 0 ? "+" : "−"}{money(Math.abs(delta), { whole: true })}
+          </span>
+        )}
+      </dd>
     </div>
   );
 }

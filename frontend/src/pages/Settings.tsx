@@ -689,7 +689,7 @@ function Audit() {
             : `Altération détectée à l'entrée ${chain.broken_at} (${chain.reason}). Quelqu'un a modifié la base hors de l'application.`}
         </span>
       </div>
-      <div className="table-scroll" style={{ marginTop: "1rem" }}><table className="plain">
+      <div className="table-scroll" tabIndex={0} role="region" aria-label="Journal, défile de côté" style={{ marginTop: "1rem" }}><table className="plain">
         <tbody>
           {entries.map((e) => (
             <tr key={e.id}>

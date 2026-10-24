@@ -530,7 +530,7 @@ function Taxes({ initial, currentValue }: { initial: CryptoTax; currentValue: nu
       <details className="cx-details" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
         <summary>Tes achats et ventes en euros ({tax.events.length})</summary>
         {tax.events.length > 0 && (
-          <div className="table-scroll"><table className="plain">
+          <div className="table-scroll" tabIndex={0} role="region" aria-label="Tableau, défile de côté"><table className="plain">
             <thead><tr><th>Date</th><th>Type</th><th className="num">Montant</th><th className="num">Plus-value</th><th /></tr></thead>
             <tbody>
               {tax.events.map((e) => {

@@ -194,7 +194,7 @@ function TransactionLedger({ items, categories, hints, onChanged }: { items: Tra
         const dayTotal = txns.filter((t) => !t.is_transfer).reduce((a, t) => a + t.amount_cents, 0);
         return (
           <li className="ledger-day" key={date}>
-            {showMonth && <h3 className="ledger-month">{monthTitle(month)}</h3>}
+            {showMonth && <h2 className="ledger-month">{monthTitle(month)}</h2>}
             <div className="ledger-date" aria-hidden="true">
               <strong>{dayNumber(date)}</strong>
               <span>{monthLabel(date.slice(0, 7))}</span>
@@ -327,7 +327,7 @@ function ImportPanel({ accounts, onImported }: { accounts: Account[]; onImported
             {preview.detected.encoding && `, encodage ${preview.detected.encoding}`}
             {preview.skipped.length > 0 && `, ${plural(preview.skipped.length, "ligne ignorée", "lignes ignorées")}`}.
           </p>
-          <div className="table-scroll"><table className="plain">
+          <div className="table-scroll" tabIndex={0} role="region" aria-label="Tableau, défile de côté"><table className="plain">
             <thead>
               <tr><th>Date</th><th>Libellé</th><th className="num">Montant</th></tr>
             </thead>

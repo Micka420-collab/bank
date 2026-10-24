@@ -132,7 +132,7 @@ export function Wealth({ retraite = false }: { retraite?: boolean }) {
           <h2 id="reg-title">Livrets réglementés</h2>
           {w.data.rates_as_of && <span className="faint">Taux au {shortDate(w.data.rates_as_of)} ({w.data.rates_source})</span>}
         </div>
-        <div className="table-scroll"><table className="plain">
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="Tableau, défile de côté"><table className="plain">
           <thead>
             <tr><th>Livret</th><th className="num">Solde</th><th className="num">Place restante</th><th className="num">Intérêts / an</th></tr>
           </thead>

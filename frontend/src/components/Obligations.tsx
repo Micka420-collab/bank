@@ -217,7 +217,7 @@ function PrefillPanel({ o, pre, onDeclared, onClose, busy }: { o: Obligation; pr
         <button type="button" className="btn link" onClick={onClose}>Fermer</button>
       </div>
       <p className="muted">Repris de tes relevés{Object.values(pre.cells.activite ?? {}).some((c) => c.source === "bulletin") ? " et de tes bulletins de paie" : ""}. Recopie-les dans ton espace {o.organism_name}, après vérification.</p>
-      <div className="table-scroll">
+      <div className="table-scroll" tabIndex={0} role="region" aria-label="Tableau, défile de côté">
         <table className="plain ob-table">
           <thead>
             <tr><th scope="col">Ressource</th>{pre.month_labels.map((m) => <th key={m} scope="col">{m}</th>)}<th scope="col">Total</th></tr>

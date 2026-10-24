@@ -81,8 +81,10 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
   citant ses sources. Chaque bloc est construit et validé par le serveur, jamais par le modèle seul.
 - **Pensé pour le téléphone** : réponses de l'assistant en direct (le texte arrive au fil de l'eau, avec ce qu'il
   fait — « cherche sur le web », « dessine le graphique »), chat en feuille qui reste au-dessus du clavier, bouton
-  flottant qui s'efface quand tu lis, cibles tactiles larges, installation sur l'écran d'accueil, bandeau hors
-  ligne — et des **notifications sur le téléphone** (Web Push, chiffrées pour ton appareil, sans messagerie ni
+  flottant qui s'efface quand tu lis, cibles tactiles larges (un bouton-lien se touche sur 32 px, une icône seule
+  sur 36), contrastes AA sur chaque écran (texte discret, pastilles vertes, ambre et rouges lisibles au soleil —
+  audit axe-core à 390 px, zéro constat sérieux), tableaux qui défilent accessibles au clavier, lien « Aller au
+  contenu », installation sur l'écran d'accueil, bandeau hors ligne — et des **notifications sur le téléphone** (Web Push, chiffrées pour ton appareil, sans messagerie ni
   compte tiers) pour le découvert qui approche, la déclaration à faire, le gain à confirmer, le pilote arrêté.
 - **Simple et ludique** : cinq destinations (Aujourd'hui, Opérations, Gagner, Papiers, Épargne), des
   missions avec leur récompense, une tirelire qui se remplit avec ce que Bank t'a vraiment fait récupérer.
