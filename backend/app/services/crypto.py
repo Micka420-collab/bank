@@ -573,7 +573,7 @@ def view(db: Session, *, today: date, now: datetime) -> dict[str, Any]:
 
 
 # ------------------------------------------------------------------ fiscalité
-def _events(db: Session) -> list[dc.TaxEvent]:
+def tax_events(db: Session) -> list[dc.TaxEvent]:
     return [
         dc.TaxEvent(e.id, e.day, e.kind, e.amount_cents, e.fees_cents, e.portfolio_value_cents)
         for e in db.scalars(select(CryptoTaxEvent))
@@ -612,7 +612,7 @@ def add_tax_event(db: Session, body: dict[str, Any], *, actor: str, today: date)
     db.add(row)
     db.flush()
     try:
-        dc.tax_years(_events(db))
+        dc.tax_years(tax_events(db))
     except dc.CryptoError:
         db.delete(row)
         db.flush()
@@ -635,7 +635,7 @@ def foreign_accounts(db: Session) -> list[str]:
 
 
 def tax_view(db: Session, *, year: int, today: date) -> dict[str, Any]:
-    events = _events(db)
+    events = tax_events(db)
     try:
         years, remaining = dc.tax_years(events)
         error = None

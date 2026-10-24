@@ -66,7 +66,7 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
 - **Crypto, sous verre** : tes adresses publiques suivies en lecture seule (sommes de contrôle vérifiées, jetons
   inconnus ignorés), tes avoirs de plateforme (saisis, ou relevés par une clé d'API en lecture seule dont les
   droits sont vérifiés à la connexion), la valeur, la courbe et la répartition, l'impôt de l'année
-  (305 €, 2086, 3916-bis), un vérificateur d'arnaques — et aucune phrase de récupération ni clé acceptée, nulle
+  (305 €, 2086, 3916-bis) rempli depuis tes exports Kraken, Binance ou Coinbase, un vérificateur d'arnaques — et aucune phrase de récupération ni clé acceptée, nulle
   part. Voir [docs/CRYPTO.md](docs/CRYPTO.md).
 - **Pilote automatique** (éteint par défaut) : ton agent peut acheter ou envoyer seul, mais seulement dans ton
   cadre — un jeton précis, tes actifs, tes adresses, tes consignes, des plafonds glissants, une perte maximale,

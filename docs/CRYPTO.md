@@ -113,6 +113,39 @@ exemple) : ce sont des soldes distincts.
 - Depuis le 1er juillet 2026, seuls les prestataires de services sur crypto-actifs **autorisés** (PSCA)
   peuvent te servir en France : vérifie le tien sur la liste blanche de l'AMF.
 
+### Importer un export de plateforme
+
+Plutôt que de tout noter à la main, dépose dans l'encart « Importer un export de plateforme » (écran Crypto)
+l'export CSV de ta plateforme. Le format est reconnu à ses en-têtes :
+
+| Plateforme | Export | Ce que Bank en lit |
+|---|---|---|
+| Kraken | export **Grand livre** (`ledgers.csv`) ou **Transactions** (`trades.csv`) | les deux jambes d'un échange (même `refid`), codes historiques ramenés (`XXBT` → BTC, `ZEUR` → EUR) ; un échange vu dans les deux fichiers ne compte qu'une fois |
+| Binance | export **Historique des transactions** (`User_ID, UTC_Time, Account, Operation, Coin, Change, Remark`) | les jambes d'un même ordre, à la même seconde ; `User_ID` et `Remark` ne sont jamais lus |
+| Coinbase | rapport **Historique des transactions** (CSV) | les lignes après l'en-tête (les lignes du dessus, avec ton nom, sont sautées) ; la paire de la note (`on ETH-BTC`) pour reconnaître un achat payé en crypto |
+
+Tu vois d'abord un **aperçu** : achats en euros, ventes en euros, ventes à compléter, opérations déjà importées
+et lignes écartées, chacune avec sa raison. Rien n'est noté avant « Importer ».
+
+- **Acquisition** : un achat payé en euros (prix et frais en euros). **Cession** : une vente contre des euros.
+- **Écartés, avec leur raison** : les échanges crypto contre crypto, stablecoins compris (pas imposables, sursis
+  de l'article 150 VH bis) ; dépôts, retraits et envois (un paiement d'un bien ou d'un service avec tes cryptos
+  est imposable : note-le à la main) ; récompenses de staking et intérêts ; marge et produits dérivés ; ce que
+  l'export ne chiffre pas en euros (achat par carte, P2P). Une contrepartie dans une **autre monnaie** (USD…)
+  est signalée : Bank ne la convertit pas avec un cours inventé.
+- **Valeur globale du portefeuille** : reprise du suivi de Bank le jour de la vente (date à Paris, l'export est
+  en UTC). Sans relevé ce jour-là, ou si le relevé est plus bas que le prix de vente, Bank te la demande dans
+  l'aperçu ; sans elle, la vente attend — un nouvel import la reprendra.
+- **Doublons écartés** : chaque ligne laisse une empreinte (SHA-256 de la plateforme et de l'identifiant de
+  l'échange, ou de la ligne et de son rang quand l'export n'a pas d'identifiant) ; réimporter le même fichier,
+  ou un export qui chevauche le précédent, ne crée rien. Supprime une opération importée : le prochain import
+  la reproposera.
+- **Garde-fous** : lu sur ton serveur, aucun appel réseau (pas même un cours) ; 5 Mo et 20 000 lignes au plus ;
+  nombres lus en décimal exact sous une forme stricte (une cellule « =FORMULE » n'est qu'un texte) ; ne sont
+  gardés que la date, le type, l'actif, la quantité, les montants en euros et l'empreinte — jamais un
+  identifiant de compte, de transaction, une adresse ni une note de la plateforme. Chaque import est journalisé
+  (nombre d'opérations créées, doublons, écartées).
+
 Bank estime pour t'aider à remplir le 2086 ; la déclaration et l'option pour le barème restent ton choix, et
 Bank n'est pas un conseiller fiscal. Si tu trades comme un professionnel, d'autres règles peuvent s'appliquer.
 

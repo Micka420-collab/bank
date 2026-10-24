@@ -1754,6 +1754,33 @@ export type ScamCheck = {
   advice: string[];
   resources: CryptoResource[];
 };
+export type CryptoImportEvent = {
+  key: string;
+  line: number;
+  day: string;
+  kind: "acquisition" | "cession";
+  asset: string | null;
+  quantity: string | null;
+  amount_cents: number;
+  fees_cents: number;
+  portfolio_value_cents: number | null;
+  value_source: "suivi" | "saisie" | null;
+  status: "new" | "duplicate" | "to_complete";
+  issue: string | null;
+};
+export type CryptoImportPreview = {
+  platform: "kraken" | "binance" | "coinbase";
+  platform_label: string;
+  format: string;
+  rows: number;
+  counts: { acquisitions: number; cessions: number; to_complete: number; duplicates: number; ignored: number };
+  events: CryptoImportEvent[];
+  truncated: boolean;
+  reasons: { reason: string; count: number }[];
+  ignored: { line: number; reason: string }[];
+  years: number[];
+  created?: number;
+};
 
 // ------------------------------------------------------------------ pilote automatique
 export type PilotKind = "buy" | "sell" | "swap" | "transfer";
