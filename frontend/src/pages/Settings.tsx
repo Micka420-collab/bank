@@ -5,6 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, useApi, type Account, type AccountKind, type BackupRun, type BackupStatus, type BudgetResponse, type ConsentView, type Me } from "../api";
 import { labelAction } from "../audit-labels";
 import { Icon } from "../components/Icon";
+import { SectionNav } from "../components/SectionNav";
 import { Segmented } from "../components/Segmented";
 import { EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
@@ -28,6 +29,17 @@ export const KIND_LABELS: Record<AccountKind, string> = {
   other: "Autre",
 };
 
+const SETTINGS_SECTIONS = [
+  { id: "acc-title", label: "Comptes" },
+  { id: "bud-title", label: "Budget" },
+  { id: "look-title", label: "Apparence" },
+  { id: "push-title", label: "Notifications" },
+  { id: "backup-title", label: "Sauvegardes" },
+  { id: "privacy-title", label: "Confidentialité" },
+  { id: "sec-title", label: "Sécurité" },
+  { id: "audit-title", label: "Journal" },
+];
+
 export function Settings({ me, onMeChange }: { me: Me; onMeChange: () => void }) {
   return (
     <>
@@ -37,6 +49,7 @@ export function Settings({ me, onMeChange }: { me: Me; onMeChange: () => void })
           <p className="muted">Banques, compteur Linky, documents de l'État et agents IA : voir <a href="#/connecteurs">Connecteurs</a>.</p>
         </div>
       </div>
+      <SectionNav items={SETTINGS_SECTIONS} />
       <Accounts />
       <BudgetSettings />
       <Appearance />

@@ -10,6 +10,7 @@ import { Icon } from "../components/Icon";
 import { InvestPlan } from "../components/InvestPlan";
 import { Loans } from "../components/Loans";
 import { Retirement } from "../components/Retirement";
+import { SectionNav } from "../components/SectionNav";
 import { Segmented } from "../components/Segmented";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { amountOnly, money, percent, plural, shortDate } from "../format";
@@ -45,6 +46,16 @@ export function bucketSlices(byBucket: Record<string, number>): Slice[] {
     .map(([k, v]) => ({ slug: k, name: BUCKETS[k]?.label ?? k, color: BUCKETS[k]?.color ?? "var(--ink-3)", cents: v, share: v / total }));
 }
 
+const WEALTH_SECTIONS = [
+  { id: "nw", label: "Valeur nette" },
+  { id: "reg-title", label: "Livrets" },
+  { id: "goals-title", label: "Objectifs" },
+  { id: "loans-title", label: "Crédits" },
+  { id: "rt-title", label: "Retraite" },
+  { id: "proj-title", label: "Simulation" },
+  { id: "plan-title", label: "Où placer" },
+];
+
 export function Wealth({ retraite = false }: { retraite?: boolean }) {
   const w = useApi<WealthResponse>("/api/wealth");
   const [range, setRange] = useState<HistoryRange>("3m");
@@ -68,6 +79,8 @@ export function Wealth({ retraite = false }: { retraite?: boolean }) {
           <p className="muted">Ce que tu possèdes, moins ce que tu dois — et comment le faire grandir.</p>
         </div>
       </div>
+
+      <SectionNav items={WEALTH_SECTIONS} />
 
       <section className="card card-hero reveal" style={{ ["--i" as string]: 0 }} aria-labelledby="nw">
         <p className="today-lead" id="nw">Valeur nette</p>

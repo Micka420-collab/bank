@@ -7,6 +7,7 @@ import { CountUp } from "../components/CountUp";
 import { Icon } from "../components/Icon";
 import { Obligations } from "../components/Obligations";
 import { PlanB } from "../components/PlanB";
+import { SectionNav } from "../components/SectionNav";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { amountOnly, longDate, money, monthLabel, shortDate } from "../format";
 
@@ -34,6 +35,14 @@ const ACTIVITY: [string, string][] = [
   ["inactif", "Sans activité"],
 ];
 
+const AIDS_SECTIONS = [
+  { id: "aids-title", label: "Aides reçues" },
+  { id: "streams-title", label: "Versements" },
+  { id: "pb-title", label: "Plan B" },
+  { id: "ob-title", label: "Déclarations" },
+  { id: "sim-title", label: "Droits simulés" },
+];
+
 export function Aids({ planB = false }: { planB?: boolean }) {
   const aids = useApi<AidsResponse>("/api/aids");
   if (aids.error) return <ErrorNote message={aids.error} onRetry={aids.reload} />;
@@ -50,6 +59,7 @@ export function Aids({ planB = false }: { planB?: boolean }) {
         </div>
       </div>
 
+      <SectionNav items={AIDS_SECTIONS} />
       <section className="card card-hero reveal" style={{ ["--i" as string]: 0 }} aria-labelledby="aids-title">
         {hasStreams ? (
           <>
