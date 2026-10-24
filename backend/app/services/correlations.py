@@ -21,8 +21,8 @@ from app.models import Category, Obligation, ObligationDone, OpportunityState, T
 from app.security import audit
 from app.services import analytics, procedures
 from app.services import energy as energy_service
-from app.services import weather as weather_service
 from app.services import housing as housing_service
+from app.services import weather as weather_service
 
 DOC_KINDS = ("lease", "insurance", "payslip", "rent_receipt")
 STATE_PREFIX = "corr:"

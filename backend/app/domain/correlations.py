@@ -23,11 +23,11 @@ from statistics import median
 from typing import Any
 
 from app.domain import contracts
-from app.domain.energy_analysis import ClimateCheck
-from app.domain.energy_signals import OPTIONS, PowerCheck, kva_label
 from app.domain import housing as hz
 from app.domain import property_tax as pt
 from app.domain import rent_control as rc
+from app.domain.energy_analysis import ClimateCheck
+from app.domain.energy_signals import OPTIONS, PowerCheck, kva_label
 from app.domain.money import format_eur
 from app.domain.recurring import add_months
 
