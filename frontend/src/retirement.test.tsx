@@ -66,7 +66,7 @@ const BASE: RetirementData = {
     full_rate: dep({ at: "2057-06-30", age_years: 66, age_months: 2, quarters_total: 172, missing_quarters: 0, rate_percent: "50.000", status: "full", base_monthly_low_cents: 116_667, base_monthly_high_cents: 116_667, total_low_cents: 142_000, total_high_cents: 149_000, notes: [] }),
     age_67: dep({ at: "2058-04-12", age_years: 67, age_months: 0, quarters_total: 175, missing_quarters: 0, extra_quarters: 3, rate_percent: "51.875", status: "surcote", total_low_cents: 150_000, total_high_cents: 158_000, notes: [] }),
   },
-  per: { payment_cents: 165_120, ceiling_cents: 471_000, deductible_cents: 165_120, marginal_rate_percent: 11, tax_saved_cents: 18_163, effort_cents: 146_957, notes: ["L'économie d'impôt est une avance : la sortie sera imposée."], tax_source: "estimated", tax_detail: "estimée depuis ton salaire" },
+  per: { payment_cents: 165_120, ceiling_cents: 471_000, deductible_cents: 165_120, marginal_rate_percent: 11, tax_saved_cents: 18_163, effort_cents: 146_957, notes: ["L'économie d'impôt est une avance : la sortie sera imposée."], tax_source: "estimated", tax_detail: "estimée depuis ton salaire." },
 };
 
 function mockApi(initial: RetirementData) {
@@ -159,6 +159,8 @@ describe("retraite", () => {
     await type("Versement", "600", true);
     expect(calls.some((c) => c.url === "/api/retirement?age_years=62&per_cents=60000")).toBe(true);
     expect(text()).toContain("l'État en reprend 66 €");
+    expect(text()).toContain("Tranche : estimée depuis ton salaire.");
+    expect(text()).not.toContain("salaire..");
     expect(text()).toContain("vérifiées le 24 oct 2026");
     expect(text()).toContain("Rien n'est envoyé à une caisse.");
   });
@@ -188,6 +190,19 @@ describe("retraite", () => {
     await click("Oublier mon relevé");
     expect(calls.some((c) => c.url === "/api/retirement/profile" && c.init?.method === "DELETE")).toBe(true);
     expect(text()).toContain("60 trimestres validés");
+  });
+
+  it("shows one row when the full rate comes at the legal age", async () => {
+    mockApi({ ...BASE, departures: { ...BASE.departures, full_rate: { ...BASE.departures.legal! } } });
+    await act(async () => root.render(<ToastProvider><Retirement open /></ToastProvider>));
+    await settle();
+    const rows = [...host.querySelectorAll(".rt-dep")];
+    expect(rows.map((r) => r.getAttribute("data-key"))).toEqual(["legal", "age_67"]);
+    expect(text()).toContain("Âge légal · taux plein");
+    expect(text()).toContain("Taux plein automatique67 ans");
+    expect(host.querySelector(".rt-dep.is-current")?.getAttribute("data-key")).toBe("legal");
+    await click("Taux plein automatique");
+    expect(host.querySelector(".rt-dep.is-current")?.getAttribute("data-key")).toBe("age_67");
   });
 
   it("asks for the birth date instead of guessing", async () => {

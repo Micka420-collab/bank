@@ -12,7 +12,7 @@ import { ErrorNote, EuroInput, Field, useAsyncAction, useToast } from "./ui";
 
 type DepartureKey = "legal" | "full_rate" | "age_67" | "custom";
 const ORDER: DepartureKey[] = ["legal", "full_rate", "age_67", "custom"];
-const TITLES: Record<DepartureKey, string> = { legal: "Âge légal", full_rate: "Taux plein", age_67: "67 ans", custom: "Ton choix" };
+const TITLES: Record<DepartureKey, string> = { legal: "Âge légal", full_rate: "Taux plein", age_67: "Taux plein automatique", custom: "Ton choix" };
 const MIN_AGE = 55;
 const MAX_AGE = 75;
 
@@ -66,13 +66,17 @@ export function Retirement({ open = false }: { open?: boolean }) {
   const view = useApi<RetirementData>(`/api/retirement${query ? `?${query}` : ""}`);
   const data = view.data;
   const career = data?.career ?? null;
+  // Quand la durée est atteinte dès l'âge légal, « âge légal » et « taux plein » sont le même départ : une seule ligne.
+  const merged = Boolean(data?.departures.full_rate && data?.departures.legal && data.departures.full_rate.at === data.departures.legal.at);
   const departures: [DepartureKey, RetirementDeparture][] = [];
   for (const k of ORDER) {
     const d = data?.departures[k];
-    if (d) departures.push([k, d]);
+    if (d && !(merged && k === "full_rate")) departures.push([k, d]);
   }
-  const current = (data?.departures[selected] ?? data?.departures.full_rate) ?? null;
+  const selectedKey: DepartureKey = merged && selected === "full_rate" ? "legal" : selected;
+  const current = (data?.departures[selectedKey] ?? data?.departures.full_rate ?? data?.departures.legal) ?? null;
   const reference = data?.departures.full_rate ?? null;
+  const titleOf = (key: DepartureKey) => (merged && key === "legal" ? "Âge légal · taux plein" : TITLES[key]);
   const maxHigh = Math.max(1, ...departures.map(([, d]) => d.total_high_cents));
   const lastAuto = useRef<number | null>(null);
   useEffect(() => {
@@ -122,7 +126,7 @@ export function Retirement({ open = false }: { open?: boolean }) {
                     <li key={key} className={`rt-dep${isCurrent ? " is-current" : ""}`} data-status={d.status} data-key={key}>
                       <button type="button" className="rt-dep-row" aria-pressed={isCurrent} onClick={() => setSelected(key)}>
                         <span className="rt-when">
-                          <span className="rt-title">{TITLES[key]}</span>
+                          <span className="rt-title">{titleOf(key)}</span>
                           <b className="rt-age">{ageText(d.age_years, d.age_months)}</b>
                           <span className="faint">{monthYear(d.at)}</span>
                         </span>
@@ -174,7 +178,7 @@ export function Retirement({ open = false }: { open?: boolean }) {
                       À {data.per.marginal_rate_percent} % d'impôt, l'État en reprend <b>{money(data.per.tax_saved_cents, { whole: true })}</b> : l'effort réel est de <b>{money(data.per.effort_cents, { whole: true })}</b>.
                     </p>
                   </div>
-                  <p className="faint">Tranche : {data.per.tax_detail || data.per.tax_source}.</p>
+                  <p className="faint">Tranche : {(data.per.tax_detail || data.per.tax_source).replace(/\.+$/, "")}.</p>
                   {data.per.notes.map((n) => <p key={n} className="faint rt-note">{n}</p>)}
                 </div>
               )}

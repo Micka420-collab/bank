@@ -6541,6 +6541,10 @@ details.card.cx-details > summary {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+.rt-stats dd small {
+  display: block;
+  font-weight: 500;
+}
 .rt-note {
   margin: 0;
   max-width: 72ch;

@@ -545,7 +545,7 @@ direct recomposée fragment par fragment, Web Push vérifié au bit près contre
 par un faux navigateur, amortissement vérifié sur un cas de référence public, plan B contre un moteur fiscal
 simulé qui réagit au revenu, sauvegarde chiffrée altérée, tronquée ou rallongée refusée, boîte mail contre un faux
 serveur IMAP qui journalise chaque commande, retraite vérifiée sur le cas de référence de service-public et contre
-les paliers de la LFSS 2026), couverture 91 %, 136 tests front (parcours de première ouverture,
+les paliers de la LFSS 2026), couverture 91 %, 137 tests front (parcours de première ouverture,
 coffre, démarches, opportunités, veille, assistant, chat interactif et réponse en direct, notifications sur
 l'appareil, plan B, crédits, retraite, sauvegardes, boîte mail, crypto, pilote, déclarations, corrélations, année qui vient,
 passkeys, erreurs qui disent quoi faire),
