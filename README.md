@@ -69,9 +69,9 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
   Voir [docs/CANAUX.md](docs/CANAUX.md).
 - **Crypto, sous verre** : tes adresses publiques suivies en lecture seule (sommes de contrôle vérifiées, jetons
   inconnus ignorés), tes avoirs de plateforme (saisis, ou relevés par une clé d'API en lecture seule dont les
-  droits sont vérifiés à la connexion), la valeur, la courbe et la répartition, l'impôt de l'année
-  (305 €, 2086, 3916-bis) rempli depuis tes exports Kraken, Binance ou Coinbase, un vérificateur d'arnaques — et aucune phrase de récupération ni clé acceptée, nulle
-  part. Voir [docs/CRYPTO.md](docs/CRYPTO.md).
+  droits sont vérifiés à la connexion), la valeur, la courbe et la répartition, l'impôt de l'année (seuil de
+  305 €, 3916-bis) et le 2086 rempli depuis tes exports Kraken, Binance ou Coinbase, un vérificateur
+  d'arnaques — et aucune phrase de récupération ni clé acceptée, nulle part. Voir [docs/CRYPTO.md](docs/CRYPTO.md).
 - **Alertes de cours** : un seuil haut, un seuil bas ou une variation sur 24 h, envoyés dans tes messageries et
   sur ton téléphone une fois par franchissement — un constat, jamais un conseil ; et, sur l'écran Pilote,
   **pilote vs consigne** : chaque rendez-vous prévu face à ce que l'agent a fait (à temps, en retard, manqué,

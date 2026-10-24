@@ -30,7 +30,14 @@ from app.db import upsert, utcnow
 from app.domain import crypto as dc
 from app.domain.money import format_eur
 from app.domain.wealth import emergency_fund, net_worth
-from app.models import CryptoHolding, CryptoPrice, CryptoSnapshot, CryptoTaxEvent, CryptoWallet
+from app.models import (
+    CryptoHolding,
+    CryptoImportExcluded,
+    CryptoPrice,
+    CryptoSnapshot,
+    CryptoTaxEvent,
+    CryptoWallet,
+)
 from app.security import audit
 from app.security.crypto import CryptoError as KeyringError
 from app.security.crypto import get_keyring
@@ -626,6 +633,8 @@ def delete_tax_event(db: Session, event_id: int, *, actor: str) -> None:
     row = db.get(CryptoTaxEvent, event_id)
     if row is None:
         raise dc.CryptoError("Opération introuvable")
+    if row.import_key:  # supprimée exprès : un export qui chevauche ne la recrée pas
+        upsert(db, CryptoImportExcluded, {"import_key": row.import_key, "created_at": utcnow()}, ["import_key"])
     db.delete(row)
     audit.record(db, actor, "crypto.tax.delete", event=event_id)
 

@@ -1765,7 +1765,8 @@ export type CryptoImportEvent = {
   fees_cents: number;
   portfolio_value_cents: number | null;
   value_source: "suivi" | "saisie" | null;
-  status: "new" | "duplicate" | "to_complete";
+  value_day: string | null; // jour du relevé du suivi proposé (la veille, sinon le jour même)
+  status: "new" | "duplicate" | "to_complete" | "manual_match" | "excluded";
   issue: string | null;
 };
 export type CryptoImportPreview = {
@@ -1773,7 +1774,10 @@ export type CryptoImportPreview = {
   platform_label: string;
   format: string;
   rows: number;
-  counts: { acquisitions: number; cessions: number; to_complete: number; duplicates: number; ignored: number };
+  counts: {
+    acquisitions: number; cessions: number; to_complete: number; duplicates: number; ignored: number;
+    manual_matches: number; excluded: number;
+  };
   events: CryptoImportEvent[];
   truncated: boolean;
   reasons: { reason: string; count: number }[];
