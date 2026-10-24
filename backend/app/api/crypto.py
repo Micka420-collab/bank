@@ -8,6 +8,7 @@ from datetime import date
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from app.api.deps import AuthDep, DbDep, SettingsDep, TodayDep, client_ip
@@ -250,7 +251,11 @@ async def import_preview(
     # Lu ici, sur ton serveur : aucun cours n'est cherché, rien ne part.
     data = await _export(file, settings)
     try:
-        return crypto_import.preview(db, data, today=today, values=_given(values), include=_chosen(include))
+        # Dans un fil à part : la lecture d'un gros export ne fige pas les autres requêtes.
+        result: dict[str, Any] = await run_in_threadpool(
+            crypto_import.preview, db, data, today=today, values=_given(values), include=_chosen(include)
+        )
+        return result
     except (ImportFormatError, CryptoError) as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
 
@@ -267,8 +272,14 @@ async def import_commit(
 ) -> dict[str, Any]:
     data = await _export(file, settings)
     try:
-        result = crypto_import.commit(
-            db, data, actor=ctx.user.username, today=today, values=_given(values), include=_chosen(include)
+        result = await run_in_threadpool(
+            crypto_import.commit,
+            db,
+            data,
+            actor=ctx.user.username,
+            today=today,
+            values=_given(values),
+            include=_chosen(include),
         )
     except (ImportFormatError, CryptoError) as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None

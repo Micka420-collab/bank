@@ -1,7 +1,8 @@
 """Import des exports de plateformes crypto : un aperçu d'abord, puis les opérations du 2086, sans doublon.
 
 La valeur globale du portefeuille de chaque cession vient de toi, ou à défaut du suivi de Bank (le relevé de la
-veille, sinon celui du jour, pris après la vente : une proposition à vérifier) ; sans l'une ni l'autre, la cession
+veille, sinon celui du jour, pris après la vente : une proposition à vérifier ; aucun si tu as acheté ou vendu
+autre chose ce jour-là) ; sans l'une ni l'autre, la cession
 attend que tu la complètes plutôt qu'une valeur inventée.
 
 Une opération déjà notée à la main (même jour, même type, même montant) ou supprimée après un import précédent
@@ -87,10 +88,42 @@ def _manual(db: Session, days: set[date]) -> Counter[tuple[date, str, int]]:
     return Counter((d, k, a) for d, k, a in rows)
 
 
-def plan(db: Session, data: bytes, *, today: date, values: Any = None, include: Any = None) -> dict[str, Any]:
+def _busy(db: Session, movements: list[cc.Movement], days: set[date]) -> set[date]:
+    """Les jours de vente où un relevé ne dit pas la valeur juste avant : un achat le même jour (compté dans le prix
+    total d'acquisition du 2086, absent du relevé de la veille) ou plusieurs ventes. Prudent : une opération notée
+    à la main et retrouvée dans l'export compte deux fois, et c'est toi qui tranches."""
+    buys: set[date] = set()
+    sales: Counter[date] = Counter()
+    keys: set[str] = set()
+    for m in movements:
+        if m.day in days and m.key not in keys:
+            keys.add(m.key)
+            if m.kind == "acquisition":
+                buys.add(m.day)
+            else:
+                sales[m.day] += 1
+    rows = db.execute(
+        select(CryptoTaxEvent.day, CryptoTaxEvent.kind, CryptoTaxEvent.import_key).where(CryptoTaxEvent.day.in_(days))
+    )
+    for d, kind, key in rows:
+        if key is not None and key in keys:
+            continue
+        if kind == "acquisition":
+            buys.add(d)
+        else:
+            sales[d] += 1
+    return buys | {d for d, n in sales.items() if n > 1}
+
+
+def parse(data: bytes, *, values: Any = None, include: Any = None) -> tuple[cc.CryptoImport, dict[str, int], set[str]]:
+    """Lecture de l'export et de tes choix, sans la base : faite avant de prendre le verrou d'écriture."""
+    return cc.parse(data), _values(values), _keys(include)
+
+
+def plan(
+    db: Session, parsed: cc.CryptoImport, *, today: date, given: dict[str, int], chosen: set[str]
+) -> dict[str, Any]:
     """Ce que l'import créerait : rien n'est écrit, rien ne part sur le réseau."""
-    parsed = cc.parse(data)
-    given, chosen = _values(values), _keys(include)
     ignored = list(parsed.ignored)
     movements: list[cc.Movement] = []
     for m in parsed.movements:
@@ -102,6 +135,7 @@ def plan(db: Session, data: bytes, *, today: date, values: Any = None, include: 
     excluded = _excluded(db, [m.key for m in movements])
     manual = _manual(db, {m.day for m in movements})
     days = {m.day for m in movements if m.kind == "cession"}
+    busy = _busy(db, movements, days)
     days |= {d - timedelta(days=1) for d in days}
     tracked = {s.day: s.value_cents for s in db.scalars(select(CryptoSnapshot).where(CryptoSnapshot.day.in_(days)))}
     seen: set[str] = set()
@@ -138,7 +172,8 @@ def plan(db: Session, data: bytes, *, today: date, values: Any = None, include: 
             mine = given.get(m.key)
             veille = m.day - timedelta(days=1)
             on = veille if veille in tracked else m.day
-            suivi = tracked.get(on)
+            # Un achat ou une autre vente ce jour-là : aucun relevé ne donne la valeur juste avant celle-ci.
+            suivi = None if m.day in busy else tracked.get(on)
             if mine is not None and mine >= m.amount_cents:
                 row["portfolio_value_cents"], row["value_source"] = mine, "saisie"
             elif mine is None and suivi and suivi >= m.amount_cents:
@@ -148,6 +183,8 @@ def plan(db: Session, data: bytes, *, today: date, values: Any = None, include: 
                 row["issue"] = (
                     f"Valeur saisie inférieure au prix de vente : au moins {format_eur(m.amount_cents)}"
                     if mine is not None
+                    else "Achat ou autre vente le même jour : indique la valeur juste avant cette vente"
+                    if m.day in busy
                     else f"Le suivi relevait {format_eur(suivi)} le {on:%d/%m/%Y}, moins que le prix de vente : "
                     "indique la valeur juste avant"
                     if suivi
@@ -192,8 +229,9 @@ def commit(
 ) -> dict[str, Any]:
     """Crée les acquisitions et les cessions complètes ; les doublons, les opérations déjà notées à la main ou
     supprimées, et les cessions sans valeur globale restent de côté (un nouvel import les reprendra)."""
+    parsed, given, chosen = parse(data, values=values, include=include)  # hors verrou : le reste de Bank n'attend pas
     write_lock(db)  # lire ce qui existe puis écrire : une seule requête à la fois
-    out = plan(db, data, today=today, values=values, include=include)
+    out = plan(db, parsed, today=today, given=given, chosen=chosen)
     create: list[dict[str, Any]] = out.pop("_create")
     label = out["platform_label"]
     # Vérifier le calcul du 2086 avec ces opérations avant d'écrire quoi que ce soit.
@@ -242,6 +280,7 @@ def commit(
 
 
 def preview(db: Session, data: bytes, *, today: date, values: Any = None, include: Any = None) -> dict[str, Any]:
-    out = plan(db, data, today=today, values=values, include=include)
+    parsed, given, chosen = parse(data, values=values, include=include)
+    out = plan(db, parsed, today=today, given=given, chosen=chosen)
     out.pop("_create")
     return out

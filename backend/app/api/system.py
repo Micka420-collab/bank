@@ -379,7 +379,7 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
                 for e in db.scalars(select(CryptoTaxEvent).order_by(CryptoTaxEvent.day))
             ],
             "exchanges": exchange_keys_service.export(db),  # plateformes reliées : jamais la clé ni le secret
-            # Alertes de cours : tes seuils et tes repères (texte libre que tu as saisi).
+            # Alertes de cours : tes seuils, tes repères (texte libre que tu as saisi) et quand elles ont sonné.
             "price_alerts": [
                 {
                     "asset": a.asset,
@@ -388,6 +388,11 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
                     "label": a.label,
                     "state": a.state,
                     "created_at": a.created_at.isoformat(),
+                    "fires": a.fires,
+                    "triggered_at": a.triggered_at.isoformat() if a.triggered_at else None,
+                    "triggered_price": a.triggered_price,
+                    "triggered_change": a.triggered_change,
+                    "rearmed_at": a.rearmed_at.isoformat() if a.rearmed_at else None,
                 }
                 for a in db.scalars(select(PriceAlert).order_by(PriceAlert.id))
             ],

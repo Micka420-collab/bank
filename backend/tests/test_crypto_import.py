@@ -434,11 +434,11 @@ def test_sale_already_noted_by_hand_is_not_counted_twice(c: TestClient, db: Sess
     db.expire_all()
     assert len(db.scalars(select(CryptoTaxEvent).where(CryptoTaxEvent.kind == "cession")).all()) == 1
 
-    # Une autre vente, vraiment : elle n'entre que cochée.
+    # Une autre vente, vraiment : elle n'entre que cochée, et avec ta valeur (deux ventes ce jour-là : pas de relevé).
     forced = c.post(
         "/api/crypto/import",
         files={"file": ("l.csv", data, "text/csv")},
-        data={"include": json.dumps([sale["key"]])},
+        data={"include": json.dumps([sale["key"]]), "values": json.dumps({sale["key"]: 1_970_000})},
     ).json()
     assert forced["result"]["created"] == 1 and forced["view"]["tax"]["total_price_cents"] == 60_000
 
@@ -453,7 +453,7 @@ def test_two_identical_sales_match_one_manual_entry_only(c: TestClient, db: Sess
         "1,2026-05-20 15:00:00,Spot,Transaction Revenue,EUR,140,\n"
     )
     body = send(c, "b.csv", data.encode()).json()
-    assert [e["status"] for e in body["events"]] == ["manual_match", "new"]
+    assert [e["status"] for e in body["events"]] == ["manual_match", "to_complete"], "deux ventes ce jour-là"
 
 
 def test_tracked_value_prefers_the_day_before_and_yours_wins(c: TestClient, db: Session) -> None:
@@ -471,6 +471,34 @@ def test_tracked_value_prefers_the_day_before_and_yours_wins(c: TestClient, db: 
     db.expire_all()
     row = db.scalars(select(CryptoTaxEvent).where(CryptoTaxEvent.kind == "cession")).one()
     assert row.portfolio_value_cents == 4_000_000
+
+
+def test_no_tracked_value_when_the_same_day_has_a_buy_or_another_sale(c: TestClient, db: Session) -> None:
+    # Le relevé de la veille ignore l'achat du matin, que le 2086 compte : proposé, il sous-évaluerait la plus-value.
+    snapshot(db, date(2026, 5, 19), 2_600_000)
+    data = BINANCE_HEAD + (
+        "1,2026-05-20 08:00:00,Spot,Transaction Spend,EUR,-20000,\n"
+        "1,2026-05-20 08:00:00,Spot,Transaction Buy,BTC,0.3,\n"
+        "1,2026-05-20 15:00:00,Spot,Transaction Sold,BTC,-0.3,\n"
+        "1,2026-05-20 15:00:00,Spot,Transaction Revenue,EUR,25000,\n"
+    )
+    sale = next(e for e in send(c, "b.csv", data.encode()).json()["events"] if e["kind"] == "cession")
+    assert (sale["status"], sale["portfolio_value_cents"], sale["value_source"]) == ("to_complete", None, None)
+    assert "même jour" in sale["issue"]
+
+    # Une seule vente, sans achat ce jour-là : le relevé de la veille reste proposé.
+    alone = BINANCE_HEAD + (
+        "1,2026-05-20 15:00:00,Spot,Transaction Sold,BTC,-0.3,\n"
+        "1,2026-05-20 15:00:00,Spot,Transaction Revenue,EUR,25000,\n"
+    )
+    sale = next(e for e in send(c, "b.csv", alone.encode()).json()["events"] if e["kind"] == "cession")
+    assert (sale["status"], sale["portfolio_value_cents"]) == ("new", 2_600_000)
+
+    # Un achat du même jour déjà enregistré compte aussi.
+    manual_buy = c.post("/api/crypto/tax", json={"day": "2026-05-20", "kind": "acquisition", "amount_cents": 2_000_000})
+    assert manual_buy.status_code == 201, manual_buy.text
+    sale = next(e for e in send(c, "b.csv", alone.encode()).json()["events"] if e["kind"] == "cession")
+    assert sale["status"] == "to_complete"
 
 
 def test_value_below_the_price_is_refused_not_replaced_by_the_tracked_one(c: TestClient, db: Session) -> None:

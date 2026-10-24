@@ -19,7 +19,7 @@ from starlette.testclient import TestClient
 from app.api import deps
 from app.domain import dvf
 from app.models import Account, AuditLog, Loan
-from app.security import audit
+from app.security import audit, netfetch
 from app.services import consents
 from app.services import home_value as svc
 
@@ -536,3 +536,31 @@ def test_description_changed_during_the_download_is_not_mixed_up(app, home: tupl
         db.commit()
         assert r["status"] == "failed" and "a changé" in r["message"]
         assert db.execute(text("SELECT data, attempts FROM dvf_cache")).one() == (None, 1)
+
+
+def test_all_files_together_fit_under_the_nginx_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Pire cas de netfetch : 3 × seconds par fichier (2 × pour la lecture, plus un dernier morceau bloqué).
+    clock = [1000.0]
+    budgets: list[float] = []
+
+    def slow(url: str, **kw: object) -> netfetch.FetchResult:
+        seconds = float(kw["seconds"])  # type: ignore[arg-type]
+        budgets.append(seconds)
+        clock[0] += svc.WORST_FACTOR * seconds
+        return netfetch.FetchResult(200, b"", url, "text/csv", None, None)
+
+    monkeypatch.setattr(netfetch, "fetch", slow)
+    get = svc.default_fetch(clock=lambda: clock[0])
+
+    def every_year() -> None:
+        for year in range(svc.YEARS_BACK + 1):
+            get(f"{svc.BASE_URL}/{2023 + year}/communes/31/31555.csv")
+
+    with pytest.raises(netfetch.FetchError, match="trop lente"):  # l'échéance commune coupe avant nginx
+        every_year()
+    assert budgets and all(b <= svc.FILE_SECONDS for b in budgets)
+    assert clock[0] - 1000.0 <= svc.TOTAL_SECONDS
+    conf = (Path(__file__).parents[2] / "frontend" / "nginx.conf").read_text()
+    home = conf.split("location ~ ^/api/home/(profile|refresh)$", 1)[1].split("}", 1)[0]
+    assert f"proxy_read_timeout {int(svc.NGINX_SECONDS)}s;" in home
+    assert svc.TOTAL_SECONDS + 30 <= svc.NGINX_SECONDS, "marge pour les connexions et la lecture des ventes"

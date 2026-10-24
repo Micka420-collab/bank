@@ -298,11 +298,20 @@ def test_api_create_list_rearm_delete(auth_client: TestClient, app) -> None:  # 
     assert auth_client.post("/api/crypto/alerts", json={"asset": "BTC", "kind": "buy", "value": "1"}).status_code == 422
     assert auth_client.post(f"/api/crypto/alerts/{a['id']}/rearm").json()["alerts"][0]["state"] == "armed"
     assert auth_client.post("/api/crypto/alerts/999/rearm").status_code == 404
-    # L'export RGPD emporte tes alertes : ce sont des données saisies (le repère est en texte libre).
+    # L'export RGPD emporte tes alertes : ce sont des données saisies (le repère est en texte libre), avec leur
+    # historique (quand elles ont sonné, à quel cours, combien de fois).
+    fired, rearmed = datetime(2026, 10, 20, 8, tzinfo=UTC), datetime(2026, 10, 21, 9, tzinfo=UTC)
+    with app.state.sessionmaker() as db:
+        row = db.get(PriceAlert, a["id"])
+        assert row is not None
+        row.fires, row.triggered_at, row.triggered_price, row.triggered_change = 2, fired, "49000", "-3.1"
+        row.rearmed_at = rearmed
+        db.commit()
     exported = auth_client.post("/api/export", json={"password": PASSWORD}).json()["crypto"]["price_alerts"]
     assert exported == [
         {"asset": "BTC", "kind": "below", "threshold": "50000", "label": "Plancher", "state": "armed",
-         "created_at": a["created_at"]}
+         "created_at": a["created_at"], "fires": 2, "triggered_at": fired.isoformat(), "triggered_price": "49000",
+         "triggered_change": "-3.1", "rearmed_at": rearmed.isoformat()}
     ]  # fmt: skip
     assert auth_client.delete("/api/crypto/alerts/999").status_code == 404
     assert auth_client.delete(f"/api/crypto/alerts/{a['id']}").status_code == 204

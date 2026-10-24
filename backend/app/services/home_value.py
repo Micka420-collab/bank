@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections.abc import Callable
 from datetime import date, datetime
 from typing import Any
@@ -33,8 +34,15 @@ GEO_URL = "https://geo.api.gouv.fr/communes"
 MAX_FILE_BYTES = 40_000_000
 YEARS_BACK = 3  # l'année en cours et les trois précédentes : 24 mois pleins malgré le retard de publication
 MAX_ATTEMPTS_PER_DAY = 3  # essais de téléchargement par jour (manuels et automatiques) : on reste poli
-# Par fichier : quatre fichiers tiennent sous le délai que nginx accorde à /api/home/(profile|refresh) (180 s).
-FILE_SECONDS = 30.0
+# Délais. netfetch abandonne une lecture après 2 × seconds, plus un dernier morceau qui peut attendre jusqu'au
+# délai de lecture (seconds) : un fichier peut donc prendre 3 × seconds. Les quatre fichiers partagent une
+# échéance commune (TOTAL_SECONDS), chacun ne recevant que ce qui reste : l'ensemble tient sous le délai que nginx
+# accorde à /api/home/(profile|refresh) (180 s), avec la marge des connexions et de la lecture des ventes.
+FILE_SECONDS = 30.0  # au plus par fichier (soit 90 s dans le pire cas)
+TOTAL_SECONDS = 120.0  # pour tous les fichiers d'une extraction
+WORST_FACTOR = 3  # pire cas d'un appel à netfetch, en multiples de seconds
+MIN_FILE_SECONDS = 5.0  # en dessous, on n'entame plus de fichier : l'extraction échoue (et rien n'est remplacé)
+NGINX_SECONDS = 180.0
 HOME_LINE = "Logement (estimation DVF)"
 HOME_KIND = "real_estate"
 HOME_LINE_ID = -1_000_000_000  # ligne à part du patrimoine : jamais un vrai compte (> 0) ni un prêt (−id)
@@ -52,8 +60,19 @@ class HomeValueError(ValueError):
         self.status = status
 
 
-def default_fetch(http: Any = None, resolver: netfetch.Resolver | None = None) -> Fetch:
+def default_fetch(
+    http: Any = None, resolver: netfetch.Resolver | None = None, clock: Callable[[], float] = time.monotonic
+) -> Fetch:
+    """Un téléchargeur par extraction : l'échéance commune part du premier fichier demandé."""
+    deadline: list[float] = []
+
     def get(url: str) -> bytes | None:
+        now = clock()
+        if not deadline:
+            deadline.append(now + TOTAL_SECONDS)
+        seconds = min(FILE_SECONDS, (deadline[0] - now) / WORST_FACTOR)
+        if seconds < MIN_FILE_SECONDS:
+            raise netfetch.FetchError("Source trop lente à répondre")
         try:
             result = netfetch.fetch(
                 url,
@@ -61,7 +80,7 @@ def default_fetch(http: Any = None, resolver: netfetch.Resolver | None = None) -
                 resolver=resolver,
                 accept="text/csv, */*;q=0.1",
                 max_bytes=MAX_FILE_BYTES,
-                seconds=FILE_SECONDS,
+                seconds=seconds,
             )
         except netfetch.FetchError as exc:
             if exc.status == 404:

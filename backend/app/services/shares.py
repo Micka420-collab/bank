@@ -166,8 +166,11 @@ def revoke(db: Session, doc_id: int, share_id: int, *, actor: str, now: datetime
     )
     if revoked.rowcount == 1:  # type: ignore[attr-defined]
         audit.record(db, actor, "vault.share_revoke", document=doc_id, share=share.id)
-    db.refresh(share)
-    return summary(share, now)
+    # Relu plutôt que rafraîchi : le document a pu être supprimé entre-temps (les partages avec lui).
+    fresh = db.scalar(select(VaultShare).where(VaultShare.id == share_id).execution_options(populate_existing=True))
+    if fresh is None:
+        raise VaultError("Partage introuvable", 404)
+    return summary(fresh, now)
 
 
 def open_link(db: Session, token: str, *, now: datetime, ip: str) -> bytes | None:
@@ -180,7 +183,12 @@ def open_link(db: Session, token: str, *, now: datetime, ip: str) -> bytes | Non
     if share is None:
         return None
     write_lock(db)
-    db.refresh(share)
+    # Relu sous le verrou, pas rafraîchi : supprimé entre-temps (avec son document), le lien répond le même 404.
+    share = db.scalar(
+        select(VaultShare).where(VaultShare.token_hash == digest).execution_options(populate_existing=True)
+    )
+    if share is None:
+        return None
     if share.payload is None or state(share, now) != "active":
         audit.record(db, PUBLIC_ACTOR, "vault.share_refused", document=share.document_id, share=share.id, ip=ip)
         return None

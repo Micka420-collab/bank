@@ -147,6 +147,27 @@ def test_expired_revoked_used_and_unknown_look_the_same(
         assert "vault.share_revoke" in [a.action for a in db.scalars(select(AuditLog))]
 
 
+def test_a_link_deleted_just_before_the_lock_gets_the_same_404(
+    app, owner: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:  # type: ignore[no-untyped-def]
+    doc_id = _upload(owner, "quittance.pdf", make_pdf(LEASE))
+    token = _token(_share(owner, doc_id).json()["link"])
+    share_id = owner.get(f"/api/vault/{doc_id}/shares").json()["shares"][0]["id"]
+    anonymous = TestClient(app, base_url="https://testserver")
+    expected = _open(anonymous, "inconnu")
+
+    def gone_then_lock(db: Any) -> None:  # le document (et ses partages) supprimé entre la recherche et le verrou
+        with app.state.sessionmaker() as other:
+            other.delete(other.get(VaultDocument, doc_id))
+            other.commit()
+            assert other.get(VaultShare, share_id) is None
+        write_lock(db)
+
+    monkeypatch.setattr(shares, "write_lock", gone_then_lock)
+    r = _open(anonymous, token)
+    assert (r.status_code, r.content) == (404, expected.content)
+
+
 def test_a_malformed_request_gets_the_same_answer(app, owner: TestClient) -> None:  # type: ignore[no-untyped-def]
     anonymous = TestClient(app, base_url="https://testserver")
     expected = _open(anonymous, "inconnu")
