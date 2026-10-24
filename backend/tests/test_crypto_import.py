@@ -20,6 +20,7 @@ from app.api import deps
 from app.importers import crypto_csv as cc
 from app.importers.base import ImportFormatError
 from app.models import AuditLog, CryptoSnapshot, CryptoTaxEvent
+from app.services import crypto_import
 
 TODAY = date(2026, 10, 24)
 FIXTURES = Path(__file__).parent / "fixtures" / "crypto"
@@ -299,3 +300,101 @@ def test_kraken_trades_new_pair_spelling_and_other_fiat() -> None:
     assert "USD" in r.ignored[0].reason and "illisible" in r.ignored[1].reason
     with pytest.raises(ImportFormatError, match="CSV illisible"):
         cc.parse(b'User_ID,UTC_Time,Account,Operation,Coin,Change,Remark\n1,"' + b"x" * 200_000 + b'"\n')
+
+
+# ------------------------------------------------------------------ retours de relecture
+BINANCE_HEAD = "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark\n"
+
+
+def test_french_spreadsheet_reads_its_comma_as_decimal() -> None:
+    assert cc.number("0,006", comma=True) == Decimal("0.006") and cc.number("-1\u202f234,56", comma=True) == Decimal(
+        "-1234.56"
+    )
+    assert cc.number("1.234,56") == cc.number("1,234.56", comma=True) == Decimal("1234.56")
+    assert cc.number("0,006") is None and cc.number("12,34") is None, "sans contexte, une virgule n'est pas devinée"
+    assert cc.number("1,234") == Decimal(1234) and cc.number("1,2,3") is None
+    data = (
+        "User_ID;UTC_Time;Account;Operation;Coin;Change;Remark\n"
+        "1;2026-01-16 11:00:00;Spot;Transaction Spend;EUR;-300,00;\n"
+        "1;2026-01-16 11:00:00;Spot;Transaction Buy;BTC;0,006;\n"
+    )
+    r = cc.parse(data.encode())
+    assert [(m.kind, m.amount_cents, m.quantity) for m in r.movements] == [("acquisition", 30_000, Decimal("0.006"))]
+
+
+def test_binance_fee_in_bnb_leaves_the_trade_readable() -> None:
+    data = BINANCE_HEAD + (
+        "1,2026-01-16 11:00:00,Spot,Transaction Spend,EUR,-300,\n"
+        "1,2026-01-16 11:00:00,Spot,Transaction Buy,BTC,0.006,\n"
+        "1,2026-01-16 11:00:00,Spot,Transaction Fee,BNB,-0.0005,\n"
+        "1,2026-05-20 09:00:00,Spot,Transaction Sold,BTC,-0.006,\n"
+        "1,2026-05-20 09:00:00,Spot,Transaction Revenue,EUR,300,\n"
+        "1,2026-05-20 09:00:00,Spot,Transaction Fee,BNB,-0.0005,\n"
+    )
+    r = cc.parse(data.encode())
+    assert [(m.kind, m.asset, m.amount_cents, m.quantity) for m in r.movements] == [
+        ("acquisition", "BTC", 30_000, Decimal("0.006")),
+        ("cession", "BTC", 30_000, Decimal("0.006")),
+    ]
+    assert [(i.line, i.reason) for i in r.ignored] == [(4, cc.CRYPTO_FEE), (7, cc.CRYPTO_FEE)]
+
+
+def test_kraken_pair_ending_in_z_keeps_its_asset() -> None:
+    assert cc._split_pair("XTZEUR") == ("XTZ", "EUR") and cc._split_pair("XTZUSD") == ("XTZ", "USD")
+    assert cc._split_pair("XXBTZEUR") == ("BTC", "EUR") and cc._split_pair("XETHXXBT") == ("ETH", "BTC")
+    assert cc._split_pair("USDTZUSD") == ("USDT", "USD") and cc._split_pair("BLZEUR") == ("BLZ", "EUR")
+    data = (
+        b"txid,ordertxid,pair,time,type,ordertype,price,cost,fee,vol,margin,misc,ledgers\n"
+        b"TZ,OZ,XTZEUR,2026-04-01 10:00:00,buy,market,1,10,0.02,10,0,,\n"
+    )
+    assert [m.asset for m in cc.parse(data).movements] == ["XTZ"]
+
+
+def test_coinbase_older_report_still_reads_its_fees() -> None:
+    data = (
+        b"Timestamp,Transaction Type,Asset,Quantity Transacted,Spot Price Currency,Spot Price at Transaction,Subtotal,"
+        b"Total (inclusive of fees),Fees,Notes\n"
+        b"2026-04-03T10:00:00Z,Sell,BTC,0.001,EUR,60000,60,59.64,0.36,\n"
+        b"2026-04-04T10:00:00Z,Buy,BTC,0.001,EUR,60000,,60.36,0.36,\n"
+    )
+    r = cc.parse(data)
+    assert [(m.kind, m.amount_cents, m.fees_cents) for m in r.movements] == [
+        ("cession", 6_000, 36),
+        ("acquisition", 6_000, 36),  # sans sous-total : total − frais
+    ]
+
+
+def test_amounts_out_of_bounds_are_set_aside(c: TestClient, db: Session) -> None:
+    huge = BINANCE_HEAD + "1,2026-01-16 11:00:00,Spot,Transaction Spend,EUR,-999999999999999,\n" * 100
+    huge += "1,2026-01-16 11:00:00,Spot,Transaction Buy,BTC,1,\n"
+    one = BINANCE_HEAD + "1,2026-01-17 11:00:00,Spot,Transaction Spend,EUR,-999999999999,\n"
+    one += "1,2026-01-17 11:00:00,Spot,Transaction Buy,BTC,1,\n"
+    for data in (huge, one):
+        r = send(c, "b.csv", data.encode(), confirm=True)
+        assert r.status_code == 201, r.text
+        assert r.json()["result"]["created"] == 0
+        assert r.json()["result"]["ignored"][-1]["reason"].startswith("Montant hors bornes")
+    assert db.scalars(select(CryptoTaxEvent)).all() == []
+
+
+def test_values_nested_without_end_are_refused(c: TestClient) -> None:
+    for raw in ("[" * 100_000, "{" + '"a":[' * 100_000, "null"):
+        r = c.post(
+            "/api/crypto/import/preview",
+            files={"file": ("b.csv", export("binance.csv"), "text/csv")},
+            data={"values": raw},
+        )
+        assert r.status_code == 422 and "illisibles" in r.json()["detail"]
+
+
+def test_same_export_imported_twice_at_once_answers_cleanly(
+    c: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = export("kraken_ledgers.csv")
+    assert send(c, "l.csv", data, confirm=True).status_code == 201
+    created = len(db.scalars(select(CryptoTaxEvent)).all())
+    monkeypatch.setattr(crypto_import, "_known", lambda *_: set())  # l'autre requête n'avait encore rien écrit
+    r = send(c, "l.csv", data, confirm=True)
+    assert r.status_code == 422 and "vient d'être importé" in r.json()["detail"]
+    db.expire_all()
+    assert len(db.scalars(select(CryptoTaxEvent)).all()) == created

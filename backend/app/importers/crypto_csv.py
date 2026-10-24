@@ -7,8 +7,9 @@ Garanties
 * Rien d'identifiant n'est gardé : ni User_ID (Binance), ni identifiant de transaction, ni adresse, ni note, ni
   les lignes d'en-tête de Coinbase (ton nom). Chaque ligne laisse une empreinte (SHA-256) qui suffit à écarter
   les doublons d'un import à l'autre.
-* Taille et lignes bornées ; nombres lus en ``Decimal`` sous une forme stricte (une cellule « =SOMME(…) » n'est
-  qu'un texte illisible) ; heures UTC ramenées à Paris pour l'année fiscale.
+* Taille, lignes et montants bornés ; nombres lus en ``Decimal`` sous une forme stricte (une cellule « =SOMME(…) »
+  n'est qu'un texte illisible, « 0,006 » n'est jamais lu 6) ; un export ressaisi par un tableur français
+  (séparateur « ; ») lit sa virgule comme décimale ; heures UTC ramenées à Paris pour l'année fiscale.
 * Échanger une crypto contre une autre (stablecoins compris) n'est pas imposable (art. 150 VH bis du CGI) : ces
   lignes sont écartées, avec leur raison.
 """
@@ -24,12 +25,14 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
+from functools import partial
 from zoneinfo import ZoneInfo
 
 from app.importers.base import ImportFormatError
 
 MAX_BYTES = 5_000_000
 MAX_ROWS = 20_000
+MAX_CENTS = 100_000_000_000  # mêmes bornes que la saisie à la main
 PARIS = ZoneInfo("Europe/Paris")
 PLATFORMS = {"kraken": "Kraken", "binance": "Binance", "coinbase": "Coinbase"}
 
@@ -101,17 +104,34 @@ def text(cell: str | None, limit: int = 60) -> str:
     return " ".join(_CTRL.sub(" ", cell or "").split()).lstrip("=+-@ ")[:limit]
 
 
-def number(cell: str | None) -> Decimal | None:
-    """Un nombre écrit à la manière des exports (« 0.00120000 », « -€1,234.56 », « 1E-8 ») ; None sinon."""
-    raw = (cell or "").strip().replace(" ", "").replace(" ", "")
+def _plain(raw: str, comma: bool) -> str | None:
+    """« 1,234.56 », « 1.234,56 », ou « 0,006 » quand la virgule est décimale → « 1234.56 » ; None si ambigu."""
+    if "," in raw and "." in raw:
+        dec = "," if raw.rfind(",") > raw.rfind(".") else "."
+    else:
+        dec = "," if comma and "," in raw else "."
+    sep = "." if dec == "," else ","
+    whole, _, frac = raw.rpartition(dec) if dec in raw else (raw, "", "")
+    if sep in whole:  # des milliers : des groupes de trois chiffres, sinon « 0,006 » deviendrait 6
+        if not re.fullmatch(rf"[1-9]\d{{0,2}}(?:{re.escape(sep)}\d{{3}})+", whole):
+            return None
+        whole = whole.replace(sep, "")
+    return f"{whole}.{frac}" if dec in raw else whole
+
+
+def number(cell: str | None, *, comma: bool = False) -> Decimal | None:
+    """Un nombre écrit à la manière des exports (« 0.00120000 », « -€1,234.56 », « 1E-8 ») ; None sinon. Avec
+    ``comma``, la virgule est décimale (« -300,00 », « 1 234,56 »)."""
+    raw = (cell or "").strip().replace(" ", "").replace(" ", "").replace("\u202f", "")  # espace fine des milliers
     neg = raw.startswith(("-", "("))
-    raw = raw.strip("()").lstrip("+-").lstrip("€$£").lstrip("+-").replace(",", "")
+    raw = raw.strip("()").lstrip("+-").lstrip("€$£").lstrip("+-")
     for sym in ("EUR", "USD", "GBP"):
         raw = raw.removesuffix(sym)
-    if not _NUMBER.fullmatch(raw):
+    plain = _plain(raw, comma)
+    if plain is None or not _NUMBER.fullmatch(plain):
         return None
     try:
-        value = Decimal(raw)
+        value = Decimal(plain)
     except InvalidOperation:
         return None
     if not value.is_finite() or abs(value) > Decimal("1e15"):
@@ -175,7 +195,7 @@ _SIGNATURES: tuple[tuple[str, frozenset[str]], ...] = (
 )
 
 
-def _rows(data: bytes) -> list[list[str]]:
+def _rows(data: bytes) -> tuple[list[list[str]], str]:
     if len(data) > MAX_BYTES:
         raise ImportFormatError("Fichier trop volumineux (5 Mo au plus)")
     content = _decode(data)
@@ -191,12 +211,12 @@ def _rows(data: bytes) -> list[list[str]]:
                 raise ImportFormatError(f"Fichier trop long (plus de {MAX_ROWS} lignes)")
     except csv.Error:
         raise ImportFormatError("CSV illisible (cellule démesurée ou guillemets mal fermés)") from None
-    return rows
+    return rows, delim
 
 
 def parse(data: bytes) -> CryptoImport:
     """Reconnaît la plateforme à ses en-têtes, puis lit le fichier."""
-    rows = _rows(data)
+    rows, delim = _rows(data)
     for i, row in enumerate(rows[:15]):
         cells = {_norm(c) for c in row}
         for fmt, needed in _SIGNATURES:
@@ -211,7 +231,7 @@ def parse(data: bytes) -> CryptoImport:
                     raise ImportFormatError(f"Fichier trop long (plus de {MAX_ROWS} lignes)")
                 reader = {"kraken_ledgers": _kraken_ledgers, "kraken_trades": _kraken_trades,
                           "binance": _binance, "coinbase": _coinbase}[fmt]  # fmt: skip
-                out = reader(body)
+                out = reader(body, delim == ";")  # « ; » : un tableur français, sa virgule est décimale
                 out.rows = len(body)
                 return out
     raise ImportFormatError(
@@ -258,6 +278,9 @@ def _settle(platform: str, g: _Group, out: CryptoImport) -> None:
     if amount <= 0:
         out.ignored.append(Ignored(g.line, "Montant en euros nul (poussière) : rien à noter"))
         return
+    if amount > MAX_CENTS:
+        out.ignored.append(Ignored(g.line, "Montant hors bornes : à vérifier à la main"))
+        return
     if fees < 0 or fees > amount:
         out.ignored.append(Ignored(g.line, "Frais illisibles ou supérieurs au montant : à vérifier à la main"))
         return
@@ -295,7 +318,8 @@ def _kraken_kind(kind: str) -> str | None:
     return None
 
 
-def _kraken_ledgers(body: Sequence[tuple[int, dict[str, str]]]) -> CryptoImport:
+def _kraken_ledgers(body: Sequence[tuple[int, dict[str, str]]], comma: bool = False) -> CryptoImport:
+    num = partial(number, comma=comma)
     out = CryptoImport("kraken", "kraken_ledgers")
     groups: dict[str, _Group] = {}
     for line, row in body:
@@ -308,7 +332,7 @@ def _kraken_ledgers(body: Sequence[tuple[int, dict[str, str]]]) -> CryptoImport:
                 Ignored(line, _kraken_kind(kind) or f"Type Kraken non reconnu (« {kind} ») : à vérifier")
             )
             continue
-        at, amount, fee = when(row.get("time")), number(row.get("amount")), number(row.get("fee") or "0")
+        at, amount, fee = when(row.get("time")), num(row.get("amount")), num(row.get("fee") or "0")
         ref = text(row.get("refid"), 64)
         if at is None or amount is None or fee is None or not ref:
             out.ignored.append(Ignored(line, "Ligne illisible (date, montant ou référence)"))
@@ -333,24 +357,27 @@ def _split_pair(pair: str) -> tuple[str, str] | None:
         return asset(base, kraken=True), asset(quote, kraken=True)
     p = pair.upper().replace("-", "")
     for quote in sorted(_KRAKEN.keys() | FIAT | {"XBT", "ETH", "USDT", "USDC", "DAI"}, key=len, reverse=True):
-        if p.endswith(quote) and len(p) > len(quote) + 1:
+        # ZEUR, XXBT : seulement derrière une base de quatre lettres (XXBTZEUR) — XTZEUR reste du Tezos en euros
+        legacy = len(quote) == 4 and quote[0] in "XZ" and quote in _KRAKEN
+        if p.endswith(quote) and len(p) - len(quote) >= (4 if legacy else 2):
             return asset(p[: -len(quote)], kraken=True), asset(quote, kraken=True)
     return None
 
 
-def _kraken_trades(body: Sequence[tuple[int, dict[str, str]]]) -> CryptoImport:
+def _kraken_trades(body: Sequence[tuple[int, dict[str, str]]], comma: bool = False) -> CryptoImport:
+    num = partial(number, comma=comma)
     out = CryptoImport("kraken", "kraken_trades")
     for line, row in body:
         side = text(row.get("type"), 8).lower()
         pair = _split_pair(text(row.get("pair"), 24))
         at, cost, fee, vol = (
             when(row.get("time")),
-            number(row.get("cost")),
-            number(row.get("fee") or "0"),
-            number(row.get("vol")),
+            num(row.get("cost")),
+            num(row.get("fee") or "0"),
+            num(row.get("vol")),
         )
         ref = text(row.get("txid"), 64)
-        if number(row.get("margin") or "0"):
+        if num(row.get("margin") or "0"):
             out.ignored.append(Ignored(line, DERIVATIVES))
             continue
         if (
@@ -385,6 +412,7 @@ _BINANCE_TRADES = {
     "auto-invest transaction", "binance card spending", "p2p trading", "convert",
 }  # fmt: skip
 _BINANCE_FEES = {"fee", "transaction fee"}
+CRYPTO_FEE = "Frais payés en crypto (BNB…) : sans cours, Bank ne les chiffre pas — ajoute-les à la main au 2086"
 _BINANCE_WORDS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("futures", "margin", "realized profit", "funding fee", "insurance", "liquidation", "options"), DERIVATIVES),
     (("withdraw",), SEND),
@@ -394,7 +422,8 @@ _BINANCE_WORDS: tuple[tuple[tuple[str, ...], str], ...] = (
 )
 
 
-def _binance(body: Sequence[tuple[int, dict[str, str]]]) -> CryptoImport:
+def _binance(body: Sequence[tuple[int, dict[str, str]]], comma: bool = False) -> CryptoImport:
+    num = partial(number, comma=comma)
     out = CryptoImport("binance", "binance")
     trades: list[tuple[int, datetime, str, str, Decimal]] = []
     for line, row in body:  # User_ID et Remark ne sont jamais lus
@@ -403,7 +432,7 @@ def _binance(body: Sequence[tuple[int, dict[str, str]]]) -> CryptoImport:
             reason = next((r for words, r in _BINANCE_WORDS if any(w in op for w in words)), None)
             out.ignored.append(Ignored(line, reason or f"Opération Binance non reconnue (« {op} ») : à vérifier"))
             continue
-        at, change, code = when(row.get("utc time")), number(row.get("change")), asset(row.get("coin"))
+        at, change, code = when(row.get("utc time")), num(row.get("change")), asset(row.get("coin"))
         if at is None or change is None or not code:
             out.ignored.append(Ignored(line, "Ligne illisible (date, monnaie ou montant)"))
             continue
@@ -423,7 +452,8 @@ def _binance(body: Sequence[tuple[int, dict[str, str]]]) -> CryptoImport:
     )
     for at, legs in sorted(by_time.items()):
         g = _Group(legs[0][0], at, raws[legs[0][0]])
-        for _, _, op, code, change in legs:
+        crypto_fees: list[tuple[int, str, Decimal]] = []
+        for line, _, op, code, change in legs:
             if code == "EUR":
                 if op in _BINANCE_FEES:
                     g.eur_fees -= change
@@ -431,6 +461,15 @@ def _binance(body: Sequence[tuple[int, dict[str, str]]]) -> CryptoImport:
                     g.eur += change
             elif code in FIAT:
                 g.fiat.add(code)
+            elif op in _BINANCE_FEES:
+                crypto_fees.append((line, code, change))
+            else:
+                g.crypto[code] += change
+        for line, code, change in crypto_fees:
+            if code in g.crypto:  # frais pris sur la crypto achetée ou vendue : déduits de sa quantité
+                g.crypto[code] += change
+            elif g.eur:  # payés à part (BNB) : l'opération se lit sur ses jambes, les frais restent à noter
+                out.ignored.append(Ignored(line, CRYPTO_FEE))
             else:
                 g.crypto[code] += change
         _settle("binance", g, out)
@@ -449,7 +488,8 @@ _COINBASE_WORDS: tuple[tuple[tuple[str, ...], str], ...] = (
 )
 
 
-def _coinbase(body: Sequence[tuple[int, dict[str, str]]]) -> CryptoImport:
+def _coinbase(body: Sequence[tuple[int, dict[str, str]]], comma: bool = False) -> CryptoImport:
+    num = partial(number, comma=comma)
     out = CryptoImport("coinbase", "coinbase")
     cols = ("timestamp", "transaction type", "asset", "quantity transacted", "subtotal")
     raws = _ranked((line, "|".join(_CTRL.sub(" ", row.get(k) or "").strip()[:40] for k in cols)) for line, row in body)
@@ -461,9 +501,10 @@ def _coinbase(body: Sequence[tuple[int, dict[str, str]]]) -> CryptoImport:
             continue
         code = asset(row.get("asset"))
         currency = asset(row.get("price currency") or row.get("spot price currency"))
-        at, qty = when(row.get("timestamp")), number(row.get("quantity transacted"))
-        subtotal, fees = number(row.get("subtotal")), number(row.get("fees and/or spread") or "0")
-        total = number(row.get("total (inclusive of fees and/or spread)"))
+        at, qty = when(row.get("timestamp")), num(row.get("quantity transacted"))
+        # Les anciens rapports (années passées) disent « Fees » et « Total (inclusive of fees) ».
+        subtotal, fees = num(row.get("subtotal")), num(row.get("fees and/or spread") or row.get("fees") or "0")
+        total = num(row.get("total (inclusive of fees and/or spread)") or row.get("total (inclusive of fees)"))
         if at is None or qty is None or not code or fees is None or (subtotal is None and total is None):
             out.ignored.append(Ignored(line, "Ligne illisible (date, quantité ou montant)"))
             continue

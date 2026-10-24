@@ -10,6 +10,7 @@ from datetime import date
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.domain import crypto as dc
@@ -155,7 +156,11 @@ def commit(db: Session, data: bytes, *, actor: str, today: date, values: Any = N
                 import_key=r["key"],
             )
         )
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:  # le même export importé au même instant (deux onglets, une requête rejouée)
+        db.rollback()
+        raise dc.CryptoError("Cet export vient d'être importé : relance l'aperçu") from None
     out["created"] = len(create)
     audit.record(
         db,
