@@ -25,6 +25,7 @@ from app.models import (
     BankConnection,
     ChannelLink,
     ConnectionStatus,
+    Consent,
     CryptoWallet,
     EnergyConnection,
     ExchangeKey,
@@ -39,7 +40,7 @@ from app.models import (
     WorkPlan,
 )
 from app.security import audit
-from app.services import advisor, consents
+from app.services import advisor, consents, push
 from app.services.settings_store import get_setting, set_setting
 
 KEY = "start_journey"
@@ -248,6 +249,24 @@ def _backup_verified(db: Session) -> bool:
     return last == "ok"
 
 
+def _accord_settled(db: Session, purpose: str) -> bool:
+    """Tu as répondu au texte actuel, ou tu as laissé tel quel un accord actif par défaut (la veille) : rien à
+    trancher. Un accord par défaut dont le texte a changé depuis ta réponse redevient à trancher."""
+    if consents.decided(db, purpose):
+        return True
+    return bool(consents.PURPOSES[purpose]["default"]) and db.get(Consent, purpose) is None
+
+
+def _set_up_before(db: Session) -> bool:
+    """Des traces d'une mise en route d'avant le parcours, même sans argent : priorités, accords, réponses de Ma
+    situation, comptes (même à 0 €), papiers, messageries, connecteurs."""
+    if has_money_data(db) or get_setting(db, "opportunity_priorities"):
+        return True
+    columns: tuple[Any, ...] = (Consent.purpose, Account.id, VaultDocument.id, ChannelLink.id, LlmProvider.id)
+    columns += (EnergyConnection.id, MailAccount.id, WorkPlan.id, BankConnection.id, CryptoWallet.id)
+    return any(_any(db, col.is_not(None)) for col in columns) or bool(advisor.plain_answers(db))
+
+
 def _eb_bank(db: Session) -> bool:
     return _any(db, BankConnection.status == ConnectionStatus.ACTIVE, BankConnection.provider.is_(None))
 
@@ -255,10 +274,12 @@ def _eb_bank(db: Session) -> bool:
 def facts(db: Session, state: dict[str, Any]) -> dict[str, bool]:
     """Chaque clé (étape, élément de la liste, section de Connecteurs) → fait ou non, maintenant."""
     linked = _any(db, ChannelLink.revoked_at.is_(None))
+    # Un appareil Web Push est aussi un ChannelLink : il compte pour « être prévenu », pas pour Messageries.
+    chat = _any(db, ChannelLink.revoked_at.is_(None), ChannelLink.platform != push.PLATFORM)
     return {
         "banque": has_money_data(db),
         "foyer": _household_done(db),
-        "accords": all(consents.decided(db, p) for p in consents.PUBLIC_PURPOSES),
+        "accords": all(_accord_settled(db, p) for p in consents.PUBLIC_PURPOSES),
         "papier": _any(db, VaultDocument.id.is_not(None)),
         "priorites": bool(get_setting(db, "opportunity_priorities")),
         "prevenir": linked,
@@ -277,7 +298,7 @@ def facts(db: Session, state: dict[str, Any]) -> dict[str, bool]:
         "etat": _any(db, OfficialFact.id.is_not(None)),
         "recherche": _any(db, SearchProvider.id.is_not(None)),
         "agents": _any(db, AgentToken.revoked_at.is_(None)),
-        "messageries": linked,
+        "messageries": chat,
     }
 
 
@@ -291,8 +312,9 @@ def _status(state: dict[str, Any]) -> str:
 
 
 def _migrate(db: Session, state: dict[str, Any], now: datetime) -> dict[str, Any]:
-    """Compte d'avant le parcours : s'il a déjà une banque ou des opérations, on ne lui impose pas l'accueil."""
-    if state or not has_money_data(db):
+    """Compte d'avant le parcours : s'il a déjà été mis en route (banque, opérations, mais aussi priorités, accords,
+    réponses, papiers…), on ne lui impose pas l'accueil plein écran ; la liste « Bien démarrer » suffit."""
+    if state or not _set_up_before(db):
         return state
     state = {"started_at": _iso(now), "finished_at": _iso(now), "skipped": [], "current": None}
     _save_on_read(db, state)

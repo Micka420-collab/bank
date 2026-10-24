@@ -99,6 +99,7 @@ export function StartChecklist() {
 
   const shown = todo.slice(0, SHOWN);
   const rest = [...todo.slice(SHOWN), ...done];
+  const restLabel = moreLabel(todo.length - shown.length, done.length);
   const journey = data.journey;
   return (
     <section className="card start-card" aria-labelledby="start-title">
@@ -119,7 +120,7 @@ export function StartChecklist() {
         <>
           {open && <ItemList items={rest} />}
           <button type="button" className="btn link start-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-            {open ? "Voir moins" : `Voir les ${rest.length} autres`}
+            {open ? "Voir moins" : restLabel}
           </button>
         </>
       )}
@@ -143,6 +144,14 @@ export function StartChecklist() {
       {error && <p className="error" role="alert">{error}</p>}
     </section>
   );
+}
+
+/** « Voir 1 autre à faire · 4 faits » : ce qui reste et ce qui est fait, jamais additionnés en « 5 autres ». */
+export function moreLabel(todo: number, done: number): string {
+  const parts = [];
+  if (todo > 0) parts.push(todo === 1 ? "1 autre à faire" : `${todo} autres à faire`);
+  if (done > 0) parts.push(done === 1 ? "1 fait" : `${done} faits`);
+  return `Voir ${parts.join(" · ")}`;
 }
 
 function ItemList({ items }: { items: StartItem[] }) {

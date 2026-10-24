@@ -221,7 +221,8 @@ describe("première ouverture", () => {
     await act(async () => { host.querySelector("form")!.requestSubmit(); });
     await flush();
     await flush();
-    const bodies = calls.map((c) => [c.url, c.init?.method, c.init?.body ? JSON.parse(String(c.init.body)) : null]);
+    // (/api/banks n'est lu que pour dire honnêtement ce que demande la carte « Connecter ma banque ».)
+    const bodies = calls.filter((c) => c.url !== "/api/banks").map((c) => [c.url, c.init?.method, c.init?.body ? JSON.parse(String(c.init.body)) : null]);
     expect(bodies).toEqual([
       ["/api/accounts", "POST", { name: "Compte courant", kind: "checking", balance_cents: 64000 }],
       ["/api/onboarding/net_monthly_income", "PUT", { value: 190000 }],

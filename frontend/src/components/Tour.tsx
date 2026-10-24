@@ -13,7 +13,12 @@ export const TOUR = [
   { key: "plus", tab: "Plus", text: "Épargne, réglages, connecteurs et messageries : tout le reste est ici." },
 ] as const;
 
-export function Tour({ onFinish, busy = false }: { onFinish: () => void; busy?: boolean }) {
+export function Tour({ onFinish, onSkip, skipLabel = "Passer la visite", busy = false }: {
+  onFinish: () => void;
+  onSkip?: () => void; // absent au dernier écran : « Voir mon tableau de bord » fait déjà la même chose
+  skipLabel?: string;
+  busy?: boolean;
+}) {
   const [i, setI] = useState(0);
   const heading = useRef<HTMLHeadingElement>(null);
   const moved = useRef(false);
@@ -33,12 +38,12 @@ export function Tour({ onFinish, busy = false }: { onFinish: () => void; busy?: 
     <div className="tour">
       <div className="tour-screen" key={screen.key}>
         <TourPreview which={screen.key} />
-        <h2 ref={heading} tabIndex={-1} className="tour-title">{screen.tab}</h2>
+        {/* La position est dans le titre, qui reçoit le focus : une seule lecture, pas de seconde annonce. */}
+        <h2 ref={heading} tabIndex={-1} className="tour-title">{screen.tab}<span className="sr-only">, écran {i + 1} sur {TOUR.length}</span></h2>
         <p className="tour-text">{screen.text}</p>
         {last && <p className="tour-ask"><Icon name="spark" /> Une question ? Demande à Bank, en bas à droite.</p>}
         <TabIsland active={i} />
       </div>
-      <p className="sr-only" aria-live="polite">Écran {i + 1} sur {TOUR.length} : {screen.tab}</p>
       <ol className="tour-dots" aria-label="Écrans de la visite">
         {TOUR.map((s, k) => (
           <li key={s.key} aria-current={k === i ? "step" : undefined}>
@@ -54,7 +59,10 @@ export function Tour({ onFinish, busy = false }: { onFinish: () => void; busy?: 
         ) : (
           <button type="button" className="btn lg" onClick={() => go(i + 1)}>Suivant <Icon name="arrow" /></button>
         )}
-        {i > 0 && <button type="button" className="btn quiet lg" onClick={() => go(i - 1)}>Précédent</button>}
+      </div>
+      <div className="tour-foot">
+        {i > 0 && <button type="button" className="btn link" onClick={() => go(i - 1)}><Icon name="back" /> Précédent</button>}
+        {!last && onSkip && <button type="button" className="btn ghost" disabled={busy} onClick={onSkip}>{skipLabel}</button>}
       </div>
     </div>
   );

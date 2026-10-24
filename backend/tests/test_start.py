@@ -169,13 +169,14 @@ def test_each_done_rule_reads_the_real_tables(
 
 
 def test_household_needs_the_five_answers(auth_client: TestClient) -> None:
+    auth_client.post("/api/start/steps/foyer", json={"action": "current"})  # pendant le parcours
     answers = {"employment": "cdi_prive", "net_monthly_income": 215_000, "household": "seul", "dependents": 0}
     for q, v in answers.items():
         assert auth_client.put(f"/api/onboarding/{q}", json={"value": v}).status_code == 200
     assert step(overview(auth_client), "foyer")["done"] is False
     auth_client.put("/api/onboarding/housing_status", json={"value": "locataire"})
     data = overview(auth_client)
-    assert step(data, "foyer")["done"] is True and data["journey"]["current"] == "banque"
+    assert step(data, "foyer")["done"] is True and data["journey"]["current"] == "accords"
 
 
 def test_a_failed_verification_after_a_good_one_is_not_a_verified_backup(app: Any, auth_client: TestClient) -> None:
@@ -241,6 +242,64 @@ def test_an_existing_account_is_never_forced_through_the_journey(app: Any, auth_
     # Et c'est noté : même si les opérations disparaissaient, l'accueil ne s'imposerait pas.
     with app.state.sessionmaker() as db:
         assert get_setting(db, start.KEY)["finished_at"]
+
+
+def _priorites_et_accord(db: Session) -> None:
+    _priorites(db)
+    consents.set_consent(db, "baremes", True, actor="micka")
+
+
+@pytest.mark.parametrize(
+    "seed",
+    [
+        _priorites_et_accord,
+        lambda db: db.add(Account(name="Livret", balance_cents=0)),
+        _papier,
+        _channel,
+    ],
+)
+def test_an_account_set_up_without_money_data_is_not_sent_into_the_journey(
+    app: Any, auth_client: TestClient, seed: Callable[[Session], None]
+) -> None:
+    # L'ancien accueil (« Je connecterai mes comptes plus tard ») finissait par les priorités et les accords.
+    write(app, seed)
+    data = overview(auth_client)
+    assert data["journey"]["status"] == "finished"
+    assert data["checklist"]["visible"] is True
+
+
+def test_the_journey_state_is_not_migrated_once_started(app: Any, auth_client: TestClient) -> None:
+    auth_client.post("/api/start/steps/banque", json={"action": "current"})
+    write(app, _priorites)
+    assert overview(auth_client)["journey"]["status"] == "in_progress"
+
+
+def test_switching_on_the_five_others_one_by_one_finishes_the_consents_step(auth_client: TestClient) -> None:
+    # La veille est active par défaut : la laisser telle quelle n'est pas une question en suspens.
+    for purpose in ("baremes", "tempo", "calendar", "home_value", "meteo"):
+        assert auth_client.put(f"/api/consents/{purpose}", json={"granted": True}).status_code == 200
+    data = overview(auth_client)
+    assert step(data, "accords")["done"] is True
+    assert {p["purpose"]: p["decided"] for p in data["public_consents"]}["watch"] is False
+
+
+def test_saying_no_counts_but_an_untouched_switch_does_not(auth_client: TestClient) -> None:
+    for purpose in ("baremes", "tempo", "calendar", "home_value"):
+        auth_client.put(f"/api/consents/{purpose}", json={"granted": False})
+    assert step(overview(auth_client), "accords")["done"] is False  # météo n'a pas de réponse
+    auth_client.put("/api/consents/meteo", json={"granted": False})
+    assert step(overview(auth_client), "accords")["done"] is True
+
+
+def test_a_push_device_is_not_a_linked_messaging_app(app: Any, auth_client: TestClient) -> None:
+    write(
+        app, lambda db: db.add(ChannelLink(platform="webpush", user_index="w", user_ref="1", chat_ref="1", label="Tél"))
+    )
+    data = overview(auth_client)
+    assert step(data, "prevenir")["done"] is True
+    assert {c["key"]: c["linked"] for c in data["connectors"]}["messageries"] is False
+    write(app, _channel)
+    assert {c["key"]: c["linked"] for c in overview(auth_client)["connectors"]}["messageries"] is True
 
 
 def test_state_changes_require_csrf(auth_client: TestClient) -> None:

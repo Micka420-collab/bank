@@ -8,7 +8,16 @@ import type { PublicConsent, StartStepKey, StartView } from "./api";
 import { ConsentGroups, groupConsents } from "./components/ConsentGroups";
 import { Journey, nextAfter } from "./components/Journey";
 import { StartChecklist } from "./components/StartChecklist";
+import { moreLabel } from "./components/StartChecklist";
 import { ToastProvider } from "./components/ui";
+
+// Les notifications du navigateur, pilotables : jsdom n'a ni service worker ni PushManager.
+const push = vi.hoisted(() => ({ supported: false, permission: "default" as NotificationPermission, enable: null as null | (() => Promise<unknown>) }));
+vi.mock("./push", () => ({
+  pushSupported: () => push.supported,
+  pushPermission: () => push.permission,
+  enablePush: () => (push.enable ? push.enable() : Promise.reject(new Error("indisponible"))),
+}));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -191,7 +200,10 @@ describe("le parcours", () => {
     const h1 = host.querySelector("h1")!;
     expect(h1.textContent).toBe("Ton foyer");
     expect(document.activeElement).toBe(h1);
-    expect(host.querySelector("[aria-live='polite'].sr-only")?.textContent).toBe("Étape passée : Ta banque.");
+    // Le titre qui reçoit le focus est décrit par la confirmation : lue d'un trait, pas d'annonce coupée.
+    const flash = document.getElementById(h1.getAttribute("aria-describedby")!);
+    expect(flash?.textContent).toContain("Étape passée : Ta banque.");
+    expect(document.querySelector(".toast")).toBeNull();
     expect(host.querySelector(".journey-progress li")?.classList.contains("is-skipped")).toBe(true);
   });
 
@@ -209,6 +221,20 @@ describe("le parcours", () => {
     expect(posted("/api/start/finish")).toEqual([]);
   });
 
+  it("Échap dans un champ sert au champ : le parcours ne se ferme pas", async () => {
+    server.status = "in_progress";
+    window.location.hash = "#/bienvenue/papier";
+    serve();
+    const onExit = vi.fn();
+    await journeyAt(onExit);
+    await settle();
+    const field = document.createElement("input");
+    host.querySelector(".journey-card")!.appendChild(field);
+    field.focus();
+    await act(async () => { field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    expect(onExit).not.toHaveBeenCalled();
+  });
+
   it("the tour never advances on its own; its end finishes the journey and celebrates", async () => {
     server.status = "in_progress";
     server.done = new Set(["banque"]);
@@ -217,20 +243,47 @@ describe("le parcours", () => {
     const onExit = vi.fn();
     await journeyAt(onExit);
     await settle();
-    expect(host.querySelector(".tour-title")?.textContent).toBe("Jour");
+    expect(host.querySelector(".tour-title")?.textContent).toBe("Jour, écran 1 sur 5");
     await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
-    expect(host.querySelector(".tour-title")?.textContent).toBe("Jour");
+    expect(host.querySelector(".tour-title")?.textContent).toBe("Jour, écran 1 sur 5");
     await click("Suivant");
-    expect(host.querySelector(".tour-title")?.textContent).toBe("Opérations");
+    expect(host.querySelector(".tour-title")?.textContent).toBe("Opérations, écran 2 sur 5");
+    expect(host.querySelector(".tour [aria-live], .journey [aria-live]")).toBeNull(); // la position est dans le titre, pas annoncée deux fois
     expect(document.activeElement).toBe(host.querySelector(".tour-title"));
     expect(host.querySelector(".tour-island")?.getAttribute("aria-label")).toContain("Opérations");
     for (let i = 0; i < 3; i++) await click("Suivant");
     expect(host.textContent).toContain("Demande à Bank, en bas à droite");
+    // Dernier écran : une action, « Précédent » en lien, plus de « Passer la visite » qui ferait la même chose.
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent?.includes("Passer la visite"))).toBe(false);
+    expect(button("Précédent").classList.contains("link")).toBe(true);
     await click("Voir mon tableau de bord");
     expect(posted("/api/start/finish")).toEqual([{ tour_done: true }]);
     expect(onExit).toHaveBeenCalled();
+    // Rien d'autre n'a été fait pendant ce passage : regarder la visite ne se fête pas.
+    expect(document.querySelector(".celebrate")).toBeNull();
+  });
+
+  it("the end celebrates only the steps done during this pass, and says what is left", async () => {
+    server.status = "in_progress";
+    window.location.hash = "#/bienvenue/priorites";
+    serve({
+      "/api/opportunities/top": () => ({ opportunities: [], value: {}, priorities: ["reduire"] }),
+      "/api/opportunities/settings": () => { server.done.add("priorites"); return {}; },
+    });
+    server.skipped = new Set(["banque", "foyer", "accords", "papier", "prevenir"]);
+    const onExit = vi.fn();
+    await journeyAt(onExit);
+    await settle();
+    await click("Garder ces priorités");
+    expect(window.location.hash).toBe("#/bienvenue/visite");
+    await journeyAt(onExit);
+    await settle();
+    expect(host.textContent).toContain("Étape faite : Tes priorités.");
+    await click("Passer la visite");
+    expect(onExit).toHaveBeenCalled();
     expect(document.querySelector(".celebrate")).not.toBeNull();
-    expect(host.textContent).toContain("Bank est prêt.");
+    expect(host.textContent).toContain("1 étape faite — il en reste 5, quand tu veux.");
+    expect(host.textContent).not.toContain("Bank est prêt");
   });
 
   it("skipping the tour finishes without a celebration: nothing to celebrate", async () => {
@@ -275,12 +328,43 @@ describe("tes accords", () => {
     expect(host.querySelectorAll(".consent-more")).toHaveLength(6); // texte complet replié
     expect(calls.some((c) => c.url.startsWith("/api/consents") || c.url === "/api/start/public-consents")).toBe(false);
 
-    await click("Tout activer pour les données publiques");
+    await click("Activer ces 6 accords");
     const sent = posted("/api/start/public-consents");
     expect(sent).toEqual([{ purposes: ["watch", "baremes", "tempo", "calendar", "home_value", "meteo"] }]);
     expect(calls.some((c) => c.url.startsWith("/api/consents/") && c.init?.method === "PUT")).toBe(false);
-    expect(host.textContent).toContain("6 accords donnés — modifiables dans Réglages › Confidentialité.");
+    await journeyAt();
+    await settle();
+    expect(host.querySelector(".journey-flash")?.textContent).toContain("6 accords donnés, modifiables dans Réglages › Confidentialité.");
     expect(window.location.hash).toBe("#/bienvenue/papier");
+  });
+
+  it("the count comes from the server: nothing new granted, no « 6 accords donnés »", async () => {
+    server.status = "in_progress";
+    server.consents = PUBLIC.map((c) => ({ ...c, granted: c.purpose !== "meteo", decided: true }));
+    window.location.hash = "#/bienvenue/accords";
+    serve();
+    await journeyAt();
+    await settle();
+    await click("Activer ces 6 accords");
+    await journeyAt();
+    await settle();
+    expect(host.querySelector(".journey-flash")?.textContent).toContain("1 accord donné,");
+  });
+
+  it("« Continuer avec ces choix » records each undecided switch as shown, the default-on watch included", async () => {
+    server.status = "in_progress";
+    server.consents = PUBLIC.map((c) => ({ ...c, granted: c.purpose === "watch" || c.purpose === "tempo", decided: c.purpose === "tempo" }));
+    window.location.hash = "#/bienvenue/accords";
+    serve({ "/api/consents/": () => ({}) });
+    await journeyAt();
+    await settle();
+    await click("Continuer avec ces choix");
+    const puts = calls.filter((c) => c.init?.method === "PUT").map((c) => [c.url.replace("/api/consents/", ""), JSON.parse(String(c.init?.body)).granted]);
+    expect(puts).toEqual([["watch", true], ["baremes", false], ["calendar", false], ["home_value", false], ["meteo", false]]);
+    expect(posted("/api/start/public-consents")).toEqual([]);
+    await journeyAt();
+    await settle();
+    expect(host.querySelector(".journey-flash")?.textContent).toContain("2 accords donnés sur 6");
   });
 
   it("a single switch changes only that consent", async () => {
@@ -322,7 +406,7 @@ describe("Bien démarrer", () => {
     const links = () => [...host.querySelectorAll<HTMLAnchorElement>(".start-card > .start-items a")].map((a) => [a.textContent?.includes("fait") ? "fait" : "à faire", a.getAttribute("href")]);
     expect(links()).toEqual([["à faire", "#/bienvenue/prevenir"], ["à faire", "#/reglages?section=sec-title"], ["à faire", "#/reglages?section=backup-title"]]);
     expect(host.querySelector<HTMLAnchorElement>(".start-resume")?.getAttribute("href")).toBe("#/bienvenue/prevenir");
-    await click("Voir les 5 autres");
+    await click("Voir 5 faits");
     expect(host.querySelectorAll(".start-items li.is-done")).toHaveLength(5);
     // « Pour aller plus loin » : replié, non compté.
     expect(host.querySelector<HTMLDetailsElement>(".start-more")?.open).toBe(false);
@@ -374,5 +458,50 @@ describe("Bien démarrer", () => {
     await render(<StartChecklist />);
     await settle();
     expect(host.querySelector(".start-card")).toBeNull();
+  });
+});
+
+describe("où te prévenir", () => {
+  afterEach(() => {
+    push.supported = false;
+    push.enable = null;
+  });
+
+  it("if the browser subscription fails, the push consent given by that click is taken back", async () => {
+    push.supported = true;
+    push.enable = () => Promise.reject(new Error("Permission refusée"));
+    server.status = "in_progress";
+    window.location.hash = "#/bienvenue/prevenir";
+    serve({
+      "/api/push": () => ({ public_key: "k", consent: false, asked: false, devices: [], max: 5 }),
+      "/api/consents/push": () => ({}),
+      "/api/consents": () => [{ purpose: "push", title: "Notifications", text: "t", granted: false, sends: "Un message chiffré." }],
+    });
+    await journeyAt();
+    await settle();
+    await click("Accepter et activer les notifications");
+    const puts = calls.filter((c) => c.url === "/api/consents/push" && c.init?.method === "PUT").map((c) => JSON.parse(String(c.init?.body)));
+    expect(puts).toEqual([{ granted: true }, { granted: false }]);
+    expect(host.textContent).toContain("Permission refusée");
+    expect(window.location.hash).toBe("#/bienvenue/prevenir");
+  });
+
+  it("without usable notifications, « Plus tard » is the clear action and Messageries links back", async () => {
+    server.status = "in_progress";
+    window.location.hash = "#/bienvenue/prevenir";
+    serve({ "/api/push": () => ({ public_key: "k", consent: false, asked: false, devices: [], max: 5 }), "/api/consents": () => [] });
+    await journeyAt();
+    await settle();
+    expect([...host.querySelectorAll("button")].filter((b) => b.textContent?.trim().startsWith("Plus tard"))).toHaveLength(1);
+    expect(button("Plus tard").classList.contains("ghost")).toBe(false);
+    expect(host.querySelector<HTMLAnchorElement>("a[href^='#/messageries']")?.getAttribute("href")).toBe("#/messageries?from=bienvenue/prevenir");
+  });
+});
+
+describe("« Voir … » de la liste", () => {
+  it("never adds what is left to what is done", () => {
+    expect(moreLabel(1, 4)).toBe("Voir 1 autre à faire · 4 faits");
+    expect(moreLabel(0, 5)).toBe("Voir 5 faits");
+    expect(moreLabel(2, 1)).toBe("Voir 2 autres à faire · 1 fait");
   });
 });

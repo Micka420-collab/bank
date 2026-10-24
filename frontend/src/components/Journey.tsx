@@ -2,7 +2,10 @@
 // action principale chacune, « Passer » toujours là ; on le quitte (Échap ou « Quitter ») et on le reprend où on l'a
 // laissé, sur n'importe quel appareil : fait, passé et l'étape en cours viennent du serveur (/api/start).
 // Les étapes réutilisent ce qui existe (chemins de Welcome, assistant Enable Banking, notifications, coffre) ; la
-// seule fête est celle de la fin, et seulement si au moins une étape a été faite pendant ce passage.
+// seule fête est celle de la fin, et seulement si au moins une étape a été faite pendant ce passage (la visite seule
+// ne compte pas) ; elle dit ce qui a été fait et ce qui reste, jamais « tout est prêt » à la place de l'anneau.
+// Pas de toast dans le parcours : il couvrirait les boutons de l'étape suivante au téléphone. La confirmation de
+// l'étape faite ou passée s'affiche en haut de la suivante, et son titre (qui reçoit le focus) la décrit.
 
 import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import {
@@ -13,6 +16,7 @@ import {
   type OnboardingResponse,
   type Opportunity,
   type OpportunityCategory,
+  type PublicConsent,
   type StartStepKey,
   type StartView,
   type VaultUpload,
@@ -25,8 +29,8 @@ import { ConsentGroups } from "./ConsentGroups";
 import { Icon } from "./Icon";
 import { BankDone, Syncing } from "./Onboarding";
 import { Tour } from "./Tour";
-import { Loading, useAsyncAction, useCelebrate, useToast } from "./ui";
-import { StartPaths, ThreeFigures, type StartPath } from "./Welcome";
+import { Loading, useAsyncAction, useCelebrate } from "./ui";
+import { isPhone, StartPaths, ThreeFigures, useBankAvailability, type StartPath } from "./Welcome";
 
 const ORDER: StartStepKey[] = ["banque", "foyer", "accords", "papier", "priorites", "prevenir", "visite"];
 
@@ -48,10 +52,12 @@ export function isStepKey(k: string | null | undefined): k is StartStepKey {
 export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: string | null; bankResult?: string | null; onExit: () => void }) {
   const initial = useApi<StartView>("/api/start");
   const [data, setData] = useState<StartView | null>(null);
-  const [announce, setAnnounce] = useState("");
+  // Ce que l'étape précédente a donné (« Étape faite : Ton foyer. »), montré en haut de l'étape affichée.
+  // Gardé avec l'étape qui doit le montrer : en sautant ailleurs par la barre, il ne traîne pas.
+  const [flashed, setFlashed] = useState<{ on: StartStepKey; text: string; skipped?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const didSomething = useRef(false);
+  const doneNow = useRef(new Set<StartStepKey>()); // étapes faites pendant ce passage (hors visite)
   const heading = useRef<HTMLHeadingElement>(null);
   const celebrate = useCelebrate();
 
@@ -84,7 +90,10 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
   const quit = useCallback(() => onExit(), [onExit]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented) quit();
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      // Échap dans un champ, une liste ou un volet déplié sert à ce champ (ou au lecteur d'écran), pas à quitter.
+      if (e.target instanceof Element && e.target.closest(FIELD_LIKE)) return;
+      quit();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -94,9 +103,9 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
     setBusy(true);
     setError(null);
     try {
-      await api("/api/start/finish", { method: "POST", body: { tour_done: tourDone } });
-      if (tourDone) didSomething.current = true;
-      if (didSomething.current) celebrate("done", "Bank est prêt.");
+      const view = await api<StartView>("/api/start/finish", { method: "POST", body: { tour_done: tourDone } });
+      const message = finishMessage(view, doneNow.current.size);
+      if (message) celebrate("done", message);
       onExit();
     } catch (e) {
       setError((e as Error).message);
@@ -106,18 +115,17 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
   };
 
   /** Le serveur a confirmé : on relit l'état (coche verte sur le segment), puis l'étape suivante. */
-  const completed = async () => {
+  const completed = async (detail?: string) => {
     if (!key) return;
     setError(null);
     try {
       const next = await api<StartView>("/api/start");
       setData(next);
       const nowDone = next.journey.steps.find((s) => s.key === key)?.done ?? false;
-      if (nowDone) {
-        didSomething.current = true;
-        setAnnounce(`Étape faite : ${step?.title ?? ""}.`);
-      }
+      if (nowDone && key !== "visite") doneNow.current.add(key);
+      const text = nowDone ? `Étape faite : ${step?.title ?? ""}.${detail ? ` ${detail}` : ""}` : detail;
       const target = next.journey.current && next.journey.current !== key ? next.journey.current : nextAfter(next, key);
+      setFlashed(target && text ? { on: target, text } : null);
       if (target) go(target);
       else void finish(false);
     } catch (e) {
@@ -133,8 +141,8 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
     try {
       const next = await api<StartView>(`/api/start/steps/${key}`, { method: "POST", body: { action: "skip" } });
       setData(next);
-      setAnnounce(`Étape passée : ${step?.title ?? ""}.`);
       const target = next.journey.current ?? nextAfter(next, key);
+      setFlashed(target ? { on: target, text: `Étape passée : ${step?.title ?? ""}. Elle t'attend dans « Bien démarrer », sur Aujourd'hui.`, skipped: true } : null);
       if (target) go(target);
       else await finish(false);
     } catch (e) {
@@ -156,6 +164,8 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
   if (!data || !key || !step) return <div className="journey"><div className="journey-body"><Loading what="Ton parcours" /></div></div>;
 
   const index = ORDER.indexOf(key);
+  const flash = flashed?.on === key ? flashed.text : null;
+  const flashSkipped = flashed?.on === key && !!flashed.skipped;
   const copy = COPY[key];
   return (
     <div className="journey">
@@ -174,18 +184,19 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
           </li>
         ))}
       </ol>
-      <p className="sr-only" aria-live="polite">{announce}</p>
       <main className="journey-body" key={key}>
         <section className="card journey-card" aria-labelledby="journey-title">
+          {/* Le titre reçoit le focus et se décrit par cette ligne : lue d'un trait, jamais coupée par une annonce. */}
+          {flash && <p className={`journey-flash${flashSkipped ? " is-skipped" : ""}`} id="journey-flash"><Icon name={flashSkipped ? "arrow" : "check"} size={14} /> {flash}</p>}
           <p className="journey-kicker"><Icon name="clock" size={14} /> {copy.time}{step.done ? " · déjà fait" : ""}</p>
-          <h1 id="journey-title" ref={heading} tabIndex={-1}>{step.title}</h1>
+          <h1 id="journey-title" ref={heading} tabIndex={-1} aria-describedby={flash ? "journey-flash" : undefined}>{step.title}</h1>
           <p className="journey-goal">{copy.goal}</p>
           {error && <p className="error" role="alert">{error}</p>}
-          <StepBody k={key} data={data} done={step.done} bankResult={bankResult} onDone={() => void completed()}
-                    onFinishTour={() => void finish(true)} busy={busy} reload={(v) => setData(v)} />
+          <StepBody k={key} data={data} done={step.done} bankResult={bankResult} onDone={(d) => void completed(d)}
+                    onSkip={() => void skip()} onFinishTour={() => void finish(true)} busy={busy} reload={(v) => setData(v)} />
         </section>
-        {/* Une étape déjà faite n'a rien à passer : « Continuer » suffit. */}
-        {!step.done && (
+        {/* Une étape déjà faite n'a rien à passer : « Continuer » suffit. La visite porte son propre « Passer ». */}
+        {!step.done && !ownSkip(key) && (
           <div className="journey-skip">
             <button type="button" className="btn ghost" disabled={busy} onClick={() => void skip()}>{copy.skip}</button>
           </div>
@@ -193,6 +204,21 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
       </main>
     </div>
   );
+}
+
+/** La visite porte son « Passer » ; « Où te prévenir » aussi quand rien n'y est activable (il devient l'action). */
+function ownSkip(k: StartStepKey): boolean {
+  return k === "visite" || (k === "prevenir" && !(pushSupported() && pushPermission() !== "denied"));
+}
+
+const FIELD_LIKE = "input, select, textarea, [contenteditable='true'], [role='listbox'], details[open]";
+
+/** La fête de fin, s'il y a lieu : ce qui a été fait pendant ce passage, et ce qui reste (sans la visite). */
+export function finishMessage(view: StartView, doneNow: number): string | null {
+  if (doneNow === 0) return null;
+  const left = view.journey.steps.filter((s) => s.key !== "visite" && !s.done).length;
+  const made = plural(doneNow, "étape faite", "étapes faites");
+  return left === 0 ? `${made} : le parcours est complet.` : `${made} — il en reste ${left}, quand tu veux.`;
 }
 
 /** La prochaine étape ni faite ni passée après `key`, sinon la visite si elle reste à faire. */
@@ -205,65 +231,93 @@ export function nextAfter(view: StartView, key: StartStepKey): StartStepKey | nu
   return key !== "visite" && visit && !visit.done ? "visite" : null;
 }
 
-function StepBody({ k, data, done, bankResult, onDone, onFinishTour, busy, reload }: {
+type OnDone = (detail?: string) => void;
+
+function StepBody({ k, data, done, bankResult, onDone, onSkip, onFinishTour, busy, reload }: {
   k: StartStepKey;
   data: StartView;
   done: boolean;
   bankResult: string | null;
-  onDone: () => void;
+  onDone: OnDone;
+  onSkip: () => void;
   onFinishTour: () => void;
   busy: boolean;
   reload: (v: StartView) => void;
 }) {
   switch (k) {
-    case "banque": return <BankStep done={done} result={bankResult} onDone={onDone} />;
+    case "banque": return <BankStep done={done} result={bankResult} onDone={onDone} onLater={onSkip} />;
     case "foyer": return <HouseholdStep onDone={onDone} />;
     case "accords": return <ConsentsStep data={data} done={done} onDone={onDone} reload={reload} />;
     case "papier": return <PaperStep done={done} onDone={onDone} />;
     case "priorites": return <PrioritiesStep onDone={onDone} />;
-    case "prevenir": return <NotifyStep done={done} onDone={onDone} />;
-    case "visite": return <Tour onFinish={onFinishTour} busy={busy} />;
+    case "prevenir": return <NotifyStep done={done} onDone={onDone} onLater={onSkip} />;
+    case "visite": return <Tour onFinish={onFinishTour} onSkip={onSkip} skipLabel={COPY.visite.skip} busy={busy} />;
   }
 }
 
-function Already({ text, onDone }: { text: string; onDone: () => void }) {
+function Already({ text, onDone }: { text: string; onDone: OnDone }) {
   return (
     <>
       <p className="notice ok"><Icon name="check" /><span>{text}</span></p>
-      <div className="actions journey-actions"><button type="button" className="btn lg" onClick={onDone}>Continuer <Icon name="arrow" /></button></div>
+      <div className="actions journey-actions"><button type="button" className="btn lg" onClick={() => onDone()}>Continuer <Icon name="arrow" /></button></div>
     </>
   );
 }
 
 // ------------------------------------------------------------------ 1. ta banque
-function BankStep({ done, result, onDone }: { done: boolean; result: string | null; onDone: () => void }) {
+function BankStep({ done, result, onDone, onLater }: { done: boolean; result: string | null; onDone: OnDone; onLater: () => void }) {
   const [path, setPath] = useState<StartPath | null>(result === "refused" || result === "error" ? "bank" : null);
   const [stage, setStage] = useState<"paths" | "sync" | "linked">(result === "connected" ? "sync" : "paths");
+  const bank = useBankAvailability();
+  const phone = isPhone();
+  const panel = useRef<HTMLDivElement>(null);
+  const chosenByHand = useRef(false);
   const backError = result === "refused" ? "Connexion annulée côté banque. Tu peux réessayer, ou choisir une autre banque."
     : result === "error" ? "La connexion a échoué ou a expiré : recommence." : null;
 
+  // Au téléphone, ce qu'ouvre la carte s'affiche sous les trois cartes, hors de vue : on y va, et le focus suit
+  // (sauf s'il est déjà dans le volet, sur le premier champ des trois chiffres).
+  useEffect(() => {
+    if (!path || !chosenByHand.current || !panel.current) return;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    panel.current.scrollIntoView?.({ behavior: reduced ? "auto" : "smooth", block: "start" });
+    if (!panel.current.contains(document.activeElement)) panel.current.focus({ preventScroll: true });
+  }, [path]);
+  const choose = (p: StartPath) => {
+    chosenByHand.current = true;
+    setPath(p);
+  };
+
   if (stage === "sync") return <Syncing onDone={() => setStage("linked")} />;
-  if (stage === "linked") return <BankDone onAnother={() => { setStage("paths"); setPath("bank"); }} onFinish={onDone} />;
+  if (stage === "linked") return <BankDone onAnother={() => { setStage("paths"); setPath("bank"); }} onFinish={() => onDone()} />;
   if (done && path === null) return <Already text="Ton argent est déjà dans Bank : rien à faire ici." onDone={onDone} />;
   return (
     <div className="stack journey-stack">
       {backError && <div className="notice danger" role="alert"><Icon name="alert" /><span>{backError}</span></div>}
-      <StartPaths chosen={path} onChoose={setPath} />
-      {path === "bank" && <BankLink />}
-      {path === "import" && (
-        <div className="panel journey-panel">
-          <p>Télécharge un relevé CSV ou OFX dans ton espace bancaire, puis dépose-le dans Opérations. Tu reviendras ici depuis « Bien démarrer », sur Aujourd'hui.</p>
-          <div className="actions journey-actions"><a className="btn lg" href="#/operations?import=1"><Icon name="upload" /> Importer mon relevé</a></div>
+      <StartPaths chosen={path} onChoose={choose} bank={bank} phone={phone} />
+      {path && (
+        <div ref={panel} tabIndex={-1} className="journey-reveal" role="region" aria-label={PATH_LABEL[path]}>
+          {path === "bank" && <BankLink phone={phone} onLater={onLater} />}
+          {path === "import" && (
+            <div className="panel journey-panel">
+              <p>Télécharge un relevé CSV ou OFX dans ton espace bancaire, puis dépose-le dans Opérations. Un bouton te ramène ensuite ici.</p>
+              <div className="actions journey-actions"><a className="btn lg" href={`#/operations?import=1&from=${RETURN}banque`}><Icon name="upload" /> Importer mon relevé</a></div>
+            </div>
+          )}
+          {path === "figures" && <ThreeFigures onDone={() => onDone("Ton premier budget est prêt.")} submitLabel="Enregistrer ces chiffres" />}
         </div>
       )}
-      {path === "figures" && <ThreeFigures onDone={onDone} submitLabel="Enregistrer ces chiffres" />}
       <p className="faint"><Icon name="shield" /> Lecture seule, toujours. Tu coupes l'accès quand tu veux, dans Connecteurs ou chez ta banque.</p>
     </div>
   );
 }
+const PATH_LABEL: Record<StartPath, string> = { bank: "Connecter ma banque", import: "Importer un relevé", figures: "Juste trois chiffres" };
+/** Paramètre des liens qui sortent du parcours : la page d'arrivée montre « Revenir au parcours ». */
+const RETURN = "bienvenue/";
 
-function BankLink() {
+function BankLink({ phone, onLater }: { phone: boolean; onLater: () => void }) {
   const status = useApi<{ enabled: boolean; connections: Connection[] }>("/api/banks");
+  const [configure, setConfigure] = useState(false);
   const [aspsps, setAspsps] = useState<string[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -290,6 +344,25 @@ function BankLink() {
     }
   };
   if (!status.data) return status.error ? <p className="error" role="alert">{status.error}</p> : <Loading what="Ta banque" />;
+  // Enable Banking pas encore configuré : on dit ce que ça demande avant d'ouvrir l'assistant en six étapes.
+  if (!status.data.enabled && !configure) {
+    return (
+      <div className="panel journey-panel">
+        <p><b>Avant ta banque, un compte chez Enable Banking.</b> C'est gratuit, mais il faut y créer une application, télécharger un fichier de clé puis le déposer ici : une quinzaine de minutes, une seule fois.</p>
+        <p className="muted">{phone ? "Sur téléphone, c'est pénible : fais-le plutôt sur ordinateur. « Relier ta banque » reste dans « Bien démarrer »." : "L'assistant te guide pas à pas, avec des liens directs."}</p>
+        <div className="actions journey-actions">
+          {phone ? (
+            <>
+              <button type="button" className="btn lg" onClick={onLater}>Je le ferai sur ordinateur</button>
+              <button type="button" className="btn quiet lg" onClick={() => setConfigure(true)}>Configurer quand même</button>
+            </>
+          ) : (
+            <button type="button" className="btn lg" onClick={() => setConfigure(true)}>Configurer Enable Banking <Icon name="arrow" /></button>
+          )}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="journey-bank">
       <p className="muted">Tu t'authentifies chez ta banque (DSP2, via Enable Banking, établissement agréé) : Bank ne voit jamais tes identifiants. Mise à jour automatique ensuite, 90 jours renouvelables.</p>
@@ -308,7 +381,7 @@ function BankLink() {
 // ------------------------------------------------------------------ 2. ton foyer
 const CHIPS = new Set(["household", "housing_status"]);
 
-function HouseholdStep({ onDone }: { onDone: () => void }) {
+function HouseholdStep({ onDone }: { onDone: OnDone }) {
   const ob = useApi<OnboardingResponse>("/api/onboarding");
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, error, run] = useAsyncAction();
@@ -363,7 +436,7 @@ function HouseholdStep({ onDone }: { onDone: () => void }) {
         if (stored && JSON.stringify(stored.value) === JSON.stringify(value)) continue;
         await api(`/api/onboarding/${id}`, { method: "PUT", body: { value } });
       }
-      onDone();
+      onDone("Bank peut simuler tes droits.");
     });
   };
 
@@ -377,15 +450,20 @@ function HouseholdStep({ onDone }: { onDone: () => void }) {
           : q.options.find((o) => o.value === String(guess.value))?.label.toLowerCase() ?? String(guess.value);
         const hint = guess ? `Lu dans tes relevés : ${shown} — c'est juste ?` : null;
         if (CHIPS.has(id)) {
+          // Un seul choix : de vrais boutons radio (flèches au clavier, « 1 sur 3 » au lecteur d'écran), en pastilles.
+          // Une valeur devinée est présélectionnée ; la ligne « Lu dans tes relevés » le dit, liée au groupe.
           return (
-            <fieldset key={id} className="journey-field">
+            <fieldset key={id} className="journey-field" aria-describedby={hint ? `hint-${id}` : undefined}>
               <legend>{q.question}</legend>
               <div className="chips">
                 {q.options.map((o) => (
-                  <button key={o.value} type="button" className="chip" aria-pressed={values[id] === o.value} onClick={() => set(id, o.value)}>{o.label}</button>
+                  <label key={o.value} className="chip chip-radio">
+                    <input type="radio" className="sr-only" name={id} value={o.value} checked={values[id] === o.value} onChange={() => set(id, o.value)} />
+                    {o.label}
+                  </label>
                 ))}
               </div>
-              {hint && <p className="faint">{hint}</p>}
+              {hint && <p className="faint" id={`hint-${id}`}>{hint}</p>}
             </fieldset>
           );
         }
@@ -432,7 +510,7 @@ function Address() {
   const consents = useApi<ConsentView[]>("/api/consents");
   const [query, setQuery] = useState("");
   const [busy, error, run] = useAsyncAction();
-  const toast = useToast();
+  const [located, setLocated] = useState(false);
   const geo = consents.data?.find((c) => c.purpose === "geocoding");
   if (!view.data || !geo) return null;
   const toggle = () =>
@@ -445,7 +523,7 @@ function Address() {
     void run(async () => {
       await api("/api/territory/geocode", { method: "POST", body: { query } });
       setQuery("");
-      toast("Adresse située : ta commune sert de point de départ.", "success");
+      setLocated(true);
       view.reload();
     });
   return (
@@ -453,6 +531,7 @@ function Address() {
       <summary>Ta commune ou ton adresse <span className="faint">(facultatif)</span></summary>
       <ConsentGroups consents={[{ ...geo, granted: view.data.consents.geocoding }]} groups={["adresse"]} busy={busy} onToggle={toggle} />
       {view.data.place?.label && <p><Icon name="pin" /> <b>{view.data.place.label}</b></p>}
+      <p className="faint" role="status">{located ? "Adresse située : ta commune sert de point de départ." : ""}</p>
       {view.data.consents.geocoding && (
         <div className="form-grid">
           <label className="field">
@@ -469,10 +548,10 @@ function Address() {
 }
 
 // ------------------------------------------------------------------ 3. tes accords
-function ConsentsStep({ data, done, onDone, reload }: { data: StartView; done: boolean; onDone: () => void; reload: (v: StartView) => void }) {
+function ConsentsStep({ data, done, onDone, reload }: { data: StartView; done: boolean; onDone: OnDone; reload: (v: StartView) => void }) {
   const [busy, error, run] = useAsyncAction();
-  const toast = useToast();
   const list = data.public_consents;
+  const off = list.filter((c) => !c.granted).length;
   const toggle = (purpose: string, granted: boolean) =>
     void run(async () => {
       await api(`/api/consents/${purpose}`, { method: "PUT", body: { granted: !granted } });
@@ -480,28 +559,39 @@ function ConsentsStep({ data, done, onDone, reload }: { data: StartView; done: b
     });
   const grantAll = () =>
     void run(async () => {
-      const fresh = list.filter((c) => !(c.granted && c.decided)).length;
-      await api("/api/start/public-consents", { method: "POST", body: { purposes: list.map((c) => c.purpose) } });
-      toast(`${plural(fresh || list.length, "accord donné", "accords donnés")} — modifiables dans Réglages › Confidentialité.`, "success");
-      onDone();
+      const before = new Map(list.map((c) => [c.purpose, c.granted && c.decided]));
+      const after = await api<PublicConsent[]>("/api/start/public-consents", { method: "POST", body: { purposes: list.map((c) => c.purpose) } });
+      // Le compte vient de la réponse du serveur : ce qui est accordé maintenant et ne l'était pas avant.
+      const fresh = after.filter((c) => c.granted && c.decided && !before.get(c.purpose)).length;
+      onDone(fresh > 0 ? `${plural(fresh, "accord donné", "accords donnés")}, modifiables dans Réglages › Confidentialité.` : "Ces accords étaient déjà donnés.");
+    });
+  /** « Continuer avec ces choix » : chaque interrupteur encore sans réponse est noté tel que tu le vois (journalisé). */
+  const keep = () =>
+    void run(async () => {
+      for (const c of list.filter((x) => !x.decided)) {
+        await api(`/api/consents/${c.purpose}`, { method: "PUT", body: { granted: c.granted } });
+      }
+      const yes = list.filter((c) => c.granted).length;
+      onDone(`Tes choix sont notés : ${plural(yes, "accord donné", "accords donnés")} sur ${list.length}.`);
     });
   return (
     <div className="stack journey-stack">
       <ConsentGroups consents={list} groups={["public", "zone"]} busy={busy} onToggle={(c) => toggle(c.purpose, c.granted)} />
       <p className="faint journey-note">
+        Météo et Valeur du logement attendent ta commune : tant que tu ne l'as pas donnée (étape Ton foyer, facultatif), rien ne part.
         Ton adresse et tes contenus (messageries, mail, assistant, Linky…) se demandent plus tard, au moment où tu relies le service.
       </p>
       {error && <p className="error" role="alert">{error}</p>}
-      <p className="journey-note">Un clic accorde ces {list.length} accords, et eux seuls. Tu peux les retirer à tout moment dans Réglages › Confidentialité.</p>
+      <p className="journey-note">
+        « Activer » accorde ces {list.length} accords et eux seuls ; « Continuer » note chaque interrupteur tel qu'il est. Tu les changes à tout moment dans Réglages › Confidentialité.
+      </p>
       <div className="actions journey-actions">
-        {done ? (
-          <>
-            <button type="button" className="btn lg" disabled={busy} onClick={onDone}>Continuer avec ces choix <Icon name="arrow" /></button>
-            {list.some((c) => !c.granted) && <button type="button" className="btn quiet lg" disabled={busy} onClick={grantAll}>Tout activer pour les données publiques</button>}
-          </>
-        ) : (
-          <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} disabled={busy} onClick={grantAll}>Tout activer pour les données publiques</button>
+        {off > 0 && (
+          <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} disabled={busy} onClick={grantAll}>Activer ces {list.length} accords</button>
         )}
+        <button type="button" className={`btn ${off > 0 ? "quiet " : ""}lg`} disabled={busy} onClick={done ? () => onDone() : keep}>
+          Continuer avec ces choix <Icon name="arrow" />
+        </button>
       </div>
     </div>
   );
@@ -510,12 +600,11 @@ function ConsentsStep({ data, done, onDone, reload }: { data: StartView; done: b
 // ------------------------------------------------------------------ 4. ton premier papier
 const ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
 
-function PaperStep({ done, onDone }: { done: boolean; onDone: () => void }) {
+function PaperStep({ done, onDone }: { done: boolean; onDone: OnDone }) {
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [skipped, setSkipped] = useState<VaultUpload["skipped"]>([]);
   const [busy, error, run] = useAsyncAction();
-  const toast = useToast();
   const send = (list: FileList | null) => {
     const chosen = Array.from(list ?? []).slice(0, 10);
     if (chosen.length === 0) return;
@@ -526,8 +615,8 @@ function PaperStep({ done, onDone }: { done: boolean; onDone: () => void }) {
       const r = await api<VaultUpload>("/api/vault/upload", { method: "POST", form });
       setSkipped(r.skipped);
       if (r.documents.length) {
-        toast(`${plural(r.documents.length, "document déposé", "documents déposés")} : Bank le lit.`, "success");
-        onDone();
+        // La lecture se fait en arrière-plan : on ne promet pas ce qu'elle trouvera.
+        onDone(`${plural(r.documents.length, "document déposé", "documents déposés")}. Bank le lit en ce moment ; ce qu'il y trouve s'affiche dans Papiers (un avis d'impôt marche le mieux).`);
       }
     });
   };
@@ -561,7 +650,7 @@ function PaperStep({ done, onDone }: { done: boolean; onDone: () => void }) {
         <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} disabled={busy} onClick={() => input.current?.click()}>
           <Icon name="camera" /> Prendre en photo ou déposer
         </button>
-        {done && <button type="button" className="btn quiet lg" onClick={onDone}>Continuer</button>}
+        {done && <button type="button" className="btn quiet lg" onClick={() => onDone()}>Continuer</button>}
       </div>
     </div>
   );
@@ -576,7 +665,7 @@ export const PRIORITIES: { key: OpportunityCategory; label: string; hint: string
   { key: "anticiper", label: "Ne plus être pris de court", hint: "Découvert, papiers qui expirent" },
 ];
 
-function PrioritiesStep({ onDone }: { onDone: () => void }) {
+function PrioritiesStep({ onDone }: { onDone: OnDone }) {
   const top = useApi<{ opportunities: Opportunity[]; priorities?: OpportunityCategory[] }>("/api/opportunities/top");
   const [chosen, setChosen] = useState<Set<OpportunityCategory> | null>(null);
   const [busy, error, run] = useAsyncAction();
@@ -627,22 +716,28 @@ function PrioritiesStep({ onDone }: { onDone: () => void }) {
 }
 
 // ------------------------------------------------------------------ 6. où te prévenir
-function NotifyStep({ done, onDone }: { done: boolean; onDone: () => void }) {
+function NotifyStep({ done, onDone, onLater }: { done: boolean; onDone: OnDone; onLater: () => void }) {
   const st = useApi<PushStatus>("/api/push");
   const consents = useApi<ConsentView[]>("/api/consents");
   const [busy, error, run] = useAsyncAction();
-  const toast = useToast();
   const supported = pushSupported();
   const permission = pushPermission();
+  const usable = supported && permission !== "denied";
   const push = consents.data?.find((c) => c.purpose === "push");
   const activate = () =>
     void run(async () => {
       if (!st.data) return;
-      // Le texte de l'accord est juste au-dessus : ce clic-là est l'accord, explicite.
-      if (!st.data.consent) await api("/api/consents/push", { method: "PUT", body: { granted: true } });
-      const device = await enablePush(st.data.public_key);
-      toast(`Notifications activées sur « ${device.label} ».`, "success");
-      onDone();
+      // Le texte de l'accord est juste au-dessus et le bouton le dit : ce clic-là est l'accord, explicite. S'il
+      // n'aboutit pas (permission refusée, abonnement en échec), l'accord donné par ce clic est retiré.
+      const granting = !st.data.consent;
+      if (granting) await api("/api/consents/push", { method: "PUT", body: { granted: true } });
+      try {
+        const device = await enablePush(st.data.public_key);
+        onDone(`Notifications activées sur « ${device.label} ».`);
+      } catch (e) {
+        if (granting) await api("/api/consents/push", { method: "PUT", body: { granted: false } }).catch(() => undefined);
+        throw e;
+      }
     });
   return (
     <div className="stack journey-stack">
@@ -654,23 +749,26 @@ function NotifyStep({ done, onDone }: { done: boolean; onDone: () => void }) {
           {push && <details className="consent-more"><summary>Lire le texte complet</summary><p className="muted">{push.text}</p></details>}
           {!supported && <p className="notice"><Icon name="alert" /><span>Ce navigateur ne sait pas recevoir de notifications. Sur iPhone : ajoute Bank à l'écran d'accueil, puis reviens ici.</span></p>}
           {supported && permission === "denied" && <p className="notice"><Icon name="alert" /><span>Les notifications sont bloquées pour Bank : réautorise-les dans les réglages du site.</span></p>}
-          {supported && permission !== "denied" && (
+          {usable && (
             <div className="actions journey-actions">
-              <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} disabled={busy || !st.data} onClick={activate}>
-                <Icon name="bell" /> Activer les notifications
+              <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} disabled={busy || !st.data} onClick={activate}
+                      aria-describedby="notify-consent">
+                <Icon name="bell" /> Accepter et activer les notifications
               </button>
+              <p className="faint" id="notify-consent">Ce bouton donne aussi l'accord « Notifications », retirable dans Réglages.</p>
             </div>
           )}
         </section>
         <section className="panel journey-choice" aria-labelledby="notify-chat">
           <h2 id="notify-chat"><Icon name="chat" /> Dans ta messagerie</h2>
-          <p className="muted">WhatsApp par QR code, Telegram, Signal… Bank t'y écrit ses alertes, et tu lui réponds.</p>
-          <div className="actions"><a className="btn quiet" href="#/messageries">Ouvrir Messageries <Icon name="arrow" /></a></div>
+          <p className="muted">WhatsApp par QR code, Telegram, Signal… Bank t'y écrit ses alertes, et tu lui réponds. Un bouton te ramène ici ensuite.</p>
+          <div className="actions"><a className="btn quiet" href={`#/messageries?from=${RETURN}prevenir`}>Ouvrir Messageries <Icon name="arrow" /></a></div>
         </section>
       </div>
       {error && <p className="error" role="alert">{error}</p>}
-      {done && <div className="actions journey-actions"><button type="button" className="btn quiet lg" onClick={onDone}>Continuer</button></div>}
+      {done && <div className="actions journey-actions"><button type="button" className="btn quiet lg" onClick={() => onDone()}>Continuer</button></div>}
+      {/* Rien d'activable ici : « Plus tard » devient l'action claire, pas un lien discret en bas. */}
+      {!done && !usable && <div className="actions journey-actions"><button type="button" className="btn lg" onClick={onLater}>Plus tard <Icon name="arrow" /></button></div>}
     </div>
   );
 }
-

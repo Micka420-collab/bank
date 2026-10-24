@@ -62,7 +62,8 @@ export function Today({ name }: { name?: string } = {}) {
   if (!budget.data) return <Loading />;
   const { forecast: f, suggested_budgets: suggested, settings } = budget.data;
   const isEmpty = f.current_balance_cents === 0 && f.history.every((p) => p.balance_cents === 0) && f.upcoming.length === 0;
-  if (isEmpty) return <Welcome onStarted={budget.reload} />;
+  // Rien encore : la liste « Bien démarrer » (et son « Reprendre le parcours ») passe avant les trois chemins.
+  if (isEmpty) return <><StartChecklist /><Welcome onStarted={budget.reload} /></>;
 
   const applySuggestion = async (slug: string, cents: number) => {
     await api(`/api/categories/${slug}`, { method: "PATCH", body: { monthly_budget_cents: cents } });

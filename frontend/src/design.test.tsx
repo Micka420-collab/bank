@@ -198,7 +198,14 @@ describe("première ouverture", () => {
     expect(host.querySelectorAll(".path")).toHaveLength(3);
     expect(host.textContent).not.toContain("Crée ton application Enable Banking");
     expect([...host.querySelectorAll("button")].filter((b) => /^(Plus tard|Je connecterai|Continuer sans)/.test(b.textContent?.trim() ?? ""))).toHaveLength(1);
+    // Sans Enable Banking configuré, la carte dit ce qu'elle demande : un compte tiers, ~15 min, plutôt sur ordinateur.
+    expect(host.querySelector(".path")?.textContent).toContain("créer un compte gratuit chez Enable Banking");
+    expect(host.querySelector(".path")?.textContent).not.toContain("Recommandé");
     await act(async () => { [...host.querySelectorAll<HTMLButtonElement>(".path")][0]!.click(); });
+    await settle();
+    expect(host.textContent).toContain("Avant ta banque, un compte chez Enable Banking.");
+    expect(host.textContent).not.toContain("Crée ton application Enable Banking");
+    await act(async () => { [...host.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Configurer Enable Banking"))!.click(); });
     await settle();
     expect(host.textContent).toContain("Crée ton application Enable Banking");
     expect(host.querySelector(".wizard-steps li.is-active")?.textContent).toContain("Créer l'application");

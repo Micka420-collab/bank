@@ -226,12 +226,12 @@ GROUPS: dict[str, str] = {
     "contenus": "Tes contenus, vers un service tiers",
 }
 SENDS: dict[str, tuple[str, str]] = {
-    "watch": ("public", "Seulement l'adresse de ton serveur, vers les sources officielles."),
-    "baremes": ("public", "Seulement l'adresse de ton serveur, vers des sources publiques (CRE, INSEE, OpenFisca)."),
+    "watch": ("public", "Rien sur toi : seulement l'adresse IP de ton serveur Bank, vers les sources officielles."),
+    "baremes": ("public", "Rien sur toi : seulement l'adresse IP de ton serveur Bank, vers CRE, INSEE, OpenFisca."),
     "tempo": ("public", "Des dates, vers api-couleur-tempo.fr."),
     "calendar": ("zone", "Ta zone, ton département ou ton académie, vers api.gouv.fr."),
     "home_value": ("zone", "Le nom ou le code de ta commune, vers data.gouv.fr."),
-    "meteo": ("zone", "Les coordonnées de ton adresse arrondies à 10 km environ, vers Open-Meteo."),
+    "meteo": ("zone", "Ta position à 10 km près environ (le secteur de ta commune, pas ta rue), vers Open-Meteo."),
     "geocoding": ("adresse", "Ton adresse telle que tu la tapes, vers l'IGN."),
     "housing": ("adresse", "L'identifiant d'adresse de ton immeuble, vers l'ADEME."),
     "ai_memory": ("contenus", "Ce que l'assistant retient de toi, vers ton modèle OpenRouter."),

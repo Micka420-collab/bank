@@ -68,6 +68,25 @@ export function hubOf(page: string): string {
 }
 
 type Phase = "loading" | "setup" | "login" | "ready" | "offline";
+
+// L'ancien drapeau d'accueil (avant #44) n'est plus lu : on l'efface une fois, il n'a rien à faire dans le navigateur.
+try {
+  window.localStorage.removeItem("bank:onboarding");
+} catch {
+  // stockage indisponible (navigation privée) : rien à effacer
+}
+
+/** « Revenir au parcours » : en haut d'une page ouverte depuis une étape (lien `?from=bienvenue/<étape>`). */
+export function JourneyReturn({ from }: { from: string | null }) {
+  const m = from ? /^bienvenue\/([a-z]+)$/.exec(from) : null;
+  if (!m) return null;
+  return (
+    <div className="journey-return" role="region" aria-label="Parcours de démarrage">
+      <span>Tu es sorti du parcours de démarrage.</span>
+      <a className="btn sm" href={`#/bienvenue/${m[1]}`}><Icon name="back" /> Revenir au parcours</a>
+    </div>
+  );
+}
 const OFFLINE = "Le serveur Bank ne répond pas. Vérifie qu'il est démarré, puis réessaie.";
 
 export function App() {
@@ -157,6 +176,7 @@ export function App() {
       <div className="shell">
         <Rail page={page} badges={badges} username={me.username} onLogout={() => void logout()} onAsk={() => setAskOpen(true)} />
         <main className="sheet" id="contenu" tabIndex={-1} key={page}>
+          <JourneyReturn from={route.params.get("from")} />
           <HubTabs page={page} />
           <Suspense fallback={<Loading />}>
           {page === "operations" ? <Operations openImport={route.params.get("import") === "1"} />
