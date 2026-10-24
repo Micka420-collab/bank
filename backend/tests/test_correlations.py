@@ -107,6 +107,36 @@ def test_rent_paid_is_compared_with_the_lease_and_the_irl() -> None:
     assert dom.rent_findings([rent(72_000)], [], today) == [], "sans bail, rien à comparer"
 
 
+def test_a_revision_is_checked_against_the_published_irl_without_guessing() -> None:
+    """« Ta révision applique un IRL de X ; l'indice publié pour ce trimestre est Y : Z €/mois de trop » : seulement
+    quand le trimestre de référence est écrit dans la clause et que l'ancien loyer (celui du bail) a été vu payé."""
+    contracts.install_irl({(2025, 2): 146.68, (2026, 2): 148.37}, "24/10/2026")
+    try:
+        today = date(2026, 11, 15)
+        doc = lease(loyer=65_000, date_debut="2025-09-01", revision="IRL 2e trimestre 2025")
+        revised = rent(66_000, history=[65_000, 65_000, 65_000, 66_000, 66_000, 66_000])
+        (f,) = dom.rent_findings([revised], [doc], today)
+        assert f.kind == "rent_irl_misapplied" and f.level == "danger" and f.yearly_cents == 251 * 12
+        assert f.body.replace("\xa0", " ").startswith(
+            "Ta révision applique un IRL de 148,94 ; l'indice publié pour ce trimestre (2e trimestre 2026) est "
+            "148,37 : 2,51 €/mois de trop."
+        )
+        irl = f.evidence[-1]
+        assert irl.label == "IRL" and "INSEE, série 001515333 (IRL), relevée par Bank le 24/10/2026" in irl.value
+        assert irl.ref == f"url:{contracts.IRL_SERIES_URL}"
+        # Une révision dans la limite : rien de plus que le constat habituel.
+        (ok,) = dom.rent_findings([rent(65_700, history=[65_000] * 3 + [65_700] * 3)], [doc], today)
+        assert ok.kind == "rent_revised"
+        # Ne jamais deviner : trimestre absent de la clause, ou ancien loyer qui n'est pas celui du bail.
+        vague = lease(loyer=65_000, date_debut="2025-09-01", revision="IRL")
+        assert dom.rent_findings([revised], [vague], today)[0].kind != "rent_irl_misapplied"
+        other = rent(66_000, history=[64_000, 64_000, 64_000, 66_000, 66_000, 66_000])
+        assert dom.rent_findings([other], [doc], today)[0].kind != "rent_irl_misapplied"
+    finally:
+        contracts.install_irl({}, None)
+    assert contracts.irl_source((2026, 2)) == contracts.IRL_SOURCE, "sans relève, la table livrée et sa date"
+
+
 def test_deposit_above_the_legal_cap_is_flagged() -> None:
     (f,) = dom.rent_findings([rent(65_000)], [lease(depot_garantie=130_000)], date(2026, 10, 22))
     assert f.kind == "deposit_over_cap" and f.yearly_cents == 65_000 and "un mois" in f.body

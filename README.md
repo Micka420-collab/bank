@@ -247,6 +247,13 @@ pic détecté à tort ; « Ajouter » pose une dépense annuelle ou trimestriell
 Quand la provision n'est pas couverte par ton épargne visée, Bank te propose de la réserver d'un geste (elle sort
 alors du reste à dépenser du jour, et le pic ne surprend plus). Ton agent lit la même projection (`get_year_ahead`).
 
+Avec l'accord « Jours fériés et vacances scolaires » (désactivé par défaut ; Réglages › **Ton adresse**), Bank relit
+les jours fériés de ta zone (calendrier.api.gouv.fr) et les vacances de ton académie (data.education.gouv.fr) : un
+prélèvement qui tombe un dimanche ou un jour férié passe au jour ouvré suivant, dans la prévision du mois comme
+dans l'année qui vient, qui montre aussi fériés et vacances mois par mois. L'académie vient de ton adresse, située
+par la Géoplateforme de l'IGN avec un autre accord (seule l'adresse tapée part ; code INSEE et coordonnées gardés
+chiffrés) ; sa commune pré-remplit aussi la valeur de ton logement.
+
 ## Ton plan B « perte de revenu »
 
 Sur la page Aides, « Ton plan B » : trois scénarios en un écran — ton salaire (ou ton allocation, ta pension)
@@ -378,7 +385,11 @@ déclare pas. Rien n'est envoyé : tu déclares sur le site de l'organisme. Règ
   valides. Numéro fiscal, NIR, numéro d'allocataire, adresse : vus et jetés, jamais enregistrés. La tranche d'impôt
   et le revenu N-2 de la simulation des aides en découlent ; une fin de droits proche déclenche une alerte. Le PDF
   est lu dans un processus séparé et confiné (CPU, mémoire, délai, sans secret ni réseau) : un fichier piégé ne
-  peut rien atteindre.
+  peut rien atteindre. Au-dessus, un bouton par organisme (impôts, CAF, France Travail, ameli, info-retraite) ouvre
+  son espace avec son état (dernier document lu, sa date, « à renouveler »). Un mail d'avis sans pièce jointe vu
+  par la boîte mail (« votre avis est disponible ») devient un document à récupérer, avec l'échéance ; l'avis
+  d'impôt attendu fin août et l'attestation du mois quand la CAF ou France Travail verse relancent d'eux-mêmes ; la
+  tâche se ferme seule quand le PDF arrive dans Papiers.
 
 ## Bank te demande (initiatives)
 
@@ -670,7 +681,8 @@ synthétique, clés de plateforme face à de fausses
 plateformes qui vérifient chaque signature et refusent les droits trop larges, pilote vs consigne sur un calendrier
 de référence — fins de mois, heures d'été et d'hiver, pauses, refus —, alertes de cours franchies une seule fois par
 deux relèves simultanées, barèmes relus sur les vraies réponses de la CRE, de la Caisse des Dépôts, de
-l'INSEE et d'OpenFisca), couverture 92 %, 178 tests front (parcours de première ouverture,
+l'INSEE et d'OpenFisca, jours fériés, vacances scolaires et géocodage sur les vraies réponses des services publics),
+couverture 92 %, 178 tests front (parcours de première ouverture,
 coffre et partage d'un papier, démarches, opportunités, veille, assistant, chat interactif et réponse en direct,
 notifications sur l'appareil, plan B, crédits, retraite, logement, sauvegardes, boîte mail, crypto et plateformes reliées,
 alertes de cours, pilote, pilote vs consigne, déclarations, corrélations, année qui vient, passkeys, erreurs qui

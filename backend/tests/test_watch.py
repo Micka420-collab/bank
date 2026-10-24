@@ -8,6 +8,7 @@ import gzip
 import json
 from collections.abc import Iterator
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -25,6 +26,8 @@ from app.services import watch as ws
 
 ECO = "https://www.economie.gouv.fr/rss/toutesactualites"
 PYPI = "https://pypi.org/rss/project/openfisca-france/releases.xml"
+SERVICE_PUBLIC = "https://www.service-public.gouv.fr/abonnements/rss/actu-actualites-particuliers.rss"
+SP_FEED = (Path(__file__).parent / "fixtures" / "calendrier" / "service_public_actualites.rss").read_bytes()
 
 
 def rss(*items: tuple[str, str, str, str]) -> bytes:
@@ -82,6 +85,7 @@ def fetcher(app, world: TestClient) -> FakeFetcher:  # type: ignore[no-untyped-d
     fake = FakeFetcher()
     fake.serve(ECO, rss(LIVRET, FRENCH_TECH), etag='"v1"')
     fake.serve(PYPI, ENGINE)
+    fake.serve(SERVICE_PUBLIC, rss())  # flux vide ici ; son vrai contenu a son propre test
     app.state.watch_fetcher = fake
     app.state.watch_resolver = lambda host: ["93.184.216.34"]
     return fake
@@ -328,8 +332,10 @@ def test_fetch_bounds_size_time_and_compression() -> None:
 # ============================================================================ scénario A : de la source à toi
 def test_official_news_is_picked_up_dated_and_matched_to_you(app, world: TestClient, fetcher: FakeFetcher) -> None:  # type: ignore[no-untyped-def]
     data = _refresh(world)
-    assert data["report"]["checked"] == 2 and data["report"]["new"] == 4 and data["report"]["errors"] == 0
-    assert all(url in (ECO, PYPI) for url, _, _ in fetcher.calls)  # seules des adresses publiques connues
+    assert data["report"]["checked"] == 3 and data["report"]["new"] == 4 and data["report"]["errors"] == 0
+    assert all(
+        url in (ECO, PYPI, SERVICE_PUBLIC) for url, _, _ in fetcher.calls
+    )  # seules des adresses publiques connues
     items = data["items"]
     livret = items[0]
     assert livret["title"].startswith("Livret A et LEP")  # pertinent pour toi : en premier
@@ -348,6 +354,23 @@ def test_official_news_is_picked_up_dated_and_matched_to_you(app, world: TestCli
     assert eco["builtin"] and eco["last_ok_at"] and eco["last_error"] is None
 
 
+def test_service_public_news_are_read_and_filtered_like_the_others(world: TestClient, fetcher: FakeFetcher) -> None:
+    """Le vrai flux d'actualités de Service-Public (relevé le 24 octobre 2026, quatre articles) : lu, daté, classé par
+    thème ; ce qui ne te concerne pas reste hors de « pertinent » (#32)."""
+    fetcher.serve(SERVICE_PUBLIC, SP_FEED)
+    data = _refresh(world)
+    sp = [i for i in data["items"] if i["source"]["name"].startswith("Service-Public")]
+    assert len(sp) == 4 and data["report"]["errors"] == 0
+    prime = next(i for i in sp if i["title"].startswith("Prime de transport"))
+    assert prime["url"].startswith("https://www.service-public.gouv.fr/particuliers/actualites/A18926")
+    assert prime["published_at"].startswith("2026-10-23T22:00") and set(prime["topics"]) == {"energie", "emploi"}
+    assert prime["relevant"] is True and prime["source"]["trust"] == "officiel"
+    reversion = next(i for i in sp if i["title"].startswith("Retraite de réversion"))
+    assert reversion["topics"] == ["retraite"] and reversion["relevant"] is False, "tu n'as pas l'âge ni de pension"
+    netent = next(i for i in sp if "Net-entreprises" in i["title"])
+    assert netent["topics"] == [] and netent["relevant"] is False
+
+
 def test_changes_are_detected_and_versioned(app, world: TestClient, fetcher: FakeFetcher) -> None:  # type: ignore[no-untyped-def]
     _refresh(world)
     livret = next(i for i in world.get("/api/watch").json()["items"] if i["title"].startswith("Livret A"))
@@ -360,7 +383,7 @@ def test_changes_are_detected_and_versioned(app, world: TestClient, fetcher: Fak
     assert again["version"] == 2 and again["changed_at"] and again["status"] == "new"  # revu → nouveau
     assert again["title"].endswith("1er février 2027")
     # Rien n'a changé (304) : la vérification est datée, sans rien retélécharger
-    assert fetcher.calls[-2][1] == '"v1"'  # la relève suivante envoie l'ETag reçu
+    assert [etag for url, etag, _ in fetcher.calls if url == ECO][1] == '"v1"'  # la relève suivante envoie l'ETag
     fetcher.serve(ECO, b"", status=304)
     before = again["last_verified_at"]
     third = _refresh(world)
@@ -396,9 +419,9 @@ def test_watch_respects_consent_and_schedule(app, world: TestClient, fetcher: Fa
     with app.state.sessionmaker() as db:
         now = utcnow()
         first = ws.housekeeping(db, now=now, fetcher=fetcher)
-        assert first["watch_checked"] == 2
+        assert first["watch_checked"] == 3
         assert ws.housekeeping(db, now=now + timedelta(hours=1), fetcher=fetcher)["watch_checked"] == 0
-        assert ws.housekeeping(db, now=now + timedelta(hours=13), fetcher=fetcher)["watch_checked"] == 1  # 12 h
+        assert ws.housekeeping(db, now=now + timedelta(hours=13), fetcher=fetcher)["watch_checked"] == 2  # 12 h
         old = db.scalars(select(WatchItem)).first()
         assert old is not None
         old.first_seen_at = now - timedelta(days=400)

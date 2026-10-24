@@ -93,6 +93,7 @@ function FindingRow({ f, onChange }: { f: Correlation; onChange: () => void }) {
                   <b>{e.label}</b> : {e.value}
                   {e.ref?.startsWith("doc:") && <> · <a href={`#/documents/${e.ref.slice(4)}`}>voir le document</a></>}
                   {e.ref?.startsWith("series:") && <> · <a href="#/operations">voir les opérations</a></>}
+                  {e.ref?.startsWith("url:https://") && <> · <a href={e.ref.slice(4)} target="_blank" rel="noreferrer noopener">source</a></>}
                 </li>
               ))}
             </ul>

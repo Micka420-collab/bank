@@ -104,12 +104,12 @@ PURPOSES: dict[str, dict[str, Any]] = {
     "watch": {
         "title": "Veille sur les sources officielles",
         "text": (
-            "Bank interroge régulièrement des sources publiques (ministère de l'Économie, moteur OpenFisca, "
-            "sources que tu ajoutes) pour repérer ce qui change. Aucune donnée te concernant n'est envoyée : la "
-            "comparaison avec ta situation se fait ici."
+            "Bank interroge régulièrement des sources publiques (ministère de l'Économie, actualités de "
+            "Service-Public, moteur OpenFisca, sources que tu ajoutes) pour repérer ce qui change. Aucune donnée te "
+            "concernant n'est envoyée : la comparaison avec ta situation se fait ici."
         ),
         "default": True,
-        "version": 1,
+        "version": 2,  # 2 : actualités de Service-Public ajoutées (#32)
     },
     "baremes": {
         "title": "Barèmes tenus à jour",
@@ -119,6 +119,30 @@ PURPOSES: dict[str, dict[str, Any]] = {
             "l'inflation et l'indice de référence des loyers (INSEE), le SMIC et le barème de l'impôt (OpenFisca). "
             "Rien te concernant n'est envoyé : ces serveurs voient seulement l'adresse de ton serveur. Chaque valeur "
             "changée est datée, sourcée et notée dans la Veille ; le fichier livré avec Bank reste le repli."
+        ),
+        "default": False,
+        "version": 1,
+    },
+    "geocoding": {
+        "title": "Ton adresse située sur la carte",
+        "text": (
+            "Quand tu enregistres ton adresse, Bank l'envoie telle que tu l'as tapée au géocodeur public de l'IGN "
+            "(Géoplateforme, data.geopf.fr) pour en tirer le code INSEE de ta commune et ses coordonnées. Rien "
+            "d'autre ne part : ni ton nom, ni tes comptes. Le résultat est gardé chiffré ici ; il sert de point de "
+            "départ aux comparaisons locales (commune du logement, jours fériés, vacances scolaires). Sans ton "
+            "accord, tu peux toujours choisir ta commune à la main."
+        ),
+        "default": False,
+        "version": 1,
+    },
+    "calendar": {
+        "title": "Jours fériés et vacances scolaires",
+        "text": (
+            "Pour décaler un prélèvement qui tombe un jour férié et montrer les vacances dans l'année qui vient, "
+            "Bank relit les jours fériés de ta zone (calendrier.api.gouv.fr) et, si ton adresse est connue, "
+            "demande l'académie de ton département puis ses vacances scolaires (data.education.gouv.fr). Ces "
+            "serveurs voient la zone, le département ou l'académie demandés et l'adresse de ton serveur ; rien "
+            "d'autre. Sans ton accord, rien ne part et la prévision ne décale aucun prélèvement."
         ),
         "default": False,
         "version": 1,

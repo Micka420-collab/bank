@@ -18,7 +18,7 @@ from starlette.testclient import TestClient
 
 from app.api import deps
 from app.domain import baremes as dom
-from app.domain import rates
+from app.domain import contracts, rates
 from app.models import AuditLog, RateObservation, WatchSource
 from app.security import netfetch
 from app.services import baremes as svc
@@ -35,6 +35,7 @@ def clean_overlay() -> Iterator[None]:
     rates.install({})
     yield
     rates.install({})
+    contracts.install_irl({}, None)
 
 
 def read(name: str) -> bytes:
@@ -328,6 +329,7 @@ def test_monthly_check_fixes_the_6_and_9_kva_subscriptions(app, net: tuple[TestC
     )
     assert indices["openfisca.smic_mensuel"]["value"] == "1 867,02 €"
     assert view["irl"] == {"checked": 3, "gaps": [], "missing": []}, "l'IRL de Bank concorde avec l'INSEE"
+    assert contracts.irl_source((2026, 3)).startswith("INSEE, série 001515333"), "ton loyer : l'IRL relu (#32)"
     assert any("Caisse des Dépôts" in n["text"] for n in view["notes"])
 
     # Une seconde vérification ne refait rien.

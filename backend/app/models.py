@@ -1311,3 +1311,50 @@ class RateOverride(Base):
     source_url: Mapped[str] = mapped_column(String(500))
     applied_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     reverted_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+# ---------------------------------------------------------------------------- territoire (#32)
+class HouseholdPlace(Base):
+    """Ton adresse telle que tu l'as tapée et ce que le géocodage en a tiré (commune, code INSEE, coordonnées,
+    département, académie) : chiffré, une seule ligne (id = 1). Le pivot des comparaisons locales."""
+
+    __tablename__ = "household_place"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    data: Mapped[str] = mapped_column(EncryptedText("place.data"))  # JSON
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+
+class PublicCalendar(Base):
+    """Jours fériés d'une année et vacances scolaires de ton académie, relus aux sources publiques et gardés datés
+    et sourcés. Chiffré : la zone et l'académie disent où tu habites. Une relève ratée garde la précédente."""
+
+    __tablename__ = "public_calendars"
+
+    key: Mapped[str] = mapped_column(String(24), primary_key=True)  # feries:2027 | scolaire
+    data: Mapped[str | None] = mapped_column(EncryptedText("calendar.data"))  # JSON
+    source_url: Mapped[str | None] = mapped_column(EncryptedText("calendar.source"))
+    fetched_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_attempt_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_error: Mapped[str | None] = mapped_column(String(300))
+
+
+class DocumentTask(Base):
+    """« Document à récupérer » : un mail d'un organisme sans pièce jointe (avis disponible, nouveau document) ou une
+    attente de saison (avis d'impôt fin août, attestation mensuelle) dont le PDF n'est pas encore dans Papiers. Se
+    ferme seule quand le PDF y est déposé. Objet et attente chiffrés : ils disent de quelles aides tu vis."""
+
+    __tablename__ = "document_tasks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(120), unique=True)  # mail:<empreinte> | season:<attente>:<période>
+    body: Mapped[str] = mapped_column(String(24), index=True)  # impots | caf | france_travail | ameli | retraite
+    origin: Mapped[str] = mapped_column(String(10))  # mail | season
+    expected: Mapped[str] = mapped_column(EncryptedText("doctask.expected"))
+    subject: Mapped[str | None] = mapped_column(EncryptedText("doctask.subject"))
+    received_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    due: Mapped[date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(10), default="open", index=True)  # open | done | dismissed
+    document_id: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    closed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())

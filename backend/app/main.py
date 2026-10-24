@@ -56,7 +56,9 @@ from app.api import (
     retirement,
     search,
     shares,
+    state_accounts,
     system,
+    territory,
     transactions,
     vault,
     watch,
@@ -89,6 +91,8 @@ from app.services import obligations as obligations_service
 from app.services import planning as planning_service
 from app.services import powens as powens_service
 from app.services import shares as shares_service
+from app.services import state_accounts as state_accounts_service
+from app.services import territory as territory_service
 from app.services import vault as vault_service
 from app.services import watch as watch_service
 from app.services.bank_sync import sync_all
@@ -230,6 +234,15 @@ def _housekeeping_once(app: FastAPI, today: date) -> dict[str, int]:
         fetch_rates = baremes_service.default_fetch(http=app.state.baremes_http, resolver=app.state.baremes_resolver)
         report.update(baremes_service.tick(db, now=utcnow(), today=today, fetch=fetch_rates))
         db.commit()
+    with app.state.sessionmaker() as db:  # jours fériés et vacances scolaires : relus quand c'est dû, avec ton accord
+        fetch_cal = territory_service.default_fetch(
+            http=app.state.territory_http, resolver=app.state.territory_resolver
+        )
+        report.update(territory_service.tick(db, now=utcnow(), today=today, fetch=fetch_cal))
+        db.commit()
+    with app.state.sessionmaker() as db:  # documents à récupérer : attentes de saison, tâches fermées par le PDF
+        report.update(state_accounts_service.sync(db, today=today, now=utcnow()))
+        db.commit()
     return report
 
 
@@ -365,6 +378,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "home": SlidingWindowLimiter(30, 600),  # recherches de commune et extractions DVF à la demande
         "bank_setup": SlidingWindowLimiter(10, 600),  # assistant Enable Banking : saisie, vérification, retrait
         "baremes": SlidingWindowLimiter(6, 3600),  # « Vérifier maintenant » des barèmes (sources publiques)
+        "territory": SlidingWindowLimiter(10, 600),  # géocodage de l'adresse et relève du calendrier à la demande
     }
     app.state.enablebanking = _build_enablebanking(settings)
     app.state.enablebanking_http = None  # transport netfetch du client saisi dans l'assistant (remplaçable en test)
@@ -387,6 +401,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.dvf_resolver = None
     app.state.baremes_http = None  # client HTTP des barèmes publics (CRE, CDC, INSEE, OpenFisca ; remplaçable en test)
     app.state.baremes_resolver = None
+    app.state.territory_http = None  # client HTTP du géocodage et du calendrier public (remplaçable en test)
+    app.state.territory_resolver = None
     app.state.channels_options = {}  # surcharges de la passerelle (tests : fabrique d'adaptateurs, horloge…)
 
     routers = (
@@ -432,6 +448,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         system,
         home,
         baremes,
+        territory,
+        state_accounts,
     )
     for r in routers:
         app.include_router(r.router)

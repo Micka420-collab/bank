@@ -200,6 +200,7 @@ export type UpcomingEvent = {
   kind: "income" | "fixed";
   confidence: number;
   late: boolean;
+  shifted_from?: string | null; // prélèvement décalé au jour ouvré suivant (jour férié, week-end)
 };
 
 export type BudgetLine = {
@@ -238,6 +239,7 @@ export type MonthForecast = {
   history: Point[];
   budgets: BudgetLine[];
   allowance: { start: string; end: string; per_day_cents: number; reason: string | null }[];
+  holidays?: { date: string; name: string }[];
 };
 
 export type BudgetResponse = {
@@ -737,6 +739,7 @@ export type YearSpike = {
   category: string | null;
   occurrences: number;
   confidence: number;
+  shifted_from?: string | null;
 };
 export type YearPoint = {
   month: string;
@@ -747,6 +750,8 @@ export type YearPoint = {
   spikes_cents: number;
   spikes: string[];
   end_balance_cents: number;
+  holidays?: string[];
+  school?: string[];
 };
 export type YearAhead = {
   start_month: string;
@@ -768,6 +773,7 @@ export type YearAhead = {
   buffer_cents: number;
   custom: { key: string; label: string; amount_cents: number; next_date: string; every_months: number }[];
   disclaimer: string;
+  calendar?: { zone: string; academy: string | null; school_zone: string | null; note: string } | null;
 };
 
 // ------------------------------------------------------------------ corrélations
@@ -1998,6 +2004,7 @@ export type HomeEstimate = {
 export type HomeView = {
   consent: boolean;
   profile: HomeProfile | null;
+  suggested?: { code: string; commune: string } | null; // commune de ton adresse géocodée (#32)
   estimate: HomeEstimate | null;
   data: {
     matches: boolean;

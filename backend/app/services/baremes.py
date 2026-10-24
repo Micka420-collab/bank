@@ -162,7 +162,22 @@ def install(db: Session) -> int:
     """Pose la couche pour tous les lecteurs (démarrage, après une relève ou un retour au fichier)."""
     layer = overlay(db)
     rates.install(layer)
+    install_irl(db)
     return len(layer)
+
+
+def install_irl(db: Session) -> None:
+    """L'IRL relu à l'INSEE devient celui qui vérifie ton loyer (domain.contracts) ; la table livrée reste le repli."""
+    values: dict[tuple[int, int], float] = {}
+    latest: datetime | None = None
+    for r in db.scalars(select(RateObservation).where(RateObservation.series == "insee.irl")):
+        start = dom.period_start(r.period)
+        try:
+            values[(start.year, (start.month - 1) // 3 + 1)] = float(r.value)
+        except ValueError:
+            continue
+        latest = max(latest, r.fetched_at) if latest else r.fetched_at
+    contracts.install_irl(values, f"{latest:%d/%m/%Y}" if latest else None)
 
 
 # ------------------------------------------------------------------ relève

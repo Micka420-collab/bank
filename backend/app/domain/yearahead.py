@@ -14,6 +14,7 @@ from typing import Any
 
 from app.domain.forecast import CategoryInfo, _occurrences, daily_variable_rate, is_planned_outflow
 from app.domain.recurring import RecurringSeries, Txn, add_months
+from app.domain.territory import SchoolBreak, breaks_between, next_business_day
 
 MONTHS = 12
 MIN_SPIKE_CENTS = 3_000  # en dessous, un prélèvement trimestriel ou annuel n'est pas un « pic »
@@ -54,6 +55,7 @@ class Spike:
     category: str | None = None
     occurrences: int = 0
     confidence: float = 1.0
+    shifted_from: date | None = None  # prélèvement décalé au jour ouvré suivant
 
 
 @dataclass(frozen=True)
@@ -66,6 +68,8 @@ class MonthPoint:
     spikes_cents: int
     spikes: tuple[str, ...]
     end_balance_cents: int
+    holidays: tuple[str, ...] = ()  # « 11/11 : 11 novembre »
+    school: tuple[str, ...] = ()  # « Vacances de Noël du 19/12 au 03/01 »
 
 
 @dataclass(frozen=True)
@@ -101,9 +105,14 @@ def _monthly_equivalent(series: RecurringSeries) -> int:
 
 
 def detected_spikes(
-    series: Sequence[RecurringSeries], categories: Mapping[str, CategoryInfo], today: date, until: date
+    series: Sequence[RecurringSeries],
+    categories: Mapping[str, CategoryInfo],
+    today: date,
+    until: date,
+    holidays: Mapping[date, str] | None = None,
 ) -> list[Spike]:
-    """Les sorties à cadence trimestrielle ou annuelle, posées à chacune de leurs échéances d'ici `until`."""
+    """Les sorties à cadence trimestrielle ou annuelle, posées à chacune de leurs échéances d'ici `until` (au jour
+    ouvré suivant si les jours fériés sont connus)."""
     out: list[Spike] = []
     for s in series:
         if s.direction != "out" or s.cadence not in ("quarterly", "yearly") or abs(s.amount_cents) < MIN_SPIKE_CENTS:
@@ -111,8 +120,9 @@ def detected_spikes(
         info = categories.get(s.category)
         if info is not None and info.kind in ("transfer", "savings"):
             continue
-        for day, _late in _occurrences(s, today, until):
-            if day < today:
+        for nominal, _late in _occurrences(s, today, until):
+            day = next_business_day(nominal, holidays) if holidays is not None else nominal
+            if day < today or day > until:
                 continue
             out.append(
                 Spike(
@@ -125,6 +135,7 @@ def detected_spikes(
                     category=s.category,
                     occurrences=s.occurrences,
                     confidence=s.confidence,
+                    shifted_from=nominal if day != nominal else None,
                 )
             )
     return out
@@ -157,6 +168,8 @@ def build_year_ahead(
     ignored: Sequence[str] = (),
     buffer_cents: int = 0,
     months: int = MONTHS,
+    holidays: Mapping[date, str] | None = None,
+    school_breaks: Sequence[SchoolBreak] = (),
 ) -> YearAhead:
     first = add_months(today.replace(day=1), 1)  # le mois en cours est à la prévision du mois
     until = add_months(first, months) - timedelta(days=1)
@@ -169,7 +182,7 @@ def build_year_ahead(
     income_other = [s for s in series if s.direction == "in" and s.cadence != "monthly"]
     fixed_monthly = sum(_monthly_equivalent(s) for s in planned_out if s.cadence in ("weekly", "biweekly", "monthly"))
     skip = set(ignored)
-    all_spikes = detected_spikes(series, categories, today, until) + custom_occurrences(custom, today, until)
+    all_spikes = detected_spikes(series, categories, today, until, holidays) + custom_occurrences(custom, today, until)
     all_spikes += [
         Spike(f"planned:{d.isoformat()}:{c}", label, c, d, "planned", "planned")
         for d, label, c in planned
@@ -196,6 +209,7 @@ def build_year_ahead(
         spikes_cents = sum(s.amount_cents for s in spikes_here)
         income = income_monthly + income_by_month.get(key, 0)
         balance = balance + income - fixed_monthly - variable - spikes_cents
+        month_end = add_months(m, 1) - timedelta(days=1)
         points.append(
             MonthPoint(
                 key,
@@ -206,6 +220,14 @@ def build_year_ahead(
                 spikes_cents,
                 tuple(f"{s.label} {s.amount_cents / 100:.0f} €" for s in spikes_here),
                 balance,
+                tuple(f"{d:%d/%m} : {n}" for d, n in sorted((holidays or {}).items()) if m <= d <= month_end),
+                tuple(
+                    f"{b.label} du {b.start:%d/%m} au {b.end:%d/%m}"
+                    if b.end > b.start
+                    else f"{b.label} le {b.start:%d/%m}"
+                    for b in breaks_between(school_breaks, m, month_end)
+                    if b.start >= m or m == first
+                ),
             )
         )
         m = add_months(m, 1)
@@ -248,6 +270,7 @@ def spike_to_dict(s: Spike) -> dict[str, Any]:
         "category": s.category,
         "occurrences": s.occurrences,
         "confidence": round(s.confidence, 2),
+        "shifted_from": s.shifted_from.isoformat() if s.shifted_from else None,
     }
 
 
@@ -265,6 +288,8 @@ def to_dict(y: YearAhead) -> dict[str, Any]:
                 "spikes_cents": p.spikes_cents,
                 "spikes": list(p.spikes),
                 "end_balance_cents": p.end_balance_cents,
+                "holidays": list(p.holidays),
+                "school": list(p.school),
             }
             for p in y.points
         ],

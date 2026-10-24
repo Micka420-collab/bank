@@ -37,7 +37,7 @@ from app.models import (
     Transaction,
     WealthSnapshot,
 )
-from app.services import home_value, planning
+from app.services import home_value, planning, territory
 from app.services.categories import category_infos
 from app.services.crypto_value import portfolio_value_cents
 from app.services.settings_store import get_setting
@@ -96,6 +96,7 @@ class ForecastInputs:
     savings_goal_cents: int
     buffer_cents: int
     planned: list[UpcomingEvent]
+    holidays: dict[date, str] | None = None  # jours fériés publics (accord « calendrier ») : prélèvements décalés
 
     def run(self, extra: Sequence[UpcomingEvent] = (), savings_goal_cents: int | None = None) -> MonthForecast:
         return build_forecast(
@@ -107,6 +108,7 @@ class ForecastInputs:
             savings_goal_cents=self.savings_goal_cents if savings_goal_cents is None else savings_goal_cents,
             buffer_cents=self.buffer_cents,
             extra_events=[*self.planned, *extra],
+            holidays=self.holidays,
         )
 
 
@@ -152,7 +154,13 @@ def forecast_inputs(db: Session, today: date) -> ForecastInputs:
         savings_goal_cents=int(get_setting(db, "savings_goal_cents")),
         buffer_cents=int(get_setting(db, "buffer_cents")),
         planned=planned_expense_events(db, today),
+        holidays=_holidays(db),
     )
+
+
+def _holidays(db: Session) -> dict[date, str] | None:
+    cal = territory.calendar(db)
+    return cal.holidays if cal is not None and cal.holidays else None
 
 
 def month_forecast(db: Session, today: date) -> tuple[MonthForecast, dict[str, int]]:

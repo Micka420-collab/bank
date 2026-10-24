@@ -100,8 +100,9 @@ function HomeForm({ view, onDone }: { view: HomeView; onDone: (r: HomeRefresh | 
   const p = view.profile;
   const [kind, setKind] = useState<HomeKind>(p?.kind ?? "appartement");
   const [surface, setSurface] = useState(p ? String(p.surface) : "");
-  const [code, setCode] = useState(p?.code ?? "");
-  const [commune, setCommune] = useState(p?.commune ?? "");
+  // Logement pas encore décrit : la commune de ton adresse (Réglages › Ton adresse) pré-remplit le formulaire.
+  const [code, setCode] = useState(p?.code ?? view.suggested?.code ?? "");
+  const [commune, setCommune] = useState(p?.commune ?? view.suggested?.commune ?? "");
   const [section, setSection] = useState(p?.section ?? "");
   const [rooms, setRooms] = useState(p?.rooms ? String(p.rooms) : "");
   const [inWealth, setInWealth] = useState(p?.in_wealth ?? true);
@@ -162,7 +163,7 @@ function HomeForm({ view, onDone }: { view: HomeView; onDone: (r: HomeRefresh | 
           ))}
         </ul>
       )}
-      <Field label="Code INSEE de la commune" hint="5 caractères ; à Paris, Lyon, Marseille, celui de l'arrondissement (75115…)">
+      <Field label="Code INSEE de la commune" hint={!p && view.suggested ? "pré-rempli depuis ton adresse ; corrige-le si ton logement est ailleurs" : "5 caractères ; à Paris, Lyon, Marseille, celui de l'arrondissement (75115…)"}>
         <input required pattern="(\d{5}|2[ABab]\d{3})" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} />
       </Field>
       <Field label="Nom de la commune"><input value={commune} maxLength={80} onChange={(e) => setCommune(e.target.value)} /></Field>

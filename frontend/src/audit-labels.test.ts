@@ -29,7 +29,7 @@ opportunity.time_value passkey.added passkey.denied passkey.removed password.cha
 planning.connect planning.disconnect planning.model planning.sync_failed planning.sync_manual procedure.approve
 procedure.close procedure.create procedure.delete procedure.fields procedure.pieces procedure.restore procedure.sent
 procedure.update profile.update proposal.approve proposal.create proposal.reject push.subscribe push.test
-rates.revert rates.update
+rates.revert rates.update place.geocode place.remove papers.task_done papers.task_close
 push.unsubscribe retirement.profile retirement.profile_removed rule.create search.configure search.denied
 search.remove search.test search.test_failed setup.denied setup.done transaction.update vault.applied vault.assist
 vault.delete vault.export vault.export_denied vault.field_removed vault.field_set vault.file_read vault.read_failed

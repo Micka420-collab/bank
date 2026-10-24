@@ -1,6 +1,7 @@
-"""Veille : sources publiques interrogées régulièrement (ministère de l'Économie, versions du moteur OpenFisca,
-flux que tu ajoutes), changements détectés et datés, rapprochement avec ta situation fait ici, et rappel des
-données de référence à revérifier. Aucune donnée te concernant ne sort : on ne fait que lire des pages publiques.
+"""Veille : sources publiques interrogées régulièrement (ministère de l'Économie, actualités de Service-Public,
+versions du moteur OpenFisca, flux que tu ajoutes), changements détectés et datés, rapprochement avec ta situation
+fait ici, et rappel des données de référence à revérifier. Aucune donnée te concernant ne sort : on ne fait que
+lire des pages publiques.
 """
 
 from __future__ import annotations
@@ -42,6 +43,15 @@ BUILTIN_SOURCES: tuple[dict[str, Any], ...] = (
         "kind": "rss",
         "name": "Ministère de l'Économie — toutes les actualités",
         "url": "https://www.economie.gouv.fr/rss/toutesactualites",
+        "trust": "officiel",
+        "interval_hours": 12,
+    },
+    {
+        # Changements de règles, échéances, aides : filtrés par thème comme les autres (#32).
+        "slug": "service-public",
+        "kind": "rss",
+        "name": "Service-Public — actualités pour les particuliers",
+        "url": "https://www.service-public.gouv.fr/abonnements/rss/actu-actualites-particuliers.rss",
         "trust": "officiel",
         "interval_hours": 12,
     },
