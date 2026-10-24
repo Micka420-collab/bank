@@ -126,7 +126,8 @@ class TestTotp:
         assert setup["qr_svg"].startswith("<?xml") or "<svg" in setup["qr_svg"]
         totp = pyotp.TOTP(setup["secret"])
         assert auth_client.post("/api/auth/totp/enable", json={"code": "000000"}).status_code == 400
-        enabled = auth_client.post("/api/auth/totp/enable", json={"code": totp.now()})
+        used = totp.now()  # rejoué tel quel : si la fenêtre de 30 s tourne entre-temps, totp.now() serait un code neuf
+        enabled = auth_client.post("/api/auth/totp/enable", json={"code": used})
         codes = enabled.json()["recovery_codes"]
         assert len(codes) == 10
         assert auth_client.get("/api/auth/me").json()["totp_enabled"] is True
@@ -135,7 +136,7 @@ class TestTotp:
             step1 = c.post("/api/auth/login", json={"username": USERNAME, "password": PASSWORD}).json()
             assert step1["mfa_required"] is True and "__Host-bank_session" not in c.cookies
             # Le code déjà utilisé pour l'activation est refusé (anti-rejeu)
-            replay = c.post("/api/auth/mfa", json={"mfa_token": step1["mfa_token"], "code": totp.now()})
+            replay = c.post("/api/auth/mfa", json={"mfa_token": step1["mfa_token"], "code": used})
             assert replay.status_code == 401
             ok = c.post("/api/auth/mfa", json={"mfa_token": step1["mfa_token"], "code": codes[0]})
             assert ok.status_code == 200 and c.get("/api/auth/me").json()["recovery_codes_left"] == 9
