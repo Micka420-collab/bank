@@ -20,6 +20,7 @@ REGULATED = {"livret_a", "ldds", "lep", "cel", "savings"}
 LONG_TERM = {"pel", "pea", "assurance_vie", "per"}
 OTHER_ASSETS = {"crypto", "other"}
 LIABILITIES = {"credit"}
+REAL_ESTATE = {"real_estate"}  # le logement estimé par les ventes voisines (DVF)
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,8 @@ def bucket_of(kind: str) -> str:
         return "epargne_long_terme"
     if kind in LIABILITIES:
         return "dettes"
+    if kind in REAL_ESTATE:
+        return "immobilier"
     return "autres_actifs"
 
 

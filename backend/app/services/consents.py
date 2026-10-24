@@ -111,6 +111,17 @@ PURPOSES: dict[str, dict[str, Any]] = {
         "default": True,
         "version": 1,
     },
+    "home_value": {
+        "title": "Valeur de ton logement (ventes DVF)",
+        "text": (
+            "Pour estimer ton logement, Bank télécharge chaque trimestre le fichier public des ventes de ta commune "
+            "(DVF, files.data.gouv.fr) et, si tu cherches ta commune par son nom, interroge geo.api.gouv.fr avec ce "
+            "nom ou ce code postal. Ces serveurs voient la commune demandée et l'adresse de ton serveur ; jamais ton "
+            "adresse, ta surface ni ta section : la comparaison se fait ici. Sans ton accord, rien ne part."
+        ),
+        "default": False,
+        "version": 1,
+    },
 }
 
 

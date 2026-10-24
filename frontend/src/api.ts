@@ -1909,3 +1909,63 @@ export type PilotTrack = {
   outside: { move_id: number; text: string; status: PilotMove["status"]; amount_cents: number; created_at: string; why: string }[];
   since: string;
 };
+// Ton logement : estimation par les ventes voisines (DVF), fourchette, extraction trimestrielle, prêt en face.
+export type HomeKind = "appartement" | "maison";
+export type HomeProfile = {
+  kind: HomeKind;
+  surface: number;
+  code: string;
+  commune: string | null;
+  section: string | null;
+  rooms: number | null;
+  in_wealth: boolean;
+};
+export type HomeEstimate = {
+  ok: boolean;
+  kind: HomeKind;
+  surface: number;
+  count: number;
+  window_start: string | null;
+  window_end: string | null;
+  message: string;
+  median_cents: number;
+  low_cents: number;
+  high_cents: number;
+  median_m2_cents: number;
+  low_m2_cents: number;
+  high_m2_cents: number;
+  first_sale: string | null;
+  last_sale: string | null;
+  tolerance_percent: number;
+  scope: "section" | "commune";
+  rooms_used: boolean;
+  outliers: number;
+  notes: string[];
+  code: string;
+};
+export type HomeView = {
+  consent: boolean;
+  profile: HomeProfile | null;
+  estimate: HomeEstimate | null;
+  data: {
+    matches: boolean;
+    fetched_at: string | null;
+    latest_sale: string | null;
+    sales: number;
+    years: number[];
+    fresh: boolean;
+    next_refresh: string;
+    error: string | null;
+  };
+  in_wealth: boolean;
+  loans: { id: number; name: string; remaining_cents: number }[];
+  loans_remaining_cents: number;
+  net_cents: number | null;
+  kinds: { key: HomeKind; label: string }[];
+  bounds: { surface: [number, number]; rooms: [number, number] };
+  source: string;
+  source_url: string;
+  disclaimer: string;
+};
+export type HomeRefresh = { status: "refreshed" | "fresh" | "failed" | "capped"; message: string };
+export type CommuneHit = { code: string; name: string; postcodes: string[] };

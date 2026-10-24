@@ -50,7 +50,7 @@ from app.models import (
     Transaction,
 )
 from app.security import audit
-from app.services import analytics, autonomy, documents, initiatives, planning
+from app.services import analytics, autonomy, documents, home_value, initiatives, planning
 from app.services import energy as energy_service
 from app.services import loans as loans_service
 
@@ -509,6 +509,9 @@ def build_dossier(db: Session, today: date, privacy: str = "redacted") -> dict[s
     sim = json.loads(sim_row.result) if sim_row else None
     household = analytics.load_profile(db) or {}
     outside = values.get("outside_assets") or []
+    if any(b.kind == home_value.HOME_KIND for b in balances):
+        # Le logement estimé (DVF) est déjà dans la valeur nette : l'immobilier déclaré ne s'ajoute pas en double.
+        outside = [a for a in outside if a.get("kind") != "immobilier"]
     last_import = db.scalar(select(func.max(ImportBatch.created_at)))
     last_sync = db.scalar(select(func.max(BankConnection.last_sync_at)))
     names = {r.slug: r.name for r in db.scalars(select(Category))}

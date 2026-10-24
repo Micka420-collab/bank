@@ -37,7 +37,7 @@ from app.models import (
     Transaction,
     WealthSnapshot,
 )
-from app.services import planning
+from app.services import home_value, planning
 from app.services.categories import category_infos
 from app.services.crypto_value import portfolio_value_cents
 from app.services.settings_store import get_setting
@@ -241,6 +241,10 @@ def account_balances(db: Session, today: date | None = None) -> list[AccountBala
         value = portfolio_value_cents(db)
         if value > 0:
             out.append(AccountBalance(0, CRYPTO_LINE, "crypto", value))
+    # Le logement estimé par les ventes voisines (DVF) : ligne à part, la médiane ; le prêt reste en dette, en face.
+    home = home_value.wealth_line(db)
+    if home is not None:
+        out.append(home)
     return out
 
 
