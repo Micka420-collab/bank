@@ -372,7 +372,11 @@ déclare pas. Rien n'est envoyé : tu déclares sur le site de l'organisme. Règ
   open source), colle le jeton reçu et ton PRM (14 chiffres, sur la facture). Bank récupère 400 jours, puis se met à
   jour chaque nuit ; le jeton et le PRM sont chiffrés en base ; révocable ici ou chez Enedis. Enedis a changé son
   API fin 2026 : Bank lit l'ancien format et toute structure (date, valeur, unité) du nouveau ; en cas de format
-  inconnu il le dit au lieu d'inventer.
+  inconnu il le dit au lieu d'inventer. Avec le même jeton, il relève aussi la **puissance maximale** de chaque jour
+  (`puissance_conso_max_quotidienne`) : indique ton option et tes kVA, et si sur 12 mois le maximum reste au moins
+  1 kVA sous une puissance plus basse, Bank chiffre l'économie annuelle sur la grille de la CRE (sinon, il dit combien
+  de mois il a). Avec l'accord « Couleur Tempo », la carte montre la couleur du jour et de demain
+  (api-couleur-tempo.fr, relais gratuit de RTE) et, en option Tempo, une alerte part la veille d'un jour rouge.
 - **Planning de travail** : colle l'adresse privée iCal de ton agenda (Google Agenda › « Adresse secrète au
   format iCal », Outlook › « Publier ») ou dépose un .ics. Bank garde les journées et les titres (chiffrés),
   relit l'adresse chaque nuit, et calcule la prochaine paie : part fixe (la paie habituelle lue dans tes relevés)

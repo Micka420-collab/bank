@@ -147,6 +147,17 @@ PURPOSES: dict[str, dict[str, Any]] = {
         "default": False,
         "version": 1,
     },
+    "tempo": {
+        "title": "Couleur Tempo",
+        "text": (
+            "Pour montrer la couleur Tempo du jour et du lendemain, et te prévenir la veille d'un jour rouge si ton "
+            "contrat est en option Tempo, Bank demande ces couleurs à api-couleur-tempo.fr (service gratuit et "
+            "indépendant qui relaie la publication de RTE). Ce serveur voit les dates demandées et l'adresse de ton "
+            "serveur ; rien te concernant. Sans ton accord, rien ne part."
+        ),
+        "default": False,
+        "version": 1,
+    },
     "home_value": {
         "title": "Valeur de ton logement (ventes DVF)",
         "text": (

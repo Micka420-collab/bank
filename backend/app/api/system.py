@@ -27,6 +27,7 @@ from app.models import (
     CryptoTaxEvent,
     CryptoWallet,
     DocumentTask,
+    EnergyMaxPower,
     EnergyReading,
     InitiativeState,
     LlmUsage,
@@ -51,6 +52,7 @@ from app.models import (
 from app.security import audit
 from app.security.auth import verify_password
 from app.services import bank_setup as bank_setup_service
+from app.services import energy as energy_service
 from app.services import exchange_keys as exchange_keys_service
 from app.services import home_value as home_value_service
 from app.services import obligations as obligations_service
@@ -186,6 +188,12 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
             {"day": r.day.isoformat(), "wh": r.wh}
             for r in db.scalars(select(EnergyReading).order_by(EnergyReading.day))
         ],
+        # Puissance maximale de chaque jour (#33) et ton contrat (option, kVA) tel que Bank le connaît.
+        "energy_max_power": [
+            {"day": r.day.isoformat(), "va": r.va, "at": r.at}
+            for r in db.scalars(select(EnergyMaxPower).order_by(EnergyMaxPower.day))
+        ],
+        "energy_contract": energy_service.contract(db),
         "official_facts": [
             {"kind": f.kind, "period": f.period, "fields": json.loads(f.data)} for f in db.scalars(select(OfficialFact))
         ],

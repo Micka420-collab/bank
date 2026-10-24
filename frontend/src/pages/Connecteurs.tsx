@@ -15,6 +15,7 @@ import {
 import { BankConnect, BankMark } from "../components/BankConnect";
 import { BankSetup, setupReady } from "../components/BankSetup";
 import { PowensSetup } from "../components/PowensSetup";
+import { EnergySignals } from "../components/EnergySignals";
 import { StateAccounts } from "../components/StateAccounts";
 import { Icon } from "../components/Icon";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useCelebrate, useToast } from "../components/ui";
@@ -347,6 +348,7 @@ function EnergyPanel({ status, busy, onSync, onDisconnect, onChanged }: {
         </div>
       )}
       {ins.spike && <div className="notice warn">Consommation des 7 derniers jours nettement au-dessus de l'habitude (×{ins.spike_ratio}).</div>}
+      <EnergySignals status={status} onChanged={onChanged} />
 
       {daily.length > 0 && (
         <figure className="energy-chart">

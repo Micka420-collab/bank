@@ -27,6 +27,7 @@ from app.services import (
     opportunities,
     price_alerts,
     procedures,
+    tempo,
     yearahead,
 )
 from app.services import backup as backup_service
@@ -106,6 +107,11 @@ def collect(
         for key, text, urgent in price_alerts.alerts(
             db, now=now, privacy=privacy, public_url=public_url, tz=local.tzinfo or UTC
         )
+    ]
+    # Tempo : la veille d'un jour rouge, en soirée, si ton contrat est en option Tempo (heures calmes respectées).
+    out += [
+        Notice(key, text, urgent)
+        for key, text, urgent in tempo.alerts(db, today=today, local=local, public_url=public_url)
     ]
     # Sauvegardes : un échec ou deux jours sans copie — la seule alerte qui parle du serveur, pas de l'argent.
     out += [

@@ -92,6 +92,7 @@ from app.services import planning as planning_service
 from app.services import powens as powens_service
 from app.services import shares as shares_service
 from app.services import state_accounts as state_accounts_service
+from app.services import tempo as tempo_service
 from app.services import territory as territory_service
 from app.services import vault as vault_service
 from app.services import watch as watch_service
@@ -112,6 +113,8 @@ def _build_enablebanking(settings: Settings) -> EnableBankingClient | None:
 def _energy_sync_once(app: FastAPI, today: date) -> int:
     with app.state.sessionmaker() as db:
         n = energy_service.sync(db, today, make_client=app.state.energy_client_factory)
+        db.commit()
+        energy_service.sync_max_power(db, today, make_client=app.state.energy_client_factory)  # puissance max (#33)
         db.commit()
         return int(n)
 
@@ -239,6 +242,10 @@ def _housekeeping_once(app: FastAPI, today: date) -> dict[str, int]:
             http=app.state.territory_http, resolver=app.state.territory_resolver
         )
         report.update(territory_service.tick(db, now=utcnow(), today=today, fetch=fetch_cal))
+        db.commit()
+    with app.state.sessionmaker() as db:  # couleur Tempo d'aujourd'hui et de demain, avec ton accord (#33)
+        fetch_tempo = tempo_service.default_fetch(http=app.state.tempo_http, resolver=app.state.tempo_resolver)
+        report.update(tempo_service.tick(db, now=utcnow(), today=today, fetch=fetch_tempo))
         db.commit()
     with app.state.sessionmaker() as db:  # documents à récupérer : attentes de saison, tâches fermées par le PDF
         report.update(state_accounts_service.sync(db, today=today, now=utcnow()))
@@ -403,6 +410,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.baremes_resolver = None
     app.state.territory_http = None  # client HTTP du géocodage et du calendrier public (remplaçable en test)
     app.state.territory_resolver = None
+    app.state.tempo_http = None  # client HTTP de la couleur Tempo (api-couleur-tempo.fr ; remplaçable en test)
+    app.state.tempo_resolver = None
     app.state.channels_options = {}  # surcharges de la passerelle (tests : fabrique d'adaptateurs, horloge…)
 
     routers = (

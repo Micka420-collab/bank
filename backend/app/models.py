@@ -516,6 +516,31 @@ class EnergyReading(Base):
     source: Mapped[str] = mapped_column(String(10), default="api")  # api | manual
 
 
+class EnergyMaxPower(Base):
+    """Puissance maximale atteinte un jour (Linky, en VA) et son heure : une ligne par jour et par connexion (#33)."""
+
+    __tablename__ = "energy_max_power"
+    __table_args__ = (UniqueConstraint("connection_id", "day", name="uq_energy_max_power_day"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    connection_id: Mapped[int] = mapped_column(ForeignKey("energy_connections.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column(Date, index=True)
+    va: Mapped[int] = mapped_column(Integer)
+    at: Mapped[str | None] = mapped_column(String(8))  # HH:MM:SS
+
+
+class TempoDay(Base):
+    """Couleur Tempo d'un jour, publiée par RTE et relue chez api-couleur-tempo.fr (#33). Donnée publique : rien te
+    concernant."""
+
+    __tablename__ = "tempo_days"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    color: Mapped[str] = mapped_column(String(8))  # bleu | blanc | rouge
+    source_url: Mapped[str] = mapped_column(String(300))
+    fetched_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
 # ---------------------------------------------------------------------------- documents officiels
 class OfficialFact(Base):
     """Faits tirés d'un document officiel (avis d'impôt, attestation CAF ou France Travail) : chiffres seulement,

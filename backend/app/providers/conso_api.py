@@ -19,6 +19,7 @@ from typing import Any
 import httpx
 
 from app.domain.energy import DailyReading, EnergyFormatError, parse_daily
+from app.domain.energy_signals import MaxPower, SignalFormatError, parse_max_power
 
 BASE_URL = "https://conso.boris.sh/api"
 USER_AGENT = "Bank/0.3 (self-hosted personal finance; contact via GitHub issues of the deployment)"  # ASCII only
@@ -58,10 +59,10 @@ class ConsoApiClient:
             chunks.append(chunk)
         return b"".join(chunks)
 
-    def _get(self, kind: str, prm: str, start: date, end: date) -> Any:
+    def _get(self, kind: str, prm: str, start: date, end: date, extra: dict[str, str] | None = None) -> Any:
         # dateFin exclusive (documentation Conso API) ; alias « start/end/prm » encore acceptés mais on
         # utilise les noms de l'API Mesure synchrone V2 d'Enedis.
-        params = {"pointId": prm, "dateDebut": start.isoformat(), "dateFin": end.isoformat()}
+        params = {"pointId": prm, "dateDebut": start.isoformat(), "dateFin": end.isoformat(), **(extra or {})}
         headers = {
             "Authorization": f"Bearer {self._token}",
             "User-Agent": USER_AGENT,
@@ -114,3 +115,33 @@ class ConsoApiClient:
                     by_day[r.day] = r.wh  # un jour présent dans deux tranches : la dernière lecture l'emporte
             cursor = chunk_end
         return [DailyReading(d, wh) for d, wh in sorted(by_day.items())]
+
+    def daily_max_power(self, prm: str, start: date, end_exclusive: date) -> list[MaxPower]:
+        """Puissance maximale atteinte chaque jour [start, end_exclusive[ (VA), par tranches sûres. Type et
+        paramètres relus le 24/10/2026 sur https://conso.boris.sh/documentation : `puissance_conso_max_quotidienne`,
+        `mesuresPas=P1D` (un point par jour), `grandeurPhysique=PMA` (puissance maximale atteinte)."""
+        by_day: dict[date, MaxPower] = {}
+        cursor = start
+        while cursor < end_exclusive:
+            chunk_end = min(end_exclusive, cursor + timedelta(days=MAX_DAYS_PER_CALL))
+            payload = self._get(
+                "puissance_conso_max_quotidienne",
+                prm,
+                cursor,
+                chunk_end,
+                {"mesuresPas": "P1D", "grandeurPhysique": "PMA"},
+            )
+            try:
+                rows = parse_max_power(payload)
+            except SignalFormatError as exc:
+                raise ConsoApiError(
+                    f"Format de la puissance maximale non reconnu ({exc}) : le format Enedis a peut-être changé, "
+                    "mets Bank à jour ou signale-le (integrations/README)",
+                    200,
+                    permanent=True,
+                ) from exc
+            for r in rows:
+                if start <= r.day < end_exclusive:
+                    by_day[r.day] = r
+            cursor = chunk_end
+        return [by_day[d] for d in sorted(by_day)]

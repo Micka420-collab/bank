@@ -158,6 +158,7 @@ def build_inputs(db: Session, today: date) -> dom.Inputs:
         aid_credits=aids,
         declared=_declared(db),
         energy=_energy(db, today),
+        power=energy_service.power(db, today) if energy_service.active_connection(db) is not None else None,
         monthly_spend=spend,
         monthly_income=income,
         daily_variable_spend=daily,

@@ -8835,3 +8835,21 @@ label {
 .ya-calendar {
   margin-block: 0.75rem;
 }
+/* Énergie (#33) : couleur Tempo du jour et du lendemain, constat de puissance souscrite. */
+.tempo-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.tempo-day {
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  font-size: var(--t-sm);
+}
+.tempo-bleu { background: var(--accent-soft); color: var(--accent-ink); }
+.tempo-blanc { background: var(--surface); color: var(--ink); }
+.tempo-rouge { background: var(--negative-soft); color: var(--negative); font-weight: 600; }
+.tempo-unknown { color: var(--ink-3); }
+.power-note p { margin-block: 0.35rem; }

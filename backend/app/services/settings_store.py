@@ -16,6 +16,11 @@ DEFAULTS: dict[str, Any] = {
     "elec_cents_per_100kwh": 2001,
     "elec_subscription_cents_per_year": 19035,
     "elec_tariff_label": "Base 6 kVA (tarif réglementé)",
+    # Ton contrat : option (base | hphc | tempo) et puissance souscrite en kVA ; None tant que Bank ne les connaît pas.
+    "elec_contract": None,
+    # Puissance maximale Linky et couleur Tempo (#33) : dernière relève et dernière erreur, dites en clair.
+    "energy_power_state": {},
+    "tempo_state": {},
     # Assistant : son nom, la durée de conservation des conversations, ce que chaque modèle sait faire.
     "assistant_name": "Bank",
     "conversation_retention_days": 365,

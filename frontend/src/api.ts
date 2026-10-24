@@ -1091,13 +1091,52 @@ export type EnergyInsights = {
 
 export type TariffOption = { id: string; label: string; cents_per_100kwh: number; yearly_subscription_cents: number; as_of: string; source: string };
 
+export type EnergyContract = { option: "base" | "hphc" | "tempo"; kva: number };
+// Puissance maximale Linky face aux kVA souscrits (#33) : le message est composé par le serveur, chiffres sourcés.
+export type PowerCheckView = {
+  status: "too_high" | "fits" | "no_saving" | "too_few_months" | "no_contract" | "no_grid" | "no_data" | "none_lower";
+  message: string;
+  subscribed_kva: number | null;
+  option: string | null;
+  max_kva: number | null;
+  max_day: string | null;
+  max_at: string | null;
+  days: number;
+  months_available: number;
+  target_kva: number | null;
+  yearly_saving_cents: number | null;
+  grid_as_of: string | null;
+  grid_source: string | null;
+  grid_url: string | null;
+  source: string;
+  last_sync_at: string | null;
+  last_error: string | null;
+};
+export type TempoDayView = { day: string; color: "bleu" | "blanc" | "rouge" | null; label: string };
+export type TempoView = {
+  consent: boolean;
+  is_tempo: boolean;
+  today: TempoDayView | null;
+  tomorrow: TempoDayView | null;
+  source: string;
+  source_url: string;
+  licence: string;
+  last_success_at: string | null;
+  last_error: string | null;
+};
+
 export type EnergyStatus = {
   connected: boolean;
   tariff: { cents_per_100kwh: number; yearly_subscription_cents: number; label: string; options: TariffOption[] };
+  contract: EnergyContract | null;
+  standard_kva: number[];
   connection: { id: number; label: string; prm_masked: string; status: string; last_sync_at: string | null; last_error: string | null; created_at: string } | null;
   insights: EnergyInsights | null;
   daily?: { day: string; wh: number }[];
+  power?: PowerCheckView;
+  tempo: TempoView;
   imported?: number;
+  tempo_error?: string | null;
 };
 
 // ------------------------------------------------------------------ documents officiels

@@ -1,4 +1,5 @@
-"""Énergie : connexion Linky, synchronisation quotidienne, analyse coût / mensualité / pics."""
+"""Énergie : connexion Linky, synchronisation quotidienne, analyse coût / mensualité / pics, et puissance maximale
+atteinte chaque jour face aux kVA de ton contrat (#33)."""
 
 from __future__ import annotations
 
@@ -7,10 +8,11 @@ from dataclasses import asdict
 from datetime import date, timedelta
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.db import utcnow
+from app.db import utcnow, write_lock
+from app.domain import energy_signals as sig
 from app.domain import rates
 from app.domain.energy import (
     MAX_WH_PER_DAY,
@@ -22,7 +24,15 @@ from app.domain.energy import (
     is_electricity_supplier,
     typical_monthly_payment,
 )
-from app.models import AppSetting, Category, EnergyConnection, EnergyReading, Transaction
+from app.models import (
+    AppSetting,
+    Category,
+    EnergyConnection,
+    EnergyMaxPower,
+    EnergyReading,
+    RateObservation,
+    Transaction,
+)
 from app.providers.conso_api import ConsoApiClient, ConsoApiError, looks_like_token
 from app.security import audit
 from app.services.settings_store import get_setting, set_setting
@@ -69,6 +79,34 @@ def set_tariff(db: Session, *, cents_per_100kwh: int, subscription_cents_per_yea
     set_setting(db, "elec_cents_per_100kwh", cents_per_100kwh)
     set_setting(db, "elec_subscription_cents_per_year", subscription_cents_per_year)
     set_setting(db, "elec_tariff_label", label[:60])
+    picked = _contract_of_option(label)
+    if picked is not None:  # une ligne de la grille choisie dit aussi l'option et la puissance
+        set_setting(db, "elec_contract", picked)
+
+
+def _contract_of_option(label: str) -> dict[str, Any] | None:
+    for o in trv_options():
+        oid = str(o.get("id") or "")
+        kind, _, kva = oid.partition("_")
+        if o.get("label") == label and kind in sig.OPTIONS and kva.isdigit() and int(kva) in sig.STANDARD_KVA:
+            return {"option": kind, "kva": int(kva)}
+    return None
+
+
+def contract(db: Session) -> dict[str, Any] | None:
+    """Ton option et ta puissance souscrite : réglées par toi, ou lues sur la ligne de grille choisie comme tarif."""
+    raw = get_setting(db, "elec_contract")
+    if isinstance(raw, dict) and raw.get("option") in sig.OPTIONS and raw.get("kva") in sig.STANDARD_KVA:
+        return {"option": str(raw["option"]), "kva": int(raw["kva"])}
+    return _contract_of_option(str(get_setting(db, "elec_tariff_label")))
+
+
+def set_contract(db: Session, *, option: str, kva: int) -> None:
+    if option not in sig.OPTIONS:
+        raise EnergyError("Option inconnue : Base, Heures creuses ou Tempo")
+    if kva not in sig.STANDARD_KVA:
+        raise EnergyError(f"Puissance non normalisée : {', '.join(str(k) for k in sig.STANDARD_KVA)} kVA")
+    set_setting(db, "elec_contract", {"option": option, "kva": kva})
 
 
 # ------------------------------------------------------------------ connexion
@@ -103,6 +141,8 @@ def disconnect(db: Session, actor: str) -> None:
     if conn is None:
         return
     db.execute(delete(EnergyReading).where(EnergyReading.connection_id == conn.id))
+    db.execute(delete(EnergyMaxPower).where(EnergyMaxPower.connection_id == conn.id))
+    set_setting(db, "energy_power_state", {})
     db.delete(conn)
     audit.record(db, actor, "energy.disconnect", connection=conn.id)
 
@@ -161,6 +201,145 @@ def readings(db: Session, since: date | None = None) -> list[DailyReading]:
     return [DailyReading(r.day, r.wh) for r in db.scalars(stmt)]
 
 
+# ------------------------------------------------------------------ puissance maximale (#33)
+def sync_max_power(db: Session, today: date, *, make_client: ClientFactory = default_client, full: bool = False) -> int:
+    """Rapatrie la puissance maximale des jours manquants jusqu'à hier, par le même jeton que la consommation.
+    Le réseau est interrogé hors transaction (rien n'est verrouillé pendant l'appel) ; un échec est noté à part et
+    ne touche ni la connexion ni la consommation. Retourne le nombre de jours ajoutés ou mis à jour."""
+    conn = active_connection(db)
+    if conn is None:
+        return 0
+    conn_id, prm, token = conn.id, conn.prm, conn.token
+    last = db.scalar(
+        select(EnergyMaxPower.day).where(EnergyMaxPower.connection_id == conn_id).order_by(EnergyMaxPower.day.desc())
+    )
+    start = today - timedelta(days=BACKFILL_DAYS) if full or last is None else last - timedelta(days=2)
+    if start >= today:
+        return 0
+    db.commit()  # rien ne reste verrouillé pendant l'appel à Enedis
+    try:
+        rows = make_client(token).daily_max_power(prm, start, today)
+        error = None
+    except ConsoApiError as exc:
+        rows, error = [], str(exc)[:300]
+    write_lock(db)
+    db.expire_all()
+    if db.get(EnergyConnection, conn_id) is None:
+        return 0  # déconnecté pendant l'appel : rien à garder
+    state = dict(get_setting(db, "energy_power_state") or {})
+    state["last_attempt_at"] = utcnow().isoformat()
+    if error is not None:
+        state["last_error"] = error
+        set_setting(db, "energy_power_state", state)
+        audit.record(db, "system", "energy.max_power_failed", connection=conn_id)
+        return 0
+    existing = {
+        r.day: r
+        for r in db.scalars(
+            select(EnergyMaxPower).where(EnergyMaxPower.connection_id == conn_id, EnergyMaxPower.day >= start)
+        )
+    }
+    changed = 0
+    for r in rows:
+        if not (start <= r.day < today) or not 0 <= r.va <= sig.MAX_VA:
+            continue  # le client filtre déjà ; une implémentation de remplacement ne doit pas pouvoir l'oublier
+        row = existing.get(r.day)
+        if row is None:
+            db.add(EnergyMaxPower(connection_id=conn_id, day=r.day, va=r.va, at=r.at))
+            changed += 1
+        elif (row.va, row.at) != (r.va, r.at):
+            row.va, row.at = r.va, r.at
+            changed += 1
+    state["last_error"] = None
+    state["last_sync_at"] = state["last_attempt_at"]
+    set_setting(db, "energy_power_state", state)
+    if changed:
+        audit.record(db, "system", "energy.max_power", connection=conn_id, changed=changed)
+    db.flush()
+    return changed
+
+
+def max_power(db: Session, since: date | None = None) -> list[sig.MaxPower]:
+    conn = active_connection(db)
+    if conn is None:
+        return []
+    stmt = select(EnergyMaxPower).where(EnergyMaxPower.connection_id == conn.id).order_by(EnergyMaxPower.day)
+    if since is not None:
+        stmt = stmt.where(EnergyMaxPower.day >= since)
+    return [sig.MaxPower(r.day, r.va, r.at) for r in db.scalars(stmt)]
+
+
+def latest_cre(db: Session, prefix: str) -> dict[str, tuple[str, str, str]]:
+    """Dernière valeur relevée de chaque série CRE commençant par `prefix` : série → (période, valeur, adresse)."""
+    out: dict[str, tuple[str, str, str]] = {}
+    for r in db.scalars(select(RateObservation).where(RateObservation.series.like(f"{prefix}%"))):
+        if r.series not in out or r.period > out[r.series][0]:  # périodes AAAA-MM-JJ : l'ordre du texte suffit
+            out[r.series] = (r.period, r.value, r.source_url)
+    return out
+
+
+def grid(db: Session, option: str) -> dict[int, sig.GridPower]:
+    """La grille de l'option : relevée à la CRE (Barèmes tenus à jour) puissance par puissance, sinon rates.json
+    pour l'option Base (6 et 9 kVA). Pour chaque puissance, la grille la plus récente l'emporte."""
+    latest = latest_cre(db, f"cre.{option}.")
+    when = db.scalar(select(func.max(RateObservation.fetched_at)).where(RateObservation.series.like(f"cre.{option}.%")))
+    source = "CRE, tarifs réglementés de vente de l'électricité (données ouvertes)" + (
+        f", relus le {when:%d/%m/%Y}" if when else ""
+    )
+    out = sig.grid_from_rates(option, rates.current())
+    for kva, g in sig.grid_from_observations(option, latest, source).items():
+        if kva not in out or g.as_of >= out[kva].as_of:
+            out[kva] = g
+    return out
+
+
+def _yearly_wh(db: Session, today: date) -> int | None:
+    rows = readings(db, today - timedelta(days=sig.YEAR_DAYS))
+    year = [r for r in rows if r.day < today]
+    if sig.YEAR_DAYS - len(year) > sig.MAX_MISSING_DAYS:
+        return None  # moins de onze mois de consommation : Bank ne compte pas l'écart de prix du kWh
+    return sum(r.wh for r in year)
+
+
+def power(db: Session, today: date) -> sig.PowerCheck:
+    c = contract(db)
+    option = c["option"] if c else None
+    return sig.power_check(
+        max_power(db, today - timedelta(days=sig.YEAR_DAYS + 1)),
+        today=today,
+        subscribed_kva=c["kva"] if c else None,
+        option=option,
+        grid=grid(db, option) if option else {},
+        yearly_wh=_yearly_wh(db, today),
+    )
+
+
+def power_view(db: Session, today: date) -> dict[str, Any]:
+    check = power(db, today)
+    state = get_setting(db, "energy_power_state") or {}
+    return {
+        "status": check.status,
+        "message": check.message,
+        "subscribed_kva": check.subscribed_kva,
+        "option": check.option,
+        "max_kva": None if check.max_va is None else round(check.max_va / 1000, 2),
+        "max_day": check.max_day.isoformat() if check.max_day else None,
+        "max_at": check.max_at,
+        "days": check.days,
+        "months_available": check.months_available,
+        "since": check.since.isoformat() if check.since else None,
+        "target_kva": check.target_kva,
+        "yearly_saving_cents": check.yearly_saving_cents,
+        "subscription_saving_cents": check.subscription_saving_cents,
+        "grid_as_of": check.grid_as_of,
+        "grid_source": check.grid_source,
+        "grid_url": check.grid_url,
+        "source": "Enedis, puissance maximale quotidienne (Linky), via Conso API",
+        "last_sync_at": state.get("last_sync_at"),
+        "last_error": state.get("last_error"),
+    }
+
+
 # ------------------------------------------------------------------ mensualités du fournisseur
 def electricity_payments(db: Session, today: date, months: int = 4) -> list[int]:
     """Prélèvements du fournisseur d'électricité sur les derniers mois (catégorie Énergie + marchand connu)."""
@@ -193,6 +372,8 @@ def status(db: Session, today: date) -> dict[str, Any]:
     out: dict[str, Any] = {
         "connected": conn is not None,
         "tariff": {**asdict(tariff), "options": trv_options()},
+        "contract": contract(db),
+        "standard_kva": list(sig.STANDARD_KVA),
         "connection": None,
         "insights": None,
     }
@@ -210,6 +391,7 @@ def status(db: Session, today: date) -> dict[str, Any]:
     }
     out["insights"] = asdict(ins)
     out["daily"] = [{"day": r.day.isoformat(), "wh": r.wh} for r in readings(db, today - timedelta(days=60))]
+    out["power"] = power_view(db, today)
     return out
 
 
@@ -234,4 +416,5 @@ def summary_for_agent(db: Session, today: date) -> dict[str, Any] | None:
         "spike": ins.spike,
         "months": [{"month": m.month, "kwh": round(m.wh / 1000), "cost_cents": m.cost_cents} for m in ins.months[-6:]],
         "tariff": current_tariff(db).label,
+        "power": {k: v for k, v in power_view(db, today).items() if k not in ("last_error", "last_sync_at")},
     }
