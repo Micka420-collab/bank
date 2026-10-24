@@ -2,7 +2,7 @@
 // Un constat envoyé dans tes messageries une fois par franchissement, jamais un conseil. La liste dit l'état de
 // chaque alerte (armée, déclenchée le …) ; réarmer et supprimer sont à un geste.
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api, useApi, type PriceAlert, type PriceAlertKind, type PriceAlertsView } from "../api";
 import { shortDate } from "../format";
 import { Icon } from "./Icon";
@@ -28,9 +28,22 @@ export function alertText(a: PriceAlert): string {
   return a.kind === "change" ? `${a.asset} ${KIND_TEXT.change} ${a.threshold_text} sur 24 h` : `${a.asset} ${KIND_TEXT[a.kind]} ${a.threshold_text}`;
 }
 
-export function PriceAlerts() {
+export function changeText(change: string | null): string {
+  if (change === null) return "—";
+  const n = Number(change);
+  return `${n > 0 ? "+" : ""}${n.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %`;
+}
+
+export function PriceAlerts({ refresh = 0 }: { refresh?: number }) {
   const v = useApi<PriceAlertsView>("/api/crypto/alerts");
   const [view, setView] = useState<PriceAlertsView | null>(null);
+  // Un relevé peut déclencher une alerte : la liste se relit, sans effacer le formulaire en cours de saisie.
+  const { reload } = v;
+  useEffect(() => {
+    if (!refresh) return;
+    setView(null);
+    reload();
+  }, [refresh]); // eslint-disable-line -- reload change à chaque rendu, seul le relevé compte
   const data = view ?? v.data;
   const [asset, setAsset] = useState("");
   const [kind, setKind] = useState<PriceAlertKind>("below");
@@ -76,7 +89,7 @@ export function PriceAlerts() {
                 {a.state === "armed" ? <span className="tag ok">armée</span> : <span className="tag warn">déclenchée {a.triggered_at ? firedText(a.triggered_at) : ""}</span>}
                 {a.label && <span className="faint">« {a.label} »</span>}
                 <span className="faint">
-                  Cours : {eurText(a.price_eur)}
+                  {a.kind === "change" ? `Variation sur 24 h : ${changeText(a.change_24h)}` : `Cours : ${eurText(a.price_eur)}`}
                   {a.state === "triggered" && a.triggered_price ? ` · au déclenchement : ${eurText(a.triggered_price)}` : ""}
                 </span>
               </div>

@@ -83,11 +83,12 @@ franchissement à signaler).
 
 - **Quand** : à chaque relève des cours (toutes les 30 minutes environ, ou « Relever maintenant »), sur le
   cours tout frais ; aucune autre source, aucun appel en plus. Un cours de plus de 2 h ne déclenche rien.
-- **Une fois par franchissement** : armée, l'alerte passe « déclenchée » (avec le cours et l'heure) par une
+- **Au plus une fois par franchissement** : armée, l'alerte passe « déclenchée » (avec le cours et l'heure) par une
   mise à jour conditionnelle — deux relèves en même temps ne la déclenchent qu'une fois. Elle se réarme seule
   quand le cours revient de l'autre côté avec une marge (1 % du seuil, ou 1 point de variation), ou quand tu la
-  réarmes (refusé tant que le cours est encore du mauvais côté). L'état est en base : un redémarrage ne renvoie
-  rien.
+  réarmes (refusé tant que le cours, ou la variation, est encore au-delà ; de même à la création). L'état est
+  en base : un redémarrage ne renvoie rien. « Au plus » : si elle tire, se réarme et tire de nouveau pendant tes
+  heures calmes, seul le dernier franchissement t'est annoncé — avec le jour, s'il n'est plus aujourd'hui.
 - **Où** : dans tes messageries et sur ton téléphone (notifications du navigateur), par le circuit commun des
   alertes : une fois par compte relié, jamais pendant tes heures calmes, regroupées avec les autres. En
   confidentialité « agrégats », le message ne dit que « une alerte de cours s'est déclenchée ».

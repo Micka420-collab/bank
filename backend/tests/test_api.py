@@ -488,6 +488,7 @@ class TestSystem:
         assert exp.status_code == 200 and "attachment" in exp.headers["content-disposition"]
         data = exp.json()
         assert data["format"] == "bank-export/v1" and len(data["transactions"]) == 9
+        assert data["crypto"]["price_alerts"] == []  # le contenu est vérifié dans test_price_alerts
 
 
 def test_transactions_belong_to_account(auth_client: TestClient, db) -> None:  # type: ignore[no-untyped-def]

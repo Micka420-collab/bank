@@ -35,6 +35,7 @@ from app.models import (
     MerchantHint,
     OfficialFact,
     OpportunityState,
+    PriceAlert,
     Procedure,
     SavingsGoal,
     Transaction,
@@ -378,6 +379,18 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
                 for e in db.scalars(select(CryptoTaxEvent).order_by(CryptoTaxEvent.day))
             ],
             "exchanges": exchange_keys_service.export(db),  # plateformes reliées : jamais la clé ni le secret
+            # Alertes de cours : tes seuils et tes repères (texte libre que tu as saisi).
+            "price_alerts": [
+                {
+                    "asset": a.asset,
+                    "kind": a.kind,
+                    "threshold": a.threshold,
+                    "label": a.label,
+                    "state": a.state,
+                    "created_at": a.created_at.isoformat(),
+                }
+                for a in db.scalars(select(PriceAlert).order_by(PriceAlert.id))
+            ],
         },
     }
     audit.record(db, ctx.user.username, "export.done", transactions=len(payload["transactions"]))

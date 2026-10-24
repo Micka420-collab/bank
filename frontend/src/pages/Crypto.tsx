@@ -89,7 +89,7 @@ export function Crypto() {
 
       {!empty && <Holdings assets={data.assets} />}
 
-      <PriceAlerts key={`alerts-${synced}`} />
+      <PriceAlerts refresh={synced} />
 
       <div className="split cx-split" style={{ marginTop: "1rem" }}>
         <Wallets data={data} onChange={reload} />
