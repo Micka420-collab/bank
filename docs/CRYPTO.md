@@ -210,7 +210,7 @@ ton journal (elles restent dans l'audit) et ne peuvent pas arrêter ton pilote �
 jour, semaine ou mois civil, dans ton fuseau) face à ce que l'agent a rapporté — fait à temps, en retard (de
 combien de jours), manqué, montant différent (écart en euros et en %), en cours, attendu — avec le total prévu et
 le total fait, puis les mouvements faits hors consigne (mode libre, consigne retirée, deuxième mouvement sur une
-même période). Une consigne peut porter un **jour prévu** (« chaque lundi », « le 15 de chaque mois » ; un 31
+même période). Une consigne peut porter un **jour prévu** (« chaque semaine, prévu le lundi », « chaque mois, prévu le 15 » ; un 31
 tombe le dernier jour des mois courts) : il ne change rien à ce que Bank autorise, il sert à dire « en retard ».
 Un rendez-vous n'est attendu que si le pilote était allumé avec cette consigne à partir du jour prévu : une
 semaine de pause, d'arrêt ou après l'échéance s'affiche « pilote éteint », pas « manqué ». Un mouvement refusé

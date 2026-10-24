@@ -31,7 +31,7 @@ from datetime import date, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session
 
 from app.db import write_lock
@@ -246,10 +246,11 @@ def rule_label(rule: dict[str, Any]) -> str:
     if rule["kind"] == "transfer":
         text += f" vers « {rule['destination']} »"
     on = rule.get("on")
+    # Le jour prévu sert au suivi, il ne borne rien : le libellé le dit, à toi comme à l'agent.
     if on and rule["every"] == "week":
-        return f"{text} chaque {WEEKDAYS[int(on) - 1]}"
+        return f"{text} chaque semaine, prévu le {WEEKDAYS[int(on) - 1]}"
     if on and rule["every"] == "month":
-        return f"{text} le {'1er' if int(on) == 1 else int(on)} de chaque mois"
+        return f"{text} chaque mois, prévu le {'1er' if int(on) == 1 else int(on)}"
     return f"{text} {EVERY[str(rule['every'])]}"
 
 
@@ -466,8 +467,14 @@ def _legacy_epoch(db: Session, row: AutonomyMandate, now: datetime) -> None:
 
 
 def _close_epochs(db: Session, now: datetime) -> None:
-    for epoch in db.scalars(select(AutonomyEpoch).where(AutonomyEpoch.stopped_at.is_(None))):
-        epoch.stopped_at = min(now, epoch.expires_at)
+    # Une seule mise à jour, sans charger les lignes : leurs consignes chiffrées ne sont jamais relues, une ligne
+    # illisible ne peut donc pas empêcher l'arrêt.
+    db.execute(
+        update(AutonomyEpoch)
+        .where(AutonomyEpoch.stopped_at.is_(None))
+        .values(stopped_at=case((AutonomyEpoch.expires_at < now, AutonomyEpoch.expires_at), else_=now))
+        .execution_options(synchronize_session="fetch")  # les périodes déjà chargées voient leur clôture
+    )
 
 
 def _disable(db: Session, row: AutonomyMandate, reason: str, *, now: datetime, by_user: bool = False) -> None:

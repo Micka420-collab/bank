@@ -8,7 +8,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 from starlette.testclient import TestClient
 
@@ -198,8 +198,8 @@ RULE = {"kind": "buy", "asset": "BTC", "amount_cents": 2_000, "every": "week", "
 
 
 def test_rule_day_is_validated_labelled_and_keeps_old_ids(db: Session) -> None:
-    assert autonomy.rule_label({**RULE}) == "Acheter 20,00\xa0€ de BTC chaque lundi"
-    assert autonomy.rule_label({**RULE, "every": "month", "on": 1}).endswith("le 1er de chaque mois")
+    assert autonomy.rule_label({**RULE}) == "Acheter 20,00\xa0€ de BTC chaque semaine, prévu le lundi"
+    assert autonomy.rule_label({**RULE, "every": "month", "on": 1}).endswith("chaque mois, prévu le 1er")
     plain = {k: v for k, v in RULE.items() if k != "on"}
     assert autonomy.rule_id({**plain, "to_asset": None, "destination": None}) == autonomy.rule_id(
         {**plain, "to_asset": None, "destination": None, "on": None}
@@ -235,7 +235,7 @@ def test_epochs_follow_enable_renew_and_stop_and_feed_the_view(db: Session) -> N
     (r,) = out["rules"]
     assert statuses(r) == [("2026-W41", "on_time"), ("2026-W42", "off"), ("2026-W43", "waiting")]
     assert r["slots"][2]["note"] == "En retard sur le jour prévu"
-    assert r["label"] == "Acheter 20,00\xa0€ de BTC chaque lundi"
+    assert r["label"] == "Acheter 20,00\xa0€ de BTC chaque semaine, prévu le lundi"
 
 
 def test_a_pilot_enabled_before_epochs_existed_gets_one_window(db: Session) -> None:
@@ -266,6 +266,29 @@ def test_the_first_epoch_keeps_the_window_of_a_pilot_enabled_before_them(db: Ses
     assert statuses(r)[1] == ("2026-W41", "missed"), "le lundi 6 octobre reste manqué"
     autonomy.configure(db, cfg, actor="micka", now=utc(2026, 10, 21, 9))
     assert db.scalar(select(func.count()).select_from(AutonomyEpoch)) == 3, "notée une seule fois"
+
+
+def test_an_unreadable_period_never_blocks_the_stop(db: Session) -> None:
+    """« Tout arrêter » ne relit pas les consignes chiffrées des périodes : une ligne illisible n'empêche rien."""
+    now = datetime(2026, 10, 20, 9, tzinfo=UTC)
+    row = autonomy.mandate(db)
+    row.enabled, row.enabled_at, row.expires_at = True, now, now + timedelta(days=3)
+    db.add(AutonomyEpoch(started_at=now, expires_at=now + timedelta(days=3), trial=True, rules="[]"))
+    db.add(
+        AutonomyEpoch(started_at=now - timedelta(days=9), expires_at=now - timedelta(days=2), trial=True, rules="[]")
+    )
+    db.commit()
+    db.execute(text("UPDATE autonomy_epochs SET rules = 'illisible'"))
+    db.commit()
+    db.expire_all()
+    assert autonomy.stop(db, actor="toi", now=now) is True
+    db.commit()
+    assert autonomy.mandate(db).enabled is False
+    ends = db.execute(
+        select(AutonomyEpoch.expires_at, AutonomyEpoch.stopped_at).order_by(AutonomyEpoch.started_at)
+    ).all()
+    assert ends[0].stopped_at == ends[0].expires_at, "une période déjà échue se clôt à son échéance"
+    assert ends[1].stopped_at == now
 
 
 def test_track_api(auth_client: TestClient, app) -> None:  # type: ignore[no-untyped-def]
