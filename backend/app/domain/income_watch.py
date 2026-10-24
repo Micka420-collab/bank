@@ -2,12 +2,14 @@
 dit face à tes revenus de l'année, et le chèque énergie.
 
 Trois constats, rangés avec les autres corrélations (même forme, mêmes décisions) :
-* une revalorisation légale (prestations au 1er avril, ARE au 1er juillet, retraites de base au 1er janvier) qui ne
-  se voit pas : le premier versement après la date est identique au centime au précédent. Bank ne dit jamais
-  qu'un montant est dû : il renvoie à la notification et au délai de recours ;
+* une revalorisation légale (prestations au 1er avril, retraites de base au 1er janvier) qui ne se voit pas : le
+  premier versement après la date est identique au centime au précédent. Bank ne dit jamais qu'un montant est dû :
+  il renvoie à la notification et au délai de recours. L'ARE n'est pas vérifiée : allocation journalière versée au
+  mois, deux versements diffèrent déjà par le nombre de jours (30 ou 31), un montant identique ne dit rien ;
 * un taux de prélèvement décalé de tes revenus de l'année : estimation au barème, avec ses entrées, comparée à la
   règle de modulation (écart de plus de 5 %), ou solde de septembre à provisionner ;
-* le chèque énergie : éligible d'après la simulation, et rien de vu dans tes relevés.
+* le chèque énergie : éligible d'après la simulation, et rien de vu dans tes relevés (sans date de campagne relue,
+  Bank ne dit pas qu'il manque).
 
 Chaque chiffre vient d'une donnée datée et sourcée (rates.json, recouvert de ce que Bank relève) ou de tes pièces.
 Module pur.
@@ -20,7 +22,7 @@ import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal, InvalidOperation
 from itertools import pairwise
 from typing import Any
 
@@ -38,9 +40,8 @@ COMPLEMENTARY = re.compile(r"AGIRC|ARRCO|IRCANTEC|COMPLEMENTAIRE|\bRAFP\b")
 KIND_WORDS = {
     "prestations": "Les prestations sociales sont revalorisées",
     "pensions": "Les retraites de base sont revalorisées",
-    "are": "Les allocations chômage sont revalorisées",
 }
-TOPIC_OF = {"prestations": "aides", "pensions": "revenus", "are": "revenus"}
+TOPIC_OF = {"prestations": "aides", "pensions": "revenus"}
 _NAMES = {k.code: k.name for k in aids.AID_KINDS}
 _ORG_OF = {k.code: k.organism for k in aids.AID_KINDS}
 _ORG_NAMES = {o.code: o.name for o in aids.ORGANISMS}
@@ -177,7 +178,7 @@ def missing_revaluations(
     out: list[Finding] = []
     for r in revaluations:
         if r.rate_percent <= 0 or r.effective > today:
-            continue  # pas de revalorisation cette année-là (ARE 2026) : un versement identique est normal
+            continue  # pas de revalorisation cette année-là : un versement identique est normal
         due_from = add_months(r.effective, 1) - timedelta(days=FIRST_PAYMENT_MARGIN_DAYS)
         for kind in sorted(r.applies_to):
             items = sorted((c for c in credits if c.kind == kind and not c.complementary), key=lambda c: c.day)
@@ -324,6 +325,8 @@ class WithholdingRule:
     balance_single_max_cents: int
     balance_source: str
     balance_url: str
+    penalty_source: str  # majoration d'une baisse excessive (CGI art. 1729 G)
+    penalty_url: str
 
 
 def load_withholding_rule(raw: Mapping[str, Any]) -> WithholdingRule | None:
@@ -336,6 +339,8 @@ def load_withholding_rule(raw: Mapping[str, Any]) -> WithholdingRule | None:
             int(w["balance_single_max_cents"]),
             str(w["balance_source"]),
             str(w["balance_url"]),
+            str(w["penalty_source"]),
+            str(w["penalty_url"]),
         )
     except (KeyError, TypeError, ValueError, InvalidOperation):
         return None
@@ -397,9 +402,15 @@ def taxable_from_credit(net_paid_cents: int, rate: Decimal) -> int:
     return int(value.quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
+def partner_missing(inp: PasInputs) -> bool:
+    """En couple sans revenu du conjoint connu (0 € au profil se confond avec « pas indiqué ») : l'impôt d'un seul
+    salaire aux parts et à la décote d'un couple serait bien trop bas, la comparaison est faussée."""
+    return inp.couple and inp.partner_taxable_monthly_cents <= 0
+
+
 def estimate_withholding(inp: PasInputs, model: TaxModel) -> PasEstimate | None:
     months = [m for m in inp.months if m.taxable_cents > 0]
-    if len(months) < MIN_MONTHS or inp.rate.percent < 0:
+    if len(months) < MIN_MONTHS or inp.rate.percent < 0 or partner_missing(inp):
         return None
     own_yearly = round(sum(m.taxable_cents for m in months) / len(months) * 12)
     partner_yearly = inp.partner_taxable_monthly_cents * 12 if inp.couple else 0
@@ -449,6 +460,32 @@ def _pas_evidence(est: PasEstimate, rule: WithholdingRule) -> tuple[Evidence, ..
     return tuple(rows)
 
 
+def partner_missing_findings(inp: PasInputs) -> list[Finding]:
+    """Ce qui manque, au lieu d'un écart qui ne viendrait que de la donnée absente."""
+    if len([m for m in inp.months if m.taxable_cents > 0]) < MIN_MONTHS:
+        return []
+    return [
+        Finding(
+            key=f"pas_partner:{inp.year}",
+            kind="withholding_rate",
+            level="info",
+            topic="revenus",
+            title=f"Taux de prélèvement {inp.year} : il manque le revenu de ton conjoint",
+            body=(
+                f"Ton foyer est déclaré en couple ({inp.parts_origin}), mais Bank ne connaît pas le revenu de ton "
+                f"conjoint : sans lui, l'impôt estimé sur tes seuls salaires serait faussé, donc Bank ne compare pas "
+                f"ton taux de {fr_percent(inp.rate.percent)} à tes revenus {inp.year}. Indique son net mensuel dans "
+                "ton profil de foyer (Aides) pour que la comparaison se fasse."
+            ),
+            evidence=(
+                Evidence("Taux appliqué", f"{fr_percent(inp.rate.percent)} — {inp.rate.origin}", inp.rate.ref),
+                Evidence("Conjoint", "aucun revenu indiqué dans ton profil de foyer"),
+            ),
+            confidence=0.5,
+        )
+    ]
+
+
 def withholding_findings(est: PasEstimate | None, rule: WithholdingRule | None) -> list[Finding]:
     if est is None or rule is None:
         return []
@@ -463,6 +500,10 @@ def withholding_findings(est: PasEstimate | None, rule: WithholdingRule | None) 
         gap = Decimal(-est.balance_cents) / est.withheld_cents * 100
         if gap <= rule.decrease_gap_percent:
             return []
+        # arrondi vers le bas : un écart de 5,04 % s'écrit 5 % et ne passe pas, 5,3 % s'écrit 5,3 %
+        shown = gap.quantize(Decimal("0.1"), rounding=ROUND_DOWN)
+        if shown <= rule.decrease_gap_percent:
+            return []
         monthly = round((-est.balance_cents) / 12)
         return [
             Finding(
@@ -474,13 +515,17 @@ def withholding_findings(est: PasEstimate | None, rule: WithholdingRule | None) 
                 f"revenus {inp.year}",
                 body=head
                 + (
-                    f"L'écart ({gap.quantize(Decimal(1))} %) dépasse {fr_percent(rule.decrease_gap_percent)}, le seuil "
+                    f"L'écart ({fr_percent(shown)}) dépasse {fr_percent(rule.decrease_gap_percent)}, le seuil "
                     f"au-delà duquel le taux peut être baissé (CGI art. 204 J). À un taux d'environ "
                     f"{fr_percent(new)}, environ {_eur0(monthly)} de plus resteraient chaque mois sur tes salaires. "
-                    f"Si tes revenus remontent d'ici décembre, la différence se règle en septembre {inp.year + 1}. "
+                    f"Si tes revenus remontent d'ici décembre, la différence se règle en septembre {inp.year + 1}, et "
+                    "une baisse qui se révèle excessive au vu des revenus réels peut être majorée (CGI art. 1729 G). "
                     "La demande se fait dans ton espace impots.gouv.fr."
                 ),
-                evidence=_pas_evidence(est, rule),
+                evidence=(
+                    *_pas_evidence(est, rule),
+                    Evidence("Baisse excessive", rule.penalty_source, f"url:{rule.penalty_url}"),
+                ),
                 yearly_cents=-est.balance_cents,
                 confidence=0.55,
             )
@@ -549,7 +594,9 @@ def is_energy_cheque(label: str) -> bool:
 
 def energy_cheque_findings(sim: EnergyCheque | None, seen: Sequence[date], today: date) -> list[Finding]:
     """Éligible d'après la simulation de cette année, et aucun chèque énergie dans les relevés de l'année. Les dates
-    de la campagne n'ont pas pu être relues sur chequeenergie.gouv.fr : Bank n'en cite aucune."""
+    de la campagne n'ont pas pu être relues sur chequeenergie.gouv.fr (l'envoi varie d'une année à l'autre, le
+    chèque se dépense jusqu'au 31 mars suivant) : Bank n'en cite aucune et ne dit pas qu'un chèque manque, il dit
+    seulement l'éligibilité simulée et où la vérifier."""
     if sim is None or sim.amount_cents <= 0 or sim.year != today.year:
         return []
     if any(d.year == sim.year for d in seen):
@@ -578,12 +625,12 @@ def energy_cheque_findings(sim: EnergyCheque | None, seen: Sequence[date], today
             kind="energy_cheque",
             level="info",
             topic="energie",
-            title=f"Chèque énergie {sim.year} : Bank ne voit pas de chèque énergie utilisé",
+            title=f"Chèque énergie {sim.year} : éligible d'après la simulation",
             body=(
                 f"La simulation OpenFisca du {sim.simulated_on:%d/%m/%Y} te donne éligible (environ "
-                f"{_eur0(sim.amount_cents)} pour {sim.year}). Bank ne voit pas de chèque énergie utilisé dans tes "
-                "relevés ; il est souvent réglé directement au fournisseur, donc invisible ici. Vérifie que tu l'as "
-                "reçu (courrier ou e-chèque) et qu'il a servi."
+                f"{_eur0(sim.amount_cents)} pour {sim.year}). Bank ne connaît pas les dates d'envoi de cette année "
+                "et le chèque est souvent réglé directement au fournisseur, invisible dans tes relevés : rien ici ne "
+                "dit qu'il manque. Son envoi et son utilisation se suivent sur chequeenergie.gouv.fr."
             ),
             evidence=(
                 Evidence("Simulation", f"{format_eur(sim.amount_cents)} — OpenFisca {sim.engine_version}"),

@@ -6,7 +6,9 @@ septembre estimé rejoint l'Année qui vient."""
 from __future__ import annotations
 
 import json
+import logging
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -30,6 +32,18 @@ from app.models import (
 from app.services import analytics
 
 READ_STATUSES = ("to_review", "verified")
+log = logging.getLogger("bank.income_watch")
+
+
+def guarded[T](label: str, produce: Callable[[], list[T]]) -> list[T]:
+    """Un constat facultatif qui casse sur une donnée inattendue (pièce lue de travers, simulation ancienne) ne fait
+    tomber que lui : les Corrélations, l'Année qui vient et le Plan B restent lisibles. Seul le type d'erreur est
+    journalisé, jamais la donnée."""
+    try:
+        return produce()
+    except Exception as exc:  # isolation voulue, voir la docstring
+        log.warning("constats %s ignorés : %s", label, type(exc).__name__)
+        return []
 
 
 # ------------------------------------------------------------------ revalorisations
@@ -214,9 +228,17 @@ def pas_estimate(db: Session, today: date) -> tuple[dom.PasEstimate | None, dom.
     return dom.estimate_withholding(inp, model), rule
 
 
+def withholding(db: Session, today: date) -> list[Finding]:
+    """Le constat sur le taux ; en couple sans revenu du conjoint, ce qui manque plutôt qu'une comparaison faussée."""
+    inp = pas_inputs(db, today)
+    if inp is not None and dom.partner_missing(inp):
+        return dom.partner_missing_findings(inp)
+    return dom.withholding_findings(*pas_estimate(db, today))
+
+
 def september_balance(db: Session, today: date) -> list[tuple[date, str, int]]:
     """Pour l'Année qui vient : le solde d'impôt estimé, à son mois."""
-    return dom.september_balance(*pas_estimate(db, today))
+    return guarded("solde de septembre", lambda: dom.september_balance(*pas_estimate(db, today)))
 
 
 # ------------------------------------------------------------------ chèque énergie
@@ -254,8 +276,14 @@ def _cheques_seen(db: Session, today: date) -> list[date]:
 
 # ------------------------------------------------------------------ ensemble
 def findings(db: Session, today: date) -> list[Finding]:
-    revals, appeal = revaluations(db)
-    out = dom.missing_revaluations(revals, _aid_credits(db, today), today, appeal)
-    out += dom.withholding_findings(*pas_estimate(db, today))
-    out += dom.energy_cheque_findings(_energy_cheque(db), _cheques_seen(db, today), today)
+    def revals() -> list[Finding]:
+        known, appeal = revaluations(db)
+        return dom.missing_revaluations(known, _aid_credits(db, today), today, appeal)
+
+    out = guarded("revalorisations", revals)
+    out += guarded("taux de prélèvement", lambda: withholding(db, today))
+    out += guarded(
+        "chèque énergie",
+        lambda: dom.energy_cheque_findings(_energy_cheque(db), _cheques_seen(db, today), today),
+    )
     return out

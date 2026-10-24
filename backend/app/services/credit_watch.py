@@ -23,6 +23,7 @@ from app.domain.correlations import Finding
 from app.models import Account, AccountKind, CommuteProfile, Loan, PublicSourceKey, RateObservation, Transaction
 from app.security import audit
 from app.services import income_watch, loans, planning
+from app.services.income_watch import guarded
 
 HISTORY_DAYS = 320  # agios des 200 derniers jours et les 100 jours qui les précèdent
 WEBSTAT = "webstat"
@@ -148,23 +149,34 @@ def _salary(db: Session, today: date) -> dom.SalaryBasis | None:
 
 # ------------------------------------------------------------------ ensemble
 def findings(db: Session, today: date) -> list[Finding]:
-    quarters = usury_quarters(db)
-    out: list[Finding] = []
-    for hist in _histories(db, today):
-        out += dom.overdraft_findings(dom.overdraft_costs(hist, today), quarters)
-    tracked = _loans(db)
-    out += dom.loan_usury_findings(tracked, quarters)
-    out += dom.renegotiation_findings(tracked, dom.latest_averages(quarters, today), today)
-    raw = rates.current()
-    out += dom.real_expenses_findings(
-        _work_days(db, today),
-        commute(db),
-        _salary(db, today),
-        dom.load_mileage(raw),
-        iw.load_tax_model(raw),
-        today,
-    )
-    return out
+    # chaque famille de constats isolée : une donnée inattendue ne fait tomber qu'elle (income_watch.guarded)
+    found = guarded("seuils de l'usure", lambda: [usury_quarters(db)])
+    usury: dict[str, dom.UsuryQuarter] = found[0] if found else {}  # sans seuils : ni découvert ni usure, le reste oui
+
+    def overdraft() -> list[Finding]:
+        out: list[Finding] = []
+        for hist in _histories(db, today):
+            out += dom.overdraft_findings(dom.overdraft_costs(hist, today), usury)
+        return out
+
+    def loans_() -> list[Finding]:
+        tracked = _loans(db)
+        return dom.loan_usury_findings(tracked, usury) + dom.renegotiation_findings(
+            tracked, dom.latest_averages(usury, today), today
+        )
+
+    def real_expenses() -> list[Finding]:
+        raw = rates.current()
+        return dom.real_expenses_findings(
+            _work_days(db, today),
+            commute(db),
+            _salary(db, today),
+            dom.load_mileage(raw),
+            iw.load_tax_model(raw),
+            today,
+        )
+
+    return guarded("découvert", overdraft) + guarded("crédits", loans_) + guarded("frais réels", real_expenses)
 
 
 # ------------------------------------------------------------------ Webstat (Banque de France), facultatif

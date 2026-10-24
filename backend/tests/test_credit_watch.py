@@ -128,9 +128,76 @@ def test_read_jorf_fetches_only_what_is_missing() -> None:
     def nothing(url: str, accept: str) -> bytes:
         return read("dila_jorf_listing.html") if url == dom.DILA_JORF_URL else empty
 
+    # fenêtre close, avis absent : les archives parcourues sont rendues, « introuvable » vient quand il n'en reste
+    # plus à ouvrir (le passage suivant ne retélécharge que la liste)
+    seen.clear()
+    (scanned,) = bsvc.read_jorf(nothing, today, frozenset())
+    assert scanned.series == bsvc.SCANNED_SERIES and scanned.period == "2026-Q4"
+    names = json.loads(scanned.value)
+    assert len(names) == dom.MAX_ARCHIVES
+    done = frozenset(f"{bsvc.SCANNED_PREFIX}{n}" for n in names)
     with pytest.raises(dbar.BaremeError, match="introuvable"):
-        bsvc.read_jorf(nothing, today, frozenset())
-    assert bsvc.read_jorf(nothing, date(2026, 9, 28), frozenset({"2026-Q3"})) == [], "avis pas encore paru"
+        bsvc.read_jorf(nothing, today, done)
+    pending = bsvc.read_jorf(nothing, date(2026, 9, 28), frozenset({"2026-Q3"}))
+    assert [o.series for o in pending] == [bsvc.SCANNED_SERIES], "avis pas encore paru : rien que des archives vues"
+
+
+def test_read_jorf_skips_what_is_not_the_avis_and_keeps_to_its_budget() -> None:
+    fetched: list[str] = []
+    other = _tar({"x/jorf/global/article/JORF/ARTI/r.xml": b"<ARTICLE>concernant l'usure<BLOC_TEXTUEL>x</ARTICLE>"})
+    broken = b"pas une archive"
+
+    def fetch(url: str, accept: str) -> bytes:
+        name = url.rsplit("/", 1)[-1]
+        fetched.append(name)
+        if url == dom.DILA_JORF_URL:
+            return read("dila_jorf_listing.html")
+        if name.endswith("20260930-215413.tar.gz"):
+            return broken  # archive abîmée : on passe à la suivante
+        if name.startswith("JORF_202609") and name > "JORF_20260927":
+            return other  # un autre texte sur l'usure (rectificatif) : on passe aussi
+        return read("JORF_20260926-210736.tar.gz") if name.endswith("20260926-210736.tar.gz") else _tar({})
+
+    (obs,) = bsvc.read_jorf(fetch, date(2026, 10, 24), frozenset())
+    assert obs.series == "jorf.usure" and obs.period == "2026-Q4"
+    # deux trimestres cherchés (fin décembre) : douze archives au plus pour la relève entière
+    fetched.clear()
+    late = bsvc.read_jorf(lambda u, a: _tar({}) if u.endswith(".gz") else fetch(u, a), date(2026, 12, 30), frozenset())
+    opened = [n for o in late for n in json.loads(o.value)]
+    assert {o.period for o in late} <= {"2026-Q4", "2027-Q1"} and len(opened) == bsvc.JORF_RUN_ARCHIVES
+    # le temps aussi : passé le budget, la suite attend le passage suivant
+    ticks = iter([0.0, 0.0, 1_000.0])
+    fetched.clear()
+    out = bsvc.read_jorf(fetch, date(2026, 10, 24), frozenset(), clock=lambda: next(ticks, 1_000.0))
+    assert [o.series for o in out] == [bsvc.SCANNED_SERIES] and len(json.loads(out[0].value)) == 1
+
+
+def test_an_avis_not_yet_found_is_looked_for_again_the_next_day(app, auth_client: TestClient) -> None:  # type: ignore[no-untyped-def]
+    from app.services import consents
+
+    listing = b"".join(f'<a href="JORF_202612{d}-002728.tar.gz">'.encode() for d in (18, 19))
+
+    def only_jorf(url: str, accept: str) -> bytes:
+        if url == dom.DILA_JORF_URL:
+            return listing
+        if url.startswith(dom.DILA_JORF_URL):
+            return _tar({})
+        raise AssertionError(url)  # les autres sources sont en pause dans ce test
+
+    day = date(2026, 12, 20)  # avis du 1er trimestre 2027 attendu, pas encore paru
+    now = datetime(2026, 12, 20, 8, tzinfo=UTC)
+    with app.state.sessionmaker() as s:
+        consents.set_consent(s, bsvc.CONSENT, True, actor="t")
+        for slug, src in bsvc.ensure_sources(s).items():
+            src.enabled = slug == "bareme-jorf"
+        s.commit()
+        bsvc.refresh(s, now=now, today=day, fetch=only_jorf, actor="t")
+        src = bsvc.ensure_sources(s)["bareme-jorf"]
+        assert src.last_ok_at is None and src.last_error is None, "pas compté relu : relu demain, pas dans un mois"
+        known = bsvc._known_periods(s)
+        assert any(k.startswith(bsvc.SCANNED_PREFIX) for k in known), "archives vues gardées, pas retéléchargées"
+        assert not bsvc._due(src, now + timedelta(hours=2), bsvc._pending("bareme-jorf", day, known))
+        assert bsvc._due(src, now + timedelta(hours=21), bsvc._pending("bareme-jorf", day, known))
 
 
 # ------------------------------------------------------------------ découvert

@@ -14,6 +14,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -70,24 +71,63 @@ OPENFISCA_LABELS = {
 }
 
 
-def read_jorf(fetch: Fetch, today: date, known: frozenset[str]) -> list[dom.Observation]:
+# Une relève du Journal officiel a un budget pour tous les trimestres cherchés ensemble ; ce qui n'a pas pu être
+# ouvert l'est à la relève suivante (le lendemain), les archives déjà parcourues sans l'avis ne sont pas reprises.
+JORF_RUN_ARCHIVES = 12
+JORF_RUN_BYTES = 60_000_000
+JORF_RUN_SECONDS = 300.0
+SCANNED_SERIES = "jorf.parcourues"  # par trimestre : archives ouvertes sans y trouver l'avis
+SCANNED_PREFIX = "archive:"  # dans `known`, à côté des trimestres connus
+
+
+def read_jorf(
+    fetch: Fetch, today: date, known: frozenset[str], clock: Callable[[], float] = time.monotonic
+) -> list[dom.Observation]:
     """L'avis trimestriel sur l'usure, cherché dans les archives quotidiennes du Journal officiel (DILA) pour le
-    trimestre en cours et le suivant, s'ils ne sont pas encore connus. Rien à chercher : aucun appel."""
+    trimestre en cours et le suivant, s'ils ne sont pas encore connus. Rien à chercher : aucun appel.
+
+    Une archive illisible ou un autre article « concernant l'usure » (rectificatif, avis voisin) ne coupe pas la
+    recherche : on passe à l'archive suivante. Les archives parcourues sans l'avis sont rendues (série
+    `jorf.parcourues`) pour ne pas être téléchargées de nouveau ; « introuvable » n'est dit qu'une fois la fenêtre
+    du trimestre close et toutes ses archives parcourues."""
     wanted = cw.wanted_quarters(today, known)
     if not wanted:
         return []
     listing = fetch(cw.DILA_JORF_URL, cw.HTML_ACCEPT)
     out: list[dom.Observation] = []
+    opened = size = 0
+    started = clock()
     for qid in wanted:
         found = None
-        for name in cw.archives_for(listing, qid, today):
-            article = cw.usury_article(fetch(cw.DILA_JORF_URL + name, cw.GZIP_ACCEPT))
-            if article is not None:
-                found = cw.parse_usury(article)
+        scanned: list[str] = []
+        names = [n for n in cw.archives_for(listing, qid, today) if f"{SCANNED_PREFIX}{n}" not in known]
+        for name in names:
+            if opened >= JORF_RUN_ARCHIVES or size >= JORF_RUN_BYTES or clock() - started >= JORF_RUN_SECONDS:
+                break  # budget de la relève épuisé : la suite au prochain passage
+            archive = fetch(cw.DILA_JORF_URL + name, cw.GZIP_ACCEPT)
+            opened += 1
+            size += len(archive)
+            try:
+                article = cw.usury_article(archive)
+                candidate = cw.parse_usury(article) if article is not None else None
+            except cw.UsuryError:
+                candidate = None  # archive abîmée ou autre texte sur l'usure : l'archive suivante
+            if candidate is not None and candidate.quarter == qid:
+                found = candidate
                 break
-        if found is not None and found.quarter == qid:
+            scanned.append(name)
+        if found is not None:
             out.append(cw.usury_observation(found))
-        elif qid == cw.quarter_id(today) and today > cw.search_window(qid)[1]:
+            continue
+        if scanned:
+            window = set(cw.archives_for(listing, qid, today))
+            before = {k.removeprefix(SCANNED_PREFIX) for k in known if k.startswith(SCANNED_PREFIX)}
+            done = sorted(n for n in before | set(scanned) if n in window)
+            note = (
+                f"{len(done)} archive{'s' if len(done) > 1 else ''} parcourue{'s' if len(done) > 1 else ''} sans l'avis"
+            )
+            out.append(dom.Observation(SCANNED_SERIES, qid, json.dumps(done), cw.DILA_JORF_URL, note))
+        elif qid == cw.quarter_id(today) and today > cw.search_window(qid)[1] and not names:
             raise dom.BaremeError(
                 f"avis sur l'usure du {cw.quarter_label(qid)} introuvable dans les archives du Journal officiel"
             )
@@ -223,11 +263,29 @@ def ensure_sources(db: Session) -> dict[str, WatchSource]:
 def _known_periods(db: Session) -> frozenset[str]:
     """Les trimestres dont l'avis sur l'usure est déjà connu (fichier livré ou relu) : pas besoin de les chercher."""
     observed = db.scalars(select(RateObservation.period).where(RateObservation.series == cw.USURY_SERIES))
-    return frozenset({q.quarter for q in cw.load_usury(rates.static())} | set(observed))
+    known = {q.quarter for q in cw.load_usury(rates.static())} | set(observed)
+    # les archives du Journal officiel déjà parcourues sans l'avis : pas retéléchargées
+    for raw in db.scalars(select(RateObservation.value).where(RateObservation.series == SCANNED_SERIES)):
+        try:
+            names = json.loads(raw)
+        except ValueError:
+            continue
+        if isinstance(names, list):
+            known |= {f"{SCANNED_PREFIX}{n}" for n in names if isinstance(n, str)}
+    return frozenset(known)
 
 
-def _due(source: WatchSource, now: datetime) -> bool:
-    stale = source.last_ok_at is None or now - source.last_ok_at >= INTERVAL
+def _pending(slug: str, today: date, known: frozenset[str], obs: Iterable[dom.Observation] = ()) -> bool:
+    """Le Journal officiel attend encore un avis (fenêtre ouverte, pas encore paru ou pas encore trouvé) : la
+    source est relue le lendemain, pas dans un mois."""
+    if slug != "bareme-jorf":
+        return False
+    found = {o.period for o in obs if o.series == cw.USURY_SERIES}
+    return bool(cw.wanted_quarters(today, known | found))
+
+
+def _due(source: WatchSource, now: datetime, pending: bool = False) -> bool:
+    stale = pending or source.last_ok_at is None or now - source.last_ok_at >= INTERVAL
     resting = source.last_checked_at is not None and now - source.last_checked_at < RETRY_AFTER
     return stale and not resting
 
@@ -365,7 +423,12 @@ def refresh(
     consents.require(db, CONSENT)
     write_lock(db)
     sources = ensure_sources(db)
-    todo = [s for s in SOURCES if sources[s.slug].enabled and (force or _due(sources[s.slug], now))]
+    known = _known_periods(db)
+    todo = [
+        s
+        for s in SOURCES
+        if sources[s.slug].enabled and (force or _due(sources[s.slug], now, _pending(s.slug, today, known)))
+    ]
     if not todo:
         return {
             "status": "fresh",
@@ -377,7 +440,6 @@ def refresh(
         }
     for spec in todo:
         sources[spec.slug].last_checked_at = now
-    known = _known_periods(db)
     db.commit()
     # Chaque fichier à part : un fichier en échec (le Tempo de la CRE, l'IPC…) n'écarte que ses propres valeurs.
     fetched: dict[str, tuple[list[dom.Observation], list[str]]] = {}
@@ -400,8 +462,13 @@ def refresh(
     idle = 0  # sources qui n'avaient rien à chercher (le Journal officiel entre deux avis) : pas comptées relues
     for slug, (obs, failures) in fetched.items():
         source = sources[slug]
-        if not obs and not failures and slug in idle_ok:
-            source.last_ok_at, source.last_error = now, None
+        pending = _pending(slug, today, known, obs)  # avis attendu : relu demain, pas dans un mois
+        values = [o for o in obs if o.series != SCANNED_SERIES]
+        if not values and not failures and slug in idle_ok:
+            _store(db, obs, now)  # les archives parcourues, s'il y en a
+            source.last_error = None
+            if not pending:
+                source.last_ok_at = now
             idle += 1
             continue
         if failures:
@@ -417,9 +484,11 @@ def refresh(
         if not obs:
             continue
         _store(db, obs, now)
-        observations += obs
+        observations += values
         if not failures:
-            source.last_ok_at, source.last_error = now, None
+            source.last_error = None
+            if not pending:
+                source.last_ok_at = now
     proposal = dom.propose(effective(db), observations, today)
     applied, refused = _apply(db, proposal.changes, now)
     _journal(db, applied, sources, now)
@@ -501,7 +570,8 @@ def tick(db: Session, *, now: datetime, today: date, fetch: Fetch) -> dict[str, 
     sources = ensure_sources(db)  # visibles dans Veille › Sources dès le démarrage, même sans accord
     if not consents.granted(db, CONSENT):
         return {}
-    if not any(s.enabled and _due(s, now) for s in sources.values()):
+    known = _known_periods(db)
+    if not any(s.enabled and _due(s, now, _pending(slug, today, known)) for slug, s in sources.items()):
         return {}
     result = refresh(db, now=now, today=today, fetch=fetch, actor="system")
     return {

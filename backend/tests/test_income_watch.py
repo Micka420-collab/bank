@@ -43,12 +43,15 @@ def test_every_rule_is_dated_and_sourced() -> None:
     by_id = {r.id: r for r in REVALS}
     assert by_id["prestations-2026"].rate_percent == Decimal("0.8")
     assert by_id["prestations-2026"].effective == date(2026, 4, 1)
-    assert by_id["pensions-2026"].rate_percent == Decimal("0.9") and by_id["are-2026"].rate_percent == 0
+    assert by_id["pensions-2026"].rate_percent == Decimal("0.9")
+    assert not [r for r in REVALS if "ft_are" in r.applies_to], "ARE journalière : un montant identique ne dit rien"
     assert "caf_logement" not in by_id["prestations-2026"].applies_to, "les aides au logement suivent l'IRL"
     for r in REVALS:
         assert r.source and r.url.startswith("https://")
     assert APPEAL is not None and APPEAL.months == 2 and "F2500" in APPEAL.url
     assert RULE is not None and RULE.decrease_gap_percent == 5 and RULE.balance_single_max_cents == 30_000
+    assert "1729 G" in RULE.penalty_source and RULE.penalty_url.startswith("https://")
+    assert "sans seuil en euros" in RULE.decrease_source, "les 200 € ont disparu avec la loi de finances pour 2023"
     assert MODEL is not None and MODEL.decote_single_cents == 89_700 and MODEL.qf_cap_half_part_cents == 180_700
 
 
@@ -86,7 +89,7 @@ def test_an_unchanged_payment_after_the_april_revaluation_is_a_finding_never_a_d
 def test_what_does_not_make_a_finding() -> None:
     today = date(2026, 8, 20)
     are = [caf(1, date(2026, 7, 2), 98_000, "ft_are"), caf(2, date(2026, 8, 3), 98_000, "ft_are")]
-    assert dom.missing_revaluations(REVALS, are, today, APPEAL) == [], "pas de revalorisation de l'ARE en 2026"
+    assert dom.missing_revaluations(REVALS, are, today, APPEAL) == [], "l'ARE n'est pas vérifiée"
     rappel = [caf(1, date(2026, 4, 5), 31_245), caf(2, date(2026, 5, 5), 31_245), caf(3, date(2026, 5, 12), 4_000)]
     assert dom.missing_revaluations(REVALS, rappel, today, APPEAL) == [], "un rappel dans le mois brouille tout"
     apl = [caf(1, date(2026, 4, 5), 20_000, "caf_logement"), caf(2, date(2026, 5, 5), 20_000, "caf_logement")]
@@ -114,12 +117,14 @@ def test_base_pensions_in_january_but_not_the_complementary_ones() -> None:
     assert dom.COMPLEMENTARY.search(dom.fold("VIR AGIRC-ARRCO RETRAITE COMPLÉMENTAIRE"))
 
 
-def test_france_travail_points_to_the_notification_for_the_appeal() -> None:
+def test_daily_unemployment_benefit_is_not_checked() -> None:
+    # 30 jours de juin puis 31 de juillet : deux montants différents sans revalorisation, un montant égal ne dit rien
     today = date(2025, 9, 1)
     are = [caf(1, date(2025, 7, 1), 98_000, "ft_are"), caf(2, date(2025, 8, 1), 98_000, "ft_are")]
-    (f,) = dom.missing_revaluations(REVALS, are, today, APPEAL)
-    assert "0,5 %" in f.body and "la notification indique la voie et le délai de recours" in f.body
-    assert "2 mois" not in f.body
+    assert dom.missing_revaluations(REVALS, are, today, APPEAL) == []
+    other = dom.Revaluation("x", "prestations", date(2025, 7, 1), Decimal("0.5"), frozenset({"ft_are"}), "s", "u")
+    (f,) = dom.missing_revaluations([other], are, today, APPEAL)
+    assert "la notification indique la voie et le délai de recours" in f.body and "2 mois" not in f.body
 
 
 # ------------------------------------------------------------------ modèle d'impôt
@@ -150,17 +155,21 @@ def test_taxable_income_from_a_salary_credit() -> None:
 
 
 # ------------------------------------------------------------------ taux de prélèvement
-def pas(rate: str, monthly: int, months: int = 6, payslips: bool = True) -> dom.PasEstimate | None:
-    assert MODEL is not None
-    inp = dom.PasInputs(
+def pas_in(rate: str, monthly: int, months: int = 6, payslips: bool = True, **kw: object) -> dom.PasInputs:
+    return dom.PasInputs(
         year=2026,
         rate=dom.RateSeen(Decimal(rate), "bulletin de paie de 06/2026", "doc:4"),
         months=[dom.MonthIncome(f"2026-{m:02d}", monthly, payslips) for m in range(1, months + 1)],
-        parts=Decimal(1),
+        parts=Decimal(str(kw.get("parts", 1))),
         parts_origin="avis d'impôt sur les revenus 2025",
-        couple=False,
+        couple=bool(kw.get("couple", False)),
+        partner_taxable_monthly_cents=int(str(kw.get("partner", 0))),
     )
-    return dom.estimate_withholding(inp, MODEL)
+
+
+def pas(rate: str, monthly: int, months: int = 6, payslips: bool = True) -> dom.PasEstimate | None:
+    assert MODEL is not None
+    return dom.estimate_withholding(pas_in(rate, monthly, months, payslips), MODEL)
 
 
 def test_income_down_lets_the_rate_be_lowered_with_its_monthly_effect() -> None:
@@ -174,7 +183,35 @@ def test_income_down_lets_the_rate_be_lowered_with_its_monthly_effect() -> None:
     assert labels["Taux appliqué"].ref == "doc:4" and "6 mois" in labels["Revenus vus"].value
     assert labels["Règle"].ref and "BOI-IR-PAS-20-30-20-10" in labels["Règle"].ref
     assert labels["Impôt estimé"].ref and labels["Impôt estimé"].ref.startswith("url:https://")
+    assert "1729 G" in f.body and labels["Baisse excessive"].ref and "1729 G" in labels["Baisse excessive"].value
+    assert re.search(r"L'écart \(\d+(,\d)? %\) dépasse 5 %", f.body)
     assert dom.september_balance(est, RULE) == []
+
+
+def test_the_gap_shown_is_never_rounded_onto_the_threshold() -> None:
+    assert RULE is not None and MODEL is not None
+    base = pas("7.4", 200_000)
+    assert base is not None
+    # écart réel de 5,3 % : écrit 5,3 % (et non « 5 % ») ; 5,04 % passerait le test mais s'écrirait 5 % : rien
+    for withheld, gap, expected in ((100_000, 5_300, "5,3 %"), (100_000, 5_040, None)):
+        est = dom.PasEstimate(base.inputs, 0, 0, withheld - gap, withheld, Decimal("2"), "m", "u")
+        found = dom.withholding_findings(est, RULE)
+        if expected is None:
+            assert found == []
+        else:
+            assert f"L'écart ({expected}) dépasse 5 %" in found[0].body
+
+
+def test_a_couple_without_the_partner_income_is_not_compared() -> None:
+    assert MODEL is not None
+    inp = pas_in("7.4", 200_000, couple=True, parts=2)
+    assert dom.partner_missing(inp) and dom.estimate_withholding(inp, MODEL) is None
+    (f,) = dom.partner_missing_findings(inp)
+    assert f.key == "pas_partner:2026" and f.level == "info" and "revenu de ton conjoint" in f.title
+    assert "pas_lower" not in f.key and "Estimation Bank" not in f.body
+    known = pas_in("7.4", 200_000, couple=True, parts=2, partner=150_000)
+    assert not dom.partner_missing(known) and dom.estimate_withholding(known, MODEL) is not None
+    assert dom.partner_missing_findings(pas_in("7.4", 200_000, months=2, couple=True, parts=2)) == []
 
 
 def test_a_small_gap_says_nothing_and_three_months_are_needed() -> None:
@@ -201,7 +238,8 @@ def test_income_up_provisions_the_september_balance_in_four_instalments() -> Non
 def test_energy_cheque_reminder_without_any_campaign_date() -> None:
     sim = dom.EnergyCheque(2026, 4_800, date(2026, 10, 2), "176.1.2")
     (f,) = dom.energy_cheque_findings(sim, [], TODAY)
-    assert "Bank ne voit pas de chèque énergie utilisé" in f.title and "48 €" in f.body
+    assert "éligible d'après la simulation" in f.title and "48 €" in f.body
+    assert "rien ici ne dit qu'il manque" in f.body and "Vérifie" not in f.body
     assert not re.search(r"\b\d{1,2}/\d{2}/\d{4}\b", f.body.replace("02/10/2026", "")), "aucune date de campagne"
     assert dom.energy_cheque_findings(sim, [date(2026, 5, 3)], TODAY) == []
     assert dom.energy_cheque_findings(dom.EnergyCheque(2025, 4_800, date(2025, 10, 2), "x"), [], TODAY) == []
@@ -278,11 +316,26 @@ def test_revaluation_and_energy_cheque_reach_the_correlations(world: TestClient,
     assert exported["fiscal_simulations"][-1]["result"]["cheque_energie_cents"] == 4_800
     # un chèque énergie vu dans les relevés éteint le rappel
     _credit(app, (date(2026, 6, 2), 4_800, "AVOIR EDF CHEQUE ENERGIE"))
-    keys = {f["key"] for f in world.get("/api/correlations").json()["findings"]}
-    assert "cheque_energie:2026" not in keys
+    after = {f["key"] for f in world.get("/api/correlations").json()["findings"]}
+    assert "cheque_energie:2026" not in after
     # écarter le constat le range, comme les autres
     r = world.post("/api/correlations/decide", json={"key": "reval:prestations-2026:caf_rsa", "decision": "dismissed"})
     assert r.status_code == 200 and "reval:prestations-2026:caf_rsa" not in {f["key"] for f in r.json()["findings"]}
+
+
+def test_a_broken_data_point_drops_only_its_own_findings(world: TestClient, app) -> None:  # type: ignore[no-untyped-def]
+    _credit(
+        app, (date(2026, 4, 5), 50_000, "VIR CAF DU LOIRET RSA"), (date(2026, 5, 5), 50_000, "VIR CAF DU LOIRET RSA")
+    )
+    with app.state.sessionmaker() as s:
+        s.add(FiscalSimulation(period="2026-10", result="[1]"))  # simulation d'une forme inattendue
+        s.add(OfficialFact(kind="avis_impot", period="2025", title="Avis", data=json.dumps({"parts": [1]})))
+        s.commit()
+    r = world.get("/api/correlations")
+    assert r.status_code == 200
+    keys = {f["key"] for f in r.json()["findings"]}
+    assert "reval:prestations-2026:caf_rsa" in keys and not any(k.startswith("cheque_energie") for k in keys)
+    assert world.get("/api/forecast/year").status_code == 200
 
 
 def test_a_bmaf_observation_extends_the_dated_revaluations(world: TestClient, app) -> None:  # type: ignore[no-untyped-def]

@@ -144,11 +144,13 @@
   },
   "withholding_tax": {
     "decrease_gap_percent": 5,
-    "decrease_source": "CGI art. 204 J, III-1 ; BOFiP BOI-IR-PAS-20-30-20-10 § 80 (publié le 07/05/2025) : baisse possible si l'écart dépasse 5 % (10 % jusqu'au 31/12/2022)",
+    "decrease_source": "CGI art. 204 J, III-1 ; BOFiP BOI-IR-PAS-20-30-20-10 § 80 (publié le 07/05/2025) : baisse possible si l'écart dépasse 5 %, sans seuil en euros (jusqu'au 31/12/2022 : plus de 10 % et plus de 200 €) ; relu le 24/10/2026",
     "decrease_url": "https://bofip.impots.gouv.fr/bofip/11263-PGP.html/identifiant=BOI-IR-PAS-20-30-20-10-20250507",
     "balance_single_max_cents": 30000,
     "balance_source": "Service-Public F35898 (vérifié le 01/01/2026) : jusqu'à 300 € en une fois en septembre, au-delà en 4 fois de septembre à décembre",
-    "balance_url": "https://www.service-public.gouv.fr/particuliers/vosdroits/F35898"
+    "balance_url": "https://www.service-public.gouv.fr/particuliers/vosdroits/F35898",
+    "penalty_source": "CGI art. 1729 G : une modulation à la baisse qui se révèle excessive au vu des revenus réels peut être majorée ; taux et seuils non relus par Bank (Légifrance refuse les requêtes automatiques, essai du 24/10/2026), à lire avant de demander la baisse",
+    "penalty_url": "https://www.legifrance.gouv.fr/codes/texte_lc/LEGITEXT000006069577/"
   },
   "revaluations": {
     "appeal_months": 2,
@@ -197,28 +199,6 @@
         ],
         "source": "Circulaire Cnav 2025-29 du 22 décembre 2025 : retraites de base revalorisées de 0,9 % (coefficient 1,009) ; pas les complémentaires",
         "url": "https://legislation.lassuranceretraite.fr/Pdf/circulaire_cnav_2025_29_22122025.pdf"
-      },
-      {
-        "id": "are-2026",
-        "kind": "are",
-        "effective": "2026-07-01",
-        "rate_percent": "0",
-        "applies_to": [
-          "ft_are"
-        ],
-        "source": "Unédic, communiqué du 30 juin 2026 : pas de revalorisation au 1er juillet 2026",
-        "url": "https://www.unedic.org/actualites/allocations-dassurance-chomage-pas-de-revalorisation-au-1er-juillet-2026"
-      },
-      {
-        "id": "are-2025",
-        "kind": "are",
-        "effective": "2025-07-01",
-        "rate_percent": "0.5",
-        "applies_to": [
-          "ft_are"
-        ],
-        "source": "Unédic, communiqué du 25 juin 2025 : revalorisation de 0,5 % au 1er juillet 2025",
-        "url": "https://www.unedic.org/actualites/allocations-d-assurance-chomage-revalorisation-de-0-5-au-1er-juillet-2025"
       }
     ]
   },
