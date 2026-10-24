@@ -16,7 +16,7 @@ import {
 } from "../api";
 import { Icon, type IconName } from "../components/Icon";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useCelebrate, useToast } from "../components/ui";
-import { money, plural, shortDate } from "../format";
+import { money, perPeriod, plural, shortDate } from "../format";
 import { editValue, fullDate } from "./Documents";
 import { Sources } from "./Opportunities";
 
@@ -80,7 +80,7 @@ function Board({ wantNew }: { wantNew: boolean }) {
           {COLUMNS.map((col) => {
             const items = rows.filter((r) => col.stages.includes(r.stage));
             return (
-              <section key={col.key} className={`proc-col is-${col.key}`} aria-labelledby={`col-${col.key}`}>
+              <section key={col.key} className={`proc-col is-${col.key}${items.length === 0 ? " is-empty" : ""}`} aria-labelledby={`col-${col.key}`}>
                 <h2 id={`col-${col.key}`}>{col.title} <span className="chip-count">{items.length}</span></h2>
                 <p className="faint">{col.hint}</p>
                 <ul>{items.map((r) => <ProcCard key={r.id} row={r} />)}</ul>
@@ -105,7 +105,7 @@ function ProcCard({ row }: { row: ProcedureRow }) {
     <li className={`proc-card${row.due ? " is-due" : ""}`}>
       <a href={`#/demarches/${row.id}`}>
         <b>{row.title}</b>
-        <span className="faint">{row.stage_label}</span>
+        <span className="faint">{row.stage_label}{row.stage !== "abandoned" && !done ? ` · étape ${step + 1}/${PHASES.length}` : ""}</span>
         {row.stage !== "abandoned" && (
           <span className="proc-progress" role="img" aria-label={done ? "Dossier terminé" : `Étape ${step + 1} sur ${PHASES.length} : ${PHASES[step]}`}>
             {PHASES.map((label, i) => <i key={label} className={i < step || done ? "is-done" : i === step ? "is-active" : undefined} />)}
@@ -519,7 +519,7 @@ function FollowUp({ view, onView }: { view: ProcedureView; onView: (v: Procedure
         body: { outcome, amount_cents: outcome === "obtenu" ? amount : null, period, note: note || null },
       }));
       // Un résultat obtenu avec son montant se fête comme un gain confirmé ; le reste est simplement noté.
-      if (outcome === "obtenu" && amount) celebrate("coin", "Résultat enregistré : compté comme obtenu.");
+      if (outcome === "obtenu" && amount) celebrate("coin", `+${perPeriod(amount, period)} obtenus, bravo ! C'est compté dans ta tirelire.`);
       else toast("Résultat enregistré.");
     });
   };

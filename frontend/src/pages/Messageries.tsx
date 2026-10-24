@@ -382,7 +382,7 @@ function Pairing({ p, reload }: { p: ChannelPlatform; reload: () => void }) {
   useEffect(() => {
     if (code && p.links.length > startCount.current) {
       setCode(null);
-      celebrate("done", `C'est relié 🎉 Écris /budget à ton robot ${p.label} pour essayer.`);
+      celebrate("done", `C'est relié ! Écris /budget à ton robot ${p.label} pour essayer.`);
     }
   }, [code, p.links.length, p.label, celebrate]);
 

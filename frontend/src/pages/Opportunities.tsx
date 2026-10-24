@@ -160,6 +160,8 @@ function PiggyBank({ value, coin }: { value: OpportunityCenter["value"]; coin: n
             {reached.map((m) => <li key={m} className={m === fresh ? "is-new" : undefined}><Icon name="coin" size={14} /> {money(m, { whole: true })}</li>)}
           </ul>
         )}
+        {/* Toujours présente, pour que le lecteur d'écran annonce le palier dès qu'il apparaît (distincte du toast du gain). */}
+        <p className="sr-only" role="status">{fresh ? `Palier de ${money(fresh, { whole: true })} atteint` : ""}</p>
         <p className="piggy-road">
           <span className="piggy-road-label">En route</span>{" "}
           {value.estimated_yearly_cents ? (

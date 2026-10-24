@@ -116,7 +116,7 @@ export function Operations({ openImport = false }: { openImport?: boolean }) {
               <span><b>{plural(list.data.total, "opération", "opérations")}</b>{filtered ? " trouvées" : ""}</span>
               <span className="faint">sur les {items.length} affichées : <b className="amount in">+{money(sumIn, { whole: true })}</b> · <b>{money(sumOut, { whole: true })}</b></span>
             </div>
-            <TransactionLedger items={items} categories={categories.data ?? []} hints={hints.data ?? {}}
+            <TransactionLedger items={items} categories={categories.data ?? []} hints={hints.data ?? {}} filtered={filtered}
                                onChanged={() => { list.reload(); hints.reload(); }} />
             {items.length < list.data.total && (
               <div className="actions" style={{ justifyContent: "center" }}>
@@ -189,7 +189,7 @@ function HintsBanner({ items, configured, hints, onSuggested }: { items: Transac
   );
 }
 
-function TransactionLedger({ items, categories, hints, onChanged }: { items: Transaction[]; categories: Category[]; hints: Record<string, string>; onChanged: () => void }) {
+function TransactionLedger({ items, categories, hints, filtered, onChanged }: { items: Transaction[]; categories: Category[]; hints: Record<string, string>; filtered: boolean; onChanged: () => void }) {
   const toast = useToast();
   const celebrate = useCelebrate();
   const days = useMemo(() => {
@@ -208,9 +208,15 @@ function TransactionLedger({ items, categories, hints, onChanged }: { items: Tra
       const said = r.propagated > 0
         ? `Classé en ${name}. Appris pour ${t.merchant} : ${plural(r.propagated, "autre opération", "autres opérations")} mises à jour.`
         : `Classé en ${name}. Les prochaines opérations ${t.merchant} suivront.`;
-      // La dernière opération « à classer » de la page vient d'être rangée : c'est la fin d'une corvée.
-      const others = items.filter((x) => x.id !== t.id && toSort(x) && !(r.propagated > 0 && x.merchant === t.merchant));
-      if (toSort(t) && slug !== "a_categoriser" && others.length === 0) celebrate("done", `${said} Tout est rangé.`);
+      // La fête seulement quand le mois de l'anneau (SortProgress) est vraiment rangé : sans filtre, et compté par le
+      // serveur sur tout le mois, pas sur les seules lignes chargées.
+      let allSorted = false;
+      if (!filtered && toSort(t) && slug !== "a_categoriser") {
+        const month = items.reduce((m, x) => (x.booking_date > m ? x.booking_date : m), "").slice(0, 7);
+        const page = await api<Page>(`/api/transactions?from=${month}-01&limit=500`);
+        allSorted = page.items.filter((x) => x.booking_date.startsWith(month) && toSort(x)).length === 0;
+      }
+      if (allSorted) celebrate("done", `${said} Tout est rangé.`);
       else toast(said);
       onChanged();
     } catch (e) {

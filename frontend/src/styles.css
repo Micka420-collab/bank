@@ -123,8 +123,6 @@
     --accent-ink: #c9c1ff;
     --accent-soft: #2a2560;
     --accent-grad: linear-gradient(135deg, #8c7cff, #d07bff);
-  --grad-a: #8c7cff;
-  --grad-b: #d07bff;
     --grad-a: #8c7cff;
     --grad-b: #d07bff;
     --accent-wash: linear-gradient(135deg, rgba(140, 124, 255, 0.2), rgba(208, 123, 255, 0.16));
@@ -171,6 +169,8 @@
   --accent-ink: #c9c1ff;
   --accent-soft: #2a2560;
   --accent-grad: linear-gradient(135deg, #8c7cff, #d07bff);
+  --grad-a: #8c7cff;
+  --grad-b: #d07bff;
   --accent-wash: linear-gradient(135deg, rgba(140, 124, 255, 0.2), rgba(208, 123, 255, 0.16));
   --on-accent: #0c0b1d;
   --glow: 0 0 0 4px rgba(169, 157, 255, 0.22), 0 10px 32px -6px rgba(208, 123, 255, 0.55);
@@ -264,8 +264,7 @@ a {
    entre eux et l'anneau (double anneau). */
 :focus-visible {
   outline: 3px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 6px;
+  outline-offset: 2px; /* le contour suit l'arrondi de l'élément : une pilule garde sa forme au focus */
 }
 button,
 input,
@@ -460,7 +459,7 @@ a.sr-only:focus-visible {
 .page-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: flex-start; /* les actions s'alignent sur le titre, sur toutes les pages */
   justify-content: space-between;
   gap: 0.75rem 1.5rem;
   margin-bottom: 1.5rem;
@@ -468,8 +467,22 @@ a.sr-only:focus-visible {
 .page-head p {
   max-width: 60ch;
 }
+.page-head h1 + p,
+.page-head h1 + .muted {
+  margin-top: 0.35rem;
+}
+.card h2 + p:not([class]),
+.card h3 + p:not([class]) {
+  margin-top: 0.4rem;
+}
 .section {
   margin-top: 2.5rem;
+}
+.sheet > .card + .card {
+  margin-top: 1rem; /* deux cartes de verre ne se touchent jamais */
+}
+.card > .section:first-child {
+  margin-top: 0; /* une section posée dans une carte : le padding de la carte suffit */
 }
 .section > h2 {
   margin-bottom: 0.9rem;
@@ -518,24 +531,23 @@ a.sr-only:focus-visible {
 .quick-actions {
   margin-top: 1.25rem;
 }
-/* Le héros : la seule carte en verre flouté, avec son propre halo (teinté par l'état du mois quand il en a un). */
+/* Le héros : du verre posé sur son propre halo (teinté par l'état du mois quand il en a un). Le halo est peint SOUS
+   le verre, qui le voile aussi : le texte garde son contraste jusque dans le coin lumineux (DESIGN.md § 3.3). Pas de
+   flou : le héros défile, un backdrop-filter s'y recalculerait à chaque image pour un effet invisible. */
 .card-hero {
+  --hero-halo-mix: 100%;
   position: relative;
   isolation: isolate;
   border-radius: var(--r-hero);
   padding: 1.75rem clamp(1.25rem, 3vw, 2.25rem);
-  background: var(--glass);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-}
-.card-hero::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(60% 90% at 100% 0%, var(--hero-halo, var(--halo-1)), transparent 72%);
-  pointer-events: none;
+  background:
+    linear-gradient(var(--glass), var(--glass)),
+    radial-gradient(
+      60% 90% at 100% 0%,
+      color-mix(in srgb, var(--hero-halo, var(--halo-1)) var(--hero-halo-mix), transparent),
+      transparent 72%
+    ),
+    var(--bg);
 }
 .card-quiet {
   box-shadow: none;
@@ -829,6 +841,15 @@ a.sr-only:focus-visible {
   font-size: 12px;
   font-family: var(--font);
 }
+.chart-ticks {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.15rem calc(12 / 720 * 100%) 0; /* aligné sur les marges du dessin (PAD de TrendChart) */
+  font-size: var(--t-xs);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
 .chart .low-label {
   fill: var(--ink);
   font-weight: 650;
@@ -908,7 +929,7 @@ a.sr-only:focus-visible {
   font-weight: 600;
   color: var(--ink-2);
   cursor: pointer;
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   transition:
     background var(--d-fast),
     color var(--d-fast),
@@ -918,9 +939,9 @@ a.sr-only:focus-visible {
   color: var(--ink);
 }
 .segmented button[aria-pressed="true"] {
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: var(--glass-shine), var(--shadow-2);
+  background: var(--accent-grad);
+  color: var(--on-accent);
+  box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--accent) 80%, transparent);
 }
 .legend {
   display: flex;
@@ -1190,6 +1211,18 @@ a.sr-only:focus-visible {
   text-align: right;
   display: grid;
 }
+/* Au téléphone, le montant passe sous le titre : aligné à gauche avec lui, sur une ligne. */
+@media (max-width: 560px) {
+  .stream-head {
+    flex-direction: column;
+  }
+  .stream-figure {
+    text-align: start;
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+  }
+}
 .stream-figure b {
   font-size: var(--t-lg);
   font-variant-numeric: tabular-nums;
@@ -1260,7 +1293,7 @@ a.sr-only:focus-visible {
   -webkit-overflow-scrolling: touch;
 }
 .audit-table td {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .audit-table td:first-child {
   white-space: nowrap;
@@ -1384,10 +1417,9 @@ a.sr-only:focus-visible {
 }
 .bars i {
   flex: 1;
-  background: var(--accent);
-  border-radius: 2px 2px 0 0;
+  background: linear-gradient(180deg, var(--grad-b), var(--grad-a));
+  border-radius: 4px 4px 2px 2px;
   min-height: 2px;
-  opacity: 0.85;
 }
 .bars i.is-empty {
   background: var(--line);
@@ -1656,20 +1688,50 @@ input[aria-invalid="true"] {
     transform: rotate(360deg);
   }
 }
+/* Le ton d'une carte arrondie : une petite barre en pilule posée À L'INTÉRIEUR, retirée de l'arrondi (une bordure
+   gauche épaisse se courberait en croissant dans le coin). Chaque composant pose --stripe. */
+.notice,
+.ask,
+.pay-forecast,
+.answer,
+.opp,
+.watch-item.is-new,
+.proc-decl,
+.corr-row {
+  position: relative;
+}
+.notice::before,
+.ask::before,
+.pay-forecast::before,
+.answer::before,
+.opp::before,
+.watch-item.is-new::before,
+.proc-decl::before,
+.corr-row::before {
+  content: "";
+  position: absolute;
+  left: 0.4rem;
+  top: 0.75rem;
+  bottom: 0.75rem;
+  width: 4px;
+  border-radius: var(--r-pill);
+  background: var(--stripe, transparent);
+  pointer-events: none;
+}
 /* Bandeaux : du verre fort teinté, une barre de couleur à gauche ; le texte reste en encre (jamais la couleur seule). */
 .notice {
   --n-c: var(--accent);
   --n-soft: var(--accent-soft);
+  --stripe: var(--n-c);
   display: flex;
   gap: 0.6rem;
   align-items: flex-start;
   border: 1px solid var(--glass-edge);
-  border-left: 4px solid var(--n-c);
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--n-soft) 85%, transparent), transparent 75%),
     var(--glass-strong);
   color: var(--ink);
-  padding: 0.75rem 1rem;
+  padding: 0.75rem 1rem 0.75rem 1.25rem;
   border-radius: var(--r-control);
   box-shadow: var(--glass-shine), var(--shadow-1);
   max-width: 72ch;
@@ -1782,12 +1844,14 @@ input[aria-invalid="true"] {
     background-position: -200% 0;
   }
 }
-.empty,
-.empty-inline {
+.empty {
   padding: 1.5rem 0;
   display: grid;
   gap: 0.75rem;
   justify-items: start;
+}
+.empty-inline {
+  padding: 1.5rem 0;
 }
 .plain {
   width: 100%;
@@ -2129,12 +2193,11 @@ input[aria-invalid="true"] {
   gap: 0.75rem;
 }
 .ask {
-  position: relative;
+  --stripe: var(--accent);
   background: var(--glass-strong);
   border: 1px solid var(--glass-edge);
-  border-left: 4px solid var(--accent);
   border-radius: var(--r-m);
-  padding: 1rem 1.25rem 1.1rem;
+  padding: 1rem 1.25rem 1.1rem 1.4rem;
   box-shadow: var(--card-shadow);
   animation: ask-in 220ms var(--ease-out);
 }
@@ -2142,13 +2205,13 @@ input[aria-invalid="true"] {
   animation: ask-out 220ms ease-in forwards;
 }
 .ask-celebrate {
-  border-left-color: var(--positive);
+  --stripe: var(--positive);
 }
 .ask-notice {
-  border-left-color: var(--warning);
+  --stripe: var(--warning);
 }
 .ask-tip {
-  border-left-color: var(--ink-3);
+  --stripe: var(--ink-3);
 }
 .ask-kind {
   font-size: var(--t-sm);
@@ -2194,7 +2257,10 @@ input[aria-invalid="true"] {
 }
 .asks-more {
   margin-top: 0.75rem;
-  font-size: var(--t-sm);
+}
+/* Sur Aujourd'hui (titre visible), la carte prend la largeur des autres cartes de la page. */
+.asks:has(> .asks-title) {
+  max-width: none;
 }
 @keyframes ask-in {
   from {
@@ -2650,9 +2716,9 @@ input[aria-invalid="true"] {
   border-color: var(--accent);
 }
 .pay-forecast {
-  padding: 1rem 1.25rem;
+  --stripe: var(--positive);
+  padding: 1rem 1.25rem 1rem 1.4rem;
   border: 1px solid var(--glass-edge);
-  border-left: 4px solid var(--positive);
   border-radius: var(--r-m);
   background: var(--glass-strong);
   max-width: 44rem;
@@ -2707,15 +2773,15 @@ input[aria-invalid="true"] {
   animation: ask-in 220ms var(--ease-out);
 }
 .answer-oui {
-  border-left: 4px solid var(--positive);
+  --stripe: var(--positive);
 }
 .answer-oui_mais,
 .answer-attendre {
-  border-left: 4px solid var(--warning);
+  --stripe: var(--warning);
 }
 .answer-plus_tard,
 .answer-hors_de_portee {
-  border-left: 4px solid var(--negative);
+  --stripe: var(--negative);
 }
 .answer-head {
   font-size: var(--t-lg);
@@ -2808,6 +2874,39 @@ input[aria-invalid="true"] {
   text-decoration: none;
   color: var(--ink);
   box-shadow: var(--card-shadow);
+}
+/* Des tuiles de même hauteur sur une ligne, et chaque pôle a sa couleur de halo derrière son icône. */
+.more li {
+  display: flex;
+  min-width: 0;
+}
+.more a {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: break-word;
+  --tint: var(--halo-1);
+}
+.more li:nth-child(4n + 2) a {
+  --tint: var(--halo-4);
+}
+.more li:nth-child(4n + 3) a {
+  --tint: var(--halo-2);
+}
+.more li:nth-child(4n + 4) a {
+  --tint: var(--halo-3);
+}
+.more a b {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.more a b .icon {
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0.5rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--tint) 70%, var(--surface));
+  color: var(--ink);
 }
 
 /* ------------------------------------------------------------------ authentification */
@@ -2908,7 +3007,7 @@ input[aria-invalid="true"] {
     display: none;
   }
   .sheet {
-    padding: 1.25rem 1rem calc(6.5rem + env(safe-area-inset-bottom));
+    padding: 1.25rem 1rem calc(9.5rem + env(safe-area-inset-bottom)); /* île d'onglets + bouton flottant */
   }
   .card,
   .panel {
@@ -2938,9 +3037,10 @@ input[aria-invalid="true"] {
     padding: var(--tab-pad);
     border: 1px solid var(--glass-edge);
     border-radius: var(--r-pill);
-    background: var(--glass-strong); /* des libellés passent dessus la liste : verre fort */
-    -webkit-backdrop-filter: var(--glass-blur);
-    backdrop-filter: var(--glass-blur);
+    /* Du texte défile dessous : verre presque opaque et flou fort, pour qu'il se devine sans se lire. */
+    background: color-mix(in srgb, var(--surface) 90%, transparent);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    backdrop-filter: blur(28px) saturate(160%);
     box-shadow: var(--glass-shine), var(--shadow-3);
     z-index: 10;
   }
@@ -3372,7 +3472,7 @@ input[aria-invalid="true"] {
 .memory-note-text {
   flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .memory-notes .btn.link {
   font-size: var(--t-xs);
@@ -3530,7 +3630,7 @@ input[aria-invalid="true"] {
 }
 .memory-entry-body p {
   line-height: 1.5;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .memory-entry-body .faint {
   font-size: var(--t-xs);
@@ -3617,7 +3717,7 @@ input[aria-invalid="true"] {
 }
 .memory-old,
 .memory-new {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .conversation-list li {
   display: grid;
@@ -3878,7 +3978,7 @@ input[aria-invalid="true"] {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   line-height: 1.3;
 }
 .vault-tile-body .faint {
@@ -3936,9 +4036,6 @@ input[aria-invalid="true"] {
   background: var(--surface);
   color: var(--ink);
   font: inherit;
-}
-.vault-empty p {
-  max-width: 60ch;
 }
 .vault-head .vault-status {
   align-self: center;
@@ -4035,7 +4132,7 @@ input[aria-invalid="true"] {
 .vault-field-value {
   font-weight: 650;
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .vault-field.is-low .vault-field-value {
   color: var(--warning);
@@ -4055,7 +4152,7 @@ input[aria-invalid="true"] {
   grid-column: 2 / -1;
   font-size: var(--t-xs);
   color: var(--ink-3);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .vault-proof-tag {
   display: inline-block;
@@ -4297,11 +4394,11 @@ input[aria-invalid="true"] {
 .opp {
   --tone: var(--accent);
   background: var(--glass-strong);
+  --stripe: var(--tone);
   border: 1px solid var(--glass-edge);
-  border-left: 3px solid var(--tone);
   border-radius: var(--r-m);
   box-shadow: var(--card-shadow);
-  padding: 1.1rem 1.25rem;
+  padding: 1.1rem 1.25rem 1.1rem 1.4rem;
   display: grid;
   gap: 0.45rem;
 }
@@ -4435,7 +4532,7 @@ input[aria-invalid="true"] {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1rem;
   margin-top: 1.5rem;
-  align-items: start;
+  align-items: stretch;
 }
 .proc-col {
   background: var(--surface-2);
@@ -4448,6 +4545,14 @@ input[aria-invalid="true"] {
   display: flex;
   align-items: baseline;
   gap: 0.25rem;
+}
+.proc-col .chip-count {
+  background: var(--glass-strong);
+  box-shadow: inset 0 0 0 1px var(--glass-edge);
+}
+.proc-col:not(.is-empty) .chip-count {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
 }
 .proc-col > p {
   font-size: var(--t-xs);
@@ -4640,7 +4745,7 @@ input[aria-invalid="true"] {
 .proc-field-value {
   font-weight: 650;
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   white-space: pre-line;
 }
 .proc-field.is-missing .proc-field-value {
@@ -4757,7 +4862,7 @@ input[aria-invalid="true"] {
   font-size: var(--t-sm);
   line-height: 1.6;
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   max-height: 28rem;
   overflow: auto;
 }
@@ -4781,7 +4886,7 @@ input[aria-invalid="true"] {
   margin: 0;
   font-weight: 600;
   white-space: pre-line;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .proc-declarations {
   border: 0;
@@ -4799,11 +4904,12 @@ input[aria-invalid="true"] {
   padding: 0.7rem 0.85rem;
   border-radius: var(--r-s);
   background: var(--surface-2);
-  border-left: 3px solid var(--accent);
+  --stripe: var(--accent);
+  padding-left: 1.15rem;
   font-weight: 450;
 }
 .proc-decl.is-consequence {
-  border-left-color: var(--warning);
+  --stripe: var(--warning);
   background: var(--warning-soft);
 }
 .proc-decl input {
@@ -4875,7 +4981,8 @@ input[aria-invalid="true"] {
   gap: 0.35rem;
 }
 .watch-item.is-new {
-  border-left: 3px solid var(--accent);
+  --stripe: var(--accent);
+  padding-left: 1.4rem;
 }
 .watch-item h3 {
   font-size: var(--t-md);
@@ -4932,7 +5039,7 @@ input[aria-invalid="true"] {
   border-top: 0;
 }
 .watch-url {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   font-size: var(--t-xs);
 }
 .watch-source-actions {
@@ -5034,6 +5141,14 @@ input[aria-invalid="true"] {
   }
   .proc-col {
     min-height: 0;
+  }
+  /* Une colonne vide au téléphone : une seule ligne « Prêt à valider · 0 », sans l'aide. */
+  .proc-col.is-empty {
+    padding: 0.55rem 0.9rem;
+  }
+  .proc-col.is-empty > p,
+  .proc-col.is-empty > ul {
+    display: none;
   }
   .proc-phases li + li::before {
     width: 0.6rem;
@@ -5209,21 +5324,26 @@ input[aria-invalid="true"] {
   position: sticky;
   top: 0;
   z-index: 6;
-  margin: -0.5rem -1rem 1rem;
-  padding: 0.5rem 1rem;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  margin: -0.25rem 0 1rem;
+  padding: 0.25rem 0;
 }
+/* Pas de bande pleine largeur qui couperait le halo : la liste elle-même est une pilule de verre (une seule couche,
+   les boutons dedans sont transparents), et son bord droit s'estompe pour dire « il y en a d'autres → ». */
 .secnav ul {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0.25rem;
   display: flex;
-  gap: 0.35rem;
+  gap: 0.2rem;
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--glass-shine), var(--shadow-2);
+  -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
+  mask-image: linear-gradient(90deg, #000 85%, transparent);
 }
 .secnav ul::-webkit-scrollbar {
   display: none;
@@ -5239,8 +5359,8 @@ input[aria-invalid="true"] {
   min-height: 2.25rem;
   padding: 0.35rem 0.85rem;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--line-strong) 35%, var(--glass-edge));
-  background: var(--glass-strong);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--ink-2);
   font-size: var(--t-sm);
   font-weight: 600;
@@ -5272,12 +5392,14 @@ main.sheet details.card {
     position: static;
     margin: 0 0 1rem;
     padding: 0;
-    background: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
   }
   .secnav ul {
     flex-wrap: wrap;
+    width: fit-content;
+    max-width: 100%;
+    border-radius: var(--r-card);
+    -webkit-mask-image: none;
+    mask-image: none;
   }
 }
 
@@ -5475,15 +5597,6 @@ main.sheet details.card {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-}
-.chance i {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  background: var(--line-strong);
-}
-.chance i.is-on {
-  background: var(--coin);
 }
 .mission .actions {
   margin-top: 0.35rem;
@@ -5755,7 +5868,7 @@ main.sheet details.card {
 }
 .ch-webhook code,
 .ch-commands code {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .ch-kv {
   display: grid;
@@ -6088,7 +6201,7 @@ main.sheet details.card {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 0.82rem;
   color: var(--ink-2);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .cx-error {
   color: var(--negative);
@@ -6420,7 +6533,7 @@ details.card.cx-details > summary {
 .pl-journal li > div,
 .pl-dest li {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .pl-frame .segmented {
   display: flex;
@@ -6553,20 +6666,19 @@ details.card.cx-details > summary {
   gap: 0.75rem;
 }
 .corr-row {
-  padding: 0.9rem 1rem;
+  padding: 0.9rem 1rem 0.9rem 1.25rem;
   border: 1px solid var(--glass-edge);
-  border-left-width: 4px;
   border-radius: var(--r-s);
   background: var(--glass-strong);
 }
 .corr-row.is-danger {
-  border-left-color: var(--negative);
+  --stripe: var(--negative);
 }
 .corr-row.is-warning {
-  border-left-color: var(--warning);
+  --stripe: var(--warning);
 }
 .corr-row.is-info {
-  border-left-color: var(--accent);
+  --stripe: var(--accent);
 }
 .corr-row h3 {
   margin: 0.35rem 0 0.25rem;
@@ -7314,7 +7426,7 @@ details.card.cx-details > summary {
 }
 .mail-text p {
   margin: 0.2rem 0 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .mail-text .tag {
   margin-left: 0.3rem;
@@ -7523,7 +7635,7 @@ details.card.cx-details > summary {
 }
 .chat-sources a {
   font-weight: 600;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .chat-snippet {
   margin: 0.15rem 0 0;
@@ -7605,6 +7717,9 @@ label {
   .btn.sm,
   .pill,
   .btn.xs,
+  .chip,
+  .secnav button,
+  .check,
   select.inline {
     min-height: 2.75rem;
   }
@@ -7631,10 +7746,15 @@ label {
     min-height: 5.5rem;
     align-content: start;
   }
+  .more a b {
+    flex-direction: column;
+    align-items: flex-start; /* l'icône au-dessus du titre : les noms longs ne se cassent plus mot par mot */
+    gap: 0.4rem;
+  }
   .more a .faint {
     font-size: var(--t-xs);
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
@@ -8038,17 +8158,27 @@ label {
   gap: 3px;
   margin-top: 0.4rem;
 }
+/* Les crans à venir sont creux et cernés (≥ 3:1 sur verre, comme la chance) : la longueur de la barre se voit. Le cran
+   en cours se distingue par la forme (plus haut, cerclé), pas par la teinte ; « étape n/6 » est aussi écrit au-dessus. */
+.proc-progress {
+  align-items: center;
+}
 .proc-progress > i {
   height: 6px;
   border-radius: var(--r-pill);
-  background: var(--line);
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
 }
 .proc-progress > i.is-done {
   background: var(--positive);
+  box-shadow: none;
 }
 .proc-progress > i.is-active {
+  height: 10px;
   background: var(--accent-grad);
-  box-shadow: 0 0 8px -1px var(--grad-b);
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 3.5px var(--accent);
 }
 
 /* ---------------------------------------------------------------- états vides illustrés */
@@ -8274,6 +8404,11 @@ label {
     min-height: 52px;
     justify-content: center;
   }
+}
+@media (max-width: 480px) {
+  .vault-actions .btn {
+    flex-basis: 100%; /* l'une sous l'autre, libellés sur une ligne */
+  }
   .vault-drop {
     padding: 1.1rem 1rem;
   }
@@ -8436,6 +8571,9 @@ label {
   body::before {
     opacity: 0.5;
   }
+  .card-hero {
+    --hero-halo-mix: 50%;
+  }
   .card-quiet {
     background: var(--surface-2);
   }
@@ -8450,6 +8588,9 @@ label {
   }
   body::before {
     opacity: 0.5;
+  }
+  .card-hero {
+    --hero-halo-mix: 50%;
   }
 }
 
@@ -8468,6 +8609,9 @@ label {
   }
   body::before {
     display: none;
+  }
+  .card-hero {
+    --hero-halo-mix: 0%;
   }
 }
 

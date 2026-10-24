@@ -6,20 +6,31 @@ import { Icon, type IconName } from "./Icon";
 // ------------------------------------------------------------------ toast
 /** Neutre par défaut ; « success » (coche qui se trace), « coin » (un gain), « error » (reste plus longtemps). */
 export type ToastKind = "info" | "success" | "coin" | "error";
-type Toast = { msg: string; kind: ToastKind; n: number; party?: CelebrationKind };
+type Toast = { msg: string; kind: ToastKind; n: number };
 const TOAST_ICON: Record<ToastKind, IconName> = { info: "spark", success: "check", coin: "coin", error: "alert" };
 type Show = (msg: string, kind?: ToastKind, party?: CelebrationKind) => void;
 const ToastCtx = createContext<Show>(() => undefined);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<Toast | null>(null);
+  const [party, setParty] = useState<{ kind: CelebrationKind; n: number } | null>(null);
   const timer = useRef<number | undefined>(undefined);
+  const partyTimer = useRef<number | undefined>(undefined);
+  const count = useRef(0);
   const show = useCallback<Show>((msg, kind = "info", party) => {
-    setToast((t) => ({ msg, kind, party, n: (t?.n ?? 0) + 1 }));
+    const n = ++count.current;
+    setToast({ msg, kind, n });
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setToast(null), kind === "error" ? 8000 : 4500);
+    // La fête dure à peine plus que son animation (1,2 s) : la couche plein écran ne reste pas montée avec le toast.
+    window.clearTimeout(partyTimer.current);
+    setParty(party ? { kind: party, n } : null);
+    if (party) partyTimer.current = window.setTimeout(() => setParty(null), 1300);
   }, []);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
+  useEffect(() => () => {
+    window.clearTimeout(timer.current);
+    window.clearTimeout(partyTimer.current);
+  }, []);
   return (
     <ToastCtx.Provider value={show}>
       {children}
@@ -33,7 +44,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         )}
       </div>
       {/* Hors de la région annoncée : la fête se voit, le texte du toast suffit à la dire. */}
-      {toast?.party && <Celebration key={toast.n} kind={toast.party} />}
+      {party && <Celebration key={party.n} kind={party.kind} />}
     </ToastCtx.Provider>
   );
 }

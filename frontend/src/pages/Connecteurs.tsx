@@ -67,6 +67,10 @@ export function Banks({ result }: { result: string | null }) {
     if (result === "connected") celebrate("done", "Banque connectée. Lance une synchronisation pour récupérer tes opérations.");
     if (result === "refused") toast("Connexion annulée côté banque.");
     if (result === "error") toast("La connexion a échoué ou a expiré : recommence.");
+    // Le retour de la banque ne se fête qu'une fois : sans ce paramètre, ni un rechargement ni « Retour » ne le rejouent.
+    if (result && window.location.hash.includes("?")) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search + window.location.hash.split("?")[0]);
+    }
   }, [result, toast, celebrate]);
 
   const connections = status.data?.connections ?? [];

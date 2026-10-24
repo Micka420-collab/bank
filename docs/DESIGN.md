@@ -139,9 +139,9 @@ menthe en bas) pour garder le fond calme sous le pouce.
 
 | Jeton | Clair | Sombre | Usage |
 |---|---|---|---|
-| `--glass` | `rgba(255,255,255,.74)` | `rgba(26,24,56,.70)` | Grandes surfaces : héros, rail, barre d'onglets, toasts, feuille de l'assistant |
+| `--glass` | `rgba(255,255,255,.74)` | `rgba(26,24,56,.70)` | Grandes surfaces : héros (posé sur son halo, sans flou), rail, toasts, feuille de l'assistant |
 | `--glass-strong` | `rgba(255,255,255,.88)` | `rgba(26,24,56,.86)` | Cartes ordinaires, listes, formulaires, tableaux (beaucoup de texte) |
-| `--glass-blur` | `blur(20px) saturate(160%)` | `blur(24px) saturate(140%)` | **Seulement** héros, rail, barre d'onglets, toasts, assistant, modales |
+| `--glass-blur` | `blur(20px) saturate(160%)` | `blur(24px) saturate(140%)` | **Seulement** ce qui est fixe ou collant : rail, barre d'onglets (flou 28 px, verre à 90 %), toasts, assistant, modales. Pas le héros : il défile, le flou s'y recalculerait à chaque image pour un effet invisible |
 | `--glass-edge` | `rgba(255,255,255,.70)` | `rgba(255,255,255,.10)` | Bordure 1 px |
 | `--glass-shine` | `inset 0 1px 0 rgba(255,255,255,.90)` | `inset 0 1px 0 rgba(255,255,255,.08)` | Reflet du haut, comme une arête de verre |
 | `--glass-shadow` | `0 12px 32px -14px rgba(52,40,120,.28), 0 2px 6px -2px rgba(52,40,120,.10)` | `0 20px 40px -20px rgba(0,0,0,.70)` | Élévation |
@@ -210,6 +210,13 @@ menthe en sombre), avec les opacités ci-dessus. Script de calcul : luminance re
 | Bordure de champ `--line-strong` sur `--surface` | 3,3 (clair) · 3,5 (sombre) |
 | Arc de progression `#5B4BFF` sur verre clair · `#8C7CFF` sur verre sombre | 4,8 · 4,8 |
 
+**Héros** : son halo est peint **sous** le verre (`linear-gradient(var(--glass))` par-dessus un radial
+`--hero-halo` par-dessus `--bg`), donc voilé lui aussi. Pire coin (en haut à droite, halo à pleine force) :
+clair `--ink-3` 5,5 · `--accent` 5,6 · `--negative` 4,6 · `--positive` 4,47 ; sombre `--ink-2` 7,3 · `--ink-3` 5,4
+· `--accent` 5,8. `--positive` clair frôle 4,5 : **tout texte coloré d'un héros va sur une pastille `-soft`
+opaque** (verdict, delta), jamais à nu. Le halo du héros suit les replis : 50 % en transparence réduite ou sans
+`backdrop-filter`, retiré en contraste renforcé (`--hero-halo-mix`).
+
 **Règle du fond nu** : directement sur `--bg` + halos (titres de page, en-têtes de section hors carte), seuls
 `--ink` (≥ 10) et `--ink-2` (≥ 5,2) sont permis. `--ink-3` y tombe à 4,0 en clair, les couleurs de sens à
 3,3–3,7 : tout texte `.faint`, `.muted` coloré, montant signé ou `.notice` va **dans** une surface de verre.
@@ -239,8 +246,11 @@ carte.
 pastille « pièce » (`.coin-chip`, `+13,49 € par mois`) brille d'un `--glow-coin` réduit de moitié.
 
 **Cartes** : `.card`, `.panel`, `.chart-wrap` → `--glass-strong`, bord `--glass-edge`, `--glass-shine` +
-`--glass-shadow`, `--r-card`. `.card-quiet` → `--surface-2` à 70 % sans ombre. `.card-hero` → `--glass` +
-`--glass-blur`, `--r-hero`, un halo propre en `::before` (radial, couleur selon l'état, voir chiffre du jour).
+`--glass-shadow`, `--r-card`. `.card-quiet` → `--surface-2` à 70 % sans ombre. `.card-hero` → `--glass` posé
+sur son propre halo (radial, couleur selon l'état, voir chiffre du jour), sans flou, `--r-hero`. Deux cartes de
+verre consécutives gardent 1rem d'écart. Le ton d'une carte arrondie (bandeau, demande, mission, veille) est une
+barre de 4 px en pilule **posée à l'intérieur**, retirée de l'arrondi (`--stripe`), jamais une bordure gauche
+épaisse qui se courberait en croissant.
 Les listes à l'intérieur (`.ledger`, `.opp-list`, `.proc-card`…) n'ont **ni** flou **ni** ombre par ligne : un
 séparateur 1 px `--line` et, au survol, `--accent-soft` à 50 %.
 
@@ -258,11 +268,12 @@ env(safe-area-inset-bottom)) 12px`), `--glass` + `--glass-blur`, `--glass-shadow
 Onglet actif : une bulle `--accent-grad` derrière l'icône (40 × 32 px, texte `--on-accent` pour l'icône,
 libellé dessous en `--accent-ink`) qui glisse d'un onglet à l'autre (`transform`, 280 ms). **Pastilles de
 compte** sur Gagner (gains à confirmer) et Papiers (démarches à traiter), les mêmes que le rail. La page garde
-une marge basse de `calc(6.5rem + env(safe-area-inset-bottom))` pour que ni l'île ni le bouton flottant ne
+une marge basse de `calc(9.5rem + env(safe-area-inset-bottom))` pour que ni l'île ni le bouton flottant ne
 cachent la dernière ligne.
 
-**Onglets de pôle** (`.hub-tabs`) et **segments** (`.segmented`) : piste en pilule `--surface-2`, segment actif
-en verre fort avec `--glass-shine` et ombre douce (« bouton enfoncé dans du verre »), 44 px. Les liens
+**Onglets de pôle** (`.hub-tabs`) et **segments** (`.segmented`) : piste en pilule, segment actif en
+`--accent-grad` avec texte `--on-accent` (comme pastilles, sommaire et onglets : ce qui est choisi s'allume),
+44 px. Un segment « de verre enfoncé » ne se distinguait de sa piste qu'à 1,1:1 (WCAG 1.4.11). Les liens
 `aria-current="page"` gardent leur sémantique.
 
 **Champs** (`.field input`, `.input`, `select`, `textarea`) : `--surface` opaque (le texte saisi ne se lit
@@ -358,19 +369,21 @@ réduisent à l'état final (badge visible, coche pleine) et au toast.
   (-webkit-backdrop-filter: blur(1px)))` : `--glass` et `--glass-strong` deviennent `--surface` (opaque),
   `backdrop-filter: none` ; les halos restent mais à 50 % de leur opacité. Écrire `-webkit-backdrop-filter`
   à côté de `backdrop-filter` (Safari).
-- `@media (prefers-contrast: more)` : halos retirés, bordures en `--line-strong`, `--ink-3` remplacé par
+- `@media (prefers-contrast: more)` : halos retirés (fond **et** héros), bordures en `--line-strong`, `--ink-3` remplacé par
   `--ink-2`, pas de lueur.
 - `@media (forced-colors: active)` : fonds et dégradés ignorés par le navigateur ; on garde des bordures
   `1px solid CanvasText` sur cartes et boutons, l'onglet actif en `Highlight`, le focus en `outline` (jamais
   seulement `box-shadow`).
-- Cibles ≥ 44 px partout (onglets ≥ 48), focus visible double anneau, montants jamais distingués par la couleur
+- Cibles ≥ 44 px au téléphone (onglets ≥ 48) : pastilles, `.btn.sm`, sommaire, cases et segments compris ; au
+  bureau (pointeur fin) les petites variantes gardent 36 px (WCAG 2.5.8 : ≥ 24). Le focus suit l'arrondi de
+  l'élément (pas de `border-radius` imposé par `:focus-visible`), montants jamais distingués par la couleur
   seule (signe + / −, icône de tendance), `aria-live` existant conservé.
 - 390 px : aucun débordement horizontal — île d'onglets en `grid-template-columns: repeat(5, minmax(0, 1fr))`,
   halos en `position: fixed` dans un calque qui ne peut pas élargir la page (`inset: 0`, `overflow: hidden`).
 - CSP stricte : aucun `<style>` ni `style=""` statique ajouté (les seules variables posées en `style` restent
   celles qui portent une donnée : `--i`, `--level`, largeurs de jauge) ; pas de police ni d'image externe :
   halos en dégradés CSS, illustrations et anneaux en SVG inline.
-- Performance : `backdrop-filter` sur six surfaces au plus à l'écran (héros, rail ou île, toast, assistant,
+- Performance : `backdrop-filter` seulement sur ce qui est fixe ou collant (rail ou île, toast, assistant,
   modale) ; jamais sur une ligne de liste, une pastille ou une carte ordinaire ; `will-change` interdit en
   permanence.
 
@@ -393,7 +406,8 @@ réduisent à l'état final (badge visible, coche pleine) et au toast.
 
 *Fondations réalisées (octobre 2026).* Écarts assumés par rapport au § 3.4 :
 - `.hub-tabs` : piste en verre fort (une piste `--surface-2` disparaît sur le fond lavande) et onglet actif en
-  `--accent-grad`, comme la bulle de l'île ; `.segmented` suit la spécification (segment de verre enfoncé).
+  `--accent-grad`, comme la bulle de l'île ; `.segmented` aussi depuis la relecture (le verre enfoncé était
+  illisible en sombre).
 - La bulle de l'île glisse par `left` (un seul petit élément) : `transform` en pourcentage se rapporte à la bulle,
   pas à la barre. L'index vient de `data-active` posé par `App.tsx`.
 - Le toast neutre porte une petite étincelle ; `useToast(msg, kind?)` accepte `"success" | "coin" | "error"`.
@@ -421,7 +435,10 @@ avec « Que faire ? » (vers « Je peux m'acheter… ? ») quand le mois se ress
 halo du fond 1,2 s, `aria-hidden`, le toast `aria-live` dit le texte ; retirée en mouvement réduit et en couleurs
 forcées), branchée sur : gain confirmé, résultat « obtenu » avec montant, dossier validé, document vérifié,
 dernière opération « à classer » de la page rangée, banque / messagerie / agenda / boîte mail reliés. Palier de
-tirelire : badge en « pop » (sans second toast, pour ne pas couvrir le gain). Anneau `Ring.tsx` (« classé ce mois »
+tirelire : badge en « pop » (sans second toast, pour ne pas couvrir le gain) et « Palier de X atteint » annoncé
+par sa propre région `role="status"`. « Tout est rangé » ne se fête que sans filtre et quand le serveur ne compte
+plus rien à classer dans le mois de l'anneau ; « Banque connectée » une seule fois (le paramètre de retour est
+retiré de l'adresse). La couche de fête est démontée 1,3 s après, sans attendre la fin du toast. Anneau `Ring.tsx` (« classé ce mois »
 dans Opérations, « N papiers rangés » dans Documents), barre d'étapes sur les cartes de démarche, tirelire en
 héros soleil, pièce lumineuse sur les récompenses, chance en trois crans, zone de dépôt lumineuse, états vides
 illustrés (`EmptyState.tsx`), action principale pleine largeur au téléphone. Pas d'objectif d'épargne « atteint »

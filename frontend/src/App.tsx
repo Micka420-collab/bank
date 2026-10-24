@@ -214,7 +214,7 @@ function TabBar({ page, badges }: { page: string; badges: BadgeMap }) {
           <a key={n.page} href={`#/${n.page}`} aria-current={current(n) ? "page" : undefined}>
             <Icon name={n.icon} />
             {n.short}
-            {badge && badge.n > 0 ? <span className="tab-badge" aria-label={`${badge.n} ${badge.label}`}>{badge.n}</span> : null}
+            {badge && badge.n > 0 ? <><span className="tab-badge" aria-hidden="true">{badge.n}</span><span className="sr-only">, {badge.n} {badge.label}</span></> : null}
           </a>
         );
       })}
@@ -230,7 +230,7 @@ function Rail({ page, badges, username, onLogout, onAsk }: { page: string; badge
       <a key={n.page} className={`nav-link${small ? " is-small" : ""}`} href={`#/${n.page}`} aria-current={current ? "page" : undefined}>
         <Icon name={n.icon} />
         {n.label}
-        {badge && badge.n > 0 ? <span className="nav-badge" aria-label={`${badge.n} ${badge.label}`}>{badge.n}</span> : null}
+        {badge && badge.n > 0 ? <><span className="nav-badge" aria-hidden="true">{badge.n}</span><span className="sr-only">, {badge.n} {badge.label}</span></> : null}
       </a>
     );
   };

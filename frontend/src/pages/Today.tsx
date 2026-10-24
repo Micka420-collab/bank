@@ -90,7 +90,14 @@ export function Today({ name }: { name?: string } = {}) {
           {f.status !== "ok" && (
             // La mauvaise nouvelle vient avec son « que faire » : la question « Je peux m'acheter… ? » plus bas.
             <button type="button" className="btn ghost sm what-now"
-                    onClick={() => document.getElementById("decide-card")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+                    onClick={() => {
+                      // Comme SectionNav : pas de défilement animé en mouvement réduit, et le focus suit (clavier, lecteur d'écran).
+                      const el = document.getElementById("decide-card");
+                      if (!el) return;
+                      const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+                      el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+                      el.querySelector<HTMLElement>("input, select, textarea, button")?.focus({ preventScroll: true });
+                    }}>
               Que faire ? <Icon name="arrow" />
             </button>
           )}

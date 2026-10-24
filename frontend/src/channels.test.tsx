@@ -151,7 +151,7 @@ describe("messageries", () => {
     await act(async () => { vi.advanceTimersByTime(3100); });
     await settle();
     expect(host.querySelector(".ch-code")).toBeNull();
-    expect(host.textContent).toContain("C'est relié 🎉");
+    expect(host.textContent).toContain("C'est relié !");
     expect(host.querySelector(".ch-links")?.textContent).toContain("@micka");
   });
 

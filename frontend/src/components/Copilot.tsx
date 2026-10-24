@@ -54,7 +54,7 @@ export function Copilot() {
       </ul>
       <div className="actions" style={{ marginTop: "0.75rem" }}>
         <a className="btn quiet sm" href="#/opportunites"><Icon name="coin" /> Toutes les missions</a>
-        {procs.open + procs.waiting > 0 && <a className="btn ghost sm" href="#/demarches">Mes démarches ({procs.open + procs.waiting})</a>}
+        {procs.open + procs.waiting > 0 && <a className="btn quiet sm" href="#/demarches">Mes démarches ({procs.open + procs.waiting})</a>}
       </div>
     </section>
   );
