@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.domain import yearahead as dom
 from app.domain.money import format_eur
 from app.security import audit
-from app.services import analytics
+from app.services import analytics, territory
 from app.services.settings_store import get_setting, set_setting
 
 ALERT_DAYS = 60
@@ -68,6 +68,7 @@ def _planned(db: Session) -> list[tuple[date, str, int]]:
 def compute(db: Session, today: date) -> dom.YearAhead:
     inputs = analytics.forecast_inputs(db, today)
     month = inputs.run()
+    cal = territory.calendar(db)  # jours fériés et vacances gardés (accord « calendrier »), sans réseau
     return dom.build_year_ahead(
         today=today,
         start_balance_cents=month.projected_end_balance_cents,
@@ -78,6 +79,8 @@ def compute(db: Session, today: date) -> dom.YearAhead:
         planned=_planned(db),
         ignored=_settings(db)["ignored"],
         buffer_cents=int(get_setting(db, "buffer_cents")),
+        holidays=cal.holidays if cal is not None and cal.holidays else None,
+        school_breaks=cal.breaks if cal is not None else (),
     )
 
 
@@ -96,6 +99,18 @@ def view(db: Session, today: date) -> dict[str, Any]:
         }
         for c in _custom(db)
     ]
+    cal = territory.calendar(db)
+    data["calendar"] = (
+        None
+        if cal is None
+        else {
+            "zone": cal.zone,
+            "academy": cal.academy,
+            "school_zone": cal.school_zone,
+            "note": "Jours fériés et vacances scolaires relus aux sources publiques ; un prélèvement qui tombe un "
+            "dimanche ou un jour férié est placé au jour ouvré suivant.",
+        }
+    )
     data["disclaimer"] = (
         "Projection à partir de tes prélèvements réguliers, de tes revenus reconnus et de ton rythme de dépenses : "
         "un ordre de grandeur, pas une promesse. Un pic détecté demande deux occurrences ; tu peux en ajouter ou en "

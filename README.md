@@ -247,6 +247,13 @@ pic détecté à tort ; « Ajouter » pose une dépense annuelle ou trimestriell
 Quand la provision n'est pas couverte par ton épargne visée, Bank te propose de la réserver d'un geste (elle sort
 alors du reste à dépenser du jour, et le pic ne surprend plus). Ton agent lit la même projection (`get_year_ahead`).
 
+Avec l'accord « Jours fériés et vacances scolaires » (désactivé par défaut ; Réglages › **Ton adresse**), Bank relit
+les jours fériés de ta zone (calendrier.api.gouv.fr) et les vacances de ton académie (data.education.gouv.fr) : un
+prélèvement qui tombe un dimanche ou un jour férié passe au jour ouvré suivant, dans la prévision du mois comme
+dans l'année qui vient, qui montre aussi fériés et vacances mois par mois. L'académie vient de ton adresse, située
+par la Géoplateforme de l'IGN avec un autre accord (seule l'adresse tapée part ; code INSEE et coordonnées gardés
+chiffrés) ; sa commune pré-remplit aussi la valeur de ton logement.
+
 ## Ton plan B « perte de revenu »
 
 Sur la page Aides, « Ton plan B » : trois scénarios en un écran — ton salaire (ou ton allocation, ta pension)
@@ -378,7 +385,11 @@ déclare pas. Rien n'est envoyé : tu déclares sur le site de l'organisme. Règ
   valides. Numéro fiscal, NIR, numéro d'allocataire, adresse : vus et jetés, jamais enregistrés. La tranche d'impôt
   et le revenu N-2 de la simulation des aides en découlent ; une fin de droits proche déclenche une alerte. Le PDF
   est lu dans un processus séparé et confiné (CPU, mémoire, délai, sans secret ni réseau) : un fichier piégé ne
-  peut rien atteindre.
+  peut rien atteindre. Au-dessus, un bouton par organisme (impôts, CAF, France Travail, ameli, info-retraite) ouvre
+  son espace avec son état (dernier document lu, sa date, « à renouveler »). Un mail d'avis sans pièce jointe vu
+  par la boîte mail (« votre avis est disponible ») devient un document à récupérer, avec l'échéance ; l'avis
+  d'impôt attendu fin août et l'attestation du mois quand la CAF ou France Travail verse relancent d'eux-mêmes ; la
+  tâche se ferme seule quand le PDF arrive dans Papiers.
 
 ## Bank te demande (initiatives)
 
@@ -561,6 +572,12 @@ change après ta simulation, une piste te propose de la relancer. Les taux, bar�
 affichent leur date de prochaine vérification et passent « à revérifier » quand elle est dépassée. La veille se
 coupe dans Réglages › Confidentialité.
 
+Avec l'accord « Barèmes tenus à jour » (désactivé par défaut), Bank relit aussi une fois par mois les tarifs
+réglementés de l'électricité (CRE), les taux du Livret A, du LDDS et du LEP (Caisse des Dépôts), l'IPC base 2025 et
+l'IRL (INSEE), le SMIC et le barème de l'impôt (OpenFisca). Ce qui a changé s'applique au-dessus de `rates.json`,
+qui reste le repli, et s'annonce dans la Veille (« Barèmes mis à jour », ancienne → nouvelle valeur, source) ;
+Réglages › **Barèmes** montre chaque valeur en vigueur avec sa date et sa source, et permet d'en écarter une.
+
 ## Messageries : Bank dans WhatsApp, Telegram, Signal, Discord, Slack et ntfy
 
 Bank › **Messageries** : écris à Bank depuis ta messagerie (« je peux m'offrir un resto ce soir ? », `/budget`,
@@ -663,7 +680,9 @@ les paliers de la LFSS 2026, lien de partage ouvert deux fois en même temps, va
 synthétique, clés de plateforme face à de fausses
 plateformes qui vérifient chaque signature et refusent les droits trop larges, pilote vs consigne sur un calendrier
 de référence — fins de mois, heures d'été et d'hiver, pauses, refus —, alertes de cours franchies une seule fois par
-deux relèves simultanées), couverture 92 %, 178 tests front (parcours de première ouverture,
+deux relèves simultanées, barèmes relus sur les vraies réponses de la CRE, de la Caisse des Dépôts, de
+l'INSEE et d'OpenFisca, jours fériés, vacances scolaires et géocodage sur les vraies réponses des services publics),
+couverture 92 %, 178 tests front (parcours de première ouverture,
 coffre et partage d'un papier, démarches, opportunités, veille, assistant, chat interactif et réponse en direct,
 notifications sur l'appareil, plan B, crédits, retraite, logement, sauvegardes, boîte mail, crypto et plateformes reliées,
 alertes de cours, pilote, pilote vs consigne, déclarations, corrélations, année qui vient, passkeys, erreurs qui

@@ -24,7 +24,7 @@ from app.domain import mail as dom
 from app.domain import vault as vault_domain
 from app.models import MailAccount, MailProposal, VaultDocument
 from app.security import audit
-from app.services import consents, vault
+from app.services import consents, state_accounts, vault
 
 MAX_MESSAGES_PER_SCAN = 40
 MAX_PROPOSALS = 200
@@ -280,6 +280,7 @@ def _scan_one(
         report.skipped += 1
         return 0
     if not headers.content_type.startswith("multipart/"):
+        state_accounts.on_mail(db, headers, has_pdf=False, now=moment)  # #32 : avis d'organisme → tâche
         return 0  # pas de pièce jointe possible : on ne télécharge pas le message
     if size > dom.MAX_MESSAGE_BYTES:
         report.notes.append(f"message {uid} trop lourd ({size // 1_000_000} Mo) : ignoré")
@@ -292,6 +293,8 @@ def _scan_one(
     raw = blocks[0][1]
     attachments, skipped = dom.attachments(raw)
     report.notes.extend(f"message {uid} : {s}" for s in skipped)
+    if not attachments:
+        state_accounts.on_mail(db, headers, has_pdf=False, now=moment)  # #32 : avis d'organisme → tâche
     created = 0
     for att in attachments:
         if att.sha256 in known:

@@ -25,7 +25,7 @@ from app.domain.recurring import add_months
 from app.domain.wealth import AccountBalance
 from app.models import Account, DvfCache, FinancialProfile, HomeProfile, Loan
 from app.security import audit, netfetch
-from app.services import consents
+from app.services import consents, territory
 
 CONSENT = "home_value"
 BASE_URL = "https://files.data.gouv.fr/geo-dvf/latest/csv"
@@ -470,6 +470,8 @@ def view(db: Session, today: date) -> dict[str, Any]:
     return {
         "consent": consents.granted(db, CONSENT),
         "profile": prof or None,
+        # Logement pas encore décrit : la commune de ton adresse géocodée le pré-remplit (#32).
+        "suggested": None if prof else territory.home_suggestion(db),
         "estimate": result,
         "data": {
             "matches": matches,

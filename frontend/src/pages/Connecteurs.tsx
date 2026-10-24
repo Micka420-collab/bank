@@ -15,6 +15,7 @@ import {
 import { BankConnect, BankMark } from "../components/BankConnect";
 import { BankSetup, setupReady } from "../components/BankSetup";
 import { PowensSetup } from "../components/PowensSetup";
+import { StateAccounts } from "../components/StateAccounts";
 import { Icon } from "../components/Icon";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useCelebrate, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
@@ -472,6 +473,7 @@ function Etat() {
         est réservé aux services agréés). Le plus proche : tu télécharges tes documents depuis chaque espace, Bank en lit
         les chiffres utiles — et jette tout le reste (numéro fiscal, numéro d'allocataire, adresse ne sont jamais conservés).
       </p>
+      <StateAccounts />
       <div className="portals">
         {portals.data?.map((p) => (
           <a key={p.id} className="portal" href={p.url} target="_blank" rel="noopener noreferrer">

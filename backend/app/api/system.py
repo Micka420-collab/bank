@@ -26,6 +26,7 @@ from app.models import (
     CryptoHolding,
     CryptoTaxEvent,
     CryptoWallet,
+    DocumentTask,
     EnergyReading,
     InitiativeState,
     LlmUsage,
@@ -37,6 +38,8 @@ from app.models import (
     OpportunityState,
     PriceAlert,
     Procedure,
+    PublicCalendar,
+    RateOverride,
     SavingsGoal,
     Transaction,
     ValueEvent,
@@ -53,6 +56,7 @@ from app.services import home_value as home_value_service
 from app.services import obligations as obligations_service
 from app.services import powens as powens_service
 from app.services import retirement as retirement_service
+from app.services import territory as territory_service
 
 router = APIRouter(prefix="/api", tags=["system"])
 
@@ -200,6 +204,49 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
         "initiative_states": [
             {"key": i.key, "status": i.status, "until": i.until.isoformat() if i.until else None, "note": i.note}
             for i in db.scalars(select(InitiativeState))
+        ],
+        # Territoire (#32) : l'adresse telle que tapée et ce que Bank en a tiré, et les calendriers qui en découlent.
+        "territory": {
+            "place": territory_service.place(db),
+            "calendars": [
+                {
+                    "key": c.key,
+                    "data": json.loads(c.data) if c.data else None,
+                    "source_url": c.source_url,
+                    "fetched_at": c.fetched_at.isoformat() if c.fetched_at else None,
+                }
+                for c in db.scalars(select(PublicCalendar).order_by(PublicCalendar.key))
+            ],
+        },
+        # Documents à récupérer (#32) : objet du mail d'avis et document attendu.
+        "document_tasks": [
+            {
+                "key": t.key,
+                "body": t.body,
+                "origin": t.origin,
+                "expected": t.expected,
+                "subject": t.subject,
+                "received_at": t.received_at.isoformat() if t.received_at else None,
+                "due": t.due.isoformat(),
+                "status": t.status,
+                "document_id": t.document_id,
+                "created_at": t.created_at.isoformat(),
+                "closed_at": t.closed_at.isoformat() if t.closed_at else None,
+            }
+            for t in db.scalars(select(DocumentTask).order_by(DocumentTask.id))
+        ],
+        # Barèmes (#32) : les valeurs relevées appliquées ou écartées par toi.
+        "rate_overrides": [
+            {
+                "path": r.path,
+                "label": r.label,
+                "value": json.loads(r.value),
+                "effective_from": r.effective_from,
+                "source": r.source,
+                "applied_at": r.applied_at.isoformat(),
+                "reverted_at": r.reverted_at.isoformat() if r.reverted_at else None,
+            }
+            for r in db.scalars(select(RateOverride).order_by(RateOverride.path))
         ],
         # Assistant : les catégories proposées et la consommation ; jamais la clé OpenRouter.
         "merchant_hints": [

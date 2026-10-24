@@ -5,6 +5,8 @@ documents (coffre) et les corrélations."""
 from __future__ import annotations
 
 import re
+import threading
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 
@@ -111,6 +113,39 @@ IRL: dict[tuple[int, int], float] = {
     (2026, 3): 148.06,
 }
 IRL_SOURCE = "INSEE, indice de référence des loyers, 3e trimestre 2026 (relevé le 22 octobre 2026)"
+IRL_SERIES_URL = "https://www.insee.fr/fr/statistiques/serie/001515333"
+
+# Les trimestres relus à l'INSEE par la relève des barèmes (série BDM 001515333), posés par services.baremes : ils
+# passent devant la table ci-dessus, qui reste le repli pour les trimestres plus anciens.
+_irl_lock = threading.Lock()
+_irl_fetched: dict[tuple[int, int], float] = {}
+_irl_fetched_on: str | None = None
+
+
+def install_irl(values: Mapping[tuple[int, int], float], fetched_on: str | None) -> None:
+    global _irl_fetched, _irl_fetched_on
+    with _irl_lock:
+        _irl_fetched, _irl_fetched_on = dict(values), fetched_on
+
+
+def irl_table() -> dict[tuple[int, int], float]:
+    """L'IRL que Bank applique : la série relue à l'INSEE, complétée des trimestres plus anciens de la table."""
+    with _irl_lock:
+        return {**IRL, **_irl_fetched}
+
+
+def irl_value(quarter: tuple[int, int]) -> float | None:
+    return irl_table().get(quarter)
+
+
+def irl_source(*quarters: tuple[int, int]) -> str:
+    """D'où viennent les indices cités : la série relue (et quand), sinon la table datée livrée avec Bank."""
+    with _irl_lock:
+        fetched = bool(quarters) and all(q in _irl_fetched for q in quarters)
+        on = _irl_fetched_on
+    if fetched:
+        return f"INSEE, série 001515333 (IRL), relevée par Bank le {on}" if on else "INSEE, série 001515333 (IRL)"
+    return IRL_SOURCE
 
 
 def quarter_of(d: date) -> tuple[int, int]:
@@ -118,12 +153,13 @@ def quarter_of(d: date) -> tuple[int, int]:
 
 
 def latest_irl_quarter() -> tuple[int, int]:
-    return max(IRL)
+    return max(irl_table())
 
 
 def irl_ratio(reference: tuple[int, int], current: tuple[int, int]) -> float | None:
     """Loyer maximal après révision = loyer × IRL(trimestre courant) / IRL(trimestre de référence du bail)."""
-    a, b = IRL.get(reference), IRL.get(current)
+    table = irl_table()
+    a, b = table.get(reference), table.get(current)
     if a is None or b is None or a <= 0:
         return None
     return b / a
@@ -143,7 +179,7 @@ def allowed_rent_cents(
     if years == 0:
         return rent_cents, ref, ref
     current = (ref[0] + years, ref[1])
-    if current not in IRL:
+    if current not in irl_table():
         current = latest_irl_quarter()
         if current <= ref:
             return None

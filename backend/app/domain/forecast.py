@@ -17,6 +17,9 @@ from datetime import date, timedelta
 from statistics import median
 
 from app.domain.recurring import RecurringSeries, Txn, add_months
+from app.domain.territory import next_business_day
+
+Day = date  # le champ « date » des dataclasses ci-dessous masque le type
 
 
 @dataclass(frozen=True)
@@ -36,6 +39,13 @@ class UpcomingEvent:
     kind: str  # income | fixed
     confidence: float
     late: bool
+    shifted_from: Day | None = None  # prélèvement décalé au jour ouvré suivant (dimanche, jour férié)
+
+
+@dataclass(frozen=True)
+class Holiday:
+    date: date
+    name: str
 
 
 @dataclass(frozen=True)
@@ -90,6 +100,7 @@ class MonthForecast:
     budgets: list[BudgetLine] = field(default_factory=list)
     history: list[ProjectionPoint] = field(default_factory=list)  # solde réel en fin de journée, du 1er à hier
     allowance: list[AllowanceSegment] = field(default_factory=list)  # paliers de « reste à dépenser par jour »
+    holidays: list[Holiday] = field(default_factory=list)  # jours fériés du mois (calendrier public, avec ton accord)
 
 
 def month_bounds(d: date) -> tuple[date, date]:
@@ -172,8 +183,11 @@ def build_forecast(
     savings_goal_cents: int = 0,
     buffer_cents: int = 0,
     extra_events: Sequence[UpcomingEvent] = (),
+    holidays: Mapping[date, str] | None = None,
 ) -> MonthForecast:
-    """`extra_events` : dépenses planifiées (onboarding) ou hypothétiques (« et si j'achète ça ? »)."""
+    """`extra_events` : dépenses planifiées (onboarding) ou hypothétiques (« et si j'achète ça ? »).
+    `holidays` : jours fériés connus (calendrier public) ; avec eux, un prélèvement qui tombe un samedi, un dimanche
+    ou un jour férié part le jour ouvré suivant, éventuellement le mois prochain. Sans eux, rien n'est décalé."""
     start, end = month_bounds(today)
     days_in_month = end.day
     days_left = (end - today).days + 1
@@ -205,6 +219,11 @@ def build_forecast(
     events: list[UpcomingEvent] = []
     for s in planned:
         for d, late in _occurrences(s, today, end):
+            nominal = d
+            if holidays is not None and s.direction == "out" and not late:
+                d = next_business_day(d, holidays)
+            if d > end:
+                continue  # décalé au mois suivant : il compte là-bas
             events.append(
                 UpcomingEvent(
                     date=d,
@@ -214,6 +233,7 @@ def build_forecast(
                     kind="income" if s.direction == "in" else "fixed",
                     confidence=s.confidence,
                     late=late,
+                    shifted_from=nominal if d != nominal else None,
                 )
             )
     events.extend(e for e in extra_events if today <= e.date <= end)
@@ -297,6 +317,7 @@ def build_forecast(
         budgets=budgets,
         history=history,
         allowance=allowance,
+        holidays=[Holiday(d, n) for d, n in sorted((holidays or {}).items()) if start <= d <= end],
     )
 
 

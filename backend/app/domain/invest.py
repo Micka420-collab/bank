@@ -11,15 +11,13 @@ Bank donne des ordres de grandeur et des enveloppes, jamais un produit commercia
 
 from __future__ import annotations
 
-import json
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from importlib import resources
-from typing import Any
 
+from app.domain import rates
 from app.domain.money import format_eur
 from app.domain.wealth import ProductStatus
 
@@ -48,7 +46,7 @@ class References:
 
 
 def load_references() -> References:
-    raw: dict[str, Any] = json.loads(resources.files("app.domain").joinpath("rates.json").read_text("utf-8"))
+    raw = rates.current()  # fichier daté, recouvert du barème relevé par Bank s'il est plus récent
     tax, inv = raw["income_tax"], raw["investing"]
     return References(
         income_tax_year=int(tax["year"]),

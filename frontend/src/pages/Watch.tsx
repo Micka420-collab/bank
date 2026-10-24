@@ -157,6 +157,13 @@ function Item({ item, onChange }: { item: WatchItemView; onChange: () => void })
   );
 }
 
+/** « toutes les 12 h », « chaque mois » (barèmes relus une fois par mois). */
+export function everyText(hours: number): string {
+  if (hours >= 24 * 28) return "chaque mois";
+  if (hours >= 48 && hours % 24 === 0) return `tous les ${hours / 24} jours`;
+  return `toutes les ${hours} h`;
+}
+
 function Sources({ sources, onChange }: { sources: WatchSourceView[]; onChange: () => void }) {
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
@@ -184,7 +191,7 @@ function Sources({ sources, onChange }: { sources: WatchSourceView[]; onChange: 
               <b>{s.name}</b> <span className="tag">{TRUST[s.trust] ?? s.trust}</span>
               <p className="faint watch-url">{s.url}</p>
               <p className="faint">
-                {s.last_ok_at ? `Relevée le ${shortDate(s.last_ok_at)}` : "Jamais relevée"} · toutes les {s.interval_hours} h
+                {s.last_ok_at ? `Relevée le ${shortDate(s.last_ok_at)}` : "Jamais relevée"} · {everyText(s.interval_hours)}
                 {s.last_error && <span className="error"> · {s.last_error}</span>}
               </p>
             </div>

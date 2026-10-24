@@ -813,7 +813,7 @@ class WatchSource(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     slug: Mapped[str] = mapped_column(String(40), unique=True)
-    kind: Mapped[str] = mapped_column(String(10))  # rss | pypi
+    kind: Mapped[str] = mapped_column(String(10))  # rss | bareme (relu par services.baremes)
     name: Mapped[str] = mapped_column(String(120))
     url: Mapped[str] = mapped_column(String(500))
     trust: Mapped[str] = mapped_column(String(12))  # officiel | secondaire | perso
@@ -1275,3 +1275,86 @@ class DvfCache(Base):
     last_error: Mapped[str | None] = mapped_column(String(300))
     attempts_day: Mapped[str | None] = mapped_column(String(10))
     attempts: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class RateObservation(Base):
+    """Une valeur publique relevée par Bank (tarif, taux, indice) : série, période, valeur, adresse exacte de la
+    source et date de relève. Une révision par la source remplace la valeur de la même période. Rien te concernant."""
+
+    __tablename__ = "rate_observations"
+    __table_args__ = (UniqueConstraint("series", "period", name="uq_rate_observation"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    series: Mapped[str] = mapped_column(String(60), index=True)  # cre.base.6.fixe_ttc, insee.irl, cdc.livret_a…
+    period: Mapped[str] = mapped_column(String(12))  # 2026-08-01, 2026-09, 2026-Q3
+    value: Mapped[str] = mapped_column(Text)  # décimal en texte (jamais un float), ou JSON pour un barème
+    note: Mapped[str | None] = mapped_column(String(300))  # texte de référence cité par la source (loi, décret)
+    source_url: Mapped[str] = mapped_column(String(500))
+    fetched_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class RateOverride(Base):
+    """Une valeur de rates.json remplacée par une valeur relevée (couche au-dessus du fichier, qui reste le repli) :
+    l'ancienne et la nouvelle valeur, la date d'effet, la source. Écartée par toi, elle n'est plus appliquée tant
+    que la source redonne la même valeur."""
+
+    __tablename__ = "rate_overrides"
+
+    path: Mapped[str] = mapped_column(String(120), primary_key=True)  # voir domain.rates
+    label: Mapped[str | None] = mapped_column(String(160))  # None : date ou source de section, pas un chiffre
+    value: Mapped[str] = mapped_column(Text)  # JSON
+    previous: Mapped[str] = mapped_column(Text)  # JSON : la valeur en vigueur juste avant
+    shown_old: Mapped[str] = mapped_column(String(200), default="")
+    shown_new: Mapped[str] = mapped_column(String(200), default="")
+    effective_from: Mapped[str] = mapped_column(String(10))  # AAAA-MM-JJ
+    source: Mapped[str] = mapped_column(String(300))
+    source_url: Mapped[str] = mapped_column(String(500))
+    applied_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    reverted_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+# ---------------------------------------------------------------------------- territoire (#32)
+class HouseholdPlace(Base):
+    """Ton adresse telle que tu l'as tapée et ce que le géocodage en a tiré (commune, code INSEE, coordonnées,
+    département, académie) : chiffré, une seule ligne (id = 1). Le pivot des comparaisons locales."""
+
+    __tablename__ = "household_place"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    data: Mapped[str] = mapped_column(EncryptedText("place.data"))  # JSON
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+
+class PublicCalendar(Base):
+    """Jours fériés d'une année et vacances scolaires de ton académie, relus aux sources publiques et gardés datés
+    et sourcés. Chiffré : la zone et l'académie disent où tu habites. Une relève ratée garde la précédente."""
+
+    __tablename__ = "public_calendars"
+
+    key: Mapped[str] = mapped_column(String(24), primary_key=True)  # feries:2027 | scolaire
+    data: Mapped[str | None] = mapped_column(EncryptedText("calendar.data"))  # JSON
+    source_url: Mapped[str | None] = mapped_column(EncryptedText("calendar.source"))
+    fetched_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_attempt_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    last_error: Mapped[str | None] = mapped_column(String(300))
+
+
+class DocumentTask(Base):
+    """« Document à récupérer » : un mail d'un organisme sans pièce jointe (avis disponible, nouveau document) ou une
+    attente de saison (avis d'impôt fin août, attestation mensuelle) dont le PDF n'est pas encore dans Papiers. Se
+    ferme seule quand le PDF y est déposé. Objet et attente chiffrés : ils disent de quelles aides tu vis."""
+
+    __tablename__ = "document_tasks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(120), unique=True)  # mail:<empreinte> | season:<attente>:<période>
+    body: Mapped[str] = mapped_column(String(24), index=True)  # impots | caf | france_travail | ameli | retraite
+    origin: Mapped[str] = mapped_column(String(10))  # mail | season
+    expected: Mapped[str] = mapped_column(EncryptedText("doctask.expected"))
+    subject: Mapped[str | None] = mapped_column(EncryptedText("doctask.subject"))
+    received_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    due: Mapped[date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(10), default="open", index=True)  # open | done | dismissed | expired
+    document_id: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    closed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())

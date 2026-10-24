@@ -281,6 +281,81 @@ def duplicate_insurance(series: Sequence[Series], docs: Sequence[Doc]) -> list[F
 
 
 # ------------------------------------------------------------------ logement : le bail face au loyer payé
+def _fr2(x: float) -> str:
+    return f"{x:.2f}".replace(".", ",")
+
+
+IRL_WINDOW_DAYS = 45
+
+
+def _applied_irl(
+    lease: Doc,
+    rent: Series,
+    loyer: int,
+    charges: int,
+    start: date | None,
+    revision: str,
+    evidence: list[Evidence],
+) -> Finding | None:
+    """La révision elle-même, recalculée : l'IRL qu'elle applique face à l'indice publié par l'INSEE.
+
+    Seulement quand Bank sait tout sans deviner : le trimestre de référence est écrit dans la clause, et l'ancien
+    loyer est celui du bail, vu payé juste avant la hausse. Révision (loi ALUR) : nouveau loyer = ancien loyer ×
+    IRL(trimestre de l'année de révision) / IRL(même trimestre un an plus tôt) ; l'IRL appliqué s'en déduit."""
+    ref = contracts.quarter_in(_fold(revision))
+    history = rent.history
+    if ref is None or start is None or len(history) < 2:
+        return None
+    paid = history[-1][1]
+    i = len(history) - 1
+    while i > 0 and abs(history[i - 1][1] - paid) <= CENTS_TOLERANCE:
+        i -= 1
+    if i == 0 or abs(history[i - 1][1] - (loyer + charges)) > CENTS_TOLERANCE:
+        return None  # pas de hausse vue, ou l'ancien loyer n'est pas celui du bail : on ne sait pas
+    changed_on = history[i][0]
+    # La hausse doit tomber à l'anniversaire du bail (à IRL_WINDOW_DAYS près, prélèvement en avance ou en retard) :
+    # une hausse ailleurs dans l'année (régularisation des charges…) n'est pas lue comme une révision.
+    years = round((changed_on - start).days / 365.25)
+    if years < 1 or loyer <= 0 or abs((changed_on - add_months(start, 12 * years)).days) > IRL_WINDOW_DAYS:
+        return None
+    prev_q, cur_q = (ref[0] + years - 1, ref[1]), (ref[0] + years, ref[1])
+    previous, published = contracts.irl_value(prev_q), contracts.irl_value(cur_q)
+    if previous is None or published is None:
+        return None
+    new_rent = paid - charges
+    applied = previous * new_rent / loyer
+    allowed = round(loyer * published / previous)
+    excess = new_rent - allowed
+    if excess <= CENTS_TOLERANCE:
+        return None
+    with_charges = f" (charges du bail inchangées, {format_eur(charges)})" if charges else ""
+    return Finding(
+        key=f"rent_irl_applied:{lease.id}:{paid}",
+        kind="rent_irl_misapplied",
+        level="danger",
+        topic="logement",
+        title="Révision du loyer au-dessus de l'IRL publié",
+        body=(
+            f"Ta révision applique un IRL de {_fr2(applied)} ; l'indice publié pour ce trimestre "
+            f"({contracts.quarter_label(cur_q)}) est {_fr2(published)} : {format_eur(excess)}/mois de trop"
+            f"{with_charges}. Le loyer révisé ne peut pas dépasser {format_eur(allowed)} hors charges, soit "
+            f"{format_eur(excess * 12)} par an : demande la régularisation au bailleur en citant l'indice de l'INSEE."
+        ),
+        evidence=(
+            *evidence,
+            Evidence("Avant la révision", f"{format_eur(history[i - 1][1])} le {history[i - 1][0]:%d/%m/%Y}", None),
+            Evidence(
+                "IRL",
+                f"{contracts.quarter_label(prev_q)} : {_fr2(previous)} → {contracts.quarter_label(cur_q)} : "
+                f"{_fr2(published)} ({contracts.irl_source(prev_q, cur_q)})",
+                f"url:{contracts.IRL_SERIES_URL}",
+            ),
+        ),
+        yearly_cents=excess * 12,
+        confidence=0.85,
+    )
+
+
 def _rent_series(series: Sequence[Series]) -> Series | None:
     rents = [s for s in series if s.category == "logement" and s.cadence == "monthly"]
     return max(rents, key=lambda s: s.amount_cents) if rents else None
@@ -398,14 +473,19 @@ def rent_findings(series: Sequence[Series], docs: Sequence[Doc], today: date) ->
             )
         )
         return out
+    applied = _applied_irl(lease, rent, loyer, charges, start_date, revision, evidence)
+    if applied is not None:
+        out.append(applied)
+        return out
     max_rent, ref_q, cur_q = allowed
     max_total = max_rent + charges
     ratio = contracts.irl_ratio(ref_q, cur_q) or 1.0
     evidence.append(
         Evidence(
             "IRL",
-            f"{contracts.quarter_label(ref_q)} → {contracts.quarter_label(cur_q)} : {(ratio - 1) * 100:+.2f} %",
-            None,
+            f"{contracts.quarter_label(ref_q)} → {contracts.quarter_label(cur_q)} : {(ratio - 1) * 100:+.2f} % "
+            f"({contracts.irl_source(ref_q, cur_q)})",
+            f"url:{contracts.IRL_SERIES_URL}",
         )
     )
     if paid > max_total + CENTS_TOLERANCE:

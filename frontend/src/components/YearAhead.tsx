@@ -61,6 +61,7 @@ export function YearAhead() {
           );
         })}
       </div>
+      <YearCalendar y={y} />
       <dl className="ya-stats">
         <div><dt>Revenus réguliers</dt><dd>{money(y.income_monthly_cents, { whole: true })} / mois</dd></div>
         <div><dt>Charges fixes</dt><dd>{money(y.fixed_monthly_cents, { whole: true })} / mois</dd></div>
@@ -85,7 +86,7 @@ export function YearAhead() {
         <ul className="ya-spikes">
           {y.spikes.map((s) => (
             <li key={`${s.key}:${s.day}`}>
-              <span><b>{s.label}</b> <span className="faint">{shortDate(s.day)} · {s.cadence === "yearly" ? "chaque année" : s.cadence === "quarterly" ? "chaque trimestre" : s.source === "planned" ? "prévu" : "ajouté"}</span></span>
+              <span><b>{s.label}</b> <span className="faint">{shortDate(s.day)}{s.shifted_from && ` (décalé du ${shortDate(s.shifted_from)})`} · {s.cadence === "yearly" ? "chaque année" : s.cadence === "quarterly" ? "chaque trimestre" : s.source === "planned" ? "prévu" : "ajouté"}</span></span>
               <span className="ya-amount">{money(s.amount_cents, { whole: true })}</span>
               {s.source === "detected" && <button type="button" className="btn link" disabled={busy} onClick={() => void ignore(s.key, true)}>Écarter</button>}
               {s.source === "custom" && <button type="button" className="btn link" disabled={busy} onClick={() => void remove(s.key)}>Retirer</button>}
@@ -128,5 +129,24 @@ function AddSpike({ onDone }: { onDone: () => void }) {
       {error && <ErrorNote message={error} />}
       <button className={`btn sm${busy ? " is-loading" : ""}`} disabled={busy}>Ajouter à l'année</button>
     </form>
+  );
+}
+
+/** Jours fériés et vacances scolaires de l'année qui vient, mois par mois (accord « calendrier » requis). */
+export function YearCalendar({ y }: { y: Pick<YearAheadData, "points" | "calendar"> }) {
+  const months = y.points.filter((p) => (p.holidays?.length ?? 0) + (p.school?.length ?? 0) > 0);
+  if (!y.calendar || months.length === 0) return null;
+  return (
+    <div className="ya-calendar">
+      <h3>Jours fériés et vacances{y.calendar.academy ? ` (académie de ${y.calendar.academy}${y.calendar.school_zone ? `, ${y.calendar.school_zone}` : ""})` : ""}</h3>
+      <ul>
+        {months.map((p) => (
+          <li key={p.month}>
+            <b>{p.label}</b> <span className="faint">{[...(p.holidays ?? []), ...(p.school ?? [])].join(" · ")}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="faint">{y.calendar.note}</p>
+    </div>
   );
 }

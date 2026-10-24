@@ -194,7 +194,7 @@ def view(db: Session, today: date) -> dict[str, Any]:
     return {
         "findings": rows,
         "hidden": hidden,
-        "irl_source": contracts.IRL_SOURCE,
+        "irl_source": contracts.irl_source(contracts.latest_irl_quarter()),
         "disclaimer": (
             "Chaque constat renvoie à ses pièces (contrat, opération). Un lien statistique est une piste, jamais une "
             "cause ; un doublon est « probable » tant que les deux contrats ne sont pas lus. Bank n'envoie rien : "

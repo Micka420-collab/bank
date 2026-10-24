@@ -4,6 +4,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, useApi, type Account, type AccountKind, type BackupRun, type BackupStatus, type BudgetResponse, type ConsentView, type Me } from "../api";
 import { labelAction } from "../audit-labels";
+import { Baremes } from "../components/Baremes";
+import { Territory } from "../components/Territory";
 import { Icon } from "../components/Icon";
 import { SectionNav } from "../components/SectionNav";
 import { Segmented } from "../components/Segmented";
@@ -35,6 +37,8 @@ const SETTINGS_SECTIONS = [
   { id: "look-title", label: "Apparence" },
   { id: "push-title", label: "Notifications" },
   { id: "backup-title", label: "Sauvegardes" },
+  { id: "baremes-title", label: "Barèmes" },
+  { id: "territory-title", label: "Adresse" },
   { id: "privacy-title", label: "Confidentialité" },
   { id: "sec-title", label: "Sécurité" },
   { id: "audit-title", label: "Journal" },
@@ -55,6 +59,8 @@ export function Settings({ me, onMeChange }: { me: Me; onMeChange: () => void })
       <Appearance />
       <Notifications />
       <Backups />
+      <Baremes />
+      <Territory />
       <Privacy />
       <Security me={me} onChange={onMeChange} />
       <Audit />

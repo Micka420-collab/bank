@@ -204,6 +204,7 @@ export function Today({ name }: { name?: string } = {}) {
                         <div className="ledger-label">
                           <span className="sr-only">{shortDate(date)} : </span>
                           <b>{e.label}</b> {e.late && <span className="tag late">en retard</span>}
+                          {e.shifted_from && <span className="tag" title="Jour férié ou week-end : le prélèvement part le jour ouvré suivant">décalé du {shortDate(e.shifted_from)}</span>}
                         </div>
                         <Amount cents={e.amount_cents} />
                       </div>
@@ -212,6 +213,9 @@ export function Today({ name }: { name?: string } = {}) {
                 </li>
               ))}
             </ul>
+          )}
+          {f.holidays && f.holidays.length > 0 && (
+            <p className="faint holidays-line">Jours fériés : {f.holidays.map((h) => `${shortDate(h.date)} (${h.name})`).join(", ")}.</p>
           )}
           <p className="faint" style={{ marginTop: "0.75rem" }}>
             Dépense courante habituelle : {money(f.daily_variable_rate_cents, { whole: true })} par jour, déjà comptée.
