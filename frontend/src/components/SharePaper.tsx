@@ -1,7 +1,7 @@
 // Partager un papier : un lien qui ne sert qu'une fois, 48 h au plus, avec ton mot de passe. Le destinataire reçoit
 // un PDF marqué à son nom ; le lien ne dit rien du document. Le journal montre qui l'a reçu, et révoque.
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, useApi, type VaultShare, type VaultShareState } from "../api";
 import { Icon } from "./Icon";
 import { useAsyncAction, useToast } from "./ui";
@@ -33,6 +33,13 @@ export function SharePaper({ docId, onClose }: { docId: number; onClose: () => v
   const [created, setCreated] = useState<{ link: string; share: VaultShare } | null>(null);
   const [busy, error, run] = useAsyncAction();
   const linkRef = useRef<HTMLInputElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const recipientRef = useRef<HTMLInputElement>(null);
+  // Sur téléphone, la section s'ouvre sous le détail, hors de l'écran : on l'amène à l'écran et on y place le curseur.
+  useEffect(() => {
+    sectionRef.current?.scrollIntoView?.({ block: "start" });
+    recipientRef.current?.focus({ preventScroll: true });
+  }, []);
   const toast = useToast();
 
   const submit = (e: FormEvent) => {
@@ -65,7 +72,7 @@ export function SharePaper({ docId, onClose }: { docId: number; onClose: () => v
 
   const shares = journal.data?.shares ?? [];
   return (
-    <section className="card section vault-share" aria-labelledby="share-title">
+    <section ref={sectionRef} id="vault-share" className="card section vault-share" aria-labelledby="share-title">
       <div className="card-head">
         <h2 id="share-title"><Icon name="send" /> Partager ce papier</h2>
         <button type="button" className="btn ghost xs" aria-label="Fermer le partage" onClick={onClose}><Icon name="close" /></button>
@@ -92,7 +99,7 @@ export function SharePaper({ docId, onClose }: { docId: number; onClose: () => v
       <form className="form-grid vault-share-form" onSubmit={submit} aria-label="Créer un lien de partage">
         <label className="field">
           Destinataire
-          <input value={recipient} onChange={(e) => setRecipient(e.target.value)} required minLength={2} maxLength={60}
+          <input ref={recipientRef} value={recipient} onChange={(e) => setRecipient(e.target.value)} required minLength={2} maxLength={60}
                  placeholder="Agence Dupont, Mme Martin (CAF)…" autoComplete="off" />
         </label>
         <label className="field">

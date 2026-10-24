@@ -35,22 +35,46 @@ def _payload_context(share_id: int) -> str:
     return f"vault.share:{share_id}"
 
 
+# Lettres latines sans décomposition Unicode (NFKD ne les ramène pas à une lettre de base).
+_LATIN_FALLBACK = str.maketrans({"Ł": "L", "ł": "l", "Đ": "D", "đ": "d", "Ħ": "H", "ħ": "h", "ı": "i", "ŀ": "l"})
+
+
+def _printable(ch: str) -> str | None:
+    """Le caractère tel que la police du filigrane (cp1252) l'écrit : lui-même, sa lettre de base sans accent
+    (« Ś » → « S »), ou None."""
+    for candidate in (ch, "".join(c for c in unicodedata.normalize("NFKD", ch) if not unicodedata.combining(c))):
+        candidate = candidate.translate(_LATIN_FALLBACK)
+        try:
+            candidate.encode("cp1252")
+        except UnicodeEncodeError:
+            continue
+        if candidate:
+            return candidate
+    return None
+
+
 def clean_recipient(raw: str) -> str:
     """Nom du destinataire tel qu'il sera imprimé : caractères de contrôle et invisibles retirés, espaces resserrés,
-    seulement ce que la police du filigrane sait écrire, 60 caractères au plus."""
+    accents hors police ramenés à leur lettre de base, 60 caractères au plus. Une lettre que la police ne sait pas
+    écrire est refusée plutôt que retirée en silence (le nom imprimé serait faux) ; symboles et emoji sont ôtés."""
     text = unicodedata.normalize("NFKC", raw or "")
-    kept = []
+    kept: list[str] = []
+    unwritable: list[str] = []
     for ch in text:
         if ch.isspace():
             kept.append(" ")
             continue
         if unicodedata.category(ch).startswith("C"):
             continue
-        try:
-            ch.encode("cp1252")
-        except UnicodeEncodeError:
-            continue
-        kept.append(ch)
+        printable = _printable(ch)
+        if printable is not None:
+            kept.append(printable)
+        elif unicodedata.category(ch).startswith(("L", "N")) and ch not in unwritable:
+            unwritable.append(ch)
+    if unwritable:
+        raise VaultError(
+            f"Le filigrane ne sait pas écrire « {''.join(unwritable[:5])} » : écris le nom en lettres latines"
+        )
     name = " ".join("".join(kept).split())[:RECIPIENT_MAX].strip()
     if len(name) < 2:
         raise VaultError("Indique à qui tu transmets ce papier")
@@ -132,10 +156,17 @@ def revoke(db: Session, doc_id: int, share_id: int, *, actor: str, now: datetime
     share = db.get(VaultShare, share_id)
     if share is None or share.document_id != doc_id:
         raise VaultError("Partage introuvable", 404)
-    if share.used_at is None and share.revoked_at is None:
-        share.revoked_at, share.payload = now, None
-        db.flush()
+    # Mise à jour conditionnelle : une révocation qui croise le téléchargement ne marque pas « révoqué » un papier
+    # déjà parti, et n'est auditée que si elle a eu lieu.
+    revoked = db.execute(
+        update(VaultShare)
+        .where(VaultShare.id == share.id, VaultShare.used_at.is_(None), VaultShare.revoked_at.is_(None))
+        .values(revoked_at=now, payload=None)
+        .execution_options(synchronize_session=False)
+    )
+    if revoked.rowcount == 1:  # type: ignore[attr-defined]
         audit.record(db, actor, "vault.share_revoke", document=doc_id, share=share.id)
+    db.refresh(share)
     return summary(share, now)
 
 
@@ -143,10 +174,13 @@ def open_link(db: Session, token: str, *, now: datetime, ip: str) -> bytes | Non
     """La copie filigranée, une seule fois. None pour un lien inconnu, expiré, consommé ou révoqué : l'appelant
     répond pareil dans tous les cas."""
     digest = sha256_hex(token[:TOKEN_MAX])  # même travail pour tous les jetons, y compris absurdes
-    write_lock(db)
+    # Recherche sans verrou : un jeton inconnu ne sérialise pas le reste de Bank. Le verrou n'est pris (et la ligne
+    # relue) que si le lien existe ; la mise à jour conditionnelle garantit l'usage unique.
     share = db.scalar(select(VaultShare).where(VaultShare.token_hash == digest))
     if share is None:
         return None
+    write_lock(db)
+    db.refresh(share)
     if share.payload is None or state(share, now) != "active":
         audit.record(db, PUBLIC_ACTOR, "vault.share_refused", document=share.document_id, share=share.id, ip=ip)
         return None

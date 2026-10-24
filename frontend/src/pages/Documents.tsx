@@ -362,7 +362,7 @@ function DocumentDetail({ id }: { id: number }) {
             <a className="btn quiet sm" href={`/api/vault/${d.id}/file?download=1`}><Icon name="download" /> Télécharger</a>
           )}
           {d.status !== "refused" && d.status !== "processing" && (
-            <button type="button" className="btn quiet sm" aria-expanded={sharing} onClick={() => setSharing(true)}><Icon name="send" /> Partager</button>
+            <button type="button" className="btn quiet sm" aria-expanded={sharing} aria-controls="vault-share" onClick={() => setSharing(true)}><Icon name="send" /> Partager</button>
           )}
           <dl className="vault-facts">
             <div><dt>Lu par</dt><dd>{METHOD[d.method] ?? d.method}{d.method !== "none" ? ` · confiance ${Math.round(d.confidence * 100)} %` : ""}</dd></div>

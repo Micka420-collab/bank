@@ -6,6 +6,7 @@ from __future__ import annotations
 import io
 import re
 import sys
+import threading
 from datetime import date, timedelta
 from typing import Any
 
@@ -19,6 +20,7 @@ from app.api import deps
 from app.db import utcnow, write_lock
 from app.domain import pdf_text, reading
 from app.models import AuditLog, VaultDocument, VaultShare
+from app.security import audit
 from app.services import shares
 from app.services.vault import VaultError
 from tests.conftest import PASSWORD
@@ -169,6 +171,45 @@ def test_two_simultaneous_downloads_cannot_both_succeed(
         assert shares.open_link(db, token, now=utcnow(), ip="1.2.3.4") is None  # la mise à jour conditionnelle tranche
 
 
+def test_a_link_opened_by_several_threads_at_once_serves_once(app, owner: TestClient) -> None:  # type: ignore[no-untyped-def]
+    doc_id = _upload(owner, "quittance.pdf", make_pdf(LEASE))
+    token = _token(_share(owner, doc_id).json()["link"])
+    barrier = threading.Barrier(4)
+    results: list[bytes | None] = []
+
+    def worker() -> None:
+        with app.state.sessionmaker() as db:
+            barrier.wait()
+            results.append(shares.open_link(db, token, now=utcnow(), ip="1.2.3.4"))
+            db.commit()
+
+    threads = [threading.Thread(target=worker) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+    assert len(results) == 4
+    assert sum(1 for r in results if r is not None) == 1, "une seule ouverture reçoit le papier"
+    with app.state.sessionmaker() as db:
+        assert audit.verify_chain(db).ok
+        actions = [a.action for a in db.scalars(select(AuditLog))]
+        assert actions.count("vault.share_download") == 1
+
+
+def test_a_revocation_that_crosses_the_download_changes_nothing(app, owner: TestClient) -> None:  # type: ignore[no-untyped-def]
+    doc_id = _upload(owner, "quittance.pdf", make_pdf(LEASE))
+    token = _token(_share(owner, doc_id).json()["link"])
+    with app.state.sessionmaker() as db:
+        share = db.scalars(select(VaultShare)).one()
+        assert shares.open_link(db, token, now=utcnow(), ip="1.2.3.4") is not None
+        db.commit()
+        # La révocation a lu la ligne avant le téléchargement : elle ne la marque pas révoquée, ni ne l'audite.
+        assert shares.revoke(db, doc_id, share.id, actor="moi", now=utcnow())["state"] == "used"
+        db.commit()
+        assert db.scalars(select(VaultShare)).one().revoked_at is None
+        assert "vault.share_revoke" not in [a.action for a in db.scalars(select(AuditLog))]
+
+
 def test_opening_links_is_rate_limited(app, owner: TestClient) -> None:  # type: ignore[no-untyped-def]
     anonymous = TestClient(app, base_url="https://testserver")
     codes = [_open(anonymous, f"essai-{i}").status_code for i in range(12)]
@@ -262,6 +303,12 @@ def test_the_watermark_stays_in_the_visible_part_of_the_page() -> None:
 def test_recipient_names_are_cleaned_for_the_watermark() -> None:
     assert shares.clean_recipient("  Jean​  Dupont\n\x1b[31m ") == "Jean Dupont [31m"
     assert shares.clean_recipient("Ｍｍｅ Ｌｅｆèｖｒｅ 🏠") == "Mme Lefèvre"  # NFKC, emoji hors police
+    # Hors cp1252 : ramené à la lettre de base plutôt que retiré (« M. ukasz Nowak » serait un autre nom).
+    assert shares.clean_recipient("M. Łukasz Nowak") == "M. Lukasz Nowak"
+    assert shares.clean_recipient("Mme Şahin (CAF)") == "Mme Sahin (CAF)"
+    assert shares.clean_recipient("Dvořák Ćwik") == "Dvorák Cwik"  # « á » existe en cp1252 : gardé
+    with pytest.raises(VaultError, match="Иван"):
+        shares.clean_recipient("Иван Петров")  # refusé, nommé : pas de nom imprimé à moitié
     assert len(shares.clean_recipient("A" * 500)) == shares.RECIPIENT_MAX
     with pytest.raises(VaultError):
         shares.clean_recipient("🏠")
@@ -273,8 +320,9 @@ def test_the_watermark_is_written_in_the_confined_child(monkeypatch: pytest.Monk
     assert "Transmis à (Paul) \\ le 01/01/2026" in _text(stamped)
     with pytest.raises(reading.ReadingError):
         reading.stamp_pdf(b"%PDF-1.4 garbage", "x")
-    with pytest.raises(reading.ReadingError):
-        reading.stamp_pdf(make_pdf(["page"], pages=pdf_text.MAX_STAMP_PAGES + 1), "x")
+    too_long = pdf_text.MAX_STAMP_PAGES + 1
+    with pytest.raises(reading.ReadingError, match=f"Ce papier fait {too_long} pages : le partage s'arrête à 60"):
+        reading.stamp_pdf(make_pdf(["page"], pages=too_long), "x")
     with pytest.raises(ValueError, match="invalide"):
         pdf_text.unpack_stamp(b"nope")
     with pytest.raises(ValueError, match="trop long"):
@@ -298,5 +346,7 @@ def test_the_watermark_is_written_in_the_confined_child(monkeypatch: pytest.Monk
     assert code == pdf_text.EXIT_OK and out.startswith(b"%PDF-")
     code, _ = run(pdf_text.pack_stamp("x", encrypt_pdf(make_pdf(LEASE), "secret")))
     assert code == pdf_text.EXIT_ENCRYPTED
+    code, out = run(pdf_text.pack_stamp("x", make_pdf(["page"], pages=pdf_text.MAX_STAMP_PAGES + 1)))
+    assert code == pdf_text.EXIT_TOO_MANY_PAGES and out == b"61"
     code, out = run(pdf_text.pack_stamp("x", b"GIF89a"))
     assert code == pdf_text.EXIT_UNREADABLE and out == b""

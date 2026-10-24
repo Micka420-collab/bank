@@ -95,6 +95,10 @@ def _run(args: list[str], data: bytes, timeout: float, what: str, env: dict[str,
         _SLOTS.release()
     if proc.returncode == pdf_text.EXIT_ENCRYPTED and args[0] == str(_PDF_CHILD):
         raise ReadingError("PDF protégé par mot de passe : retire-le avant de le déposer")
+    if proc.returncode == pdf_text.EXIT_TOO_MANY_PAGES and args[0] == str(_PDF_CHILD):
+        pages = proc.stdout.decode("ascii", "replace").strip()
+        count = f"{pages} pages" if pages.isdigit() else "plus de pages"
+        raise ReadingError(f"Ce papier fait {count} : le partage s'arrête à {pdf_text.MAX_STAMP_PAGES}")
     if proc.returncode != 0:
         log.warning("%s refusé (code %s, %s)", what, proc.returncode, proc.stderr[-80:].decode("ascii", "replace"))
         raise ReadingError(f"{what.capitalize()} impossible : fichier illisible ou trop lourd")

@@ -150,13 +150,14 @@ ton mot de passe.
 | Aperçu de lien d'une messagerie qui « consomme » le téléchargement | La page du destinataire ne soumet le jeton qu'au clic, par `POST`, sans cookie (`credentials: omit`) ; un robot qui charge l'adresse ne reçoit que l'application |
 | Deux téléchargements du même lien | Consommation par une seule mise à jour conditionnelle (`used_at IS NULL`, ni révoqué ni expiré, nombre de lignes vérifié), sous le verrou d'écriture : un seul gagnant (`test_two_simultaneous_downloads_cannot_both_succeed`) |
 | Deviner si un lien a existé | Lien inconnu, expiré, consommé ou révoqué : même 404, même corps, aucun détail, y compris pour une requête malformée (pas de 422 de validation) (`test_expired_revoked_used_and_unknown_look_the_same`, `test_a_malformed_request_gets_the_same_answer`) ; 10 ouvertures par IP et par 5 minutes côté API, 10 par minute côté nginx (`test_opening_links_is_rate_limited`) |
-| Le papier circule ensuite sans attache | Filigrane sur chaque page (en diagonale et en pied de page) : « Transmis à X le JJ/MM/AAAA par Bank — usage unique » ; une photo est d'abord mise en page en PDF ; le tout dans le processus enfant confiné qui lit déjà les PDF ; nom du destinataire nettoyé (contrôles et invisibles retirés, 60 caractères, police du filigrane) ; posé dans la zone affichée (CropBox) et pied de page ajusté à la largeur (`test_a_photo_is_shared_as_a_watermarked_pdf`, `test_recipient_names_are_cleaned_for_the_watermark`, `test_the_watermark_stays_in_the_visible_part_of_the_page`) |
+| Le papier circule ensuite sans attache | Filigrane sur chaque page (en diagonale et en pied de page) : « Transmis à X le JJ/MM/AAAA par Bank — usage unique » ; une photo est d'abord mise en page en PDF ; le tout dans le processus enfant confiné qui lit déjà les PDF ; nom du destinataire nettoyé (contrôles et invisibles retirés, 60 caractères, accent hors police ramené à sa lettre de base, lettre que la police ne sait pas écrire refusée plutôt que retirée) ; posé dans la zone affichée (CropBox) et pied de page ajusté à la largeur (`test_a_photo_is_shared_as_a_watermarked_pdf`, `test_recipient_names_are_cleaned_for_the_watermark`, `test_the_watermark_stays_in_the_visible_part_of_the_page`) |
 | Un partage bloque le reste de Bank | Le filigrane (jusqu'à 25 s) se fait avant toute écriture : le verrou d'écriture de SQLite n'est pris qu'après (`test_the_rest_of_bank_can_write_while_a_copy_is_stamped`) |
 | Copie qui traîne | Copie filigranée chiffrée (AES-256-GCM, identifiant du partage en données associées), effacée au téléchargement, à la révocation, ou à l'entretien horaire après l'expiration ; supprimer le document emporte ses liens ; le journal (destinataire chiffré, dates) reste |
 | Partage à ton insu | Création, téléchargement (avec l'IP), révocation et tentatives sur un lien qui ne sert plus sont dans la chaîne d'audit (`vault.share_*`), sans jeton ni nom du destinataire |
 
-Pour un destinataire extérieur, ton reverse proxy n'a à exposer que `/`, `/assets/`, `/icon.svg`, `/sw.js` et
-`/api/share/open` : sans session, tout le reste de `/api` répond 401.
+Pour un destinataire extérieur, ton reverse proxy n'a à exposer que `/`, `/assets/`, `/icon.svg` et
+`/api/share/open` : le reste de `/api` n'est pas exposé. La page du destinataire n'enregistre pas le service worker
+et ne demande pas le manifeste de l'application.
 
 ## Crypto et pilote automatique
 

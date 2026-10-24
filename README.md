@@ -464,9 +464,9 @@ scans, reconnaissance de texte (Tesseract, en français), le tout dans des proce
   jamais lu ni gardé, les identifiants ne sortent ni dans l'API, ni dans le journal, ni dans une erreur.
 - **Partager un papier** : « Partager » sur un document donne un lien à usage unique, valable 1 h, 24 h ou 48 h,
   créé avec ton mot de passe. Le destinataire reçoit un PDF marqué « Transmis à … le … par Bank — usage unique » ;
-  le lien ne dit rien du document, et le journal montre qui l'a téléchargé et quand — révocable tant qu'il n'a pas
+  le lien ne dit rien du document, et le journal montre quand il a été téléchargé — révocable tant qu'il n'a pas
   servi. Pour un destinataire hors de chez toi, ton reverse proxy n'a à ouvrir que `/`, `/assets/`,
-  `/icon.svg`, `/sw.js` et `/api/share/open` (voir [SECURITY.md](SECURITY.md#partage-dun-papier-par-lien)).
+  `/icon.svg` et `/api/share/open` (voir [SECURITY.md](SECURITY.md#partage-dun-papier-par-lien)).
 
 ## Opportunités : ce que tu pourrais gagner, chiffré honnêtement
 
