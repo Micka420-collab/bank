@@ -278,12 +278,23 @@ def load_tax_model(raw: Mapping[str, Any]) -> TaxModel | None:
         return None
 
 
-def estimate_tax(model: TaxModel, salaries_cents: Sequence[int], parts: Decimal, couple: bool) -> int:
-    """Impôt au barème sur des salaires imposables annuels (un par déclarant) : abattement de 10 % borné, quotient
-    familial plafonné (cas général), décote. Un ordre de grandeur, pas l'avis."""
+def estimate_tax(
+    model: TaxModel,
+    salaries_cents: Sequence[int],
+    parts: Decimal,
+    couple: bool,
+    deductions_cents: Sequence[int | None] | None = None,
+) -> int:
+    """Impôt au barème sur des salaires imposables annuels (un par déclarant) : abattement de 10 % borné, ou frais
+    réels pour le déclarant dont `deductions_cents` donne le montant, quotient familial plafonné (cas général),
+    décote. Un ordre de grandeur, pas l'avis."""
     net = 0
-    for s in salaries_cents:
+    for i, s in enumerate(salaries_cents):
         if s <= 0:
+            continue
+        real = deductions_cents[i] if deductions_cents is not None and i < len(deductions_cents) else None
+        if real is not None:
+            net += s - min(max(real, 0), s)
             continue
         deduction = int((Decimal(s) * model.deduction_rate / 100).quantize(Decimal(1), rounding=ROUND_HALF_UP))
         deduction = min(max(deduction, model.deduction_min_cents), model.deduction_max_cents, s)

@@ -793,7 +793,14 @@ export type Correlation = {
   status: "new" | "dismissed" | string;
   procedure_id: number | null;
 };
-export type CorrelationsView = { findings: Correlation[]; hidden: number; irl_source: string; disclaimer: string };
+export type Commute = { one_way_km: string; fiscal_hp: number; electric: boolean };
+export type CorrelationsView = {
+  findings: Correlation[];
+  hidden: number;
+  irl_source: string;
+  disclaimer: string;
+  commute?: Commute | null; // trajet indiqué pour comparer les frais réels à l'abattement de 10 %
+};
 
 export type Profile = {
   birth_date: string;

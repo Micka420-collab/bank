@@ -1422,3 +1422,26 @@ class DocumentTask(Base):
     document_id: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     closed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+class CommuteProfile(Base):
+    """Ton trajet domicile-travail pour comparer les frais réels à l'abattement de 10 % : distance d'un aller,
+    puissance fiscale du véhicule, électrique ou non. Chiffré (la distance dit où tu travailles), une seule ligne."""
+
+    __tablename__ = "commute_profile"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    data: Mapped[str] = mapped_column(EncryptedText("commute.data"))  # JSON
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+
+class PublicSourceKey(Base):
+    """Clé d'accès d'une source publique qui demande un compte (Webstat de la Banque de France) : chiffrée, jamais
+    réaffichée ; seuls ses quatre derniers caractères se montrent."""
+
+    __tablename__ = "public_source_keys"
+
+    slug: Mapped[str] = mapped_column(String(24), primary_key=True)  # webstat
+    api_key: Mapped[str] = mapped_column(EncryptedText("source.api_key"))
+    hint: Mapped[str] = mapped_column(String(8), default="")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)

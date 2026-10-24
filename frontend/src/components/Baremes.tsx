@@ -3,7 +3,7 @@
 // (inflation, IRL, SMIC) ; « Vérifier maintenant ». Rien ne change en silence : chaque mise à jour est aussi dans la
 // Veille et au journal. Sans ton accord, aucune source n'est interrogée.
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { api, useApi, type ConsentView } from "../api";
 import { Icon } from "./Icon";
 import { ErrorNote, Loading, useAsyncAction, useToast } from "./ui";
@@ -180,6 +180,7 @@ export function Baremes() {
               <ul className="baremes-notes">{data.notes.map((n) => <li key={n.text} className="faint">{n.text}</li>)}</ul>
             </>
           )}
+          <Webstat />
           <h3>Sources</h3>
           <ul className="baremes-sources">
             {data.sources.map((s) => (
@@ -214,6 +215,41 @@ function BaremesConsent({ onDone }: { onDone: () => void }) {
         </button>
         <span className="faint">Sans accord, rien ne part : Bank garde les valeurs du fichier livré.</span>
       </div>
+    </div>
+  );
+}
+
+type WebstatStatus = { configured: boolean; message: string; signup_url: string };
+
+/** Webstat (Banque de France) : facultatif. Sans compte, les seuils de l'usure viennent du Journal officiel. */
+function Webstat() {
+  const status = useApi<WebstatStatus>("/api/baremes/webstat");
+  const [key, setKey] = useState("");
+  const [busy, error, run] = useAsyncAction();
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    void run(async () => {
+      await api("/api/baremes/webstat", { method: "PUT", body: { api_key: key.trim() } });
+      setKey("");
+      status.reload();
+    });
+  };
+  const remove = () => void run(async () => { await api("/api/baremes/webstat", { method: "DELETE" }); status.reload(); });
+  if (!status.data) return null;
+  return (
+    <div className="baremes-webstat">
+      <h3>Webstat (Banque de France)</h3>
+      <p className="faint">{status.data.message}</p>
+      {status.data.configured ? (
+        <button type="button" className="btn link" disabled={busy} onClick={remove}>Retirer la clé</button>
+      ) : (
+        <form className="actions" onSubmit={save} aria-label="Clé Webstat">
+          <input type="password" autoComplete="off" value={key} placeholder="Clé d'API Webstat" onChange={(e) => setKey(e.target.value)} />
+          <button className={`btn sm${busy ? " is-loading" : ""}`} disabled={busy || key.trim().length < 8}>Enregistrer</button>
+          <a href={status.data.signup_url} target="_blank" rel="noreferrer noopener">Créer un compte</a>
+        </form>
+      )}
+      {error && <ErrorNote message={error} />}
     </div>
   );
 }

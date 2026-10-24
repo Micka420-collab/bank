@@ -107,3 +107,37 @@ describe("ce qui est lié", () => {
     expect(text()).toContain("Dépose ton bail et tes attestations d'assurance");
   });
 });
+
+describe("crédit et coûts", () => {
+  const RENEG: Correlation = {
+    key: "renegociation:9:2026-Q4", kind: "renegotiation", level: "info", topic: "credits", topic_label: "Crédits",
+    title: "Maison : à 4,05 %, le simulateur de renégociation donne environ 5 000 € de gain net", body: "Estimation Bank…",
+    evidence: [{ label: "Simulateur", value: "nouveau taux 4,05 %", ref: "loan:9:405" }],
+    yearly_cents: null, action: null, confidence: 0.5, statistical: false, status: "new", procedure_id: null,
+  };
+  const ASK: Correlation = {
+    key: "frais_reels_ask:2026", kind: "real_expenses_ask", level: "info", topic: "impots", topic_label: "Impôts",
+    title: "Frais réels 2026 : il manque ta distance domicile-travail et ton véhicule", body: "Ton agenda compte 180 jours…",
+    evidence: [], yearly_cents: null, action: null, confidence: 0.6, statistical: false, status: "new", procedure_id: null,
+  };
+
+  it("ouvre le simulateur du prêt avec le taux du constat, et demande le trajet pour les frais réels", async () => {
+    mockApi({
+      "/api/correlations/commute": () => view({ findings: [], commute: { one_way_km: "38.0", fiscal_hp: 6, electric: false } }),
+      "/api/correlations": () => view({ findings: [RENEG, ASK] }),
+    });
+    await render();
+    await click("Les pièces");
+    const link = [...host.querySelectorAll("a")].find((a) => a.textContent === "ouvrir le simulateur");
+    expect(link?.getAttribute("href")).toBe("#/patrimoine?pret=9&taux=405");
+    const form = host.querySelector<HTMLFormElement>("form.corr-commute")!;
+    const [km, hp] = [...form.querySelectorAll<HTMLInputElement>("input:not([type=checkbox])")];
+    const set = (el: HTMLInputElement, v: string) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, v);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    await act(async () => { set(km!, "38,5"); set(hp!, "6"); });
+    await click("Comparer");
+    expect(body(calls.find((c) => c.url === "/api/correlations/commute")!)).toEqual({ one_way_km: "38.5", fiscal_hp: 6, electric: false });
+  });
+});

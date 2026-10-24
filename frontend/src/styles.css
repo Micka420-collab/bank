@@ -8892,3 +8892,23 @@ label {
   margin: 0.25rem 0 0.5rem;
   padding-left: 1.2rem;
 }
+
+/* Crédit et coûts (#35) : le trajet domicile-travail demandé dans « Ce qui est lié », la clé Webstat. */
+.corr-commute {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 1rem;
+  margin-block: 0.5rem;
+}
+.corr-commute label:not(.check) {
+  display: grid;
+  gap: 0.25rem;
+}
+.corr-commute input:not([type="checkbox"]) {
+  width: 8rem;
+}
+.baremes-webstat input[type="password"] {
+  flex: 1 1 14rem;
+  min-width: 0;
+}

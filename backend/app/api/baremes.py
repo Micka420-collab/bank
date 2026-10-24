@@ -12,13 +12,17 @@ from pydantic import BaseModel, Field
 from app.api.deps import AuthDep, DbDep, TodayDep, client_ip
 from app.db import utcnow
 from app.services import baremes as svc
-from app.services import consents
+from app.services import consents, credit_watch
 
 router = APIRouter(prefix="/api/baremes", tags=["baremes"])
 
 
 class RevertIn(BaseModel):
     path: str = Field(min_length=3, max_length=120)
+
+
+class WebstatIn(BaseModel):
+    api_key: str = Field(min_length=8, max_length=200)
 
 
 @router.get("")
@@ -54,3 +58,24 @@ def revert(body: RevertIn, ctx: AuthDep, db: DbDep) -> dict[str, Any]:
     except svc.BaremesError as exc:
         raise HTTPException(exc.status, str(exc)) from None
     return svc.view(db)
+
+
+@router.get("/webstat")
+def webstat(_: AuthDep, db: DbDep) -> dict[str, Any]:
+    """Webstat (Banque de France) : facultatif ; sans compte, les seuils viennent du Journal officiel."""
+    return credit_watch.webstat_status(db)
+
+
+@router.put("/webstat")
+def save_webstat(body: WebstatIn, ctx: AuthDep, db: DbDep) -> dict[str, Any]:
+    try:
+        credit_watch.save_webstat_key(db, body.api_key, actor=ctx.user.username, now=utcnow())
+    except credit_watch.CreditWatchError as exc:
+        raise HTTPException(exc.status, str(exc)) from None
+    return credit_watch.webstat_status(db)
+
+
+@router.delete("/webstat")
+def clear_webstat(ctx: AuthDep, db: DbDep) -> dict[str, Any]:
+    credit_watch.clear_webstat_key(db, actor=ctx.user.username)
+    return credit_watch.webstat_status(db)

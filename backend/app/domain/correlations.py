@@ -45,6 +45,8 @@ TOPICS = {
     "aides": "Aides",
     "energie": "Énergie",
     "habitudes": "Habitudes",
+    "credits": "Crédits",
+    "impots": "Impôts",
 }
 
 
@@ -124,7 +126,7 @@ class Inputs:
     paydays: Sequence[date] = ()
     category_names: Mapping[str, str] = field(default_factory=dict)
     housing: HousingLink | None = None
-    extra: Sequence[Finding] = ()  # constats déjà calculés ailleurs (revenus et prestations : domain.income_watch)
+    extra: Sequence[Finding] = ()  # constats calculés ailleurs (domain.income_watch, domain.credit_watch)
 
 
 # ------------------------------------------------------------------ sorties

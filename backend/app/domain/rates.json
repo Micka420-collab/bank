@@ -221,5 +221,160 @@
         "url": "https://www.unedic.org/actualites/allocations-d-assurance-chomage-revalorisation-de-0-5-au-1er-juillet-2025"
       }
     ]
+  },
+  "usury": {
+    "source": "Avis trimestriels relatifs à l'usure (art. L. 314-6 du code de la consommation et L. 313-5-1 du code monétaire et financier), publiés au Journal officiel et relus dans ses archives quotidiennes (echanges.dila.gouv.fr/OPENDATA/JORF). Seuils applicables aux particuliers ; « averages » : taux effectifs moyens pratiqués au trimestre précédent.",
+    "items": [
+      {
+        "quarter": "2026-Q1",
+        "effective": "2026-01-01",
+        "thresholds": {
+          "conso_3000": "23.56",
+          "conso_6000": "15.87",
+          "conso_plus": "8.67",
+          "immo_fixe_lt10": "4.12",
+          "immo_fixe_10_20": "4.59",
+          "immo_fixe_20": "5.13",
+          "immo_variable": "4.99",
+          "immo_relais": "6.15"
+        },
+        "averages": {
+          "conso_3000": "17.67",
+          "conso_6000": "11.9",
+          "conso_plus": "6.5",
+          "immo_fixe_lt10": "3.09",
+          "immo_fixe_10_20": "3.44",
+          "immo_fixe_20": "3.85",
+          "immo_variable": "3.74",
+          "immo_relais": "4.61"
+        },
+        "source": "Avis du 22/12/2025 relatif à l'usure (art. L. 314-6 du code de la consommation), JO n° 0301 du 24/12/2025 ; relu le 24/10/2026 dans les archives du Journal officiel de la DILA",
+        "url": "https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000053160376"
+      },
+      {
+        "quarter": "2026-Q2",
+        "effective": "2026-04-01",
+        "thresholds": {
+          "conso_3000": "23.52",
+          "conso_6000": "15.73",
+          "conso_plus": "8.61",
+          "immo_fixe_lt10": "4",
+          "immo_fixe_10_20": "4.48",
+          "immo_fixe_20": "5.19",
+          "immo_variable": "5",
+          "immo_relais": "6.2"
+        },
+        "averages": {
+          "conso_3000": "17.64",
+          "conso_6000": "11.8",
+          "conso_plus": "6.46",
+          "immo_fixe_lt10": "3",
+          "immo_fixe_10_20": "3.36",
+          "immo_fixe_20": "3.89",
+          "immo_variable": "3.75",
+          "immo_relais": "4.65"
+        },
+        "source": "Avis du 26/03/2026 relatif à l'usure (art. L. 314-6 du code de la consommation), JO n° 0074 du 27/03/2026 ; relu le 24/10/2026 dans les archives du Journal officiel de la DILA",
+        "url": "https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000053724000"
+      },
+      {
+        "quarter": "2026-Q3",
+        "effective": "2026-07-01",
+        "thresholds": {
+          "conso_3000": "23.53",
+          "conso_6000": "15.67",
+          "conso_plus": "8.56",
+          "immo_fixe_lt10": "4.07",
+          "immo_fixe_10_20": "4.57",
+          "immo_fixe_20": "5.29",
+          "immo_variable": "5.28",
+          "immo_relais": "6.39"
+        },
+        "averages": {
+          "conso_3000": "17.65",
+          "conso_6000": "11.75",
+          "conso_plus": "6.42",
+          "immo_fixe_lt10": "3.05",
+          "immo_fixe_10_20": "3.43",
+          "immo_fixe_20": "3.97",
+          "immo_variable": "3.96",
+          "immo_relais": "4.79"
+        },
+        "source": "Avis du 26/06/2026 relatif à l'usure (art. L. 314-6 du code de la consommation), JO n° 0150 du 28/06/2026 ; relu le 24/10/2026 dans les archives du Journal officiel de la DILA",
+        "url": "https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000054323743"
+      },
+      {
+        "quarter": "2026-Q4",
+        "effective": "2026-10-01",
+        "thresholds": {
+          "conso_3000": "23.6",
+          "conso_6000": "15.76",
+          "conso_plus": "8.56",
+          "immo_fixe_lt10": "4.09",
+          "immo_fixe_10_20": "4.68",
+          "immo_fixe_20": "5.4",
+          "immo_variable": "5.52",
+          "immo_relais": "6.49"
+        },
+        "averages": {
+          "conso_3000": "17.7",
+          "conso_6000": "11.82",
+          "conso_plus": "6.42",
+          "immo_fixe_lt10": "3.07",
+          "immo_fixe_10_20": "3.51",
+          "immo_fixe_20": "4.05",
+          "immo_variable": "4.14",
+          "immo_relais": "4.87"
+        },
+        "source": "Avis du 25/09/2026 relatif à l'usure (art. L. 314-6 du code de la consommation), JO n° 0225 du 26/09/2026 ; relu le 24/10/2026 dans les archives du Journal officiel de la DILA",
+        "url": "https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000054903528"
+      }
+    ]
+  },
+  "mileage_allowance": {
+    "incomes_year": 2025,
+    "source": "Barème kilométrique fixé par l'arrêté du 27 mars 2023 (CGI, ann. IV, art. 6 B), toujours celui que cite Service-Public F1989 pour les revenus 2025 (fiche vérifiée le 15/04/2026) ; BOFiP BOI-BAREME-000001 (version en vigueur depuis le 20/07/2023), relu le 24/10/2026. Barème des revenus 2026 pas encore publié à cette date.",
+    "url": "https://bofip.impots.gouv.fr/bofip/2185-PGP.html/identifiant=BOI-BAREME-000001-20230720",
+    "rules_source": "BOFiP BOI-RSA-BASE-30-50-30-20, relu le 24/10/2026 : un aller et retour par jour (§ 180), 40 km par trajet au plus sauf circonstances particulières, barème plafonné à 7 CV (§ 450) ; +20 % pour un véhicule électrique (CGI, ann. IV, art. 6 B, II, cité par BOI-BAREME-000001)",
+    "rules_url": "https://bofip.impots.gouv.fr/bofip/2161-PGP.html/identifiant=BOI-RSA-BASE-30-50-30-20-20170224",
+    "max_one_way_km": 40,
+    "electric_uplift_percent": 20,
+    "cars": [
+      {
+        "hp": 3,
+        "upto_5000": "0.529",
+        "mid_rate": "0.316",
+        "mid_fixed_cents": 106500,
+        "over_20000": "0.370"
+      },
+      {
+        "hp": 4,
+        "upto_5000": "0.606",
+        "mid_rate": "0.340",
+        "mid_fixed_cents": 133000,
+        "over_20000": "0.407"
+      },
+      {
+        "hp": 5,
+        "upto_5000": "0.636",
+        "mid_rate": "0.357",
+        "mid_fixed_cents": 139500,
+        "over_20000": "0.427"
+      },
+      {
+        "hp": 6,
+        "upto_5000": "0.665",
+        "mid_rate": "0.374",
+        "mid_fixed_cents": 145700,
+        "over_20000": "0.447"
+      },
+      {
+        "hp": 7,
+        "upto_5000": "0.697",
+        "mid_rate": "0.394",
+        "mid_fixed_cents": 151500,
+        "over_20000": "0.470"
+      }
+    ]
   }
 }

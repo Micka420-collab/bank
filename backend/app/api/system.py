@@ -56,6 +56,7 @@ from app.models import (
 from app.security import audit
 from app.security.auth import verify_password
 from app.services import bank_setup as bank_setup_service
+from app.services import credit_watch
 from app.services import energy as energy_service
 from app.services import exchange_keys as exchange_keys_service
 from app.services import home_value as home_value_service
@@ -231,6 +232,8 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
             {"key": i.key, "status": i.status, "until": i.until.isoformat() if i.until else None, "note": i.note}
             for i in db.scalars(select(InitiativeState))
         ],
+        # Trajet domicile-travail indiqué pour les frais réels (#35) ; la clé Webstat n'en sort jamais.
+        "commute": credit_watch.commute_view(db),
         # Territoire (#32) : l'adresse telle que tapée et ce que Bank en a tiré, et les calendriers qui en découlent.
         "territory": {
             "place": territory_service.place(db),

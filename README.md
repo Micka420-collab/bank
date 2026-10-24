@@ -394,6 +394,16 @@ septembre suivant est posé dans l'Année qui vient (en une fois jusqu'à 300 �
 **chèque énergie** : éligible d'après la simulation des aides et rien vu dans tes relevés, Bank te demande de
 vérifier qu'il a été reçu et utilisé ; si ton revenu fiscal de l'année N-2 lui manque, il dit lequel.
 
+Côté crédit et coûts, trois de plus. Le **seuil de l'usure** : les seuils du trimestre sont lus dans l'avis
+publié au Journal officiel (archives quotidiennes de la DILA, avec la relève des barèmes) ; tes agios rapportés à
+ton solde débiteur reconstitué jour par jour, et le taux actuariel de tes prêts suivis, sont comparés au seuil de
+leur catégorie, méthode à l'appui (Webstat de la Banque de France reste facultatif : sans compte, le Journal
+officiel suffit). La **renégociation** : quand le taux effectif moyen des nouveaux prêts immobiliers, publié dans
+le même avis, donne un gain net dans le simulateur après l'indemnité de remboursement anticipé, Bank le dit et le
+lien ouvre le simulateur à ce taux. Les **frais réels** : jours travaillés lus dans ton agenda, distance et
+puissance fiscale que tu indiques (chiffrées), barème kilométrique des revenus 2025 (celui des revenus 2026 n'est
+pas encore publié), comparés à l'abattement de 10 % avec l'effet sur l'impôt estimé.
+
 ## Déclarations à ne pas oublier
 
 Bank › Gagner › Aides › **Tes déclarations**. Un versement France Travail reconnu dans tes relevés fait proposer
