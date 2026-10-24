@@ -101,14 +101,13 @@ def parse_max_power(payload: Any) -> list[MaxPower]:
                 continue
             when = _day_and_time(p.get("d"))
             try:
-                value = float(str(p.get("v")).replace(",", "."))
+                scaled = float(str(p.get("v")).replace(",", ".")) * factor
             except ValueError:
                 continue
-            if when is None or not math.isfinite(value):
+            # Le produit est testé avant l'arrondi : 1e306 kVA donne l'infini, que round() refuse (OverflowError).
+            if when is None or not math.isfinite(scaled) or not 0 <= scaled <= MAX_VA:
                 continue
-            va = round(value * factor)
-            if not 0 <= va <= MAX_VA:
-                continue
+            va = round(scaled)
             day, at = when
             prev = by_day.get(day)
             if prev is None or va > prev.va:  # deux points le même jour : le plus haut est le maximum du jour
@@ -197,6 +196,14 @@ def _kwh_delta(
     return Decimal(yearly_wh) / 1000 * max(worst, Decimal(0)), None
 
 
+def offered_kva(grid: Mapping[int, GridPower]) -> tuple[int, ...]:
+    """Les puissances de la grille la plus récente de l'option ; la liste normalisée quand Bank n'a pas de grille."""
+    if not grid:
+        return STANDARD_KVA
+    latest = max(g.as_of for g in grid.values())
+    return tuple(sorted(k for k, g in grid.items() if g.as_of == latest))
+
+
 def power_check(
     readings: Sequence[MaxPower],
     *,
@@ -248,7 +255,9 @@ def power_check(
             f"relevés) ; il en faut 12 pour couvrir un hiver. Maximum relevé jusqu'ici : {peak_text}, pour "
             f"{subscribed_kva} kVA souscrits.",
         )
-    lower = [p for p in STANDARD_KVA if p < subscribed_kva]
+    # Les puissances proposées viennent de la grille relevée quand Bank l'a (la CRE en ajoute ou en retire selon
+    # l'option et la date : Tempo n'avait pas de 24 kVA avant le 01/08/2026) ; sans grille, la liste normalisée.
+    lower = [p for p in offered_kva(grid) if p < subscribed_kva]
     if not lower:
         return replace(
             out,
@@ -258,11 +267,13 @@ def power_check(
         )
     fitting = [p for p in lower if peak.va <= p * 1000 - MARGIN_VA]
     if not fitting:
+        below = max(lower)
+        tight = "est dépassée par ce maximum" if peak.va > below * 1000 else "laisserait moins de 1 kVA de marge"
         return replace(
             out,
             status="fits",
             message=f"En 12 mois, ta puissance maximale a atteint {peak_text} : {subscribed_kva} kVA correspond à ton "
-            f"usage (la puissance inférieure, {max(lower)} kVA, laisserait moins de 1 kVA de marge).",
+            f"usage (la puissance inférieure, {below} kVA, {tight}).",
         )
     current = grid.get(subscribed_kva)
     targets = [p for p in sorted(fitting) if p in grid]

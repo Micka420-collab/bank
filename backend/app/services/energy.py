@@ -9,6 +9,7 @@ import re
 from collections.abc import Callable
 from dataclasses import asdict
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import delete, func, select
@@ -179,6 +180,13 @@ def disconnect(db: Session, actor: str) -> None:
     audit.record(db, actor, "energy.disconnect", connection=conn.id)
 
 
+@consents.on_revoke(CURVE_CONSENT)
+def _curve_revoked(db: Session) -> None:
+    """Accord « Courbe de charge » retiré : la courbe gardée (elle dit quand tu es chez toi) est effacée."""
+    db.execute(delete(EnergyLoadCurve))
+    set_setting(db, "energy_curve_state", {})
+
+
 # ------------------------------------------------------------------ synchronisation
 def sync(db: Session, today: date, *, make_client: ClientFactory = default_client, full: bool = False) -> int:
     """Rapatrie les jours manquants jusqu'à hier (les données d'un jour arrivent le lendemain matin).
@@ -254,6 +262,8 @@ def sync_max_power(db: Session, today: date, *, make_client: ClientFactory = def
         error = None
     except ConsoApiError as exc:
         rows, error = [], str(exc)[:300]
+    except (ValueError, ArithmeticError) as exc:  # une surprise du lecteur est notée, elle n'arrête pas la relève
+        rows, error = [], f"Réponse de Conso API illisible ({type(exc).__name__})"
     write_lock(db)
     db.expire_all()
     if db.get(EnergyConnection, conn_id) is None:
@@ -420,7 +430,7 @@ def sync_load_curve(db: Session, today: date, *, now: Any = None, make_client: C
             older = client.load_curve(prm, *backward)
             got.update(older)
             history_done = not older or backward[0] <= today - timedelta(days=CURVE_HISTORY_DAYS)
-    except ConsoApiError as exc:
+    except (ConsoApiError, ValueError, ArithmeticError) as exc:  # une surprise du lecteur est notée, pas levée
         error = (
             f"Courbe de charge indisponible ({exc}). Son enregistrement s'active dans ton espace client Enedis ; "
             "l'historique commence à cette date."
@@ -568,8 +578,8 @@ def is_gas_supplier(merchant: str) -> bool:
 
 def gas_view(db: Session, today: date) -> dict[str, Any] | None:
     """Une ligne de comparaison, seulement quand Bank voit des prélèvements de gaz : ce que tu as payé sur douze mois
-    (tes opérations) à côté du prix repère du mois (rates.json, daté et sourcé). Bank ne connaît pas tes MWh : il
-    ne divise pas l'un par l'autre."""
+    (tes opérations) à côté de la grille du prix repère du mois (rates.json, daté et sourcé). Bank ne connaît pas tes
+    MWh : il ne divise pas l'un par l'autre."""
     ref = ana.gas_reference(rates.current(), today)
     since = today - timedelta(days=365)
     rows = db.execute(
@@ -587,13 +597,25 @@ def gas_view(db: Session, today: date) -> dict[str, Any] | None:
         return None
     spent = -sum(a for a, _ in paid)
     merchants = sorted({m.strip() for _, m in paid})[:3]
-    message = (
-        f"Gaz : {format_eur(spent)} prélevés sur douze mois ({', '.join(merchants)}). Prix repère de la CRE en "
-        f"{ana.month_year(ref.since)} : {ana.euro_mwh(ref.eur_per_mwh)} TTC, soit "
-        f"{sig.euro_kwh(ref.eur_per_mwh / 1000)} le kWh, à comparer avec le prix du kWh de ta facture de gaz."
-    )
+    message = f"Gaz : {format_eur(spent)} prélevés sur douze mois ({', '.join(merchants)}). "
+    average = f"{ana.euro_mwh(ref.eur_per_mwh)} TTC, abonnement compris et tous foyers confondus"
+    if ref.grid:
+        # La grille par type de foyer se compare à la facture ; le prix moyen, abonnement compris, ne le peut pas.
+        message += (
+            f"Prix repère de la CRE en {ana.month_year(ref.since)}, zone GRDF, TTC : "
+            + " ; ".join(_gas_line(g) for g in ref.grid)
+            + ". C'est cette grille qui se compare à l'abonnement et au prix du kWh de ta facture de gaz. Prix moyen : "
+            f"{average}."
+        )
+    else:
+        message += (
+            f"Prix repère moyen de la CRE en {ana.month_year(ref.since)} : {average} ; il ne se compare pas au seul "
+            "prix du kWh d'une facture, et Bank n'a pas la grille par type de foyer de ce mois."
+        )
     if ref.next_price is not None and ref.next_since is not None:
-        message += f" Au {sig.fr_date(ref.next_since)} : {ana.euro_mwh(ref.next_price)} TTC."
+        nxt = ", ".join(f"{_kwh_eur(g.kwh)} ({g.label})" for g in ref.next_grid)
+        message += f" Au {sig.fr_date(ref.next_since)} : " + (f"kWh à {nxt} ; " if nxt else "")
+        message += f"prix moyen {ana.euro_mwh(ref.next_price)} TTC."
     return {
         "message": message,
         "spent_cents": spent,
@@ -602,9 +624,38 @@ def gas_view(db: Session, today: date) -> dict[str, Any] | None:
         "since": ref.since.isoformat(),
         "next_eur_per_mwh": None if ref.next_price is None else str(ref.next_price),
         "next_since": ref.next_since.isoformat() if ref.next_since else None,
+        "grid": [_gas_grid_view(g) for g in ref.grid],
+        "next_grid": [_gas_grid_view(g) for g in ref.next_grid],
         "source": ref.source,
         "source_url": ref.source_url,
+        "data_url": ref.data_url,
         "published": ref.published,
+    }
+
+
+def _kwh_eur(value: Decimal) -> str:
+    """Le prix du kWh tel que la CRE le publie (cinq décimales), sans arrondi."""
+    return f"{value}".replace(".", ",") + " €"
+
+
+def _gas_line(g: ana.GasGrid) -> str:
+    text = f"{g.label}, abonnement {format_eur(round(g.abonnement * 100))} par an et kWh à {_kwh_eur(g.kwh)} en moyenne"
+    if g.kwh_low is not None and g.kwh_high is not None:
+        text += f" (de {_kwh_eur(g.kwh_low)} à {_kwh_eur(g.kwh_high)} selon la localisation)"
+    if g.reference_mwh is not None:
+        text += f", pour un foyer de référence à {str(g.reference_mwh).replace('.', ',')} MWh par an"
+    return text
+
+
+def _gas_grid_view(g: ana.GasGrid) -> dict[str, Any]:
+    return {
+        "profile": g.profile,
+        "label": g.label,
+        "reference_mwh": None if g.reference_mwh is None else str(g.reference_mwh),
+        "abonnement_eur": str(g.abonnement),
+        "kwh_eur": str(g.kwh),
+        "kwh_low_eur": None if g.kwh_low is None else str(g.kwh_low),
+        "kwh_high_eur": None if g.kwh_high is None else str(g.kwh_high),
     }
 
 

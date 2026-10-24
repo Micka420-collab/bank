@@ -382,8 +382,9 @@ déclare pas. Rien n'est envoyé : tu déclares sur le site de l'organisme. Règ
   et le seuil de bascule, calcul exact jour par jour avec l'accord « Courbe de charge Linky » (pas de 30 min, à
   activer aussi chez Enedis) et tes heures creuses. Avec l'accord « Météo de ta commune », Bank compare ta
   consommation d'une année sur l'autre **à climat égal** (degrés-jours base 18 °C, archive Open-Meteo, coordonnées
-  arrondies à 10 km) et ne signale qu'une dérive de plus de 10 % sur trois mois. Si tu paies du gaz, le **prix
-  repère** de la CRE (daté dans `rates.json`, d'après Service-Public) s'affiche à côté pour comparer.
+  arrondies à 10 km) et ne signale qu'une dérive de plus de 10 % sur trois mois. Si tu paies du gaz, la grille du **prix
+  repère** de la CRE (abonnement et kWh par type de foyer, zone GRDF, datée dans `rates.json` d'après les données
+  ouvertes de la CRE) s'affiche à côté, à comparer avec ta facture.
 - **Planning de travail** : colle l'adresse privée iCal de ton agenda (Google Agenda › « Adresse secrète au
   format iCal », Outlook › « Publier ») ou dépose un .ics. Bank garde les journées et les titres (chiffrés),
   relit l'adresse chaque nuit, et calcule la prochaine paie : part fixe (la paie habituelle lue dans tes relevés)

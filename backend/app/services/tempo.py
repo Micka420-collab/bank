@@ -82,7 +82,7 @@ def refresh(db: Session, *, now: datetime, today: date, fetch: Fetch) -> dict[st
     found: dict[date, str | None] = {}
     try:
         found = sig.parse_tempo(fetch(url))
-    except (netfetch.FetchError, ValueError) as exc:  # SignalFormatError est une ValueError
+    except (netfetch.FetchError, ValueError, ArithmeticError) as exc:  # SignalFormatError est une ValueError
         error = f"Couleur Tempo indisponible ({exc}) : les couleurs connues restent."
     write_lock(db)
     db.expire_all()
@@ -146,7 +146,7 @@ def refresh_history(db: Session, *, now: datetime, today: date, fetch: Fetch) ->
             for day, value in sig.parse_tempo(fetch(url)).items():
                 if value is not None and start <= day < today:
                     found[day] = (value, url)
-        except (netfetch.FetchError, ValueError) as exc:
+        except (netfetch.FetchError, ValueError, ArithmeticError) as exc:
             error = f"Historique Tempo indisponible ({exc}) : les couleurs connues restent."
             break
     write_lock(db)

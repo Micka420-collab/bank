@@ -91,8 +91,12 @@ def parse_meteo(body: bytes) -> dict[date, float]:
             day = date.fromisoformat(str(raw_day)[:10])
         except ValueError:
             continue
-        if math.isfinite(raw_t) and -60 <= raw_t <= 60:
-            out[day] = float(raw_t)
+        try:
+            t = float(raw_t)  # un entier JSON de 400 chiffres ne tient pas dans un float : OverflowError
+        except (OverflowError, ValueError):
+            continue
+        if math.isfinite(t) and -60 <= t <= 60:
+            out[day] = t
     return out
 
 
@@ -236,6 +240,7 @@ def climate_check(readings: Sequence[DailyReading], temps: Mapping[date, float],
         return replace(base, status="too_few", months=tuple(months), message="Consommation nulle l'an dernier.")
     adjusted = c - slope * (h - hp) / 1000
     raw_pct, corrected_pct = (c / cp - 1) * 100, (adjusted / cp - 1) * 100
+    # Un % de degrés-jours n'a de sens que si l'an dernier en comptait assez ; sinon les deux nombres sont donnés.
     cold_pct = (h / hp - 1) * 100 if hp >= MIN_HDD else None
     period = _period_label(window[0].month, window[-1].month)
     head = f"{period.capitalize()} : {_pct(raw_pct)} sur un an ({round(c)} kWh contre {round(cp)})"
@@ -246,13 +251,18 @@ def climate_check(readings: Sequence[DailyReading], temps: Mapping[date, float],
             else "ta consommation n'augmente pas quand il fait froid"
         )
         climate = f", et {why} : à climat égal, l'écart reste {_pct(corrected_pct)}"
-    elif cold_pct is None:
-        climate = f" ; il n'a presque pas fallu chauffer : à climat égal, {_pct(corrected_pct)}"
-    else:
-        feel = "plus froid" if cold_pct > 0 else "plus doux"
+    elif cold_pct is None and h < MIN_HDD:
         climate = (
-            f", {'mais' if (cold_pct > 0) == (raw_pct > 0) else 'et'} il a fait {abs(round(cold_pct))} % {feel} "
-            f"({round(h)} degrés-jours contre {round(hp)}) : à climat égal, {_pct(corrected_pct)}"
+            f" ; il n'a presque pas fallu chauffer ({round(h)} degrés-jours de chauffe contre {round(hp)}) : à climat "
+            f"égal, {_pct(corrected_pct)}"
+        )
+    elif cold_pct is None:
+        climate = f" ; {round(h)} degrés-jours de chauffe contre {round(hp)} : à climat égal, {_pct(corrected_pct)}"
+    else:
+        more = "en plus" if cold_pct > 0 else "en moins"
+        climate = (
+            f", {'mais' if (cold_pct > 0) == (raw_pct > 0) else 'et'} avec {abs(round(cold_pct))} % de degrés-jours "
+            f"de chauffe {more} ({round(h)} contre {round(hp)}) : à climat égal, {_pct(corrected_pct)}"
         )
     extra = round(adjusted - cp)
     out = replace(
@@ -567,7 +577,13 @@ def simulate(
         gap = (ordered[1].total_cents or 0) - (ordered[0].total_cents or 0)
         message += f" L'écart entre les deux premières est de {_whole(gap)} sur l'année."
     if "tempo" not in missing:
-        message += f" L'année comptait {red_days} jours rouges."
+        # Les jours rouges de l'année se comptent sur les couleurs, pas sur les seuls jours relevés par le compteur.
+        known = [c for d, c in colors.items() if start <= d < today]
+        if len(known) >= 365:
+            red_days = sum(c == "rouge" for c in known)
+            message += f" L'année comptait {red_days} jours rouges."
+        else:
+            message += f" Tes {days} jours relevés comptaient {red_days} jours rouges."
     notes = tuple(f"{OPTIONS[o]} non chiffrée : {why}." for o, why in missing.items())
     return Simulation(
         "ok",
@@ -614,15 +630,71 @@ def _fr_iso(iso: str) -> str:
 
 
 # ------------------------------------------------------------------ gaz : prix repère de la CRE
+# Le prix repère moyen (€/MWh) est un prix « abonnement compris, tous consommateurs confondus » : il ne se compare pas
+# au prix du kWh d'une facture. La grille de la CRE donne, pour chaque type de foyer, l'abonnement annuel et le prix
+# du kWh : c'est elle qui se compare à ta facture.
+GAS_PROFILES = ("chauffage", "cuisson")
+
+
+@dataclass(frozen=True)
+class GasGrid:
+    """Grille du prix repère d'un type de foyer (zone GRDF), TTC : abonnement annuel et prix du kWh."""
+
+    profile: str
+    label: str
+    reference_mwh: Decimal | None  # consommation annuelle de référence de la CRE pour ce type de foyer
+    abonnement: Decimal
+    kwh: Decimal
+    kwh_low: Decimal | None = None
+    kwh_high: Decimal | None = None
+
+
 @dataclass(frozen=True)
 class GasReference:
-    eur_per_mwh: Decimal
+    eur_per_mwh: Decimal  # prix moyen, abonnement compris, tous consommateurs confondus
     since: date
     source: str
     source_url: str
     published: str | None
     next_price: Decimal | None = None
     next_since: date | None = None
+    grid: tuple[GasGrid, ...] = ()
+    next_grid: tuple[GasGrid, ...] = ()
+    data_url: str | None = None
+
+
+def _dec(raw: Any) -> Decimal | None:
+    try:
+        value = Decimal(str(raw))
+    except (InvalidOperation, ValueError):
+        return None
+    return value if value.is_finite() and value > 0 else None
+
+
+def _gas_grid(raw: Any, profiles: Mapping[str, Any]) -> tuple[GasGrid, ...]:
+    """La grille d'un mois ; un type de foyer dont l'abonnement ou le kWh manque n'y entre pas."""
+    if not isinstance(raw, Mapping):
+        return ()
+    out: list[GasGrid] = []
+    for key in GAS_PROFILES:
+        row, meta = raw.get(key), profiles.get(key)
+        if not isinstance(row, Mapping) or not isinstance(meta, Mapping):
+            continue
+        abo, kwh = _dec(row.get("abonnement_ttc")), _dec(row.get("kwh_ttc"))
+        if abo is None or kwh is None:
+            continue
+        out.append(
+            GasGrid(
+                key,
+                str(meta.get("label") or key),
+                _dec(meta.get("reference_mwh")),
+                abo,
+                kwh,
+                _dec(row.get("kwh_low_ttc")),
+                _dec(row.get("kwh_high_ttc")),
+            )
+        )
+    return tuple(out)
 
 
 def gas_reference(rates: Mapping[str, Any], today: date) -> GasReference | None:
@@ -631,26 +703,33 @@ def gas_reference(rates: Mapping[str, Any], today: date) -> GasReference | None:
     section = rates.get("gas_reference")
     if not isinstance(section, Mapping):
         return None
-    rows: list[tuple[date, Decimal]] = []
+    profiles = section.get("profiles")
+    profiles = profiles if isinstance(profiles, Mapping) else {}
+    rows: list[tuple[date, Decimal, tuple[GasGrid, ...]]] = []
     for row in section.get("prices") or []:
         try:
-            rows.append((date.fromisoformat(str(row["from"])), Decimal(str(row["eur_per_mwh_ttc"]))))
+            day, price = date.fromisoformat(str(row["from"])), Decimal(str(row["eur_per_mwh_ttc"]))
         except (KeyError, TypeError, ValueError, InvalidOperation):
             continue
-    rows.sort()
+        rows.append((day, price, _gas_grid(row.get("grid"), profiles)))
+    rows.sort(key=lambda r: r[0])
     current = [r for r in rows if r[0] <= today]
     if not current:
         return None
-    since, price = current[-1]
+    since, price, grid = current[-1]
     upcoming = [r for r in rows if r[0] > today]
+    nxt = upcoming[0] if upcoming else None
     return GasReference(
         price,
         since,
         str(section.get("source") or ""),
         str(section.get("source_url") or ""),
         str(section.get("published") or "") or None,
-        upcoming[0][1] if upcoming else None,
-        upcoming[0][0] if upcoming else None,
+        nxt[1] if nxt else None,
+        nxt[0] if nxt else None,
+        grid,
+        nxt[2] if nxt else (),
+        str(section.get("data_url") or "") or None,
     )
 
 

@@ -72,6 +72,12 @@ def test_open_meteo_reads_the_real_archive_response() -> None:
     assert q["latitude"] == ["48.9"] and q["longitude"] == ["2.4"] and q["daily"] == ["temperature_2m_mean"]
 
 
+def test_open_meteo_huge_integer_is_skipped_not_raised() -> None:
+    body = b'{"daily_units": {"temperature_2m_mean": "\xc2\xb0C"}, "daily": {"time": ["2026-10-01", "2026-10-02"], '
+    body += b'"temperature_2m_mean": [1' + b"0" * 400 + b", 12.5]}}"
+    assert ana.parse_meteo(body) == {date(2026, 10, 2): 12.5}
+
+
 def test_load_curve_reads_the_real_v2_response() -> None:
     days = ana.parse_load_curve(json.loads((FIX / "courbe_de_charge.json").read_bytes()))
     (slots,) = days.values()
@@ -147,7 +153,10 @@ def test_climate_compares_at_equal_climate_and_flags_only_a_real_drift() -> None
     assert check.raw_pct is not None and check.raw_pct > 5 and check.cold_pct is not None and check.cold_pct > 10
     assert check.corrected_pct == 0 and check.wh_per_hdd == 400 and check.r2 is not None and check.r2 > 0.9
     text = plain(check.message)
-    assert f"+{check.raw_pct} % sur un an" in text and f"mais il a fait {check.cold_pct} % plus froid" in text
+    assert (
+        f"+{check.raw_pct} % sur un an" in text
+        and f"mais avec {check.cold_pct} % de degrés-jours de chauffe en plus" in text
+    )
     assert "à climat égal, +0 %" in text and "degrés-jours" in text
     assert not climate_findings(check)
     assert_factual(check.message)
@@ -158,6 +167,26 @@ def test_climate_compares_at_equal_climate_and_flags_only_a_real_drift() -> None
     assert finding.kind == "energy_climate_drift" and finding.topic == "energie" and finding.level == "warning"
     assert any(e.ref == "url:https://open-meteo.com/" for e in finding.evidence)
     assert_factual(finding.title + finding.body)
+
+
+def test_climate_without_heating_last_year_gives_the_degree_days_not_a_percentage() -> None:
+    def summer(now_c: float) -> tuple[list[DailyReading], dict[date, float]]:
+        readings, temps = two_years(colder_now=0.0)
+        for d in temps:
+            if date(2025, 7, 1) <= d < date(2025, 10, 1):
+                temps[d] = 20.0  # l'an dernier : aucun degré-jour de chauffe sur la période
+            elif date(2026, 7, 1) <= d < date(2026, 10, 1):
+                temps[d] = now_c
+        readings = [DailyReading(r.day, round(5_000 + 400 * ana.hdd(temps[r.day]))) for r in readings]
+        return readings, temps
+
+    cold = ana.climate_check(*summer(15.0), today=TODAY)
+    text = plain(cold.message)
+    assert cold.cold_pct is None and "presque pas" not in text and "%  de degrés-jours" not in text
+    assert "276 degrés-jours de chauffe contre 0" in text, text
+    warm = ana.climate_check(*summer(19.5), today=TODAY)
+    assert "il n'a presque pas fallu chauffer (0 degrés-jours de chauffe contre 0)" in plain(warm.message)
+    assert_factual(cold.message + warm.message)
 
 
 def test_climate_says_what_is_missing() -> None:
@@ -199,6 +228,14 @@ def test_simulation_estimates_from_daily_readings_with_its_assumptions() -> None
     assert "grille de la CRE du 01/08/2026 en 9 kVA" in text and "(estimation)" in text and "22 jours rouges" in text
     assert "964 €" in text
     assert_factual(sim.message + " ".join(sim.assumptions))
+    assert "L'année comptait 22 jours rouges" in text
+    # Dix jours rouges sans relevé Linky : l'année en compte toujours 22, les jours relevés 12 ; chacun est dit tel quel.
+    gaps = [r for r in readings if r.day not in set(year_days()[100:110])]
+    holed = ana.simulate(gaps, {}, colours, today=TODAY, kva=9, grids=g, hc_ranges=None, tempo_colors_known=True)
+    assert holed.red_days == 22 and "L'année comptait 22 jours rouges" in holed.message
+    only_read = {d: c for d, c in colours.items() if d not in set(year_days()[100:110])}
+    part = ana.simulate(gaps, {}, only_read, today=TODAY, kva=9, grids=g, hc_ranges=None, tempo_colors_known=True)
+    assert part.red_days == 12 and "Tes 355 jours relevés comptaient 12 jours rouges" in part.message
     # Sans les couleurs de l'année, Tempo n'est pas chiffrée : Bank le dit.
     blind = ana.simulate(readings, {}, {}, today=TODAY, kva=9, grids=g, hc_ranges=None, tempo_colors_known=False)
     t = next(o for o in blind.options if o.option == "tempo")
@@ -259,7 +296,12 @@ def test_gas_reference_is_dated_and_sourced() -> None:
     oct_ = ana.gas_reference(raw, date(2026, 10, 24))
     assert oct_ is not None and oct_.eur_per_mwh == Decimal("182.88") and oct_.since == date(2026, 10, 1)
     assert oct_.next_price == Decimal("194.90") and oct_.next_since == date(2026, 11, 1)
-    assert oct_.source_url == "https://www.service-public.gouv.fr/particuliers/actualites/A17956"
+    assert oct_.source_url.startswith("https://www.cre.fr/consommateurs/prix-reperes-et-references/")
+    # Données ouvertes de la CRE (OPEN_DATA_GRDF.xlsx, feuille « Historique grilles », relue le 24/10/2026).
+    heat = next(g for g in oct_.grid if g.profile == "chauffage")
+    assert heat.abonnement == Decimal("360.79") and heat.kwh == Decimal("0.14557")
+    assert heat.reference_mwh == Decimal("11.37") and heat.kwh_low == Decimal("0.13594")
+    assert next(g for g in oct_.next_grid if g.profile == "cuisson").kwh == Decimal("0.19027")
     nov = ana.gas_reference(raw, date(2026, 11, 2))
     assert nov is not None and nov.eur_per_mwh == Decimal("194.90") and nov.next_price is None
     assert ana.gas_reference(raw, date(2026, 9, 30)) is None, "aucun prix repère connu avant octobre 2026"
@@ -330,9 +372,12 @@ def test_simulation_on_the_energy_card_and_the_load_curve_consent(app, home: tup
     assert all(start >= TODAY - timedelta(days=2) for start, _ in CurveConso.curve_calls[calls:]), "plus d'historique"
     data = client.post("/api/export", json={"password": PASSWORD}).json()
     assert len(data["energy_load_curve"]) == 30 and data["energy_load_curve"][0]["wh_per_half_hour"][0] == 200
-    # Accord retiré : la courbe gardée ne sert plus, aussitôt.
+    # Accord retiré : la courbe gardée est effacée aussitôt (elle dit quand tu es chez toi).
     client.put("/api/consents/linky_curve", json={"granted": False})
     assert client.get("/api/energy").json()["curve"]["days"] == 0
+    with app.state.sessionmaker() as db:
+        assert db.scalar(select(EnergyLoadCurve).limit(1)) is None
+    assert client.post("/api/export", json={"password": PASSWORD}).json()["energy_load_curve"] == []
 
 
 def test_load_curve_failure_is_reported_apart(app, home: tuple[TestClient, MeteoNet]) -> None:  # type: ignore[no-untyped-def]
@@ -402,6 +447,12 @@ def test_weather_needs_consent_and_place_then_is_forgotten_with_it(app, home: tu
     # Une nouvelle relève ne relit que les derniers jours.
     client.post("/api/energy/weather/refresh")
     assert parse_qs(fake.requests[-1].url.query.decode())["start_date"] == [(TODAY - timedelta(days=6)).isoformat()]
+    # Accord retiré, adresse gardée : les températures sont effacées quand même.
+    client.put("/api/consents/meteo", json={"granted": False})
+    with app.state.sessionmaker() as db:
+        assert list(db.scalars(select(WeatherDay))) == [], "sans accord, plus de raison de les garder"
+    client.put("/api/consents/meteo", json={"granted": True})
+    client.post("/api/energy/weather/refresh")
     assert client.delete("/api/territory/place").status_code in (200, 204)
     with app.state.sessionmaker() as db:
         assert list(db.scalars(select(WeatherDay))) == [], "les températures disent où tu habites"
@@ -427,7 +478,11 @@ def test_gas_line_only_when_gas_spending_is_seen(app, home: tuple[TestClient, Me
     gas = client.get("/api/energy").json()["gas"]
     assert gas is not None and gas["spent_cents"] == 36_000 and "182,88 €/MWh" in plain(gas["message"])
     assert "194,90 €/MWh" in plain(gas["message"]) and "facture de gaz" in gas["message"]
-    assert gas["source_url"].endswith("A17956")
+    assert gas["source_url"].startswith("https://www.cre.fr/") and gas["data_url"].endswith("OPEN_DATA_GRDF.xlsx")
+    # Le prix moyen (abonnement compris) n'est plus présenté comme un prix du kWh à comparer à la facture.
+    text = plain(gas["message"])
+    assert "0,1829 €" not in text and "abonnement compris et tous foyers confondus" in text
+    assert "abonnement 360,79 € par an et kWh à 0,14557 € en moyenne" in text and "0,17832 €" in text
     assert_factual(gas["message"])
     st = client.get("/api/energy").json()
     assert st["insights"]["monthly_payment_cents"] is None, (

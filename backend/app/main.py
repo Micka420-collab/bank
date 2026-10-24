@@ -246,14 +246,25 @@ def _housekeeping_once(app: FastAPI, today: date) -> dict[str, int]:
         )
         report.update(territory_service.tick(db, now=utcnow(), today=today, fetch=fetch_cal))
         db.commit()
-    with app.state.sessionmaker() as db:  # couleur Tempo d'aujourd'hui et de demain, avec ton accord (#33)
-        fetch_tempo = tempo_service.default_fetch(http=app.state.tempo_http, resolver=app.state.tempo_resolver)
-        report.update(tempo_service.tick(db, now=utcnow(), today=today, fetch=fetch_tempo))
-        db.commit()
+    # Tempo et météo (#33) : chacune isolée, une source tierce en panne ne prive pas les tâches qui suivent.
+    with app.state.sessionmaker() as db:  # couleur Tempo d'aujourd'hui et de demain, avec ton accord
+        try:
+            fetch_tempo = tempo_service.default_fetch(http=app.state.tempo_http, resolver=app.state.tempo_resolver)
+            report.update(tempo_service.tick(db, now=utcnow(), today=today, fetch=fetch_tempo))
+            db.commit()
+        except Exception:
+            db.rollback()
+            log.exception("couleur Tempo : relève en échec")
     with app.state.sessionmaker() as db:  # météo de ta commune (degrés-jours), une fois par jour, avec ton accord
-        fetch_meteo = weather_service.default_fetch(http=app.state.weather_http, resolver=app.state.weather_resolver)
-        report.update(weather_service.tick(db, now=utcnow(), today=today, fetch=fetch_meteo))
-        db.commit()
+        try:
+            fetch_meteo = weather_service.default_fetch(
+                http=app.state.weather_http, resolver=app.state.weather_resolver
+            )
+            report.update(weather_service.tick(db, now=utcnow(), today=today, fetch=fetch_meteo))
+            db.commit()
+        except Exception:
+            db.rollback()
+            log.exception("météo : relève en échec")
     with app.state.sessionmaker() as db:  # documents à récupérer : attentes de saison, tâches fermées par le PDF
         report.update(state_accounts_service.sync(db, today=today, now=utcnow()))
         db.commit()

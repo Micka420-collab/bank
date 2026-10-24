@@ -193,6 +193,35 @@ def test_power_margin_tempo_and_what_is_missing_is_said() -> None:
     assert t.status == "too_high" and t.target_kva == 6 and t.yearly_saving_cents == 4_736 and t.kwh_effect_cents == 0
     # 3 kVA n'est jamais visé : la grille Tempo commence à 6 kVA.
     assert 3 not in tgrid
+    # Tempo en 6 kVA avec un maximum de 2 kVA : pas de grille Tempo en 3 kVA, donc rien de plus petit (et pas un
+    # faux « active les barèmes »).
+    t6 = sig.power_check(year_of(2_000), **{**kw, "option": "tempo", "grid": tgrid, "subscribed_kva": 6})  # type: ignore[arg-type]
+    assert t6.status == "none_lower" and "plus petite puissance" in t6.message
+    assert sig.offered_kva(tgrid) == (6, 9, 12), "les puissances du CSV réduit de la CRE, pas une liste figée"
+    assert sig.offered_kva({}) == sig.STANDARD_KVA
+
+
+def test_fits_says_whether_the_lower_power_is_exceeded_or_only_too_tight() -> None:
+    grid = sig.grid_from_observations("base", cre_latest(("base",)), "CRE")
+    kw = {"today": TODAY, "subscribed_kva": 9, "option": "base", "grid": grid, "yearly_wh": 3_650_000}
+    over = sig.power_check(year_of(7_500), **kw)  # type: ignore[arg-type]
+    assert over.status == "fits" and "6 kVA, est dépassée par ce maximum" in over.message
+    assert "marge" not in over.message
+    tight = sig.power_check(year_of(5_200), **kw)  # type: ignore[arg-type]
+    assert "6 kVA, laisserait moins de 1 kVA de marge" in tight.message
+
+
+def test_max_power_huge_value_is_skipped_not_raised() -> None:
+    payload = {
+        "grandeur": [
+            {
+                "grandeurPhysique": "PMA",
+                "unite": "kVA",
+                "points": [{"v": "1e306", "d": "2026-04-01 07:00:00"}, {"v": "4.2", "d": "2026-04-02 07:00:00"}],
+            }
+        ]
+    }
+    assert [(r.day, r.va) for r in sig.parse_max_power(payload)] == [(date(2026, 4, 2), 4_200)]
 
 
 # ------------------------------------------------------------------ service et API

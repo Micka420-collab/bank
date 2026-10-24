@@ -73,6 +73,13 @@ def forget(db: Session) -> None:
     db.execute(delete(WeatherDay))
 
 
+@consents.on_revoke(CONSENT)
+def _revoked(db: Session) -> None:
+    """Accord retiré : les températures gardées grâce à lui sont effacées."""
+    forget(db)
+    set_setting(db, "meteo_state", {})
+
+
 def refresh(db: Session, *, now: datetime, today: date, fetch: Fetch) -> dict[str, Any]:
     """Relit les jours manquants jusqu'à hier, en un appel. Le réseau est interrogé hors transaction."""
     consents.require(db, CONSENT)
@@ -90,10 +97,12 @@ def refresh(db: Session, *, now: datetime, today: date, fetch: Fetch) -> dict[st
     found: dict[date, float] = {}
     try:
         found = dom.parse_meteo(fetch(url))
-    except (netfetch.FetchError, ValueError) as exc:  # SignalFormatError est une ValueError
+    except (netfetch.FetchError, ValueError, ArithmeticError) as exc:  # SignalFormatError est une ValueError
         error = f"Météo indisponible ({exc}) : les températures connues restent."
     write_lock(db)
     db.expire_all()
+    if not consents.granted(db, CONSENT):
+        return {"stored": 0, "error": None}  # accord retiré pendant l'appel : rien ne s'écrit
     if _cell(db) != cell:
         return {"stored": 0, "error": "Ton adresse a changé pendant la relève : la météo sera relue."}
     state = _state(db) | {"last_attempt_at": now.isoformat(), "last_error": error}
