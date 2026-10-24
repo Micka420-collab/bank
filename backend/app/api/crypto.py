@@ -215,9 +215,13 @@ async def _export(file: UploadFile) -> bytes:
 
 
 def _given(values: str | None) -> Any:
+    if not values:
+        return None
     try:
-        return json.loads(values) if values else None
-    except ValueError:
+        if not values.lstrip().startswith("{"):
+            raise ValueError
+        return json.loads(values)
+    except (ValueError, RecursionError):  # « {[[[[… » : une imbrication sans fin n'est qu'illisible
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Valeurs du portefeuille illisibles") from None
 
 
