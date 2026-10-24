@@ -1845,6 +1845,9 @@ input[aria-invalid="true"] {
   padding: 0.6rem 0.75rem;
   border-bottom: 0;
 }
+.fiche-lines .is-observed .faint {
+  color: var(--ink-2); /* sur le fond teinté, le texte discret garde 4,5:1, sombre compris */
+}
 .fiche-fact.is-probable {
   border-bottom: 1px dashed var(--ink-3);
 }
