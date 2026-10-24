@@ -68,6 +68,8 @@ def test_one_miscopied_letter_never_passes_the_checksum(raw: bytes, data: st.Dat
         return
     i = data.draw(st.sampled_from(letters))
     bad = good[:i] + good[i].swapcase() + good[i + 1 :]
+    if bad[2:] == bad[2:].lower() or bad[2:] == bad[2:].upper():
+        return  # la seule lettre de l'autre casse retournée : adresse d'une seule casse, acceptée sans somme
     with pytest.raises(dc.CryptoError, match="EIP-55"):
         dc.validate_address("ethereum", bad)
 
