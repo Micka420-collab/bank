@@ -6,7 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PilotSlot, PilotTrack as PilotTrackData, PriceAlert, PriceAlertsView } from "./api";
 import { PilotTrack, gapText, slotLabel, statusText } from "./components/PilotTrack";
-import { PriceAlerts, alertText, eurText } from "./components/PriceAlerts";
+import { PriceAlerts, alertText, eurText, firedText } from "./components/PriceAlerts";
 import { ToastProvider } from "./components/ui";
 import { ruleText } from "./pages/Pilot";
 
@@ -98,6 +98,8 @@ describe("alertes de cours", () => {
     expect(alertText({ ...ARMED, kind: "change", threshold_text: "8 %" })).toBe("BTC varie de 8 % sur 24 h");
     expect(eurText("0.000123")).toMatch(/0,000123/);
     expect(eurText(null)).toBe("—");
+    // 0 h 30 dans ton fuseau : le jour aussi est le tien, pas celui d'UTC.
+    expect(firedText(new Date(2026, 9, 22, 0, 30).toISOString())).toBe("le 22 oct à 0 h 30");
   });
 
   it("liste, arme, réarme et supprime", async () => {

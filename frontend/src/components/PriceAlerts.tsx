@@ -19,7 +19,9 @@ export function eurText(eur: string | null): string {
 
 export function firedText(iso: string): string {
   const d = new Date(iso);
-  return `le ${shortDate(iso.slice(0, 10))} à ${d.getHours()} h ${String(d.getMinutes()).padStart(2, "0")}`;
+  // Le jour et l'heure dans ton fuseau, tous deux : entre minuit et 2 h, la date UTC serait celle de la veille.
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return `le ${shortDate(day)} à ${d.getHours()} h ${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 export function alertText(a: PriceAlert): string {

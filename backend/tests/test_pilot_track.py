@@ -8,7 +8,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.testclient import TestClient
 
@@ -157,6 +157,37 @@ def test_failures_trials_extras_and_moves_outside_any_rule() -> None:
     assert dom.gap_percent(1, 3) == 33.3 and dom.gap_percent(-1, 8) == -12.5
 
 
+def test_the_history_cut_reads_the_first_period_whole() -> None:
+    rule = {"id": "rmo", "label": "chaque mois", "every": "month", "amount_cents": 5_000}
+    windows = [dom.Window(utc(2026, 6, 1), utc(2026, 12, 1), frozenset({"rmo"}))]
+    moves = [move(i, "rmo", utc(2026, m, 3, 9)) for i, m in enumerate((7, 8, 9, 10), 1)]
+    (r,) = dom.track([rule], windows, moves, now=utc(2026, 10, 24), tz=PARIS, since=utc(2026, 7, 24))["rules"]
+    assert statuses(r) == [(f"2026-{m:02d}", "on_time") for m in (7, 8, 9, 10)], "le 3 juillet est avant la coupure"
+    assert r["totals"]["missed"] == 0 and r["totals"]["done_cents"] == r["totals"]["expected_cents"] == 20_000
+    assert dom.history_start(utc(2026, 7, 24), PARIS) == datetime(2026, 7, 1, tzinfo=PARIS)
+    assert dom.history_start(utc(2026, 10, 1, 12), PARIS) == datetime(2026, 9, 28, tzinfo=PARIS)  # un jeudi
+
+
+def test_a_pilot_stopped_after_the_due_day_misses_it_at_once() -> None:
+    windows = [dom.Window(utc(2026, 10, 5, 6), utc(2026, 10, 21, 12), frozenset({"rmon"}))]
+    moves = [move(1, "rmon", utc(2026, 10, 5, 9)), move(2, "rmon", utc(2026, 10, 12, 9))]
+    for now in (utc(2026, 10, 22), utc(2026, 10, 27)):
+        (r,) = dom.track([MONDAY], windows, moves, now=now, tz=PARIS, since=SINCE)["rules"]
+        assert statuses(r)[2] == ("2026-W43", "missed") and r["totals"]["missed"] == 1
+    # Arrêté avant le jour prévu de la semaine : pas un « manqué ».
+    windows = [dom.Window(utc(2026, 10, 5, 6), utc(2026, 10, 18, 12), frozenset({"rmon"}))]
+    (r,) = dom.track([MONDAY], windows, moves, now=utc(2026, 10, 22), tz=PARIS, since=SINCE)["rules"]
+    assert statuses(r)[-1] == ("2026-W42", "on_time")
+
+
+def test_a_failure_then_a_retry_is_not_an_extra_move() -> None:
+    rule = {"id": "rwk", "label": "chaque semaine", "every": "week", "amount_cents": 2_000}
+    windows = [dom.Window(utc(2026, 10, 12), utc(2026, 10, 30), frozenset({"rwk"}))]
+    moves = [move(1, "rwk", utc(2026, 10, 13), status="failed"), move(2, "rwk", utc(2026, 10, 14))]
+    out = dom.track([rule], windows, moves, now=utc(2026, 10, 16), tz=PARIS, since=SINCE)
+    assert statuses(out["rules"][0]) == [("2026-W42", "on_time")] and out["outside"] == []
+
+
 def test_nothing_without_windows_or_moves() -> None:
     (r,) = dom.track([MONDAY], [], [], now=utc(2026, 10, 21), tz=PARIS, since=SINCE)["rules"]
     assert r["slots"] == [] and r["totals"]["due"] == 0
@@ -218,6 +249,23 @@ def test_a_pilot_enabled_before_epochs_existed_gets_one_window(db: Session) -> N
     (r,) = pilot_track.view(db, now=t0 + timedelta(days=8), tz=PARIS)["rules"]
     assert statuses(r) == [("2026-W41", "missed"), ("2026-W42", "waiting")]
     assert db.scalar(select(AutonomyMove)) is None
+
+
+def test_the_first_epoch_keeps_the_window_of_a_pilot_enabled_before_them(db: Session) -> None:
+    tok = token(db)
+    t0 = utc(2026, 10, 1, 8)
+    cfg = {**BASE, "mode": "rules", "rules": [RULE], "enabled": True, "agent_token_id": tok.id, "days": 30}
+    autonomy.configure(db, cfg, actor="micka", now=t0)
+    for e in db.scalars(select(AutonomyEpoch)):
+        db.delete(e)
+    db.flush()
+    autonomy.configure(db, cfg, actor="micka", now=utc(2026, 10, 20, 8))  # renouvelé après la mise à jour
+    epochs = list(db.scalars(select(AutonomyEpoch).order_by(AutonomyEpoch.started_at)))
+    assert [(e.started_at, e.stopped_at) for e in epochs] == [(t0, utc(2026, 10, 20, 8)), (utc(2026, 10, 20, 8), None)]
+    (r,) = pilot_track.view(db, now=utc(2026, 10, 21, 8), tz=PARIS)["rules"]
+    assert statuses(r)[1] == ("2026-W41", "missed"), "le lundi 6 octobre reste manqué"
+    autonomy.configure(db, cfg, actor="micka", now=utc(2026, 10, 21, 9))
+    assert db.scalar(select(func.count()).select_from(AutonomyEpoch)) == 3, "notée une seule fois"
 
 
 def test_track_api(auth_client: TestClient, app) -> None:  # type: ignore[no-untyped-def]

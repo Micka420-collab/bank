@@ -96,6 +96,13 @@ def gap_percent(gap_cents: int, expected_cents: int) -> float:
     return float(pct)
 
 
+def history_start(since: datetime, tz: tzinfo) -> datetime:
+    """Le début du premier rendez-vous qui touche ``since``, toutes cadences confondues : un mois ou une semaine
+    entamés se lisent en entier, sinon un mouvement fait juste avant la coupure passerait pour un « manqué »."""
+    d = local_day(since, tz)
+    return midnight(min(slot_of("week", None, d).start, slot_of("month", None, d).start), tz)
+
+
 def _slots_between(every: str, on: int | None, first: date, last: date) -> list[Slot]:
     out: list[Slot] = []
     d = first
@@ -119,6 +126,7 @@ def track_rule(
     rid, every = str(rule["id"]), str(rule["every"])
     on = int(rule["on"]) if rule.get("on") else None
     expected_cents = int(rule["amount_cents"])
+    since = midnight(slot_of(every, on, local_day(since, tz)).start, tz)  # le premier rendez-vous, en entier
     mine = [w for w in windows if rid in w.rule_ids and w.end > since and w.start < now]
     own = [m for m in moves if m.rule_id == rid and m.created_at >= since]
     days: list[date] = []
@@ -176,14 +184,18 @@ def _slot(
         "refusals": [m.refusal or "Refusé" for m in moves if m.status == "refused"][:3],
     }
     counted = sorted((m for m in moves if m.status in PRIORITY), key=lambda m: (PRIORITY[m.status], m.id))
-    best, extras = (counted[0], counted[1:]) if counted else (None, [])
+    best = counted[0] if counted else None
+    # « En plus » : un deuxième mouvement qui a eu lieu (ou en cours), pas un échec suivi d'un nouvel essai.
+    extras = [m for m in counted[1:] if m.status in DONE or m.status == "reserved"]
     ended = end_at <= now
     if best is None:
-        if active and ended:
-            row["status"] = "missed"
-        elif active and any(w.start <= now < w.end for w in windows):
+        on_now = any(w.start <= now < w.end for w in windows)
+        if active and on_now and not ended:
             row["status"] = "waiting"
             row["note"] = "En retard sur le jour prévu" if local_day(now, tz) > due else None
+        elif active and (ended or local_day(now, tz) > due):
+            # Pilote arrêté après le jour prévu, rien de fait : manqué tout de suite, pas « éteint » jusqu'à la fin.
+            row["status"] = "missed"
         return row, extras
     row["move_id"] = best.id
     if best.status == "reserved":

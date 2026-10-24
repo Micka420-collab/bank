@@ -42,6 +42,7 @@ export function Crypto() {
   const [busy, error, run] = useAsyncAction();
   const [view, setView] = useState<CryptoView | null>(null);
   const [imported, setImported] = useState(0); // remonte l'encart Impôts sur les opérations importées
+  const [synced, setSynced] = useState(0); // un relevé peut déclencher une alerte : la carte des alertes se relit
   const data = view ?? v.data;
   if (v.error) return <ErrorNote message={v.error} onRetry={v.reload} />;
   if (!data) return <Loading />;
@@ -54,6 +55,7 @@ export function Crypto() {
     run(async () => {
       const r = await api<{ result: { wallets_synced: number; wallets_failed: number; prices: number }; view: CryptoView }>("/api/crypto/sync", { method: "POST" });
       setView(r.view);
+      setSynced((n) => n + 1);
       const { wallets_synced: ok, wallets_failed: ko, prices } = r.result;
       toast(ko ? `${ok} adresse(s) relevée(s), ${ko} en échec — détail sous chaque adresse.` : `Relevé : ${ok} adresse(s), ${prices} cours à jour.`);
     });
@@ -86,7 +88,7 @@ export function Crypto() {
 
       {!empty && <Holdings assets={data.assets} />}
 
-      <PriceAlerts />
+      <PriceAlerts key={synced} />
 
       <div className="split cx-split" style={{ marginTop: "1rem" }}>
         <Wallets data={data} onChange={reload} />

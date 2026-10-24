@@ -412,6 +412,8 @@ def configure(db: Session, body: dict[str, Any], *, actor: str, now: datetime) -
         if banned:
             raise AutonomyError(f"Tes lignes rouges excluent {', '.join(sorted(banned))} : retire-les de la liste")
     was_active = _active(row, now)
+    if enable:
+        _legacy_epoch(db, row, now)
     same_agent = token is not None and row.agent_token_id == token.id
     row.scopes, row.assets, row.mode, row.trial = json.dumps(scopes), json.dumps(assets), mode, trial
     row.rules = json.dumps(rules, ensure_ascii=False)
@@ -448,6 +450,19 @@ def configure(db: Session, body: dict[str, Any], *, actor: str, now: datetime) -
         expires_at=row.expires_at.isoformat() if enable and row.expires_at else None,
     )
     return row
+
+
+def _legacy_epoch(db: Session, row: AutonomyMandate, now: datetime) -> None:
+    """Pilote allumé avant que Bank ne note ses périodes : avant d'ouvrir la première, celle-là est notée avec ses
+    consignes d'alors, sinon ses rendez-vous manqués passeraient après coup pour « pilote éteint »."""
+    if row.enabled_at is None or row.expires_at is None or db.scalar(select(AutonomyEpoch.id).limit(1)) is not None:
+        return
+    stopped = min(row.disabled_at or now, row.expires_at)
+    db.add(
+        AutonomyEpoch(
+            started_at=row.enabled_at, expires_at=row.expires_at, stopped_at=stopped, trial=row.trial, rules=row.rules
+        )
+    )
 
 
 def _close_epochs(db: Session, now: datetime) -> None:

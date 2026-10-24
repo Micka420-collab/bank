@@ -48,7 +48,8 @@ def windows(db: Session, now: datetime, since: datetime) -> tuple[list[dom.Windo
 
 def view(db: Session, *, now: datetime, tz: tzinfo) -> dict[str, Any]:
     since = now - HISTORY
-    found, rules = windows(db, now, since)
+    start = dom.history_start(since, tz)  # le mois ou la semaine entamés à la coupure se lisent en entier
+    found, rules = windows(db, now, start)
     moves = [
         dom.Move(
             id=m.id,
@@ -61,7 +62,7 @@ def view(db: Session, *, now: datetime, tz: tzinfo) -> dict[str, Any]:
             text=autonomy.describe(m),
             refusal=m.refusal,
         )
-        for m in db.scalars(select(AutonomyMove).where(AutonomyMove.created_at >= since).order_by(AutonomyMove.id))
+        for m in db.scalars(select(AutonomyMove).where(AutonomyMove.created_at >= start).order_by(AutonomyMove.id))
     ]
     out = dom.track(rules, found, moves, now=now, tz=tz, since=since)
     out["since"] = since.astimezone(tz).date().isoformat()
