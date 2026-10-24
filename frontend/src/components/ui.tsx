@@ -1,23 +1,34 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { money } from "../format";
+import { Icon, type IconName } from "./Icon";
 
 // ------------------------------------------------------------------ toast
-const ToastCtx = createContext<(msg: string) => void>(() => undefined);
+/** Neutre par défaut ; « success » (coche qui se trace), « coin » (un gain), « error » (reste plus longtemps). */
+export type ToastKind = "info" | "success" | "coin" | "error";
+type Toast = { msg: string; kind: ToastKind; n: number };
+const TOAST_ICON: Record<ToastKind, IconName> = { info: "spark", success: "check", coin: "coin", error: "alert" };
+const ToastCtx = createContext<(msg: string, kind?: ToastKind) => void>(() => undefined);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [msg, setMsg] = useState<string | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
   const timer = useRef<number | undefined>(undefined);
-  const show = useCallback((m: string) => {
-    setMsg(m);
+  const show = useCallback((msg: string, kind: ToastKind = "info") => {
+    setToast((t) => ({ msg, kind, n: (t?.n ?? 0) + 1 }));
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setMsg(null), 4500);
+    timer.current = window.setTimeout(() => setToast(null), kind === "error" ? 8000 : 4500);
   }, []);
   useEffect(() => () => window.clearTimeout(timer.current), []);
   return (
     <ToastCtx.Provider value={show}>
       {children}
       <div aria-live="polite" role="status">
-        {msg && <div className="toast">{msg}</div>}
+        {toast && (
+          // La clé relance l'animation (coche, lueur) quand un deuxième message suit le premier.
+          <div key={toast.n} className={`toast${toast.kind === "info" ? "" : ` is-${toast.kind}`}`}>
+            <Icon name={TOAST_ICON[toast.kind]} />
+            {toast.msg}
+          </div>
+        )}
       </div>
     </ToastCtx.Provider>
   );

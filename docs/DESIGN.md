@@ -391,6 +391,15 @@ réduisent à l'état final (badge visible, coche pleine) et au toast.
 8. Replis : transparence réduite, sans `backdrop-filter`, contraste renforcé, couleurs forcées, mouvement
    réduit ; vérification 390 px clair/sombre et suite Vitest.
 
+*Fondations réalisées (octobre 2026).* Écarts assumés par rapport au § 3.4 :
+- `.hub-tabs` : piste en verre fort (une piste `--surface-2` disparaît sur le fond lavande) et onglet actif en
+  `--accent-grad`, comme la bulle de l'île ; `.segmented` suit la spécification (segment de verre enfoncé).
+- La bulle de l'île glisse par `left` (un seul petit élément) : `transform` en pourcentage se rapporte à la bulle,
+  pas à la barre. L'index vient de `data-active` posé par `App.tsx`.
+- Le toast neutre porte une petite étincelle ; `useToast(msg, kind?)` accepte `"success" | "coin" | "error"`.
+- Les pastilles de compte du rail et de l'île viennent d'un seul appel (`useNavBadges`).
+- Les cartes à liseré gauche coloré (missions, bandeaux) gardent leur liseré, courbé par le rayon de 22 px.
+
 **Expérience** (pages, plaisir et clarté)
 
 1. Aujourd'hui : salutation, halo du héros selon l'état, verdict en pastille avec « Que faire ? », carte « La

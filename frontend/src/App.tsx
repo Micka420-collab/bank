@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useReducer, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useReducer, useState, type ReactNode } from "react";
 import { api, ApiError, useApi, type Me } from "./api";
 import { Assistant } from "./components/Assistant";
 import { Icon, type IconName } from "./components/Icon";
@@ -132,9 +132,10 @@ export function App() {
 
   return (
     <ToastProvider>
+      <WithBadges page={page}>{(badges) => (<>
       <a className="sr-only" href="#contenu">Aller au contenu</a>
       <div className="shell">
-        <Rail page={page} username={me.username} onLogout={() => void logout()} onAsk={() => setAskOpen(true)} />
+        <Rail page={page} badges={badges} username={me.username} onLogout={() => void logout()} onAsk={() => setAskOpen(true)} />
         <main className="sheet" id="contenu" tabIndex={-1} key={page}>
           <HubTabs page={page} />
           <Suspense fallback={<Loading />}>
@@ -161,20 +162,16 @@ export function App() {
       <InstallHint />
       <button type="button" className={`fab${reading ? " is-hidden" : ""}`} onClick={() => setAskOpen(true)} aria-label="Demande à Bank"><Icon name="spark" /></button>
       <Assistant open={askOpen} onClose={() => setAskOpen(false)} />
-      <nav className="tabbar" aria-label="Navigation">
-        {TABS.map((n) => (
-          <a key={n.page} href={`#/${n.page}`}
-             aria-current={hubOf(page) === n.hub || (n.page === "plus" && MORE.has(page)) ? "page" : undefined}>
-            <Icon name={n.icon} />
-            {n.short}
-          </a>
-        ))}
-      </nav>
+      <TabBar page={page} badges={badges} />
+      </>)}</WithBadges>
     </ToastProvider>
   );
 }
 
-function Rail({ page, username, onLogout, onAsk }: { page: string; username: string; onLogout: () => void; onAsk: () => void }) {
+type BadgeMap = Record<string, { n: number; label: string }>;
+
+/** Pastilles de compte, partagées par le rail (bureau) et l'île d'onglets (téléphone). */
+function useNavBadges(page: string): BadgeMap {
   const summary = useApi<{ pending_proposals: number }>("/api/agents/summary");
   // Pastilles relues à chaque changement de page (appel léger : sans recalcul des pistes).
   const counts = useApi<Badges>(`/api/copilot/badges?p=${encodeURIComponent(page)}`);
@@ -192,12 +189,40 @@ function Rail({ page, username, onLogout, onAsk }: { page: string; username: str
     };
   }, [reloadCounts]);
   const b = counts.data;
-  const badges: Record<string, { n: number; label: string }> = {
+  return {
     gagner: { n: b?.confirmations ?? 0, label: "gain à confirmer" },
     papiers: { n: (b?.procedures_due ?? 0) + (b?.procedures_ready ?? 0), label: "démarche à traiter" },
     situation: { n: summary.data?.pending_proposals ?? 0, label: "en attente" },
     veille: { n: b?.watch_new_relevant ?? 0, label: "nouveautés pour toi" },
   };
+}
+
+/** Lit les pastilles une seule fois pour le rail et l'île d'onglets (les hooks ne peuvent pas vivre dans App,
+ *  qui sort plus tôt pendant le chargement et la connexion). */
+function WithBadges({ page, children }: { page: string; children: (badges: BadgeMap) => ReactNode }) {
+  return <>{children(useNavBadges(page))}</>;
+}
+
+function TabBar({ page, badges }: { page: string; badges: BadgeMap }) {
+  const current = (n: (typeof TABS)[number]) => hubOf(page) === n.hub || (n.page === "plus" && MORE.has(page));
+  const active = TABS.findIndex(current);
+  return (
+    <nav className="tabbar" aria-label="Navigation" data-active={active >= 0 ? active : undefined}>
+      {TABS.map((n) => {
+        const badge = badges[n.hub];
+        return (
+          <a key={n.page} href={`#/${n.page}`} aria-current={current(n) ? "page" : undefined}>
+            <Icon name={n.icon} />
+            {n.short}
+            {badge && badge.n > 0 ? <span className="tab-badge" aria-label={`${badge.n} ${badge.label}`}>{badge.n}</span> : null}
+          </a>
+        );
+      })}
+    </nav>
+  );
+}
+
+function Rail({ page, badges, username, onLogout, onAsk }: { page: string; badges: BadgeMap; username: string; onLogout: () => void; onAsk: () => void }) {
   const hub = hubOf(page);
   const link = (n: { page: string; label: string; icon: IconName }, key: string, current: boolean, small = false) => {
     const badge = badges[key];
