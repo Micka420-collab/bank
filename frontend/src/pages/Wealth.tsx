@@ -9,6 +9,7 @@ import { CountUp } from "../components/CountUp";
 import { Icon } from "../components/Icon";
 import { InvestPlan } from "../components/InvestPlan";
 import { Loans } from "../components/Loans";
+import { Retirement } from "../components/Retirement";
 import { Segmented } from "../components/Segmented";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { amountOnly, money, percent, plural, shortDate } from "../format";
@@ -44,7 +45,7 @@ export function bucketSlices(byBucket: Record<string, number>): Slice[] {
     .map(([k, v]) => ({ slug: k, name: BUCKETS[k]?.label ?? k, color: BUCKETS[k]?.color ?? "var(--ink-3)", cents: v, share: v / total }));
 }
 
-export function Wealth() {
+export function Wealth({ retraite = false }: { retraite?: boolean }) {
   const w = useApi<WealthResponse>("/api/wealth");
   const [range, setRange] = useState<HistoryRange>("3m");
   if (w.error) return <ErrorNote message={w.error} onRetry={w.reload} />;
@@ -150,6 +151,7 @@ export function Wealth() {
 
       <Goals goals={w.data.goals} accounts={w.data.accounts} onChange={w.reload} />
       <Loans onChange={w.reload} />
+      <Retirement open={retraite} />
       <Projection initial={Math.max(0, savings)} />
       <InvestPlan />
       <p className="faint section">{w.data.disclaimer}</p>

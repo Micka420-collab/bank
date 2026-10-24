@@ -6404,6 +6404,224 @@ details.card.cx-details > summary {
   align-items: center;
 }
 
+/* ------------------------------------------------------------------ patrimoine : retraite */
+.rt .card-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.rt-body {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 1rem;
+}
+.rt-career {
+  margin: 0;
+  max-width: 72ch;
+}
+.rt-departures {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+.rt-dep {
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  overflow: hidden;
+  transition: border-color var(--d-base) var(--ease-out), background var(--d-base) var(--ease-out);
+}
+.rt-dep.is-current {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.rt-dep-row {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(6.5rem, auto) 1fr;
+  grid-template-areas: "when amount" "range range";
+  gap: 0.35rem 0.75rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  cursor: pointer;
+  color: inherit;
+}
+.rt-dep-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+@media (min-width: 640px) {
+  .rt-dep-row {
+    grid-template-columns: minmax(8rem, auto) 1fr minmax(11rem, auto);
+    grid-template-areas: "when range amount";
+  }
+}
+.rt-when {
+  grid-area: when;
+  display: grid;
+  line-height: 1.2;
+}
+.rt-title {
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+}
+.rt-age {
+  font-size: var(--t-lg);
+  letter-spacing: -0.01em;
+}
+.rt-range {
+  grid-area: range;
+  position: relative;
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line);
+}
+.rt-range i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: left var(--d-base) var(--ease-out), width var(--d-base) var(--ease-out);
+}
+.rt-dep[data-status="decote"] .rt-range i,
+.rt-dep[data-status="before_legal"] .rt-range i {
+  background: var(--warning);
+}
+.rt-dep[data-status="surcote"] .rt-range i {
+  background: var(--positive);
+}
+.rt-amount {
+  grid-area: amount;
+  display: grid;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.rt-amount b {
+  font-size: var(--t-base);
+}
+.rt-status {
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+}
+.rt-dep[data-status="decote"] .rt-status,
+.rt-dep[data-status="before_legal"] .rt-status {
+  color: var(--warning);
+}
+.rt-dep[data-status="surcote"] .rt-status {
+  color: var(--positive);
+}
+.rt-detail {
+  padding: 0 0.8rem 0.8rem;
+  display: grid;
+  gap: 0.5rem;
+}
+.rt-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 1rem;
+  margin: 0;
+}
+@media (min-width: 640px) {
+  .rt-stats {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+.rt-stats dt {
+  font-size: var(--t-xs);
+  color: var(--ink-3);
+}
+.rt-stats dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.rt-note {
+  margin: 0;
+  max-width: 72ch;
+}
+.rt-slider {
+  display: grid;
+  gap: 0.3rem;
+  max-width: 40rem;
+}
+.rt-slider label {
+  font-weight: 500;
+}
+.rt-slider output {
+  font-weight: 700;
+  color: var(--accent-ink);
+}
+.rt-slider input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+  margin: 0;
+}
+.rt-slider-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--t-xs);
+}
+.rt-per {
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--r-s);
+  background: var(--accent-soft);
+  display: grid;
+  gap: 0.5rem;
+}
+.rt-per h3 {
+  margin: 0;
+  font-size: var(--t-base);
+}
+.rt-per-row {
+  display: grid;
+  gap: 0.75rem;
+  align-items: end;
+}
+@media (min-width: 640px) {
+  .rt-per-row {
+    grid-template-columns: minmax(9rem, 12rem) 1fr;
+  }
+}
+.rt-per-lead {
+  margin: 0;
+  max-width: 60ch;
+}
+.rt-form {
+  margin-top: 0.25rem;
+  max-width: 44rem;
+}
+.rt-form-lead {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.rt-form .check {
+  grid-column: 1 / -1;
+}
+.rt-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.rt-sources summary {
+  cursor: pointer;
+  color: var(--ink-2);
+}
+.rt-sources ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.3rem;
+  font-size: var(--t-sm);
+  color: var(--ink-2);
+}
+
 /* ------------------------------------------------------------------ réglages : sauvegardes */
 .backup-actions {
   display: flex;

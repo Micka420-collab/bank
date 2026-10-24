@@ -41,7 +41,7 @@ def frontmatter(text: str) -> dict[str, Any]:
 def test_skill_frontmatter_and_references() -> None:
     text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
     meta = frontmatter(text)
-    assert meta["name"] == "gestionnaire-argent" and meta["version"] == "2.3.0"
+    assert meta["name"] == "gestionnaire-argent" and meta["version"] == "2.4.0"
     assert "crypto" in meta["metadata"]["hermes"]["tags"]
     for ref in set(re.findall(r"references/([\w-]+\.md)", text)):
         assert (SKILL / "references" / ref).is_file(), ref

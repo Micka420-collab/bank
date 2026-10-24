@@ -47,6 +47,7 @@ from app.api import (
     planning,
     procedures,
     push,
+    retirement,
     search,
     system,
     transactions,
@@ -353,6 +354,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         loans,
         backups,
         mail,
+        retirement,
         system,
     )
     for r in routers:

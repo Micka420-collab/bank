@@ -35,6 +35,11 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
   remboursement anticipé (finir plus tôt, payer moins, tout solder) avec l'indemnité plafonnée par la loi, datée, et
   renégociation à un autre taux (frais, rachat). Le restant dû entre dans le patrimoine net et dans le dossier de
   l'agent.
+- **Retraite** : d'après ta génération (âge légal, trimestres requis — règles datées, calendrier 2023 suspendu par la
+  LFSS 2026), les trimestres de ton relevé (saisis, chiffrés) et le salaire que Bank connaît (bulletin du coffre ou
+  relevés), trois départs comparés en fourchette — âge légal, taux plein, 67 ans — plus un âge au choix au curseur,
+  avec décote, surcote, base et Agirc-Arrco, taux de remplacement ; et ce qu'un versement PER change à ton impôt
+  (plafond, tranche connue, effort réel). Un ordre de grandeur : le chiffre opposable est celui d'info-retraite.fr.
 - **Décider** : « je peux m'acheter ça ? » répond oui, oui mais, à partir de telle date, ou dans N mois d'épargne
   (matelas d'abord ou au plus vite) ; « où placer mon argent ? » donne un plan par priorité (mois d'avance, dette
   chère, matelas sur LEP / livrets, projets datés, long terme PEA / assurance vie / PER selon ta tranche d'impôt,
@@ -218,6 +223,31 @@ mois d'intérêts sur le capital remboursé et au plus 3 % du restant dû ; cré
 prévoir moins) ; **renégocier** — même durée restante, nouveau taux, frais et rachat par une autre banque compris,
 avec le gain net et un avis franc quand ça ne vaut pas le coup. Ton agent voit les prêts suivis dans `get_wealth`
 (dettes, source « amortization »).
+
+## Retraite
+
+Sur la page Patrimoine, « Ta retraite » : ta génération fixe l'âge légal et la durée requise (62 ans pour les
+générations 1960 et avant, puis par paliers jusqu'à 64 ans et 172 trimestres à partir de 1969 ; la loi de financement
+de la Sécurité sociale pour 2026 suspend le calendrier de 2023 — 62 ans 9 mois et 170 trimestres jusqu'aux
+générations nées avant avril 1965 — règles datées, sourcées). Bank part de ce qu'elle sait : ta date de naissance
+(Ma situation), ton brut annuel (le dernier bulletin vérifié du coffre, sinon le salaire net de tes relevés
+converti), et, sans ton relevé de carrière, compte quatre trimestres par an depuis l'année de tes 20 ans en te
+disant de saisir le vrai chiffre. Trois départs sont comparés en fourchette : **à l'âge légal**, **au taux plein**
+(quand la durée est atteinte, au plus tard à 67 ans) et **à 67 ans** — pour chacun la date, les trimestres validés
+sur ceux requis, le taux (50 % au taux plein, −1,25 % par trimestre manquant dans la limite de vingt, +1,25 % par
+trimestre au-delà de l'âge légal et de la durée), la pension de base (salaire annuel moyen plafonné × taux × durée
+validée / durée requise), la complémentaire Agirc-Arrco en points (acquis d'après ton relevé, sinon estimés, plus
+ceux à venir au salaire actuel ; coefficient d'anticipation en cas de décote), et le taux de remplacement par
+rapport à ton net actuel. Un curseur ajoute « Ton choix » (de 55 à 75 ans). Les règles sont vérifiées sur le cas de
+référence de service-public (35 000 € de salaire annuel moyen et 169 trimestres : 1 458,33 € par mois au taux
+plein). Saisis ton **relevé de carrière** (trimestres, date, salaire annuel moyen, points, début de carrière) :
+chiffré en base, il remplace les estimations. **Un versement PER** cette année : déductible dans la limite de 10 %
+de tes revenus professionnels (entre 10 % du PASS et 10 % de huit PASS), l'économie d'impôt à ta tranche connue
+(déclarée, avis d'impôt importé, ou estimée) et l'effort réel — avec les deux rappels qui comptent (la sortie sera
+imposée ; à 0 % ou 11 %, la déduction rapporte peu). Rien n'est envoyé à une caisse ; le chiffre opposable est
+celui de ton relevé et du simulateur officiel (info-retraite.fr), et Bank le dit à chaque écran. Ton agent y accède
+avec `get_retirement` (lecture ; salaires et points masqués en mode agrégats), l'assistant avec l'outil
+`retirement` et le bouton « Ma retraite ».
 
 ## Ce qui est lié (corrélations)
 
@@ -504,7 +534,7 @@ make check       # lint + mypy strict + bandit + tests + build front
 make fiscal-test # contre le vrai OpenFisca
 ```
 
-Qualité au moment de la livraison : 919 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
+Qualité au moment de la livraison : 928 tests backend (unitaires, propriétés Hypothesis, intégration HTTP,
 JSON-RPC MCP de bout en bout, OCR réel, scénarios du copilote A à F, messageries face à de faux serveurs fidèles
 aux protocoles — passerelle Discord et Socket Mode Slack sur de vrais websockets locaux —, scénarios adverses du
 banc d'essai crypto de Minara rejoués contre le pilote automatique, demandes simultanées qui ne passent jamais
@@ -514,9 +544,10 @@ l'envoi de chaque réponse, chat interactif face à un modèle simulé et à de 
 direct recomposée fragment par fragment, Web Push vérifié au bit près contre le vecteur de la RFC 8291 et déchiffré
 par un faux navigateur, amortissement vérifié sur un cas de référence public, plan B contre un moteur fiscal
 simulé qui réagit au revenu, sauvegarde chiffrée altérée, tronquée ou rallongée refusée, boîte mail contre un faux
-serveur IMAP qui journalise chaque commande), couverture 91 %, 132 tests front (parcours de première ouverture,
+serveur IMAP qui journalise chaque commande, retraite vérifiée sur le cas de référence de service-public et contre
+les paliers de la LFSS 2026), couverture 91 %, 136 tests front (parcours de première ouverture,
 coffre, démarches, opportunités, veille, assistant, chat interactif et réponse en direct, notifications sur
-l'appareil, plan B, crédits, sauvegardes, boîte mail, crypto, pilote, déclarations, corrélations, année qui vient,
+l'appareil, plan B, crédits, retraite, sauvegardes, boîte mail, crypto, pilote, déclarations, corrélations, année qui vient,
 passkeys, erreurs qui disent quoi faire),
 mypy strict sans erreur,
 ruff et bandit propres, revue de sécurité indépendante du pilote et de la crypto (ses constats corrigés et

@@ -578,6 +578,76 @@ export type PlanB = {
   disclaimer: string;
 };
 
+// ------------------------------------------------------------------ retraite
+export type RetirementStatus = "before_legal" | "decote" | "full" | "surcote";
+export type RetirementDeparture = {
+  at: string;
+  age_years: number;
+  age_months: number;
+  quarters_total: number;
+  quarters_required: number;
+  missing_quarters: number;
+  extra_quarters: number;
+  rate_percent: string;
+  status: RetirementStatus;
+  base_monthly_low_cents: number;
+  base_monthly_high_cents: number;
+  complementary_monthly_low_cents: number;
+  complementary_monthly_high_cents: number;
+  total_low_cents: number;
+  total_high_cents: number;
+  points: string;
+  replacement_percent: number | null;
+  notes: string[];
+};
+export type RetirementCareer = {
+  birth_date: string;
+  age_years: number;
+  quarters_acquired: number;
+  as_of: string;
+  quarters_required: number;
+  legal_age_years: number;
+  legal_age_months: number;
+  gross_annual_cents: number;
+  salary_source: string;
+  best_years_average_cents: number | null;
+  agirc_arrco_points: string | null;
+  points_per_year: string;
+  working: boolean;
+  quarter_salary_cents: number;
+};
+export type RetirementPer = {
+  payment_cents: number;
+  ceiling_cents: number;
+  deductible_cents: number;
+  marginal_rate_percent: number;
+  tax_saved_cents: number;
+  effort_cents: number;
+  notes: string[];
+  tax_source: string;
+  tax_detail: string;
+};
+export type RetirementProfile = {
+  quarters_acquired?: number;
+  as_of?: string;
+  best_years_average_cents?: number | null;
+  agirc_arrco_points?: string | null;
+  career_start_year?: number | null;
+  working?: boolean;
+  birth_date?: string | null;
+};
+export type Retirement = {
+  profile: RetirementProfile;
+  notes: string[];
+  rules: Record<string, LoanRule>;
+  rules_checked: string;
+  rules_recheck: boolean;
+  disclaimer: string;
+  career: RetirementCareer | null;
+  departures: Partial<Record<"legal" | "full_rate" | "age_67" | "custom", RetirementDeparture>>;
+  per: RetirementPer | null;
+};
+
 // ------------------------------------------------------------------ déclarations récurrentes
 export type ObligationState = "upcoming" | "open" | "soon" | "late" | "done" | "missed";
 export type ObligationPeriod = {

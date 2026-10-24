@@ -1,7 +1,7 @@
 ---
 name: gestionnaire-argent
 description: Gère budget, aides, déclarations, contrats, patrimoine et crypto de Micka via Bank — et ne bouge jamais d'argent sans son accord
-version: 2.3.0
+version: 2.4.0
 metadata:
   hermes:
     tags: [finance, budget, aides, declarations, patrimoine, crypto, pilote-automatique, bank, mcp]
@@ -19,7 +19,8 @@ expliques, arbitres et proposes.
 
 - Toute question d'argent : « combien je peux dépenser ? », « je peux m'acheter X ? », « où part mon argent ? »,
   « je devrais épargner combien ? », « j'ai droit à quoi ? », « mon patrimoine avance ? », « et si je perds mon
-  travail ? », « je tiens combien de temps ? », « fin de droits ».
+  travail ? », « je tiens combien de temps ? », « fin de droits », « à quel âge je pars à la retraite ? »,
+  « un PER ça vaut le coup ? ».
 - Les routines planifiées : point du matin, revue du dimanche, bilan du mois.
 - L'onboarding financier (« fais mon onboarding », « apprends ma situation »).
 - Quand une autre tâche a un impact financier (abonnement, achat, voyage) : vérifie avant d'encourager.
@@ -275,6 +276,23 @@ Suis `references/autonomie.md`. En bref :
    montant au centime ; renvoie au simulateur de France Travail (`are.simulator.url`). Tu n'inventes aucun droit
    (ASS, RSA, CSS…) : seulement ce que Bank liste, avec ses conditions. Rien ne part vers un organisme : Micka
    prépare chaque démarche dans Bank (« Préparer la démarche ») et l'envoie lui-même.
+
+### R. « À quel âge je pars ? », « combien de retraite ? », « un PER ça vaut le coup ? »
+
+1. `mcp_bank_get_retirement` (lecture) : la génération (`career.legal_age_years`/`legal_age_months`,
+   `career.quarters_required`), les trimestres connus (`career.quarters_acquired` au `career.as_of`), les départs
+   (`departures.legal`, `departures.full_rate`, `departures.age_67`) chacun avec sa date (`at`), l'âge, les
+   trimestres manquants ou en plus, le taux (`rate_percent`, `status` : `before_legal`, `decote`, `full`,
+   `surcote`), une **fourchette** mensuelle base + complémentaire (`total_low_cents`–`total_high_cents`) et le taux
+   de remplacement ; `per` dit ce qu'un versement change à l'impôt (`deductible_cents`, `tax_saved_cents`,
+   `effort_cents`, plafond `ceiling_cents`, tranche connue).
+2. Réponds avec l'âge légal et la durée requise de sa génération, puis les trois départs en fourchette (jamais un
+   centime précis), ce qu'un trimestre manquant coûte (décote) et ce qu'un trimestre de plus rapporte (surcote).
+   Les `notes` disent ce qui est supposé (salaire moyen inconnu, points estimés) : reprends-les.
+3. Le chiffre opposable est celui du relevé de carrière et d'info-retraite.fr (`rules.simulator.url`) : dis-le à
+   chaque fois. Tu n'inventes aucun trimestre, aucun droit (carrière longue, minimum contributif, réversion…) ;
+   si Micka évoque un cas particulier, renvoie à la caisse. Un PER n'est pas un conseil de placement : tu donnes
+   l'économie d'impôt que Bank calcule et le point d'attention (sortie imposée, argent bloqué), pas plus.
 
 ### P. Prendre l'initiative : « relie ça, ça débloque… »
 

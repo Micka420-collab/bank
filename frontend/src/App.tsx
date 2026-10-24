@@ -140,7 +140,7 @@ export function App() {
           <Suspense fallback={<Loading />}>
           {page === "operations" ? <Operations openImport={route.params.get("import") === "1"} />
             : page === "aides" ? <Aids planB={route.params.get("planb") === "1"} />
-            : page === "patrimoine" ? <Wealth />
+            : page === "patrimoine" ? <Wealth retraite={route.params.get("retraite") === "1"} />
             : page === "crypto" ? <Crypto />
             : page === "pilote" ? <Pilot />
             : page === "situation" ? <Situation />

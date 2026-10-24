@@ -60,6 +60,7 @@ from app.services import obligations as obligations_service
 from app.services import opportunities as opportunities_service
 from app.services import planb as planb_service
 from app.services import procedures as procedures_service
+from app.services import retirement as retirement_service
 from app.services import yearahead as yearahead_service
 from app.services.categories import recategorize
 from app.services.proposals import KINDS, ProposalError, create_proposal, describe, expire_old
@@ -110,6 +111,10 @@ patrimoine). Tu es son gestionnaire d'argent. Règles :
    scénarios (le revenu principal s'arrête, baisse de 30 %, fin de droits), mois d'autonomie sur les charges
    réelles, prestations recalculées par OpenFisca, fourchette d'ARE (règle officielle, jamais le centime) et
    démarches de la première semaine. Tu expliques dans l'ordre (J+1 d'abord) ; rien ne part sans la personne.
+16. « À quel âge je pars ? », « combien de retraite ? », « un PER ça vaut le coup ? » -> get_retirement : âge légal
+   et durée requise de la génération, départs (âge légal, taux plein, 67 ans) avec une fourchette de pension base
+   + complémentaire, et l'effet d'un versement PER sur l'impôt. Un ordre de grandeur daté : tu renvoies à
+   info-retraite.fr pour le chiffre opposable, tu n'inventes aucun droit ni aucun trimestre.
 Montants en entrée : en euros. Montants en sortie : en centimes (champ *_cents)."""
 
 
@@ -790,6 +795,24 @@ def build_mcp(
             return planb_service.agent_view(db, today(), privacy=p.privacy, fiscal=fiscal())
 
         return enc(await call(ctx, "simulate", "get_plan_b", fn))
+
+    @srv.tool(
+        description="Retraite : génération (âge légal, trimestres requis — règles datées, LFSS 2026), trimestres "
+        "validés et salaire que Bank connaît, départs possibles (âge légal, taux plein, 67 ans) avec décote ou "
+        "surcote et une fourchette de pension mensuelle (base + Agirc-Arrco), taux de remplacement, et l'effet d'un "
+        "versement PER sur l'impôt de l'année (plafond, tranche connue). Un ordre de grandeur : le chiffre opposable "
+        "est celui d'info-retraite.fr. Lecture seule ; rien ne part vers une caisse. En mode agrégats, les salaires "
+        "et points ne sont pas donnés.",
+        annotations=ToolAnnotations(readOnlyHint=True),
+    )
+    async def get_retirement(ctx: Context) -> dict[str, Any]:
+        def fn(db: Session, p: AgentPrincipal) -> dict[str, Any]:
+            try:
+                return retirement_service.agent_view(db, today(), p.privacy)
+            except retirement_service.RetirementServiceError as exc:
+                raise McpError(str(exc)) from exc
+
+        return enc(await call(ctx, "read", "get_retirement", fn))
 
     @srv.tool(
         description="L'année qui vient : projection mois par mois sur douze mois à partir de la fin du mois en cours "

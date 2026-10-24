@@ -95,6 +95,12 @@ def _tax(db: Session, today: date, values: dict[str, Any], household: dict[str, 
     )
 
 
+def tax_estimate(db: Session, today: date) -> TaxEstimate:
+    """La tranche marginale que Bank connaît (déclarée, avis d'impôt importé, ou estimée du salaire)."""
+    values = advisor.plain_answers(db)
+    return _tax(db, today, values, analytics.load_profile(db) or {})
+
+
 def investment_plan(db: Session, today: date) -> InvestmentPlan:
     values = advisor.plain_answers(db)
     household = analytics.load_profile(db) or {}

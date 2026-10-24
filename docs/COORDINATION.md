@@ -31,12 +31,11 @@ voient pas : **GitHub est le seul point de rencontre**. Règles simples pour ne 
 
 | Session | Zones en cours | Issues |
 |---|---|---|
-| cloud (Claude Fable 5.1) | plan B, crédits, sauvegardes (livrés) ; boîte mail IMAP (`domain/mail`, `services/mail`, `api/mail`, `pages/MailSettings`, `components/MailProposals` + une ligne dans `Documents.tsx`, `SOURCES` dans `services/vault.py`) | #4 ✔, #6 ✔, #16 ✔, #15 en cours |
-| nimbus (Opus 5.5) | partage d'un papier par lien expirant (`feat/14-partage-papier`), import CSV crypto (`feat/10-import-crypto-csv`) ; ensuite #12, puis #8 ou #9. Ne touche ni ROADMAP.md ni aux zones de la session cloud ; ajoute en fin de fichier dans les fichiers partagés | #14, #10 en cours |
+| cloud (Claude Fable 5.1) | plan B, crédits, sauvegardes, boîte mail IMAP, retraite (livrés : `domain/retirement`, `services/retirement`, `api/retirement`, `components/Retirement`) ; ensuite #7 (virement DSP2) ou #11 | #4 ✔, #6 ✔, #16 ✔, #15 ✔, #9 ✔ |
+| nimbus (Opus 5.5) | partage d'un papier par lien expirant (`feat/14-partage-papier`), import CSV crypto (`feat/10-import-crypto-csv`) ; ensuite #12, puis #8. Ne touche ni ROADMAP.md ni aux zones de la session cloud ; ajoute en fin de fichier dans les fichiers partagés | #14, #10 en cours |
 
-Tant que la machine d'Opus n'a pas d'accès GitHub (`gh auth login` ou un jeton), Micka relaie : les commentaires
-d'issue « en cours — Opus » sont posés par la session cloud à sa demande, et ses branches sont poussées par Micka ;
-la session cloud relit les PR.
+Opus a maintenant son accès GitHub : chaque session pose ses commentaires d'issue, pousse ses branches et ouvre ses
+PR ; l'autre relit.
 
 Les fichiers partagés par tout le monde (`README.md`, `SECURITY.md`, `docs/ROADMAP.md`, `app/main.py`,
 `frontend/src/api.ts`, `frontend/src/styles.css`, `tests/test_mcp.py`, la compétence HERMÈS) se touchent par petites

@@ -29,6 +29,7 @@ from app.models import (
     EnergyReading,
     InitiativeState,
     LlmUsage,
+    Loan,
     MemoryEntry,
     MemoryProposal,
     MerchantHint,
@@ -46,6 +47,7 @@ from app.models import (
 from app.security import audit
 from app.security.auth import verify_password
 from app.services import obligations as obligations_service
+from app.services import retirement as retirement_service
 
 router = APIRouter(prefix="/api", tags=["system"])
 
@@ -327,6 +329,22 @@ def export(body: ExportIn, request: Request, ctx: AuthDep, db: DbDep) -> Respons
         "autopilot": _autopilot(db),
         # Déclarations récurrentes : ce qui est suivi, ce qui a été fait et ce que tu as déclaré.
         "obligations": obligations_service.export(db),
+        # Crédits suivis et relevé de carrière : ce que tu as saisi (contrat, trimestres) ; le reste se recalcule.
+        "loans": [
+            {
+                "name": loan.name,
+                "lender": loan.lender,
+                "kind": loan.kind,
+                "principal_cents": loan.principal_cents,
+                "annual_rate_bp": loan.annual_rate_bp,
+                "months": loan.months,
+                "first_payment": loan.first_payment.isoformat(),
+                "insurance_monthly_cents": loan.insurance_monthly_cents,
+                "account_id": loan.account_id,
+            }
+            for loan in db.scalars(select(Loan).order_by(Loan.id))
+        ],
+        "retirement_profile": retirement_service.profile(db) or None,
         # Crypto : adresses publiques suivies, avoirs, opérations fiscales (aucune clé : Bank n'en a jamais).
         "crypto": {
             "wallets": [

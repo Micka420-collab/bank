@@ -364,6 +364,17 @@ class MailProposal(Base):
     decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
 
 
+class RetirementProfile(Base):
+    """Ton relevé de carrière tel que tu l'as saisi (trimestres acquis, salaire annuel moyen, points Agirc-Arrco,
+    début de carrière) : chiffré, une seule ligne (id = 1)."""
+
+    __tablename__ = "retirement_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    data: Mapped[str] = mapped_column(EncryptedText("retirement.profile"))
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+
+
 class BackupRun(Base):
     """Une sauvegarde ou une restauration d'essai : ce qui s'est passé, visible dans Bank. Jamais de secret :
     noms de fichiers, tailles, nombre de lignes par table, message d'erreur."""
