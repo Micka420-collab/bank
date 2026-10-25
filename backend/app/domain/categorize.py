@@ -25,38 +25,99 @@ class CategoryDef:
     slug: str
     name: str
     kind: str  # income | fixed | variable | savings | transfer | uncategorized
-    color: str
+    tone: str  # teinte de données de l'interface (voir TONES)
     order: int
 
+    @property
+    def color(self) -> str:
+        """Couleur par défaut stockée en base : la valeur claire de la teinte (repli hors interface)."""
+        return TONES[self.tone]
 
+
+# Teintes de données « Lagon » (frontend/src/styles.css, --c1…--c6 ; « muted » = --c-muted). L'interface reçoit
+# la clé et dessine la teinte du thème en cours ; l'hexadécimal n'est que la valeur claire, gardée en base.
+TONES: dict[str, str] = {
+    "c1": "#0b7480",  # sarcelle
+    "c2": "#2f6fe0",  # ciel
+    "c3": "#b88300",  # soleil
+    "c4": "#0e9a7a",  # émeraude
+    "c5": "#e0566e",  # corail
+    "c6": "#5a7a88",  # ardoise
+    "muted": "#7b8588",  # --c-muted : ce qui n'est pas classé, « Autres »
+}
+
+# Charges fixes en sarcelle et ciel, dépenses courantes en soleil et corail, épargne en --c1.
 BUILTIN_CATEGORIES: tuple[CategoryDef, ...] = (
-    CategoryDef("salaire", "Salaire", "income", "#16a34a", 10),
-    CategoryDef("aides", "Aides & prestations", "income", "#059669", 11),
-    CategoryDef("remboursements", "Remboursements", "income", "#0d9488", 12),
-    CategoryDef("autres_revenus", "Autres revenus", "income", "#65a30d", 13),
-    CategoryDef("logement", "Logement", "fixed", "#7c3aed", 20),
-    CategoryDef("energie", "Énergie & eau", "fixed", "#9333ea", 21),
-    CategoryDef("telecom", "Box & mobile", "fixed", "#a855f7", 22),
-    CategoryDef("assurances", "Assurances", "fixed", "#6d28d9", 23),
-    CategoryDef("abonnements", "Abonnements", "fixed", "#c026d3", 24),
-    CategoryDef("credits", "Crédits", "fixed", "#be185d", 25),
-    CategoryDef("impots", "Impôts & taxes", "fixed", "#9f1239", 26),
-    CategoryDef("courses", "Courses", "variable", "#ea580c", 30),
-    CategoryDef("restaurants", "Restaurants & livraison", "variable", "#f97316", 31),
-    CategoryDef("transport", "Transport & carburant", "variable", "#0284c7", 32),
-    CategoryDef("sante", "Santé", "variable", "#e11d48", 33),
-    CategoryDef("shopping", "Shopping", "variable", "#db2777", 34),
-    CategoryDef("maison", "Maison & bricolage", "variable", "#a16207", 35),
-    CategoryDef("loisirs", "Loisirs & sorties", "variable", "#2563eb", 36),
-    CategoryDef("enfants", "Enfants", "variable", "#f59e0b", 37),
-    CategoryDef("frais_bancaires", "Frais bancaires", "variable", "#475569", 38),
-    CategoryDef("retraits", "Retraits d'espèces", "variable", "#64748b", 39),
-    CategoryDef("cadeaux_dons", "Cadeaux & dons", "variable", "#d946ef", 40),
-    CategoryDef("divers", "Divers", "variable", "#94a3b8", 41),
-    CategoryDef("epargne", "Épargne", "savings", "#0891b2", 50),
-    CategoryDef("virements_internes", "Virements internes", "transfer", "#71717a", 60),
-    CategoryDef("a_categoriser", "À catégoriser", "uncategorized", "#a1a1aa", 99),
+    CategoryDef("salaire", "Salaire", "income", "c4", 10),
+    CategoryDef("aides", "Aides & prestations", "income", "c1", 11),
+    CategoryDef("remboursements", "Remboursements", "income", "c2", 12),
+    CategoryDef("autres_revenus", "Autres revenus", "income", "c6", 13),
+    CategoryDef("logement", "Logement", "fixed", "c1", 20),
+    CategoryDef("energie", "Énergie & eau", "fixed", "c6", 21),
+    CategoryDef("telecom", "Box & mobile", "fixed", "c6", 22),
+    CategoryDef("assurances", "Assurances", "fixed", "c4", 23),
+    CategoryDef("abonnements", "Abonnements", "fixed", "c2", 24),
+    CategoryDef("credits", "Crédits", "fixed", "c6", 25),
+    CategoryDef("impots", "Impôts & taxes", "fixed", "c1", 26),
+    CategoryDef("courses", "Courses", "variable", "c3", 30),
+    CategoryDef("restaurants", "Restaurants & livraison", "variable", "c5", 31),
+    CategoryDef("transport", "Transport & carburant", "variable", "c2", 32),
+    CategoryDef("sante", "Santé", "variable", "c4", 33),
+    CategoryDef("shopping", "Shopping", "variable", "c5", 34),
+    CategoryDef("maison", "Maison & bricolage", "variable", "c3", 35),
+    CategoryDef("loisirs", "Loisirs & sorties", "variable", "c4", 36),
+    CategoryDef("enfants", "Enfants", "variable", "c3", 37),
+    CategoryDef("frais_bancaires", "Frais bancaires", "variable", "c6", 38),
+    CategoryDef("retraits", "Retraits d'espèces", "variable", "c6", 39),
+    CategoryDef("cadeaux_dons", "Cadeaux & dons", "variable", "c5", 40),
+    CategoryDef("divers", "Divers", "variable", "muted", 41),
+    CategoryDef("epargne", "Épargne", "savings", "c1", 50),
+    CategoryDef("virements_internes", "Virements internes", "transfer", "muted", 60),
+    CategoryDef("a_categoriser", "À catégoriser", "uncategorized", "muted", 99),
 )
+BUILTIN_BY_SLUG = {c.slug: c for c in BUILTIN_CATEGORIES}
+
+# Couleurs par défaut des versions précédentes : une catégorie intégrée qui les garde n'a jamais été recolorée,
+# on la passe à la couleur du jour au démarrage. Toute autre couleur est un choix de l'utilisateur : on n'y touche pas.
+LEGACY_COLORS: dict[str, tuple[str, ...]] = {
+    "salaire": ("#16a34a",),
+    "aides": ("#059669",),
+    "remboursements": ("#0d9488",),
+    "autres_revenus": ("#65a30d",),
+    "logement": ("#7c3aed",),
+    "energie": ("#9333ea",),
+    "telecom": ("#a855f7",),
+    "assurances": ("#6d28d9",),
+    "abonnements": ("#c026d3",),
+    "credits": ("#be185d",),
+    "impots": ("#9f1239",),
+    "courses": ("#ea580c",),
+    "restaurants": ("#f97316",),
+    "transport": ("#0284c7",),
+    "sante": ("#e11d48",),
+    "shopping": ("#db2777",),
+    "maison": ("#a16207",),
+    "loisirs": ("#2563eb",),
+    "enfants": ("#f59e0b",),
+    "frais_bancaires": ("#475569",),
+    "retraits": ("#64748b",),
+    "cadeaux_dons": ("#d946ef",),
+    "divers": ("#94a3b8",),
+    "epargne": ("#0891b2",),
+    "virements_internes": ("#71717a",),
+    "a_categoriser": ("#a1a1aa",),
+}
+
+
+def category_tone(slug: str | None, color: str | None) -> str | None:
+    """La teinte à dessiner pour une catégorie : celle du thème tant que sa couleur est la couleur intégrée par
+    défaut, aucune (la couleur stockée fait foi) si l'utilisateur l'a choisie."""
+    d = BUILTIN_BY_SLUG.get(slug or "")
+    if d is None or color is None or color.lower() != d.color:
+        return None
+    return d.tone
+
+
 CATEGORY_KIND = {c.slug: c.kind for c in BUILTIN_CATEGORIES}
 
 

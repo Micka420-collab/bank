@@ -13,9 +13,11 @@ from sqlalchemy import select, text, update
 from starlette.testclient import TestClient
 
 from app.db import utcnow
+from app.domain.categorize import TONES
 from app.fiscal.client import FiscalClient
-from app.models import Account, AuthSession, Transaction
+from app.models import Account, AuthSession, Category, Transaction
 from app.security.crypto import sha256_hex
+from app.services.categories import seed_categories
 from tests.conftest import PASSWORD, SETUP_TOKEN, USERNAME, do_login, do_setup, fixture_bytes
 from tests.test_enablebanking import FakeBank, make_client
 
@@ -288,6 +290,23 @@ class TestTransactions:
         r = auth_client.patch("/api/categories/courses", json={"monthly_budget_cents": 40000})
         assert r.json()["monthly_budget_cents"] == 40000
         assert auth_client.patch("/api/categories/nope", json={"name": "x"}).status_code == 404
+
+    def test_old_default_colors_move_to_lagon_and_chosen_ones_stay(self, app, auth_client: TestClient) -> None:  # type: ignore[no-untyped-def]
+        with app.state.sessionmaker() as db:  # une base d'avant la palette « Lagon »
+            db.execute(update(Category).where(Category.slug == "logement").values(color="#7C3AED"))
+            db.execute(update(Category).where(Category.slug == "courses").values(color="#123456"))  # choix
+            db.commit()
+            seed_categories(db)  # ce que fait le démarrage
+            db.commit()
+        cats = {c["slug"]: c for c in auth_client.get("/api/categories").json()}
+        assert cats["logement"]["color"] == TONES["c1"] and cats["logement"]["tone"] == "c1"
+        assert cats["courses"]["color"] == "#123456" and cats["courses"]["tone"] is None
+        aid = make_account(auth_client)
+        upload(auth_client, aid, "ca_export.csv")
+        h = auth_client.get("/api/history?range=all").json()
+        by = {c["slug"]: c for c in h["categories"]}
+        assert by["courses"]["tone"] is None and by["courses"]["color"] == "#123456"
+        assert all(c["tone"] in TONES for k, c in by.items() if k != "courses")
 
 
 # =============================================================================== budget / aides / patrimoine

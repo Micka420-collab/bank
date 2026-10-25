@@ -126,6 +126,7 @@ def test_buttons_come_from_the_catalogue_chart_from_bank_and_blocks_are_kept(app
     chart = out["blocks"][0]
     assert chart["kind"] == "donut" and chart["dataset"] == "spend_by_category" and "3 derniers mois" in chart["title"]
     assert chart["items"] and all(it["value"] > 0 for it in chart["items"]) and chart["source"].startswith("Bank")
+    assert all(it.get("tone") in {"c1", "c2", "c3", "c4", "c5", "c6", "muted"} for it in chart["items"])  # thème
     diagram = out["blocks"][1]
     assert [n["id"] for n in diagram["nodes"]] == ["rev", "fix", "rad"] and diagram["edges"][1]["label"] == "moins"
     actions = out["blocks"][2]["items"]

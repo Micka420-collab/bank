@@ -33,11 +33,12 @@ export function sliceRange<T>(series: T[], range: HistoryRange): T[] {
 }
 
 const BUCKETS: Record<string, { label: string; color: string }> = {
-  liquidites: { label: "Comptes courants", color: "var(--ink-3)" },
-  epargne_disponible: { label: "Épargne disponible", color: "var(--accent)" },
-  epargne_long_terme: { label: "Épargne long terme", color: "var(--positive)" },
-  autres_actifs: { label: "Autres actifs", color: "var(--warning)" },
-  immobilier: { label: "Logement (estimation DVF)", color: "var(--accent-ink)" },
+  // Teintes de données (--c*), une par part : pas de couleurs d'état, qui se ressemblent trop en clair.
+  liquidites: { label: "Comptes courants", color: "var(--c6)" },
+  epargne_disponible: { label: "Épargne disponible", color: "var(--c1)" },
+  epargne_long_terme: { label: "Épargne long terme", color: "var(--c4)" },
+  autres_actifs: { label: "Autres actifs", color: "var(--c3)" },
+  immobilier: { label: "Logement (estimation DVF)", color: "var(--c2)" },
 };
 
 export function bucketSlices(byBucket: Record<string, number>): Slice[] {

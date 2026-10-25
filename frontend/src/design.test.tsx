@@ -16,6 +16,7 @@ import { ToastProvider } from "./components/ui";
 import { merchantCase } from "./format";
 import { Login } from "./pages/Auth";
 import { bucketSlices, sliceRange } from "./pages/Wealth";
+import { sliceColors, toneSlices } from "./components/charts/tones";
 import { applyTheme, readTheme } from "./theme";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -320,6 +321,7 @@ describe("graphiques", () => {
     const slices = bucketSlices({ liquidites: 64_000, epargne_disponible: 790_000, dettes: -20_000, autres_actifs: 0 });
     expect(slices.map((s) => s.slug)).toEqual(["epargne_disponible", "liquidites"]);
     expect(slices[0]!.share + slices[1]!.share).toBeCloseTo(1);
+    expect(slices.map((s) => s.color)).toEqual(["var(--c1)", "var(--c6)"]); // teintes de données, distinctes
     const series = Array.from({ length: 400 }, (_, i) => i);
     expect(sliceRange(series, "7d")).toHaveLength(7);
     expect(sliceRange(series, "1y")).toHaveLength(365);
@@ -398,5 +400,15 @@ describe("erreurs qui disent quoi faire", () => {
     const text = host.textContent ?? "";
     expect(text).toMatch(/patiente une minute/);
     expect(text).not.toMatch(/Erreur 429/);
+  });
+});
+
+describe("chart tones", () => {
+  it("draws theme tones, keeps chosen colours and keeps slices distinct", () => {
+    expect(sliceColors([{ tone: "c1" }, { tone: "c1" }, { color: "#123456" }, {}, { tone: "muted" }, { tone: "nope", color: "#abcdef" }]))
+      .toEqual(["var(--c1)", "var(--c2)", "#123456", "var(--c3)", "var(--c-muted)", "#abcdef"]);
+    const many = sliceColors(Array.from({ length: 9 }, () => ({ tone: "c4" })));
+    expect(new Set(many.slice(0, 8)).size).toBe(8);
+    expect(toneSlices([{ slug: "x", tone: "c5", color: "#e0566e" }])[0]!.color).toBe("var(--c5)");
   });
 });

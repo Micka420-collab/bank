@@ -51,7 +51,10 @@ def build(db: Session, today: date, dataset: str, period: str | None = None) -> 
     if dataset == "spend_by_category":
         per = per or "month"
         h = history.history(db, today, PERIODS[per])
-        items = [{"label": c["name"], "value": c["cents"], "color": c["color"]} for c in h["categories"]]
+        items = [
+            {"label": c["name"], "value": c["cents"], "color": c["color"], "tone": c.get("tone")}
+            for c in h["categories"]
+        ]
         if not items:
             raise ChartError("Aucune dépense sur la période")
         return blocks.chart_block(

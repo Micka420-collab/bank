@@ -5,16 +5,21 @@ from __future__ import annotations
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.domain.categorize import BUILTIN_CATEGORIES, Categorizer, Rule, TokenBayes
+from app.domain.categorize import BUILTIN_CATEGORIES, LEGACY_COLORS, Categorizer, Rule, TokenBayes
 from app.domain.forecast import CategoryInfo
 from app.models import Category, CategoryRule, CategorySource, Transaction
 
 
 def seed_categories(db: Session) -> None:
-    existing = set(db.scalars(select(Category.slug)))
+    """Crée les catégories intégrées manquantes et passe à la palette du jour celles qui gardent une ancienne
+    couleur par défaut (jamais une couleur choisie par l'utilisateur)."""
+    existing = {c.slug: c for c in db.scalars(select(Category))}
     for c in BUILTIN_CATEGORIES:
-        if c.slug not in existing:
+        row = existing.get(c.slug)
+        if row is None:
             db.add(Category(slug=c.slug, name=c.name, kind=c.kind, color=c.color, sort_order=c.order, is_builtin=True))
+        elif row.is_builtin and (row.color or "").lower() in LEGACY_COLORS.get(c.slug, ()):
+            row.color = c.color
     db.flush()
 
 

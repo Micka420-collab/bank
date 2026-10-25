@@ -914,7 +914,7 @@ function NotifyStep({ done, onDone, onLater }: { done: boolean; onDone: OnDone; 
           {push?.sends && <p className="consent-sends"><span>Envoie :</span> {push.sends}</p>}
           {push && <details className="consent-more"><summary>Lire le texte complet</summary><p className="muted">{push.text}</p></details>}
           {!supported && <p className="notice"><Icon name="alert" /><span>Ce navigateur ne sait pas recevoir de notifications. Sur iPhone : ajoute Bank à l'écran d'accueil, puis reviens ici.</span></p>}
-          {supported && permission === "denied" && <p className="notice"><Icon name="alert" /><span>Les notifications sont bloquées pour Bank : réautorise-les dans les réglages du site.</span></p>}
+          {supported && permission === "denied" && <p className="notice warn"><Icon name="alert" /><span>Les notifications sont bloquées pour Bank : réautorise-les dans les réglages du site.</span></p>}
           {usable && (
             <div className="actions journey-actions">
               <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} disabled={!st.data} aria-disabled={busy || undefined} onClick={() => { if (!busy) activate(); }}

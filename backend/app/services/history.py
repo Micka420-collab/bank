@@ -14,6 +14,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.domain.categorize import TONES, category_tone
 from app.domain.recurring import add_months
 from app.domain.wealth import net_worth
 from app.models import Account, Category, Transaction, WealthSnapshot
@@ -52,6 +53,13 @@ def _label(rng: str, start: date) -> str:
     if rng in ("30d", "3m"):
         return f"sem. du {start.day} {MONTHS_FR[start.month - 1]}"
     return f"{MONTHS_FR[start.month - 1]} {start.year % 100:02d}"
+
+
+def _category_entry(slug: str, name: str | None, color: str | None) -> dict[str, Any]:
+    """Une part du donut : la couleur stockée, et la teinte du thème (``tone``) tant qu'elle est celle par défaut."""
+    if color is None:  # opération sans catégorie
+        return {"slug": slug, "name": name or "À classer", "color": TONES["muted"], "tone": "muted", "cents": 0}
+    return {"slug": slug, "name": name or "À classer", "color": color, "tone": category_tone(slug, color), "cents": 0}
 
 
 def history(db: Session, today: date, rng: str = "30d") -> dict[str, Any]:
@@ -118,18 +126,17 @@ def history(db: Session, today: date, rng: str = "30d") -> dict[str, Any]:
             continue
         key = slug or "a_categoriser"
         if start <= d <= today:
-            entry = by_cat.setdefault(
-                key, {"slug": key, "name": name or "À classer", "color": color or "#8a91ac", "cents": 0}
-            )
+            entry = by_cat.setdefault(key, _category_entry(key, name, color))
             entry["cents"] += -amount
         elif prev_start <= d < start:
             prev_by_cat[key] += -amount
     cats = sorted(by_cat.values(), key=lambda c: -c["cents"])
     total_spent = sum(c["cents"] for c in cats) or 1
-    top = cats[:7]
-    rest = sum(c["cents"] for c in cats[7:])
+    # Six parts au plus, puis « Autres » : autant que de teintes de données (--c1…--c6), chaque part reste distincte.
+    top = cats[:6]
+    rest = sum(c["cents"] for c in cats[6:])
     if rest:
-        top.append({"slug": "autres", "name": "Autres", "color": "#8a91ac", "cents": rest})
+        top.append({"slug": "autres", "name": "Autres", "color": TONES["muted"], "tone": "muted", "cents": rest})
     for c in top:
         c["share"] = round(c["cents"] / total_spent, 3)
 

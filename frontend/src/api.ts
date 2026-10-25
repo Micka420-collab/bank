@@ -253,6 +253,8 @@ export type Category = {
   name: string;
   kind: string;
   color: string;
+  /** Teinte du thème (--c1…) tant que la couleur est celle par défaut ; null si l'utilisateur l'a choisie. */
+  tone?: string | null;
   monthly_budget_cents: number | null;
 };
 
@@ -1293,7 +1295,7 @@ export type History = {
   balances: { date: string; balance_cents: number }[];
   now: HistoryTotals;
   previous: HistoryTotals;
-  categories: { slug: string; name: string; color: string; cents: number; share: number }[];
+  categories: { slug: string; name: string; color: string; tone?: string | null; cents: number; share: number }[];
   periods: { key: string; start: string; label: string; income_cents: number; spent_cents: number }[];
   anomalies: { slug: string; name: string; cents: number; previous_cents: number; ratio: number }[];
   latest: { id: number; date: string; merchant: string; label: string; amount_cents: number; category: string | null; category_name: string | null; is_transfer: boolean }[];
@@ -1307,7 +1309,7 @@ export type ChatActionItem =
   | { key: string; label: string; kind: "navigate"; page: string }
   | { key: string; label: string; kind: "ask"; prompt: string }
   | { key: string; label: string; kind: "act"; card: string; action: string };
-export type ChartItem = { label: string; value?: number; a?: number; b?: number; color?: string };
+export type ChartItem = { label: string; value?: number; a?: number; b?: number; color?: string; tone?: string };
 export type ChatBlock =
   | { type: "actions"; items: ChatActionItem[] }
   | { type: "chart"; kind: "donut" | "bars" | "pairs" | "line"; title: string; unit: "eur" | "pct" | "kwh" | "count"; items: ChartItem[]; source: string; dataset: string }

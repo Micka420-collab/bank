@@ -121,6 +121,12 @@ def test_chart_block_keeps_integers_colors_and_bounds() -> None:
     ]
     block = blocks.chart_block("donut", "Dépenses", items=items, source="Bank", dataset="spend_by_category")
     assert block["items"] == [{"label": "Courses", "value": 12346, "color": "#AABBCC"}, {"label": "X", "value": 0}]
+    toned = blocks.chart_block(
+        "donut",
+        "x",
+        items=[{"label": "A", "value": 1, "color": "#0b7480", "tone": "c1"}, {"label": "B", "tone": "var(--x)"}],
+    )
+    assert toned["items"] == [{"label": "A", "value": 1, "color": "#0b7480", "tone": "c1"}, {"label": "B", "value": 0}]
     pairs = blocks.chart_block("pairs", "Reçu/dépensé", items=[{"label": "oct.", "a": 100, "b": 50}])
     assert pairs["items"][0] == {"label": "oct.", "a": 100, "b": 50}
     with pytest.raises(blocks.BlockError):

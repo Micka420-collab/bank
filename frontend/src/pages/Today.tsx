@@ -5,6 +5,7 @@ import { useState } from "react";
 import { api, useApi, type AidsResponse, type BudgetResponse, type Category, type History, type HistoryRange, type MonthForecast } from "../api";
 import { Bars } from "../components/charts/Bars";
 import { Donut } from "../components/charts/Donut";
+import { toneSlices } from "../components/charts/tones";
 import { TrendChart } from "../components/charts/TrendChart";
 import { Copilot } from "../components/Copilot";
 import { CountUp } from "../components/CountUp";
@@ -170,7 +171,7 @@ export function Today({ name }: { name?: string } = {}) {
         <div className="split reveal" style={{ marginTop: "1rem", ["--i" as string]: 4 }}>
           <section className="card" aria-labelledby="donut-title">
             <div className="card-head"><h2 id="donut-title">Où part l'argent</h2><span className="faint">{rangeLabel(range)}</span></div>
-            <Donut slices={h.categories} total={h.now.spent_cents} label="Dépenses par catégorie" />
+            <Donut slices={toneSlices(h.categories)} total={h.now.spent_cents} label="Dépenses par catégorie" />
             {h.anomalies.length > 0 && (
               <ul className="stack" style={{ marginTop: "1rem", listStyle: "none", padding: 0 }}>
                 {h.anomalies.map((a) => (

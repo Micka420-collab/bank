@@ -134,16 +134,21 @@ les deux thèmes.
 | `--bg` | `#EFFAFC` | `#03141C` | Fond de page (ciel très clair / océan profond) |
 | `--halo-1` (aqua) | `#22D3EE` à 36 % | `#22D3EE` à 26 % | Haut gauche, derrière le rail et le chiffre du jour |
 | `--halo-2` (turquoise / sarcelle) | `#2DD4BF` à 38 % | `#14B8A6` à 28 % | Haut droit ; teinte « tout va bien » |
-| `--halo-3` (soleil) | `#FFD54A` à 48 % | `#FACC15` à 16 % | Bas gauche ; teinte « pièce », allumée par les gains |
+| `--halo-3` (soleil) | `#FFD54A` à 36 % | `#FACC15` à 16 % | Teinte « pièce », allumée par les gains ; bas gauche en clair |
 | `--halo-4` (ciel) | `#60A5FA` à 30 % | `#3B82F6` à 26 % | Bas droit |
+| `--halo-foot` (bas du fond) | `--halo-3` | `--halo-4` | Bas gauche, et bas du téléphone : le soleil en clair, le ciel la nuit |
 
 Les halos sont quatre `radial-gradient` (rayon 38–48 vmax, transparent au bord) sur un calque
 `body::before` en `position: fixed; inset: 0; z-index: -1; pointer-events: none` : aucune image, aucun script,
 rien à recalculer au défilement. Pas d'animation continue. Sur téléphone, deux halos seulement (aqua en haut,
-soleil en bas) pour garder le fond calme sous le pouce. Le rôle d'un halo est le même dans les deux thèmes
-(`--halo-2` sarcelle, `--halo-3` soleil) : les états qui s'en servent ne changent pas de couleur avec le thème.
-Halo du héros « Aujourd'hui » : `ok` → `--halo-2`, `tight` → `--halo-3`, `risk` → `--negative` à 30 % (la
-palette n'a pas de halo chaud) ; tirelire et fête « pièce » → `--halo-3`, fête « fait » → `--halo-2`.
+`--halo-foot` en bas) pour garder le fond calme sous le pouce. Le bas du fond passe par `--halo-foot` : en
+sombre, le jaune posé sur l'océan vire à l'olive (`#2A3118`) ; le ciel garde la nuit profonde. Au-delà du fond,
+le rôle d'un halo est le même dans les deux thèmes (`--halo-2` sarcelle, `--halo-3` soleil) : les états qui s'en
+servent ne changent pas de couleur avec le thème. Halo du héros « Aujourd'hui » : `ok` → `--positive` à 30 %
+(distinct du halo aqua par défaut), `tight` → `--halo-3`, `risk` → `--negative` à 30 % ; tirelire et fête
+« pièce » → `--halo-3`, fête « fait » → `--halo-2`. Les tuiles de « Plus » prennent tour à tour aqua, ciel,
+sarcelle et `--tint-sun` (`--halo-3` en clair ; `--coin` à 22 % sur `--surface` en sombre, un ambre net plutôt
+qu'un kaki).
 
 #### Verre
 
@@ -170,7 +175,7 @@ transparaît.
 | Jeton | Clair | Sombre |
 |---|---|---|
 | `--accent` (liens, anneau de focus, icônes actives) | `#0B7480` | `#4FE0F0` |
-| `--accent-grad` (bouton principal, onglet actif, anneau de progression, logo) | `linear-gradient(135deg, #16C8E4, #2FDCB4)` | `linear-gradient(135deg, #22D3EE, #5EEAD4)` |
+| `--accent-grad` (bouton principal, onglet actif, étape en cours, logo) | `linear-gradient(135deg, #16C8E4, #2FDCB4)` | `linear-gradient(135deg, #22D3EE, #5EEAD4)` |
 | `--on-accent` (texte sur `--accent-grad`) | `#04222A` | `#03202A` |
 | `--on-solid` (texte sur un aplat plein `--accent`, `--positive`, `--negative`, `--warning`) | `#FFFFFF` | `#03141C` |
 | `--accent-soft` / texte dessus `--accent-ink` | `#D6F5F7` / `#08636D` | `#0E3A47` / `#8CF0FA` |
@@ -194,7 +199,7 @@ plusieurs lignes). `--r-s`, `--r-m`, `--r-l` deviennent des alias de `--r-contro
 
 | Jeton | Clair | Sombre | Pastille (`-soft`) clair / sombre |
 |---|---|---|---|
-| `--positive` (argent arrivé, fait, relié) | `#0B7A55` | `#5FE0AD` | `#D8F5EA` / `#0F3A2E` |
+| `--positive` (argent arrivé, fait, relié) | `#0F7A3E` (un vert franc, distinct de la sarcelle `--accent`) | `#5FE0AD` | `#DCF4E3` / `#0F3A2E` |
 | `--negative` (action requise : découvert, échéance ratée) | `#C2304B` | `#FF8A9E` | `#FDE5EA` / `#3D1822` |
 | `--warning` (à surveiller) | `#8A5300` | `#FFD166` | `#FFF2CF` / `#382C0E` |
 | `--coin` (ce qu'on peut gagner ; remplissage seulement) | `#F5B800` | `#FFD23F` | `#FFF3C4` / `#3A300C` |
@@ -205,14 +210,27 @@ plusieurs lignes). `--r-s`, `--r-m`, `--r-l` deviennent des alias de `--r-contro
 
 | Jeton | `--c1` | `--c2` | `--c3` | `--c4` | `--c5` | `--c6` |
 |---|---|---|---|---|---|---|
-| Clair | `#0B7480` sarcelle | `#2F6FE0` bleu | `#D99A00` soleil | `#0FA37F` émeraude | `#E0566E` corail | `#5A7A88` ardoise |
+| Clair | `#0B7480` sarcelle | `#2F6FE0` bleu | `#B88300` soleil | `#0E9A7A` émeraude | `#E0566E` corail | `#5A7A88` ardoise |
 | Sombre | `#4FE0F0` | `#8FB4FF` | `#FFD23F` | `#5FE0AD` | `#FF8A9E` | `#9AB8C2` |
-| Contraste sur verre clair · sombre | 5,1 · 9,0 | 4,3 · 6,9 | 2,3 · 9,9 | 2,9 · 8,7 | 3,4 · 6,4 | 4,2 · 6,8 |
+| Contraste sur verre clair · sombre | 5,1 · 9,0 | 4,3 · 6,9 | 3,1 · 9,9 | 3,3 · 8,7 | 3,4 · 6,4 | 4,2 · 6,8 |
 
-Les donuts de l'assistant (`components/chat/Blocks.tsx`) prennent ces jetons (`var(--c1)`…) quand le bloc ne donne
-pas sa couleur. En clair, `--c3` et `--c4` restent sous 3:1 : une teinte ne porte jamais seule l'information, la
-légende donne le nom et la valeur de chaque part. Les couleurs de catégories (`categorize.py`) sont des données
-du serveur, hors de ces jetons.
+Ce sont des objets graphiques : chaque teinte tient **3:1** sur le verre clair le plus défavorable (WCAG 1.4.11).
+`--c3` et `--c4` clairs sont donc un soleil et une émeraude un peu plus profonds que le nuancier « Lagon »
+(`#D99A00` et `#0FA37F` n'atteignaient que 2,3 et 2,9:1). La légende donne quand même le nom et la valeur de
+chaque part : une teinte ne porte jamais seule l'information.
+
+**Catégories.** Le serveur ne choisit plus de couleur pour l'interface : chaque catégorie intégrée a une teinte
+(`tone` : `c1`…`c6`, ou `muted` pour « À catégoriser », « Divers », « Autres ») dans
+`backend/app/domain/categorize.py` — charges fixes en sarcelle, ciel et ardoise, dépenses courantes en soleil,
+corail et émeraude, épargne en `--c1`. `muted` est `--c-muted`, un gris neutre (`#7B8588` / `#7A8A8F`, 3,5 · 4,0:1
+sur verre), distinct de l'ardoise `--c6`. `/api/categories`, `/api/history` et le donut `spend_by_category` de l'assistant
+envoient `tone` ; l'interface (`components/charts/tones.ts`) dessine `var(--c…)`, donc le sombre suit. Le serveur
+garde six catégories puis « Autres » (`--c-muted`), autant que de teintes ; dans un même donut, une teinte déjà
+prise passe à la première libre (puis `--c-muted`, `--ink-3` pour un bloc plus long), les parts restent
+distinctes. `Category.color` garde la valeur claire de la teinte : au démarrage, une catégorie intégrée qui a
+encore une ancienne couleur par défaut (les violets d'avant) y passe ; une couleur choisie par l'utilisateur
+arrive sans `tone` et reste telle quelle. Le donut « Répartition » du patrimoine prend aussi ces teintes
+(comptes `--c6`, épargne disponible `--c1`, long terme `--c4`, autres actifs `--c3`, logement `--c2`).
 
 #### Contrastes vérifiés (WCAG 2.2, texte ≥ 4,5:1, éléments d'interface ≥ 3:1)
 
@@ -227,7 +245,7 @@ alpha).
 | `--ink-3` | 5,8 | 6,1 | 6,9 | 7,4 |
 | `--accent` | 5,1 | 5,3 | 9,0 | 9,6 |
 | `--accent-ink` | 6,4 | 6,7 | 10,9 | 11,6 |
-| `--positive` | 4,9 | 5,1 | 8,7 | 9,3 |
+| `--positive` | 5,0 | 5,2 | 8,7 | 9,3 |
 | `--negative` | 5,1 | 5,3 | 6,4 | 6,8 |
 | `--warning` | 5,8 | 6,1 | 9,9 | 10,6 |
 | `--coin-ink` | 6,8 | 7,0 | 11,1 | 11,8 |
@@ -236,14 +254,14 @@ alpha).
 |---|---|
 | `--on-accent` sur `--accent-grad` clair (début `#16C8E4` / fin `#2FDCB4`) | 8,2 / 9,5 |
 | `--on-accent` sur `--accent-grad` sombre (début `#22D3EE` / fin `#5EEAD4`) | 9,3 / 11,4 |
-| `--on-solid` sur `--accent` · `--positive` · `--negative` · `--warning` (clair) | 5,5 · 5,3 · 5,5 · 6,3 |
+| `--on-solid` sur `--accent` · `--positive` · `--negative` · `--warning` (clair) | 5,5 · 5,4 · 5,5 · 6,3 |
 | `--on-solid` sur `--accent` · `--positive` · `--negative` · `--warning` (sombre) | 11,8 · 11,4 · 8,4 · 13,0 |
-| Pastilles : positive 4,6 · negative 4,6 · warning 5,7 · coin 6,6 · accent 6,1 (clair) ; 7,7 · 6,9 · 9,5 · 10,1 · 9,3 (sombre) | ✓ |
+| Pastilles : positive 4,7 · negative 4,6 · warning 5,7 · coin 6,6 · accent 6,1 (clair) ; 7,7 · 6,9 · 9,5 · 10,1 · 9,3 (sombre) | ✓ |
 | Toast `--ink` / `--bg` (clair) · (sombre) | 14,7 · 17,6 |
 | Repli opaque : `--ink-3` sur `--surface` clair · sombre | 6,3 · 7,9 |
 | Anneau de focus `--accent` sur `--bg` | 5,2 (clair) · 11,8 (sombre) |
 | Bordure de champ `--line-strong` sur `--surface` | 3,2 (clair) · 4,5 (sombre) |
-| Arc de progression `--grad-a` sur verre sombre | 7,9 (en clair, l'arc turquoise `#16C8E4` est décoratif : le chiffre au centre, en `--ink`, porte l'information) |
+| Arc de progression (`--arc-a` → `--arc-b`) sur verre, pire halo | 3,4 → 3,3 (clair : sarcelle profonde `#0B93A8` → `#0D9A7D`) · 7,9 (sombre : `--grad-a` → `--grad-b`). Le logo garde le dégradé `#16C8E4` → `#2FDCB4` (1,85:1, décoratif) |
 
 **Héros** : son halo est peint **sous** le verre (`linear-gradient(var(--glass))` par-dessus un radial
 `--hero-halo` par-dessus `--bg`), donc voilé lui aussi : le pire coin vaut la colonne « `--glass` (pire halo) »
@@ -264,6 +282,7 @@ sens à 3,9–4,1 : tout texte `.faint`, `.muted` coloré, montant signé ou `.n
 |---|---|---|
 | octobre 2026 | « Verre lumineux » violet | Lavande très pâle / nuit violette, accent `#4B3BEA`, halos violet, rose, menthe, soleil |
 | 25/10/2026 | **« Lagon »** | Choisie par Micka parmi les palettes proposées : turquoise, aqua, sarcelle sous un soleil jaune, ciel très clair ; sombre : océan profond. Logo, `theme-color`, manifeste et teintes de données suivent ; ajout de `--on-solid` |
+| 25/10/2026 | « Lagon », relecture | Catégories en teintes du thème (`tone`, fini les violets du serveur), Répartition en `--c*`, `--c3`/`--c4` clairs et arc de progression à 3:1, `--positive` vert franc, `--c-muted`, bas du fond `--halo-foot` (ni kaki en clair ni olive en sombre), une seule règle d'étapes |
 
 ### 3.4 Composants
 
@@ -341,14 +360,17 @@ gardé quand il existe) : plus rien « à classer » → « Tout est rangé. » 
 aucun document → « Prends un papier en photo : Bank le lit pour toi. »
 
 **Progression** :
-- **Anneau** (`.ring`, nouveau, SVG inline 48–96 px) : piste `--surface-2`, arc en `--accent-grad` (dégradé SVG
+- **Anneau** (`.ring`, nouveau, SVG inline 48–96 px) : piste `--surface-2`, arc en `--arc-a` → `--arc-b` (dégradé SVG
   `<linearGradient>` dans le JSX, pas d'URL externe), bout rond, valeur en texte au centre et `role="img"` +
   `aria-label` (« 5 papiers sur 7 à jour »). Sert à : opérations classées sur le mois, papiers à jour, dossier
   de démarche.
 - **Barre** (`.meter`, `.piggy-bar`) : 10 px de haut, pilule, remplissage `--accent-grad` (ou `--coin` pour la
   tirelire, `--negative` seulement au-delà de 100 %), repère « rythme attendu » gardé.
 - **Étapes** (`.proc-phases`) : pastilles reliées par un trait qui se remplit ; étape faite = coche sur
-  `--positive-soft`, étape en cours = `--accent-grad` avec `--glow`.
+  `--positive-soft`, étape en cours = `--accent-grad` avec `--glow`. Une seule règle pour toutes les barres
+  d'étapes (parcours, assistants de configuration `.wizard-steps`, visite) : en cours = `--accent-grad`, faite =
+  `--accent` (jamais un second vert collé au dégradé). Bouton principal désactivé : aplat `--surface-2`, texte
+  `--ink-3` (pas le dégradé pâli, qu'on prendrait pour une pastille).
 
 ### 3.5 Pages : ce qui change pour l'expérience
 

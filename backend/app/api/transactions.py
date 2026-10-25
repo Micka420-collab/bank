@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 
 from app.api.deps import AuthDep, DbDep
+from app.domain.categorize import category_tone
 from app.models import Category, CategoryRule, MerchantHint, Transaction
 from app.security import audit
 from app.services.categories import category_ids, load_categorizer, reapply_rules, recategorize
@@ -48,6 +49,7 @@ class CategoryOut(BaseModel):
     name: str
     kind: str
     color: str
+    tone: str | None  # teinte du thème (--c1…) tant que la couleur est celle par défaut
     monthly_budget_cents: int | None
 
 
@@ -149,7 +151,14 @@ def update_transaction(txn_id: int, body: TransactionPatch, ctx: AuthDep, db: Db
 @router.get("/categories")
 def list_categories(_: AuthDep, db: DbDep) -> list[CategoryOut]:
     return [
-        CategoryOut(slug=c.slug, name=c.name, kind=c.kind, color=c.color, monthly_budget_cents=c.monthly_budget_cents)
+        CategoryOut(
+            slug=c.slug,
+            name=c.name,
+            kind=c.kind,
+            color=c.color,
+            tone=category_tone(c.slug, c.color),
+            monthly_budget_cents=c.monthly_budget_cents,
+        )
         for c in db.scalars(select(Category).order_by(Category.sort_order))
     ]
 
@@ -169,6 +178,7 @@ def update_category(slug: str, body: CategoryPatch, ctx: AuthDep, db: DbDep) -> 
         name=cat.name,
         kind=cat.kind,
         color=cat.color,
+        tone=category_tone(cat.slug, cat.color),
         monthly_budget_cents=cat.monthly_budget_cents,
     )
 

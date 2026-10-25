@@ -10,8 +10,11 @@
   --bg: #effafc;
   --halo-1: rgba(34, 211, 238, 0.36); /* aqua */
   --halo-2: rgba(45, 212, 191, 0.38); /* turquoise */
-  --halo-3: rgba(255, 213, 74, 0.48); /* soleil */
+  --halo-3: rgba(255, 213, 74, 0.36); /* soleil */
   --halo-4: rgba(96, 165, 250, 0.30); /* ciel */
+  --halo-foot: rgba(255, 213, 74, 0.24); /* bas du fond : un soleil léger (plus fort, il vire au kaki sur l'aqua) ;
+                                           la nuit, le ciel (le jaune y vire à l'olive) */
+  --tint-sun: var(--halo-3); /* pastille « soleil » des tuiles (.more) */
   --surface: #ffffff; /* opaque : champs, menus, repli sans transparence */
   --surface-2: #e5f6f8;
   --glass: rgba(250, 255, 255, 0.74);
@@ -32,14 +35,16 @@
   --accent-grad: linear-gradient(135deg, #16c8e4, #2fdcb4);
   --grad-a: #16c8e4; /* bouts du dégradé, pour les SVG (anneau de progression) */
   --grad-b: #2fdcb4;
+  --arc-a: #0b93a8; /* anneau de progression : sarcelle plus profonde, 3,4:1 sur verre (le logo garde --grad-a) */
+  --arc-b: #0d9a7d; /* 3,3:1 */
   --accent-wash: linear-gradient(135deg, rgba(22, 200, 228, 0.14), rgba(47, 220, 180, 0.14));
   --on-accent: #04222a;
   --on-solid: #ffffff; /* texte sur un aplat plein (--accent, --positive, --negative, --warning) : 5,3:1 au pire */
   --glow: 0 0 0 4px rgba(22, 200, 228, 0.18), 0 10px 28px -8px rgba(47, 220, 180, 0.55);
   --glow-coin: 0 0 0 4px rgba(245, 184, 0, 0.22), 0 10px 28px -8px rgba(245, 184, 0, 0.6);
-  --glow-ok: 0 0 0 4px rgba(11, 122, 85, 0.18), 0 8px 22px -8px rgba(11, 122, 85, 0.5);
-  --positive: #0b7a55;
-  --positive-soft: #d8f5ea;
+  --glow-ok: 0 0 0 4px rgba(15, 122, 62, 0.18), 0 8px 22px -8px rgba(15, 122, 62, 0.5);
+  --positive: #0f7a3e; /* un vert franc, distinct de la sarcelle --accent */
+  --positive-soft: #dcf4e3;
   --negative: #c2304b;
   --negative-soft: #fde5ea;
   --warning: #8a5300;
@@ -113,6 +118,8 @@
     --halo-2: rgba(20, 184, 166, 0.28); /* sarcelle */
     --halo-3: rgba(250, 204, 21, 0.16); /* soleil */
     --halo-4: rgba(59, 130, 246, 0.26);
+    --halo-foot: var(--halo-4);
+    --tint-sun: #85610b; /* mêlé à 70 % au --surface : un or chaud #604e16, pas un kaki */
     --surface: #0a2230;
     --surface-2: #0f2d3d;
     --glass: rgba(8, 36, 50, 0.70);
@@ -132,6 +139,8 @@
     --accent-grad: linear-gradient(135deg, #22d3ee, #5eead4);
     --grad-a: #22d3ee;
     --grad-b: #5eead4;
+    --arc-a: #22d3ee;
+    --arc-b: #5eead4;
     --accent-wash: linear-gradient(135deg, rgba(34, 211, 238, 0.2), rgba(94, 234, 212, 0.16));
     --on-accent: #03202a;
     --on-solid: #03141c;
@@ -160,6 +169,8 @@
   --halo-2: rgba(20, 184, 166, 0.28); /* sarcelle */
   --halo-3: rgba(250, 204, 21, 0.16); /* soleil */
   --halo-4: rgba(59, 130, 246, 0.26);
+  --halo-foot: var(--halo-4);
+  --tint-sun: #85610b; /* mêlé à 70 % au --surface : un or chaud #604e16, pas un kaki */
   --surface: #0a2230;
   --surface-2: #0f2d3d;
   --glass: rgba(8, 36, 50, 0.70);
@@ -179,6 +190,8 @@
   --accent-grad: linear-gradient(135deg, #22d3ee, #5eead4);
   --grad-a: #22d3ee;
   --grad-b: #5eead4;
+  --arc-a: #22d3ee;
+  --arc-b: #5eead4;
   --accent-wash: linear-gradient(135deg, rgba(34, 211, 238, 0.2), rgba(94, 234, 212, 0.16));
   --on-accent: #03202a;
   --on-solid: #03141c;
@@ -232,7 +245,7 @@ body::before {
   background:
     radial-gradient(42vmax 42vmax at 4% 0%, var(--halo-1), transparent 70%),
     radial-gradient(38vmax 38vmax at 100% 6%, var(--halo-2), transparent 70%),
-    radial-gradient(46vmax 46vmax at 0% 100%, var(--halo-3), transparent 70%),
+    radial-gradient(46vmax 46vmax at 0% 100%, var(--halo-foot), transparent 70%),
     radial-gradient(40vmax 40vmax at 100% 100%, var(--halo-4), transparent 70%);
 }
 @media (max-width: 760px) {
@@ -240,7 +253,7 @@ body::before {
   body::before {
     background:
       radial-gradient(70vmax 50vmax at 10% -6%, var(--halo-1), transparent 70%),
-      radial-gradient(70vmax 50vmax at 90% 106%, var(--halo-3), transparent 70%);
+      radial-gradient(70vmax 50vmax at 90% 106%, var(--halo-foot), transparent 70%);
   }
 }
 h1,
@@ -1585,6 +1598,12 @@ input[aria-invalid="true"] {
   box-shadow: none;
   transform: none;
 }
+/* Le bouton principal désactivé ne ressemble pas à une pastille --accent-soft : un aplat neutre, net. */
+.btn:disabled:not(.quiet, .ghost, .link, .danger, .coin, .is-loading) {
+  opacity: 1;
+  background: var(--surface-2);
+  color: var(--ink-3);
+}
 .btn.quiet {
   background: var(--glass-strong);
   border-color: color-mix(in srgb, var(--line-strong) 45%, var(--glass-edge));
@@ -2575,7 +2594,7 @@ input[aria-invalid="true"] {
   transform: scaleX(0);
 }
 .journey-progress .is-done .journey-fill {
-  background: var(--positive);
+  background: var(--accent);
   transform: none;
   animation: seg-fill var(--d-enter) var(--ease-out) both;
 }
@@ -2918,7 +2937,7 @@ input[aria-invalid="true"] {
 .journey-sky > i:nth-child(3) {
   left: 13vmax;
   bottom: -13vmax;
-  background: radial-gradient(closest-side, var(--halo-3), transparent);
+  background: radial-gradient(closest-side, var(--halo-foot), transparent);
 }
 /* La dérive : translation seule, lente, deux allers-retours (une minute et demie environ), puis le ciel se pose. */
 @media (prefers-reduced-motion: no-preference) {
@@ -3250,7 +3269,7 @@ input[aria-invalid="true"] {
   fill: var(--line-strong);
 }
 .art-toggle.is-on {
-  fill: var(--positive);
+  fill: var(--accent); /* comme le vrai .switch */
 }
 .art-knob {
   fill: var(--surface);
@@ -4641,7 +4660,7 @@ input[aria-invalid="true"] {
   --tint: var(--halo-2);
 }
 .more li:nth-child(4n + 4) a {
-  --tint: var(--halo-3);
+  --tint: var(--tint-sun);
 }
 .more a b {
   display: flex;
@@ -7762,10 +7781,11 @@ main.sheet details.card {
 :root {
   --c1: #0b7480;
   --c2: #2f6fe0;
-  --c3: #d99a00;
-  --c4: #0fa37f;
+  --c3: #b88300; /* soleil, assez profond pour 3:1 sur verre (WCAG 1.4.11) */
+  --c4: #0e9a7a;
   --c5: #e0566e;
   --c6: #5a7a88;
+  --c-muted: #7b8588; /* gris neutre : « Autres », « À catégoriser » (3,5:1 sur verre) */
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -7775,6 +7795,7 @@ main.sheet details.card {
     --c4: #5fe0ad;
     --c5: #ff8a9e;
     --c6: #9ab8c2;
+    --c-muted: #7a8a8f;
   }
 }
 :root[data-theme="dark"] {
@@ -7784,6 +7805,7 @@ main.sheet details.card {
   --c4: #5fe0ad;
   --c5: #ff8a9e;
   --c6: #9ab8c2;
+  --c-muted: #7a8a8f;
 }
 .cx-vault {
   position: relative;
@@ -9744,7 +9766,8 @@ label {
 
 /* ---------------------------------------------------------------- Aujourd'hui : salut, halo d'humeur, verdict */
 .today[data-status="ok"] {
-  --hero-halo: var(--halo-2); /* sarcelle : tout va bien */
+  /* vert voilé : tout va bien, distinct du halo aqua par défaut ; 30 % sous le verre garde --positive à 4,8:1 */
+  --hero-halo: color-mix(in srgb, var(--positive) 30%, transparent);
 }
 .today[data-status="tight"] {
   --hero-halo: var(--halo-3); /* soleil : à surveiller */
@@ -9844,6 +9867,13 @@ label {
 }
 .ring-stop-b {
   stop-color: var(--grad-b);
+}
+/* L'anneau est un objet graphique (≥ 3:1) : il prend la sarcelle profonde ; logo et illustrations gardent l'aqua. */
+.ring .ring-stop-a {
+  stop-color: var(--arc-a);
+}
+.ring .ring-stop-b {
+  stop-color: var(--arc-b);
 }
 .ring-value {
   position: relative;
@@ -10452,17 +10482,17 @@ label {
   font-variant-numeric: tabular-nums;
 }
 .wizard-steps li.is-done > span {
-  border-color: var(--positive);
-  color: var(--positive);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .wizard-steps li.is-active {
   color: inherit;
   font-weight: 600;
 }
 .wizard-steps li.is-active > span {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--on-solid);
+  border-color: transparent;
+  background: var(--accent-grad);
+  color: var(--on-accent);
 }
 .wizard-panel {
   display: grid;

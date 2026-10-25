@@ -217,7 +217,7 @@ export function Notifications() {
       </p>
       {st.error && <p className="error" role="alert">{st.error}</p>}
       {!supported && <p className="notice"><Icon name="alert" /> Ce navigateur ne sait pas recevoir de notifications. Sur iPhone : ajoute Bank à l'écran d'accueil (Partager → Sur l'écran d'accueil), puis reviens ici.</p>}
-      {supported && permission === "denied" && <p className="notice"><Icon name="alert" /> Les notifications sont bloquées par le navigateur pour Bank : réautorise-les dans ses réglages de site.</p>}
+      {supported && permission === "denied" && <p className="notice warn"><Icon name="alert" /> Les notifications sont bloquées par le navigateur pour Bank : réautorise-les dans ses réglages de site.</p>}
       {st.data && (
         <>
           {here ? (
