@@ -340,10 +340,15 @@ describe("le parcours", () => {
 });
 
 describe("mouvement", () => {
-  type Started = { update: () => Promise<void>; done: Promise<void> };
+  type Started = { vtOld: boolean; run: () => Promise<void>; end: () => void; finished: Promise<void> };
   let started: Started[];
-  /** Préférence de mouvement du navigateur ; et une View Transitions API factice qui attend le nouvel état. */
-  const motion = (reduce: boolean) => {
+  const rootClass = (c: string) => document.documentElement.classList.contains(c);
+  /**
+   * Préférence de mouvement du navigateur, et une View Transitions API factice fidèle à la vraie : l'ancien état est
+   * capturé à l'appel (on note la classe vt-old), `update` est appelée plus tard, de façon asynchrone, et `finished`
+   * se résout après elle. En mode manuel, le test décide quand `update` tourne (run) et quand la transition finit (end).
+   */
+  const motion = (reduce: boolean, manual = false) => {
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
       value: (q: string) => ({ matches: reduce && q.includes("reduce"), media: q, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false }),
@@ -352,33 +357,43 @@ describe("mouvement", () => {
     Object.defineProperty(document, "startViewTransition", {
       configurable: true,
       value: (update: () => Promise<void>) => {
-        const done = update();
-        started.push({ update, done });
-        return { finished: done, ready: Promise.resolve(), updateCallbackDone: done, skipTransition() {} };
+        let end: () => void = () => undefined;
+        const finished = new Promise<void>((r) => { end = r; });
+        let ran: Promise<void> | null = null;
+        const entry: Started = { vtOld: rootClass("vt-old"), run: () => (ran ??= update()), end, finished };
+        started.push(entry);
+        if (!manual) setTimeout(() => { void entry.run().then(end); }, 0);
+        return { finished, ready: Promise.resolve(), updateCallbackDone: finished, skipTransition() {} };
       },
     });
   };
   afterEach(() => {
+    vi.useRealTimers();
     delete (window as { matchMedia?: unknown }).matchMedia;
     delete (document as { startViewTransition?: unknown }).startViewTransition;
+    try { window.sessionStorage.clear(); } catch { /* rien */ }
   });
+  const quiet = () => serve({ "/api/onboarding": () => ({ questions: [], answers: {}, suggestions: [] }), "/api/territory": () => ({ consents: { geocoding: false }, place: null }), "/api/consents": () => [] });
 
   it("a step change runs in a view transition, slides the right way and still lands the focus on the new title", async () => {
     motion(false);
     window.location.hash = "#/bienvenue/banque";
-    serve({ "/api/onboarding": () => ({ questions: [], answers: {}, suggestions: [] }), "/api/territory": () => ({ consents: { geocoding: false }, place: null }), "/api/consents": () => [] });
+    quiet();
     await journeyAt();
     await settle();
     await click("Plus tard");
     expect(started).toHaveLength(1);
+    // L'ancienne étape est capturée sous son nom de sortie ; le nom est rendu avant le changement.
+    expect(started[0]!.vtOld).toBe(true);
+    expect(rootClass("vt-old")).toBe(false);
     expect(document.documentElement.dataset.journeyDir).toBe("forward");
-    expect(document.documentElement.classList.contains("is-view-transition")).toBe(true);
-    // App rend la nouvelle étape au « hashchange » : la transition est libérée dès qu'elle est dans le DOM.
+    expect(rootClass("is-view-transition")).toBe(true);
+    // App rend la nouvelle étape au « hashchange » : la transition est libérée quand elle est dans le DOM.
     await journeyAt();
     await settle();
-    await started[0]!.done;
+    await started[0]!.finished;
     await settle();
-    expect(document.documentElement.classList.contains("is-view-transition")).toBe(false);
+    expect(rootClass("is-view-transition")).toBe(false);
     const h1 = host.querySelector("h1")!;
     expect(h1.textContent).toBe("Ton foyer");
     expect(document.activeElement).toBe(h1);
@@ -387,62 +402,206 @@ describe("mouvement", () => {
     await act(async () => { host.querySelector<HTMLAnchorElement>(".journey-progress a")!.click(); });
     expect(started).toHaveLength(2);
     expect(document.documentElement.dataset.journeyDir).toBe("back");
+    await settle();
     expect(window.location.hash).toBe("#/bienvenue/banque");
+    // La nouvelle étape naît pendant la transition (classe déjà posée, comme dans le navigateur)…
+    expect(rootClass("is-view-transition")).toBe(true);
     await journeyAt();
     await settle();
     expect(host.querySelector("h1")?.textContent).toBe("Ta banque");
     expect(document.activeElement).toBe(host.querySelector("h1"));
-    // Née dans une transition de vue, l'étape ne rejoue pas d'entrée CSS par-dessus (ni à la fin de la transition).
+    // … donc elle ne rejoue pas d'entrée CSS par-dessus la glissade (ni à la fin de la transition).
     expect(host.querySelector(".journey-body")?.className).toBe("journey-body");
   });
 
-  it("a transition that never sees the new step is released by its safety timer", async () => {
-    motion(false);
+  it("a step still loading holds the transition until its content is there", async () => {
+    motion(false, true);
     window.location.hash = "#/bienvenue/banque";
-    serve({ "/api/onboarding": () => ({ questions: [], answers: {}, suggestions: [] }), "/api/territory": () => ({ consents: { geocoding: false }, place: null }), "/api/consents": () => [] });
+    let answer: (v: unknown) => void = () => undefined;
+    const onboarding = new Promise((r) => { answer = r; });
+    serve({ "/api/territory": () => ({ consents: { geocoding: false }, place: null }), "/api/consents": () => [] });
+    const base = globalThis.fetch;
+    vi.stubGlobal("fetch", (url: string, init?: RequestInit) =>
+      url === "/api/onboarding" ? onboarding.then((v) => new Response(JSON.stringify(v), { status: 200, headers: { "content-type": "application/json" } })) : base(url, init));
     await journeyAt();
     await settle();
     await click("Plus tard");
     let released = false;
-    void started[0]!.done.then(() => { released = true; });
-    await act(async () => { await new Promise((r) => setTimeout(r, 500)); });
+    await act(async () => { void started[0]!.run().then(() => { released = true; }); });
+    await journeyAt();
+    await settle();
+    expect(host.querySelector(".journey-body .skeleton")).not.toBeNull();
+    expect(released).toBe(false); // le squelette ne glisse pas : on attend le formulaire
+    await act(async () => { answer({ questions: [], answers: {}, suggestions: [] }); });
+    await settle();
+    expect(host.querySelector(".journey-body .skeleton")).toBeNull();
     expect(released).toBe(true);
+  });
+
+  it("a transition that never sees the new step is released by its safety timer", async () => {
+    motion(false, true);
+    window.location.hash = "#/bienvenue/banque";
+    quiet();
+    await journeyAt();
+    await settle();
+    await click("Plus tard");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    let released = false;
+    void started[0]!.run().then(() => { released = true; }); // la nouvelle étape n'est jamais rendue
+    await act(async () => { vi.advanceTimersByTime(449); });
+    expect(released).toBe(false);
+    await act(async () => { vi.advanceTimersByTime(1); });
+    expect(released).toBe(true);
+  });
+
+  it("overlapping transitions: only the last one to finish takes the class away", async () => {
+    motion(false, true);
+    window.location.hash = "#/bienvenue/banque";
+    quiet();
+    await journeyAt();
+    await settle();
+    const links = () => [...host.querySelectorAll<HTMLAnchorElement>(".journey-progress a")];
+    await act(async () => { links()[1]!.click(); });
+    await act(async () => { links()[2]!.click(); });
+    expect(started).toHaveLength(2);
+    await act(async () => { void started[0]!.run(); void started[1]!.run(); });
+    expect(rootClass("is-view-transition")).toBe(true);
+    expect(rootClass("vt-old")).toBe(false);
+    // La première est coupée par la seconde et finit avant elle : la classe reste, la seconde glisse encore.
+    await act(async () => { started[0]!.end(); await started[0]!.finished; });
+    expect(rootClass("is-view-transition")).toBe(true);
+    await act(async () => { started[1]!.end(); await started[1]!.finished; });
+    expect(rootClass("is-view-transition")).toBe(false);
+  });
+
+  it("while a step is being sent, its button keeps the focus (aria-disabled, not disabled)", async () => {
+    motion(true);
+    window.location.hash = "#/bienvenue/banque";
+    quiet();
+    const base = globalThis.fetch;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => { release = r; });
+    let skips = 0;
+    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
+      const body = init?.body ? String(init.body) : "";
+      if (url !== "/api/start/steps/banque" || !body.includes("skip")) return base(url, init);
+      skips++;
+      return gate.then(() => base(url, init));
+    });
+    await journeyAt();
+    await settle();
+    const later = [...host.querySelectorAll<HTMLButtonElement>(".journey-skip button")][0]!;
+    later.focus();
+    await act(async () => { later.click(); });
+    expect(later.getAttribute("aria-disabled")).toBe("true");
+    expect(later.disabled).toBe(false);
+    expect(document.activeElement).toBe(later); // pas renvoyé sur <body> pendant l'attente
+    await act(async () => { later.click(); }); // un second clic pendant l'attente ne renvoie rien
+    expect(skips).toBe(1);
+    await act(async () => { release(); });
+    await settle();
+    expect(window.location.hash).toBe("#/bienvenue/foyer");
   });
 
   it("with reduced motion: no view transition, the focus moves at once, numbers are final straight away", async () => {
     motion(true);
-    serve({ "/api/onboarding": () => ({ questions: [], answers: {}, suggestions: [] }), "/api/territory": () => ({ consents: { geocoding: false }, place: null }), "/api/consents": () => [] });
+    quiet();
     await journeyAt();
     await settle();
     await click("Plus tard");
     expect(started).toHaveLength(0);
-    expect(document.documentElement.classList.contains("is-view-transition")).toBe(false);
+    expect(rootClass("is-view-transition")).toBe(false);
+    expect(rootClass("vt-old")).toBe(false);
     await journeyAt();
     await settle();
     expect(document.activeElement).toBe(host.querySelector("h1"));
     expect(host.querySelector("h1")?.textContent).toBe("Ton foyer");
-    expect(host.querySelector(".journey-body")?.classList.contains("is-forward")).toBe(true); // l'entrée CSS, coupée par le média
+    // L'entrée CSS de repli est posée en classe ; c'est la feuille de style qui la coupe (voir le test suivant).
+    expect(host.querySelector(".journey-body")?.classList.contains("is-forward")).toBe(true);
 
     await act(async () => root.unmount());
     root = createRoot(host);
     server.done = new Set(["banque", "foyer", "accords", "papier", "priorites"]);
+    window.sessionStorage.setItem("bank:start-seen-done", "2"); // même avec un compte plus ancien en mémoire
     await render(<StartChecklist />);
     await settle();
     expect(host.querySelector(".start-card .ring-value")?.textContent).toBe("5/8");
+    expect(host.querySelector(".start-card .ring-arc")?.getAttribute("stroke-dasharray")).toBe("62.5 100");
   });
 
-  it("without reduced motion, the checklist count climbs to its value", async () => {
+  it("the stylesheet cuts every animation under reduced motion, and the sky only drifts without that preference", async () => {
+    // La feuille telle qu'écrite (jsdom n'évalue pas les @media) : lue du disque, sans passer par Vite.
+    const fs = (await import(/* @vite-ignore */ "node:" + "fs")) as { readFileSync: (p: string, enc: "utf8") => string };
+    const cwd = (globalThis as unknown as { process: { cwd: () => string } }).process.cwd(); // vitest tourne dans frontend/
+    const css = fs.readFileSync(`${cwd}/src/styles.css`, "utf8");
+    const blocks = (media: string) => {
+      const out: string[] = [];
+      let at = css.indexOf(media);
+      while (at !== -1) {
+        let depth = 0;
+        let i = css.indexOf("{", at);
+        const start = i;
+        for (; i < css.length; i++) {
+          if (css[i] === "{") depth++;
+          else if (css[i] === "}" && --depth === 0) break;
+        }
+        out.push(css.slice(start, i));
+        at = css.indexOf(media, i);
+      }
+      return out.join("\n");
+    };
+    const reduce = blocks("@media (prefers-reduced-motion: reduce)");
+    expect(reduce).toMatch(/\*,\s*\*::before,\s*\*::after\s*\{\s*animation: none !important;\s*transition: none !important;/);
+    expect(reduce).toMatch(/::view-transition-new\(\*\)\s*\{\s*animation: none !important;/);
+    expect(reduce).toMatch(/\.finale-confetti\s*\{\s*display: none;/);
+    // Le ciel : son animation et son will-change n'existent que sans préférence ; ailleurs, aucun calque promu.
+    const free = blocks("@media (prefers-reduced-motion: no-preference)");
+    expect(free).toMatch(/\.journey-sky > i\s*\{\s*will-change: transform;\s*animation: sky-drift-a/);
+    const outside = css.replace(free, "");
+    expect(outside).not.toMatch(/\.journey-sky[^{]*\{[^}]*(will-change|animation:)/);
+    // Le ciel, la scène et les reflets finissent par s'arrêter : aucune boucle infinie dans le parcours.
+    const journey = css.slice(css.indexOf("démarrer : mouvement"), css.indexOf("/* Accords groupés"));
+    expect(journey).not.toContain("infinite");
+  });
+
+  it("without reduced motion, the checklist ring and its number move together, only when the count changed", async () => {
     motion(false);
+    // Une horloge d'images factice : chaque `step` fait avancer le temps et joue les rappels en attente.
+    let now = 0;
+    let queue: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => { queue.push(cb); return queue.length; });
+    vi.stubGlobal("cancelAnimationFrame", () => undefined);
+    const step = (ms: number) => act(async () => { now += ms; const q = queue; queue = []; q.forEach((cb) => cb(now)); });
     server.status = "in_progress";
     server.done = new Set(["banque", "foyer", "accords", "papier", "priorites"]);
     serve();
     await render(<StartChecklist />);
     await settle();
     const value = () => host.querySelector(".start-card .ring-value")?.textContent;
-    expect(value()).not.toBe("5/8"); // il compte encore
-    await act(async () => { await new Promise((r) => setTimeout(r, 1200)); });
+    const arc = () => Number(host.querySelector(".start-card .ring-arc")?.getAttribute("stroke-dasharray")?.split(" ")[0]);
+    // Première visite de la session : rien ne compte depuis zéro, l'anneau est à sa place.
     expect(value()).toBe("5/8");
-    expect(host.querySelector(".ring")?.getAttribute("aria-label")).toBe("5 éléments sur 8 faits"); // le nom ne compte pas
+    expect(arc()).toBe(62.5);
+    expect(host.querySelector(".ring")?.getAttribute("aria-label")).toBe("5 éléments sur 8 faits");
+
+    // Revenu sur Aujourd'hui après un réglage fait ailleurs : on part du compte vu la dernière fois.
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    server.done.add("prevenir");
+    await render(<StartChecklist />);
+    await settle();
+    await step(16);
+    expect(value()).toBe("5/8");
+    for (let t = 0; t < 30; t++) {
+      await step(40);
+      // L'arc et le chiffre suivent la même valeur : jamais « 5/8 » avec un arc déjà aux 6/8.
+      const shown = Number(value()!.split("/")[0]);
+      expect(Math.abs(arc() / 12.5 - shown)).toBeLessThanOrEqual(0.5);
+    }
+    expect(value()).toBe("6/8");
+    expect(arc()).toBe(75);
+    expect(host.querySelector(".ring")?.getAttribute("aria-label")).toBe("6 éléments sur 8 faits"); // le nom ne compte pas
+    expect(host.querySelector(".ring.is-live")).not.toBeNull(); // pas de tracé CSS par-dessus
   });
 
   it("an item done while the page is open ticks itself; nothing ticks on load", async () => {

@@ -6,8 +6,10 @@
 // ne compte pas) ; elle dit ce qui a été fait et ce qui reste, jamais « tout est prêt » à la place de l'anneau.
 // Pas de toast dans le parcours : il couvrirait les boutons de l'étape suivante au téléphone. La confirmation de
 // l'étape faite ou passée s'affiche en haut de la suivante, et son titre (qui reçoit le focus) la décrit.
-// Mouvement (§ 3.7) : chaque changement d'étape glisse dans le sens du parcours (View Transitions quand le navigateur
-// les connaît, entrée CSS sinon), chaque étape a sa petite scène animée, et la fin est un écran de fête dans la carte.
+// Mouvement (§ 3.7) : chaque changement d'étape est un passage de relais — l'ancienne s'efface sur place, la nouvelle
+// glisse dans le sens du parcours (View Transitions quand le navigateur les connaît, entrée CSS sinon) ; un seul
+// mouvement d'entrée à la fois. Chaque étape a sa petite scène, jouée la première fois qu'on la voit ; la fin est un
+// écran de fête dans la carte.
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type FormEvent, type MouseEvent, type ReactNode } from "react";
 import {
@@ -30,7 +32,7 @@ import { BankSetup, setupReady } from "./BankSetup";
 import { ConsentGroups } from "./ConsentGroups";
 import { Icon } from "./Icon";
 import { BankDone, Syncing } from "./Onboarding";
-import { useCountUp, viewTransition } from "../motion";
+import { useTween, viewTransition } from "../motion";
 import { Confetti, FinaleBadge, JourneySky, StepArt } from "./JourneyArt";
 import { Ring } from "./Ring";
 import { Tour } from "./Tour";
@@ -66,8 +68,13 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
   const heading = useRef<HTMLHeadingElement>(null);
   // La fin, quand il y a lieu : l'état renvoyé par le serveur et ce qui a été fait pendant ce passage.
   const [finale, setFinale] = useState<{ view: StartView; doneNow: number } | null>(null);
-  // Le changement d'étape en cours dans une transition de vue : on la libère quand la nouvelle étape est rendue.
+  // Le changement d'étape en cours dans une transition de vue : on la libère quand la nouvelle étape est prête.
   const transitionReady = useRef<(() => void) | null>(null);
+  const shell = useRef<HTMLDivElement>(null);
+  // Vrai dès le premier changement d'étape : la toute première étape entre ligne à ligne, les suivantes glissent.
+  const moved = useRef(false);
+  // Les scènes déjà jouées pendant ce passage : revenir sur une étape ne rejoue pas son image.
+  const artSeen = useRef(new Set<StartStepKey>());
 
   useEffect(() => {
     if (initial.data) setData(initial.data);
@@ -75,24 +82,53 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
 
   const key: StartStepKey | null = isStepKey(stepKey) ? stepKey
     : data ? data.journey.current ?? data.journey.steps.find((s) => !s.done && !s.skipped)?.key ?? "banque" : null;
-  const go = useCallback((k: StartStepKey) => {
+  /** Va à l'étape `k` ; `along` (la confirmation à montrer là-bas) est posé dans le même changement, après la capture
+   *  de l'étape qui part — sinon elle perdrait sa propre confirmation sous les yeux juste avant de s'effacer. */
+  const go = useCallback((k: StartStepKey, along?: () => void) => {
     const target = `#/bienvenue/${k}`;
-    if (window.location.hash === target) return;
+    if (window.location.hash === target) return along?.();
     // Le sens du glissement : en avant vers une étape plus loin dans l'ordre, en arrière sinon.
     const from = key ? ORDER.indexOf(key) : -1;
     document.documentElement.dataset.journeyDir = ORDER.indexOf(k) >= from ? "forward" : "back";
-    // On remonte d'abord : l'étape qui part glisse depuis son titre, pas depuis le bas d'un formulaire.
-    if (window.scrollY > 0) window.scrollTo?.({ top: 0, behavior: "instant" });
+    moved.current = true;
     viewTransition((ready) => {
       transitionReady.current = ready;
+      // On remonte une fois l'ancienne étape capturée (elle s'efface là où on la voyait) : la nouvelle arrive en haut.
+      if (window.scrollY > 0) window.scrollTo?.({ top: 0, behavior: "instant" });
+      along?.();
       window.location.hash = target;
     });
   }, [key]);
+  // La transition est libérée quand la nouvelle étape a son contenu, pas seulement son cadre : une étape qui charge
+  // (squelette) glisserait vide puis grandirait sous les yeux. Le garde-fou de 450 ms reste derrière.
   useLayoutEffect(() => {
-    transitionReady.current?.();
-    transitionReady.current = null;
+    const ready = transitionReady.current;
+    if (!ready) return;
+    const release = () => {
+      if (transitionReady.current !== ready) return;
+      transitionReady.current = null;
+      ready();
+    };
+    const body = shell.current?.querySelector(".journey-body");
+    if (!body || !body.querySelector(".skeleton") || typeof MutationObserver !== "function") return release();
+    const watch = new MutationObserver(() => {
+      if (!body.querySelector(".skeleton")) {
+        watch.disconnect();
+        release();
+      }
+    });
+    watch.observe(body, { childList: true, subtree: true });
+    return () => watch.disconnect();
   }, [key, !!finale]);
-  useEffect(() => () => { delete document.documentElement.dataset.journeyDir; }, []);
+  // Le parcours remplace le fond fixe de l'application par son ciel (classe sur la racine, pas de :has() sur <body>).
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add("in-journey");
+    return () => {
+      root.classList.remove("in-journey");
+      delete root.dataset.journeyDir;
+    };
+  }, []);
 
   // Le sens de l'entrée CSS (repli sans View Transitions) : on compare l'étape affichée à la précédente.
   const index = key ? ORDER.indexOf(key) : -1;
@@ -140,7 +176,7 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
       // La fête n'a lieu que si quelque chose a été fait pendant ce passage ; sinon on rentre, simplement.
       if (doneNow.current.size === 0) return onExit();
       const doneCount = doneNow.current.size;
-      document.documentElement.dataset.journeyDir = "forward";
+      document.documentElement.dataset.journeyDir = "finale";
       viewTransition((ready) => {
         transitionReady.current = ready;
         setFinale({ view, doneNow: doneCount });
@@ -163,9 +199,12 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
       if (nowDone && key !== "visite") doneNow.current.add(key);
       const text = nowDone ? `Étape faite : ${step?.title ?? ""}.${detail ? ` ${detail}` : ""}` : detail;
       const target = next.journey.current && next.journey.current !== key ? next.journey.current : nextAfter(next, key);
-      setFlashed(target && text ? { on: target, text } : null);
-      if (target) go(target);
-      else void finish(false);
+      const flash = () => setFlashed(target && text ? { on: target, text } : null);
+      if (target) go(target, flash);
+      else {
+        flash();
+        void finish(false);
+      }
     } catch (e) {
       setError((e as Error).message);
     }
@@ -180,9 +219,12 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
       const next = await api<StartView>(`/api/start/steps/${key}`, { method: "POST", body: { action: "skip" } });
       setData(next);
       const target = next.journey.current ?? nextAfter(next, key);
-      setFlashed(target ? { on: target, text: `Étape passée : ${step?.title ?? ""}. Elle t'attend dans « Bien démarrer », sur Aujourd'hui.`, skipped: true } : null);
-      if (target) go(target);
-      else await finish(false);
+      const flash = () => setFlashed(target ? { on: target, text: `Étape passée : ${step?.title ?? ""}. Elle t'attend dans « Bien démarrer », sur Aujourd'hui.`, skipped: true } : null);
+      if (target) go(target, flash);
+      else {
+        flash();
+        await finish(false);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -192,21 +234,21 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
 
   if (initial.error && !data) {
     return (
-      <div className="journey">
+      <div className="journey" ref={shell}>
         <div className="journey-body"><div className="notice danger" role="alert"><Icon name="alert" /><span>{initial.error}</span></div>
           <div className="actions"><button type="button" className="btn" onClick={initial.reload}>Réessayer</button><button type="button" className="btn ghost" onClick={quit}>Quitter</button></div>
         </div>
       </div>
     );
   }
-  if (!data || !key || !step) return <div className="journey"><JourneySky /><div className="journey-body"><Loading what="Ton parcours" /></div></div>;
+  if (!data || !key || !step) return <div className="journey" ref={shell}><JourneySky /><div className="journey-body"><Loading what="Ton parcours" /></div></div>;
   if (finale) return <Finale view={finale.view} doneNow={finale.doneNow} onExit={quit} />;
 
   const flash = flashed?.on === key ? flashed.text : null;
   const flashSkipped = flashed?.on === key && !!flashed.skipped;
   const copy = COPY[key];
   return (
-    <div className="journey">
+    <div className="journey" ref={shell}>
       <JourneySky />
       <header className="journey-top">
         <div className="brand"><img src="/icon.svg" alt="" />Bank</div>
@@ -223,7 +265,7 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
           </li>
         ))}
       </ol>
-      <StepFrame key={key} dir={dir}>
+      <StepFrame key={key} entry={moved.current ? dir : "first"}>
         <section className="card journey-card" aria-labelledby="journey-title">
           {/* Le titre reçoit le focus et se décrit par cette ligne : lue d'un trait, jamais coupée par une annonce. */}
           {flash && <p className={`journey-flash${flashSkipped ? " is-skipped" : ""}`} id="journey-flash"><Icon name={flashSkipped ? "arrow" : "check"} size={14} /> {flash}</p>}
@@ -232,7 +274,7 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
               <p className="journey-kicker"><Icon name="clock" size={14} /> {copy.time}{step.done ? " · déjà fait" : ""}</p>
               <h1 id="journey-title" ref={heading} tabIndex={-1} aria-describedby={flash ? "journey-flash" : undefined}>{step.title}</h1>
             </div>
-            <StepArt step={key} />
+            <StepArtOnce step={key} seen={artSeen.current} />
           </div>
           <p className="journey-goal">{copy.goal}</p>
           {error && <p className="error" role="alert">{error}</p>}
@@ -242,7 +284,8 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
         {/* Une étape déjà faite n'a rien à passer : « Continuer » suffit. La visite porte son propre « Passer ». */}
         {!step.done && !ownSkip(key) && (
           <div className="journey-skip">
-            <button type="button" className="btn ghost" disabled={busy} onClick={() => void skip()}>{copy.skip}</button>
+            {/* Occupé, le bouton reste focalisable (aria-disabled) : le focus n'est pas renvoyé sur <body> pendant l'attente. */}
+            <button type="button" className="btn ghost" aria-disabled={busy || undefined} onClick={() => { if (!busy) void skip(); }}>{copy.skip}</button>
           </div>
         )}
       </StepFrame>
@@ -251,12 +294,20 @@ export function Journey({ stepKey, bankResult = null, onExit }: { stepKey: strin
 }
 
 /**
- * Le cadre d'une étape. Son entrée CSS (glissement du côté où l'on va) ne joue que s'il n'est pas né dans une
- * transition de vue — décidé une fois, à sa naissance : la fin de la transition ne la rejoue pas.
+ * Le cadre d'une étape, et le seul maître de son entrée — décidé une fois, à sa naissance :
+ * né dans une transition de vue, il n'a rien à jouer (la transition le fait glisser) ; sinon il glisse lui-même du
+ * côté où l'on va (`is-forward` / `is-back`) ; la toute première étape (`is-first`) entre ligne après ligne.
  */
-function StepFrame({ dir, children }: { dir: "forward" | "back"; children: ReactNode }) {
+function StepFrame({ entry, children }: { entry: "forward" | "back" | "first"; children: ReactNode }) {
   const [inTransition] = useState(() => document.documentElement.classList.contains("is-view-transition"));
-  return <main className={`journey-body${inTransition ? "" : ` is-${dir}`}`}>{children}</main>;
+  return <main className={`journey-body${inTransition ? "" : ` is-${entry}`}`}>{children}</main>;
+}
+
+/** La scène de l'étape, animée la première fois qu'on la voit pendant ce passage, immobile ensuite. */
+function StepArtOnce({ step, seen }: { step: StartStepKey; seen: Set<StartStepKey> }) {
+  const [still] = useState(() => seen.has(step));
+  useEffect(() => { seen.add(step); }, [seen, step]);
+  return <StepArt step={step} still={still} />;
 }
 
 /**
@@ -270,7 +321,6 @@ function Finale({ view, doneNow, onExit }: { view: StartView; doneNow: number; o
   const ready = cl.total > 0 && cl.done >= cl.total;
   const left = steps.filter((s) => !s.done).length;
   const title = ready ? "Bank est prêt." : left === 0 ? "Parcours terminé !" : "C'est parti !";
-  const counted = useCountUp(cl.done, { duration: 1100, delay: 250 });
   useEffect(() => {
     document.title = `${title} · Bank`;
     window.scrollTo?.({ top: 0, behavior: "instant" });
@@ -282,16 +332,14 @@ function Finale({ view, doneNow, onExit }: { view: StartView; doneNow: number; o
       <header className="journey-top">
         <div className="brand"><img src="/icon.svg" alt="" />Bank</div>
       </header>
-      <StepFrame dir="forward">
+      <StepFrame entry="forward">
         <section className="card journey-card journey-finale" aria-labelledby="journey-title">
           <Confetti />
           <FinaleBadge />
           <h1 id="journey-title" ref={heading} tabIndex={-1} aria-describedby="finale-message">{title}</h1>
           <p className="journey-goal" id="finale-message">{finishMessage(view, doneNow)}</p>
           <div className="finale-count">
-            <Ring value={cl.done} max={cl.total} label={`${cl.done} éléments sur ${cl.total} faits`} size="lg">
-              {counted}<small>/{cl.total}</small>
-            </Ring>
+            <FinaleRing done={cl.done} total={cl.total} />
             <p><b>{plural(cl.done, "réglage fait", "réglages faits")}</b> sur {cl.total} dans « Bien démarrer ».<br />
               <span className="muted">La liste t'attend sur Aujourd'hui pour la suite.</span></p>
           </div>
@@ -310,6 +358,16 @@ function Finale({ view, doneNow, onExit }: { view: StartView; doneNow: number; o
         </section>
       </StepFrame>
     </div>
+  );
+}
+
+/** L'anneau de la fin : arc et chiffre suivent la même valeur, au rythme de l'arrivée du cadre qui les porte. */
+function FinaleRing({ done, total }: { done: number; total: number }) {
+  const value = useTween(done, { from: 0, duration: 900, delay: 420 });
+  return (
+    <Ring live value={value} max={total} label={`${done} éléments sur ${total} faits`} size="lg">
+      {Math.round(value)}<small>/{total}</small>
+    </Ring>
   );
 }
 
@@ -519,6 +577,7 @@ function HouseholdStep({ onDone }: { onDone: OnDone }) {
 
   const save = (e: FormEvent) => {
     e.preventDefault();
+    if (busy) return;
     const out: [string, unknown][] = [];
     for (const id of FIELDS) {
       if (id === "housing_cost" && !rent) continue;
@@ -594,7 +653,7 @@ function HouseholdStep({ onDone }: { onDone: OnDone }) {
       {invalid && <p className="error" role="alert">{invalid}</p>}
       {error && <p className="error" role="alert">{error}</p>}
       <div className="actions journey-actions">
-        <button className={`btn lg${busy ? " is-loading" : ""}`} disabled={busy}>Enregistrer mon foyer</button>
+        <button className={`btn lg${busy ? " is-loading" : ""}`} aria-disabled={busy || undefined}>Enregistrer mon foyer</button>
       </div>
       <Address />
     </form>
@@ -694,9 +753,9 @@ function ConsentsStep({ data, done, onDone, reload }: { data: StartView; done: b
       </p>
       <div className="actions journey-actions">
         {off > 0 && (
-          <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} disabled={busy} onClick={grantAll}>Activer ces {list.length} accords</button>
+          <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} aria-disabled={busy || undefined} onClick={() => { if (!busy) grantAll(); }}>Activer ces {list.length} accords</button>
         )}
-        <button type="button" className={`btn ${off > 0 ? "quiet " : ""}lg`} disabled={busy} onClick={done ? () => onDone() : keep}>
+        <button type="button" className={`btn ${off > 0 ? "quiet " : ""}lg`} aria-disabled={busy || undefined} onClick={() => { if (!busy) (done ? onDone() : keep()); }}>
           Continuer avec ces choix <Icon name="arrow" />
         </button>
       </div>
@@ -754,7 +813,7 @@ function PaperStep({ done, onDone }: { done: boolean; onDone: OnDone }) {
       )}
       {error && <p className="error" role="alert">{error}</p>}
       <div className="actions journey-actions">
-        <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} disabled={busy} onClick={() => input.current?.click()}>
+        <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} aria-disabled={busy || undefined} onClick={() => { if (!busy) input.current?.click(); }}>
           <Icon name="camera" /> Prendre en photo ou déposer
         </button>
         {done && <button type="button" className="btn quiet lg" onClick={() => onDone()}>Continuer</button>}
@@ -816,7 +875,7 @@ function PrioritiesStep({ onDone }: { onDone: OnDone }) {
       {invalid && <p className="error" role="alert">Choisis au moins une priorité, ou passe cette étape.</p>}
       {error && <p className="error" role="alert">{error}</p>}
       <div className="actions journey-actions">
-        <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} disabled={busy} onClick={save}>Garder ces priorités</button>
+        <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} aria-disabled={busy || undefined} onClick={() => { if (!busy) save(); }}>Garder ces priorités</button>
       </div>
     </div>
   );
@@ -858,7 +917,7 @@ function NotifyStep({ done, onDone, onLater }: { done: boolean; onDone: OnDone; 
           {supported && permission === "denied" && <p className="notice"><Icon name="alert" /><span>Les notifications sont bloquées pour Bank : réautorise-les dans les réglages du site.</span></p>}
           {usable && (
             <div className="actions journey-actions">
-              <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} disabled={busy || !st.data} onClick={activate}
+              <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} disabled={!st.data} aria-disabled={busy || undefined} onClick={() => { if (!busy) activate(); }}
                       aria-describedby="notify-consent">
                 <Icon name="bell" /> Accepter et activer les notifications
               </button>

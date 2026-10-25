@@ -55,7 +55,7 @@ export function Tour({ onFinish, onSkip, skipLabel = "Passer la visite", busy = 
       </ol>
       <div className="actions journey-actions">
         {last ? (
-          <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} disabled={busy} onClick={onFinish}>
+          <button type="button" className={`btn lg${busy ? " is-loading" : ""}`} aria-disabled={busy || undefined} onClick={() => { if (!busy) onFinish(); }}>
             Voir mon tableau de bord <Icon name="arrow" />
           </button>
         ) : (
@@ -64,7 +64,7 @@ export function Tour({ onFinish, onSkip, skipLabel = "Passer la visite", busy = 
       </div>
       <div className="tour-foot">
         {i > 0 && <button type="button" className="btn link" onClick={() => go(i - 1)}><Icon name="back" /> Précédent</button>}
-        {!last && onSkip && <button type="button" className="btn ghost" disabled={busy} onClick={onSkip}>{skipLabel}</button>}
+        {!last && onSkip && <button type="button" className="btn ghost" aria-disabled={busy || undefined} onClick={() => { if (!busy) onSkip(); }}>{skipLabel}</button>}
       </div>
     </div>
   );

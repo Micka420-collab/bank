@@ -72,6 +72,12 @@
   --d-base: 200ms;
   --d-slow: 320ms;
   --d-glow: 240ms;
+  /* Le parcours (§ 3.7) : sortie, entrée d'une surface, scène ; --ease-out pour les surfaces, --ease-spring pour les
+     petits objets seulement (pastilles, boutons de bascule, badges), --ease-in pour ce qui part. */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --d-exit: 120ms;
+  --d-enter: 380ms;
+  --d-scene: 600ms;
   --sidebar: 15.5rem;
   --content: 72rem;
 
@@ -2528,35 +2534,39 @@ input[aria-invalid="true"] {
   min-height: 2.75rem; /* la cible fait 44 px, le segment dessiné 8 px */
   border-radius: var(--r-pill);
 }
-/* Un segment : une piste, un remplissage (.journey-fill) qui s'étire de gauche à droite (transform seul). Les segments
-   à venir sont aplatis (scaleY), celui en cours et les faits prennent leur pleine hauteur avec un ressort. */
+/* Un segment : une piste, un remplissage (.journey-fill) qui s'étire de gauche à droite (transform seul, sur l'enfant :
+   la piste arrondie, elle, ne se déforme jamais). À venir et passés : une piste fine de vraie hauteur ; en cours et
+   faits : pleine hauteur. Le changement de hauteur se fait pendant le fondu de la transition de vue, sans transition. */
 .journey-seg {
   position: relative;
   display: grid;
   place-items: center;
   width: 100%;
-  height: 1rem;
+  height: 0.5rem;
   border-radius: var(--r-pill);
   overflow: hidden;
   background: color-mix(in srgb, var(--line-strong) 40%, var(--line));
   color: var(--on-accent);
-  transform: scaleY(0.5);
-  transition: transform var(--d-slow) var(--ease-spring);
+  transition: background-color var(--d-fast);
 }
 .journey-progress a:hover .journey-seg {
-  transform: scaleY(0.75);
+  background: var(--line-strong);
 }
+/* Passée : la même piste fine, plus soutenue — pas de rayures. */
 .journey-progress .is-skipped .journey-seg {
-  background: repeating-linear-gradient(90deg, var(--line-strong) 0 0.35rem, transparent 0.35rem 0.6rem);
+  background: var(--line-strong);
 }
 .journey-progress .is-done .journey-seg,
 .journey-progress [aria-current="step"] .journey-seg {
-  transform: none;
+  height: 1rem;
+}
+/* La lueur du segment en cours : une ombre posée une fois (pas de filtre sur un contenu qui s'anime). */
+.journey-progress [aria-current="step"] .journey-seg {
+  box-shadow: 0 4px 10px -2px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 .journey-fill {
   position: absolute;
   inset: 0;
-  border-radius: inherit;
   overflow: hidden;
   transform-origin: left center;
   transform: scaleX(0);
@@ -2564,24 +2574,21 @@ input[aria-invalid="true"] {
 .journey-progress .is-done .journey-fill {
   background: var(--positive);
   transform: none;
-  animation: seg-fill 520ms var(--ease-out) both;
+  animation: seg-fill var(--d-enter) var(--ease-out) both;
 }
 .journey-progress [aria-current="step"] .journey-fill {
   background: var(--accent-grad);
   transform: none;
-  animation: seg-fill 640ms var(--ease-out) 120ms both;
+  animation: seg-fill var(--d-scene) var(--ease-out) 120ms both;
 }
-/* Un reflet qui passe trois fois sur le segment en cours, puis s'arrête. */
+/* Un reflet passe une fois sur le segment en cours, juste après son remplissage. */
 .journey-progress [aria-current="step"] .journey-fill::after {
   content: "";
   position: absolute;
   inset: 0;
   background: linear-gradient(90deg, transparent, var(--glass-edge), transparent);
   transform: translateX(-100%);
-  animation: seg-sheen 1.6s ease-in-out 900ms 3;
-}
-.journey-progress [aria-current="step"] a {
-  filter: drop-shadow(0 4px 8px color-mix(in srgb, var(--accent) 45%, transparent));
+  animation: seg-sheen 1.2s var(--ease-out) 720ms 1;
 }
 .journey-progress .is-done .journey-seg .icon {
   position: relative;
@@ -2854,9 +2861,19 @@ input[aria-invalid="true"] {
 }
 
 /* ------------------------------------------------------------------ démarrer : mouvement (§ 3.7, § 3.10 e) */
-/* Le parcours vit : un ciel qui dérive, des étapes qui glissent dans le sens du parcours, une scène animée par
-   étape, des cartes qui se soulèvent. On n'anime que transform, opacity, filter et stroke-dashoffset ; mouvement
-   réduit : la règle globale coupe tout et chaque chose est dessinée dans son état final. */
+/* Le parcours vit, puis se pose : un ciel qui dérive lentement (et s'arrête), des étapes qui se passent le relais
+   dans le sens du parcours, une scène par étape jouée une fois, des cartes qui se soulèvent. Un seul maître pour
+   chaque entrée. On n'anime que transform, opacity et stroke-dashoffset (les ombres de survol des boutons et des
+   cartes, courtes, sont la seule exception) ; mouvement réduit : la règle globale coupe tout et chaque chose est
+   dessinée dans son état final. Durées : --d-exit, --d-enter, --d-scene ; --ease-spring pour les petits objets. */
+:root {
+  --step-shift: 32px;
+}
+@media (max-width: 760px) {
+  :root {
+    --step-shift: 20px; /* au téléphone, la carte arrive sans dépasser du bord */
+  }
+}
 .journey {
   position: relative;
   isolation: isolate;
@@ -2865,8 +2882,8 @@ input[aria-invalid="true"] {
   position: relative;
   z-index: 1;
 }
-/* Le ciel vivant remplace les halos fixes du fond pendant le parcours. */
-body:has(.journey-sky)::before {
+/* Le ciel vivant remplace les halos fixes du fond pendant le parcours (classe posée par Journey sur la racine). */
+:root.in-journey body::before {
   opacity: 0;
 }
 .journey-sky {
@@ -2876,47 +2893,64 @@ body:has(.journey-sky)::before {
   overflow: hidden;
   pointer-events: none;
 }
+/* Chaque halo est peint petit (18vmax) puis agrandi ×4 : un dégradé radial s'agrandit sans perte visible, pour un
+   seizième de la mémoire. */
 .journey-sky > i {
   position: absolute;
-  width: 72vmax;
-  height: 72vmax;
+  width: 18vmax;
+  height: 18vmax;
   border-radius: 50%;
-  will-change: transform;
-  animation: sky-drift-a 26s ease-in-out infinite alternate;
+  transform: scale(4);
 }
 .journey-sky > i:nth-child(1) {
-  left: -30vmax;
-  top: -34vmax;
+  left: -3vmax;
+  top: -7vmax;
   background: radial-gradient(closest-side, var(--halo-1), transparent);
 }
 .journey-sky > i:nth-child(2) {
-  right: -34vmax;
-  top: 4vh;
+  right: -7vmax;
+  top: calc(4vh + 27vmax);
   background: radial-gradient(closest-side, var(--halo-2), transparent);
-  animation-name: sky-drift-b;
-  animation-duration: 31s;
 }
 .journey-sky > i:nth-child(3) {
-  left: -14vmax;
-  bottom: -40vmax;
+  left: 13vmax;
+  bottom: -13vmax;
   background: radial-gradient(closest-side, var(--halo-3), transparent);
-  animation-name: sky-drift-c;
-  animation-duration: 23s;
+}
+/* La dérive : translation seule, lente, deux allers-retours (une minute et demie environ), puis le ciel se pose. */
+@media (prefers-reduced-motion: no-preference) {
+  .journey-sky > i {
+    will-change: transform;
+    animation: sky-drift-a 44s ease-in-out 2 alternate;
+  }
+  .journey-sky > i:nth-child(2) {
+    animation-name: sky-drift-b;
+    animation-duration: 52s;
+  }
+  .journey-sky > i:nth-child(3) {
+    animation-name: sky-drift-c;
+    animation-duration: 38s;
+  }
 }
 @keyframes sky-drift-a {
   to {
-    transform: translate3d(16vmax, 12vmax, 0) scale(1.15);
+    transform: translate3d(16vmax, 12vmax, 0) scale(4);
   }
 }
 @keyframes sky-drift-b {
   to {
-    transform: translate3d(-18vmax, 16vmax, 0) scale(0.88);
+    transform: translate3d(-18vmax, 16vmax, 0) scale(4);
   }
 }
 @keyframes sky-drift-c {
   to {
-    transform: translate3d(14vmax, -14vmax, 0) scale(1.1);
+    transform: translate3d(14vmax, -14vmax, 0) scale(4);
   }
+}
+/* Pendant qu'on remplit un champ, rien ne bouge autour. */
+.journey:has(input:focus, select:focus, textarea:focus) .journey-sky > i,
+.journey:has(input:focus, select:focus, textarea:focus) .journey-art {
+  animation-play-state: paused;
 }
 @media (max-width: 760px) {
   /* Au téléphone, deux halos : moins de calques à composer. */
@@ -2928,7 +2962,7 @@ body:has(.journey-sky)::before {
 /* « Étape 3 sur 7 » : le chiffre monte en place. */
 .journey-count-n {
   display: inline-block;
-  animation: count-flip 420ms var(--ease-spring) both;
+  animation: count-flip var(--d-slow) var(--ease-spring) both;
 }
 @keyframes count-flip {
   from {
@@ -2937,72 +2971,100 @@ body:has(.journey-sky)::before {
   }
 }
 
-/* Changement d'étape, repli CSS : l'étape entre du côté où l'on va, avec un léger ressort. */
+/* Changement d'étape, repli CSS (sans View Transitions) : l'étape glisse du côté où l'on va. */
 .journey-body.is-forward {
-  animation: step-in-forward 520ms var(--ease-spring) both;
+  animation: step-in-forward var(--d-enter) var(--ease-out) both;
 }
 .journey-body.is-back {
-  animation: step-in-back 520ms var(--ease-spring) both;
+  animation: step-in-back var(--d-enter) var(--ease-out) both;
 }
 @keyframes step-in-forward {
   from {
     opacity: 0;
-    transform: translate3d(40px, 0, 0) scale(0.985);
+    transform: translate3d(var(--step-shift), 0, 0);
   }
 }
 @keyframes step-in-back {
   from {
     opacity: 0;
-    transform: translate3d(-40px, 0, 0) scale(0.985);
+    transform: translate3d(calc(-1 * var(--step-shift)), 0, 0);
   }
 }
-/* Avec View Transitions : l'ancienne étape part d'un côté pendant que la nouvelle arrive de l'autre. */
+/* Avec View Transitions : un passage de relais, pas un fondu enchaîné. L'étape qui part est capturée sous un autre
+   nom (journey-out, classe vt-old) : elle s'efface vite, sur place, là où on la voyait — même descendu dans un long
+   formulaire ; la nouvelle (journey-step) arrive en haut juste après. Deux groupes séparés : les deux images ne se
+   superposent jamais en un mélange, et aucune taille ni position n'est interpolée entre elles. */
+:root.vt-old .journey-body {
+  view-transition-name: journey-out;
+}
+/* Pendant les ~0,5 s du relais, les clics vont à la page (déjà en place sous le calque) plutôt qu'au calque. */
+::view-transition {
+  pointer-events: none;
+}
 ::view-transition-old(root),
 ::view-transition-new(root) {
-  animation-duration: 220ms;
+  animation-duration: var(--d-base);
 }
-::view-transition-group(journey-step) {
-  animation-duration: 460ms;
-  animation-timing-function: var(--ease-out);
+::view-transition-group(journey-step),
+::view-transition-group(journey-out) {
+  animation: none;
 }
-::view-transition-old(journey-step) {
-  animation: vt-out-forward 260ms var(--ease-out) both;
+::view-transition-old(journey-out) {
+  animation: vt-out-forward var(--d-exit) var(--ease-in) both;
 }
 ::view-transition-new(journey-step) {
-  animation: vt-in-forward 560ms var(--ease-spring) 60ms both;
+  animation: vt-in-forward var(--d-enter) var(--ease-out) var(--d-exit) both; /* après la sortie : jamais deux titres */
 }
-:root[data-journey-dir="back"]::view-transition-old(journey-step) {
+:root[data-journey-dir="back"]::view-transition-old(journey-out) {
   animation-name: vt-out-back;
 }
 :root[data-journey-dir="back"]::view-transition-new(journey-step) {
   animation-name: vt-in-back;
 }
+/* La fin ne vient d'aucun côté : elle s'ouvre sur place. */
+:root[data-journey-dir="finale"]::view-transition-old(journey-out) {
+  animation-name: fade-out;
+}
+:root[data-journey-dir="finale"]::view-transition-new(journey-step) {
+  animation-name: vt-in-finale;
+}
 @keyframes vt-out-forward {
   to {
     opacity: 0;
-    transform: translateX(-56px) scale(0.97);
-  }
-}
-@keyframes vt-in-forward {
-  from {
-    opacity: 0;
-    transform: translateX(64px) scale(0.98);
+    transform: translateX(-24px);
   }
 }
 @keyframes vt-out-back {
   to {
     opacity: 0;
-    transform: translateX(56px) scale(0.97);
+    transform: translateX(24px);
+  }
+}
+@keyframes vt-in-forward {
+  from {
+    opacity: 0;
+    transform: translateX(var(--step-shift));
   }
 }
 @keyframes vt-in-back {
   from {
     opacity: 0;
-    transform: translateX(-64px) scale(0.98);
+    transform: translateX(calc(-1 * var(--step-shift)));
+  }
+}
+@keyframes vt-in-finale {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
   }
 }
 
-/* Le titre et sa scène, côte à côte ; le contenu de l'étape arrive ligne après ligne. */
+/* Le titre et sa scène, côte à côte. */
 .journey-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -3014,47 +3076,19 @@ body:has(.journey-sky)::before {
   gap: 0.5rem;
   align-content: center;
 }
-.journey-head-text > *,
-.journey-card > .journey-goal {
-  animation: rise 460ms var(--ease-out) both;
+/* La toute première étape (rien ne glisse encore) entre en trois temps, 40 ms d'écart : le titre, le but, le reste.
+   Une étape qui glisse n'en rajoute pas : la glissade est sa seule entrée. */
+.journey-body.is-first .journey-card > *,
+.journey-body.is-first .journey-skip {
+  animation: rise var(--d-slow) var(--ease-out) 60ms both;
 }
-.journey-head-text > :nth-child(2) {
-  animation-delay: 50ms;
+.journey-body.is-first .journey-card > .journey-goal {
+  animation-delay: 100ms;
 }
-.journey-card > .journey-goal {
-  animation-delay: 110ms;
+.journey-body.is-first .journey-card > .journey-goal ~ *,
+.journey-body.is-first .journey-skip {
+  animation-delay: 140ms;
 }
-.journey-body .journey-stack > *,
-.journey-body .journey-card > .stack > *,
-.journey-body .goals-grid > *,
-.journey-body .paths-grid > *,
-.journey-body .consent-list > li,
-.journey-body .journey-choices > *,
-.journey-finale .finale-list > li {
-  animation: rise 480ms var(--ease-out) both;
-  animation-delay: 160ms;
-}
-.journey-body .journey-stack > :nth-child(2) { animation-delay: 210ms; }
-.journey-body .journey-stack > :nth-child(3) { animation-delay: 260ms; }
-.journey-body .journey-stack > :nth-child(4) { animation-delay: 310ms; }
-.journey-body .journey-stack > :nth-child(5) { animation-delay: 360ms; }
-.journey-body .journey-stack > :nth-child(6) { animation-delay: 410ms; }
-.journey-body .journey-stack > :nth-child(n + 7) { animation-delay: 450ms; }
-.journey-body .goals-grid > :nth-child(1),
-.journey-body .paths-grid > :nth-child(1),
-.journey-body .consent-list > li:nth-child(1),
-.journey-body .journey-choices > :nth-child(1) { animation-delay: 220ms; }
-.journey-body .goals-grid > :nth-child(2),
-.journey-body .paths-grid > :nth-child(2),
-.journey-body .consent-list > li:nth-child(2),
-.journey-body .journey-choices > :nth-child(2) { animation-delay: 270ms; }
-.journey-body .goals-grid > :nth-child(3),
-.journey-body .paths-grid > :nth-child(3),
-.journey-body .consent-list > li:nth-child(3) { animation-delay: 320ms; }
-.journey-body .goals-grid > :nth-child(4),
-.journey-body .consent-list > li:nth-child(4) { animation-delay: 370ms; }
-.journey-body .goals-grid > :nth-child(n + 5),
-.journey-body .consent-list > li:nth-child(n + 5) { animation-delay: 420ms; }
 @keyframes rise {
   from {
     opacity: 0;
@@ -3062,12 +3096,19 @@ body:has(.journey-sky)::before {
   }
 }
 
-/* Les scènes : un disque, des formes qui « popent », se tracent ou volent en place, puis flottent doucement. */
+/* Les scènes : l'image entière « pope » (un calque HTML, composé à part), deux ou trois gestes signature dans le
+   SVG, le tout posé en moins de 0,7 s ; puis elle flotte quatre fois, et s'arrête. Déjà vue : immobile. */
 .journey-art {
   display: block;
   width: clamp(6.25rem, 27vw, 9rem);
   aspect-ratio: 1;
-  animation: art-float 5s ease-in-out 1.8s infinite alternate;
+  animation:
+    art-in 480ms var(--ease-spring) both,
+    art-float 5s ease-in-out 900ms 4 alternate;
+}
+.journey-art.is-still,
+.journey-art.is-still * {
+  animation: none;
 }
 .journey-art svg {
   display: block;
@@ -3079,6 +3120,12 @@ body:has(.journey-sky)::before {
   transform-box: fill-box;
   transform-origin: center;
 }
+@keyframes art-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6) rotate(-6deg);
+  }
+}
 @keyframes art-float {
   to {
     transform: translateY(-5px) rotate(-1.5deg);
@@ -3086,23 +3133,22 @@ body:has(.journey-sky)::before {
 }
 .art-disc {
   fill: var(--accent-soft);
-  animation: art-pop 620ms var(--ease-spring) both;
 }
 .a-pop {
-  animation: art-pop 560ms var(--ease-spring) both;
+  animation: art-pop var(--d-enter) var(--ease-spring) both;
 }
 .a-rise {
-  animation: art-rise 520ms var(--ease-out) both;
+  animation: art-rise var(--d-enter) var(--ease-out) both;
 }
 .a-draw {
   stroke-dasharray: 1;
-  animation: art-draw 900ms var(--ease-out) both;
+  animation: art-draw 500ms var(--ease-out) both;
 }
-.journey-art .d1 { animation-delay: 120ms; }
-.journey-art .d2 { animation-delay: 240ms; }
-.journey-art .d3 { animation-delay: 360ms; }
-.journey-art .d4 { animation-delay: 480ms; }
-.journey-art .d5 { animation-delay: 600ms; }
+.journey-art .d1 { animation-delay: 60ms; }
+.journey-art .d2 { animation-delay: 120ms; }
+.journey-art .d3 { animation-delay: 180ms; }
+.journey-art .d4 { animation-delay: 240ms; }
+.journey-art .d5 { animation-delay: 300ms; }
 @keyframes art-pop {
   from {
     opacity: 0;
@@ -3143,7 +3189,7 @@ body:has(.journey-sky)::before {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-/* Ta banque : la carte arrive en tournant, les flèches de synchro font deux tours. */
+/* Ta banque : la carte arrive en tournant, les flèches de synchro font un tour. */
 .art-coin,
 .art-chip {
   fill: var(--coin);
@@ -3155,7 +3201,7 @@ body:has(.journey-sky)::before {
 }
 .art-card {
   transform: rotate(-8deg);
-  animation: art-card 760ms var(--ease-spring) 80ms both;
+  animation: art-card var(--d-scene) var(--ease-spring) 40ms both;
 }
 @keyframes art-card {
   from {
@@ -3164,14 +3210,14 @@ body:has(.journey-sky)::before {
   }
 }
 .art-spin {
-  animation: art-spin 1.1s var(--ease-out) 500ms 2;
+  animation: art-spin var(--d-scene) var(--ease-out) 120ms 1;
 }
 @keyframes art-spin {
   to {
     transform: rotate(360deg);
   }
 }
-/* Ton foyer : la maison se dessine, la porte s'ouvre, le foyer arrive, le cœur bat deux fois. */
+/* Ton foyer : la maison se dessine, le foyer arrive devant, le cœur « pope » au-dessus du toit. */
 .art-house {
   fill: var(--surface);
   stroke: var(--accent);
@@ -3189,18 +3235,14 @@ body:has(.journey-sky)::before {
 .art-person.is-small {
   fill: var(--coin);
 }
+.art-foyer .a-rise {
+  animation-delay: 180ms;
+}
 .art-heart {
   fill: var(--grad-b);
-  animation:
-    art-pop 520ms var(--ease-spring) 700ms both,
-    art-beat 900ms ease-in-out 1.3s 2;
+  animation: art-pop var(--d-enter) var(--ease-spring) 280ms both;
 }
-@keyframes art-beat {
-  40% {
-    transform: scale(1.2);
-  }
-}
-/* Tes accords : le bouclier, la coche qui se trace, l'interrupteur qui bascule avec un rebond. */
+/* Tes accords : la coche se trace sur le bouclier, l'interrupteur bascule avec un rebond. */
 .art-toggle {
   fill: var(--line-strong);
 }
@@ -3211,14 +3253,14 @@ body:has(.journey-sky)::before {
   fill: var(--surface);
 }
 .a-knob {
-  animation: art-knob 640ms var(--ease-spring) both;
+  animation: art-knob 420ms var(--ease-spring) both;
 }
 @keyframes art-knob {
   from {
-    transform: translateX(-15px);
+    transform: translateX(-12px);
   }
 }
-/* Ton premier papier : la feuille vole jusque dans le dossier. */
+/* Ton premier papier : la feuille vole jusque dans le dossier, une petite coche se trace. */
 .art-folder-back {
   fill: var(--accent);
   opacity: 0.45;
@@ -3229,19 +3271,19 @@ body:has(.journey-sky)::before {
   stroke-width: 1.5;
 }
 .art-doc {
-  animation: art-doc 1s var(--ease-out) 150ms both;
+  animation: art-doc var(--d-scene) var(--ease-out) 60ms both;
 }
 @keyframes art-doc {
   0% {
     opacity: 0;
     transform: translate(34px, -40px) rotate(28deg) scale(0.8);
   }
-  55% {
+  60% {
     opacity: 1;
-    transform: translate(0, -14px) rotate(-6deg);
+    transform: translate(0, -10px) rotate(-5deg);
   }
-  80% {
-    transform: translate(0, 4px) rotate(1deg);
+  85% {
+    transform: translate(0, 3px) rotate(1deg);
   }
 }
 .art-ok {
@@ -3250,9 +3292,9 @@ body:has(.journey-sky)::before {
 .art-check.is-small {
   stroke-width: 3;
   stroke-dasharray: 1;
-  animation: art-draw 500ms var(--ease-out) 800ms both;
+  animation: art-draw 240ms var(--ease-out) 480ms both;
 }
-/* Tes priorités : la cible se pose cercle après cercle, la flèche s'y plante. */
+/* Tes priorités : la flèche se plante dans la cible. */
 .art-ring {
   fill: var(--surface);
   stroke: var(--line);
@@ -3274,7 +3316,7 @@ body:has(.journey-sky)::before {
   fill: var(--grad-b);
 }
 .art-arrow {
-  animation: art-arrow 640ms cubic-bezier(0.3, 0.9, 0.4, 1.25) 650ms both;
+  animation: art-arrow var(--d-enter) var(--ease-spring) 240ms both;
 }
 @keyframes art-arrow {
   from {
@@ -3282,7 +3324,7 @@ body:has(.journey-sky)::before {
     transform: translate(40px, -40px);
   }
 }
-/* Où te prévenir : la notification descend, la cloche sonne deux fois. */
+/* Où te prévenir : la notification descend, la cloche sonne une fois, la pastille « pope ». */
 .art-phone {
   fill: var(--surface);
   stroke: var(--ink);
@@ -3292,7 +3334,7 @@ body:has(.journey-sky)::before {
   fill: var(--ink);
 }
 .art-notif {
-  animation: art-notif 700ms var(--ease-spring) 350ms both;
+  animation: art-notif var(--d-enter) var(--ease-spring) 120ms both;
 }
 @keyframes art-notif {
   from {
@@ -3305,29 +3347,26 @@ body:has(.journey-sky)::before {
 }
 .journey-art .art-bell {
   transform-origin: 50% 0;
-  animation: art-bell 1.1s ease-in-out 600ms 2;
+  animation: art-bell var(--d-scene) ease-in-out 240ms 1;
 }
 @keyframes art-bell {
   15% {
     transform: rotate(16deg);
   }
-  30% {
+  35% {
     transform: rotate(-14deg);
   }
-  45% {
-    transform: rotate(10deg);
-  }
-  60% {
-    transform: rotate(-6deg);
+  55% {
+    transform: rotate(9deg);
   }
   75% {
-    transform: rotate(3deg);
+    transform: rotate(-4deg);
   }
 }
 .art-badge {
   fill: var(--negative);
 }
-/* La visite : l'écran central, puis ses voisins qui glissent de chaque côté ; l'onglet allumé parcourt l'île. */
+/* La visite : l'écran central, ses voisins qui glissent de chaque côté ; l'onglet allumé parcourt l'île, une fois. */
 .art-frame {
   fill: var(--surface);
   stroke: var(--ink);
@@ -3340,10 +3379,10 @@ body:has(.journey-sky)::before {
   fill: var(--surface-2);
 }
 .art-side.is-left {
-  animation: art-side-l 700ms var(--ease-spring) 280ms both;
+  animation: art-side-l var(--d-enter) var(--ease-out) 120ms both;
 }
 .art-side.is-right {
-  animation: art-side-r 700ms var(--ease-spring) 280ms both;
+  animation: art-side-r var(--d-enter) var(--ease-out) 120ms both;
 }
 @keyframes art-side-l {
   from {
@@ -3358,22 +3397,22 @@ body:has(.journey-sky)::before {
   }
 }
 .art-island-on {
-  animation: art-tabs 2.6s ease-in-out 900ms 2;
+  animation: art-tabs 720ms ease-in-out 200ms 1;
 }
 @keyframes art-tabs {
-  25% {
+  30% {
     transform: translateX(7px);
   }
-  50% {
+  60% {
     transform: translateX(14px);
   }
-  75% {
+  85% {
     transform: translateX(19px);
   }
 }
 
-/* Micro-interactions du parcours. Boutons : un ressort à l'appui, un reflet qui passe (une fois à l'arrivée, puis au
-   survol) sur l'action principale. */
+/* Micro-interactions du parcours. Boutons : un ressort à l'appui ; sur l'action principale, un reflet qui passe au
+   survol (jamais tout seul à l'arrivée). Occupé, un bouton reste focalisable (aria-disabled) et le dit. */
 .journey .btn {
   overflow: hidden;
   transition:
@@ -3384,9 +3423,15 @@ body:has(.journey-sky)::before {
     border-color var(--d-fast),
     color var(--d-fast);
 }
-.journey .btn:active:not(:disabled) {
+.journey .btn:active:not(:disabled, [aria-disabled="true"]) {
   transform: scale(0.95);
   transition-duration: 90ms;
+}
+.journey .btn[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: progress;
+  box-shadow: none;
+  transform: none;
 }
 .journey .btn.lg:not(.quiet, .ghost, .link)::after {
   content: "";
@@ -3396,20 +3441,11 @@ body:has(.journey-sky)::before {
   pointer-events: none;
   background: linear-gradient(110deg, transparent 30%, var(--glass-edge) 50%, transparent 70%);
   transform: translateX(-110%);
-  animation: btn-shine 1.1s var(--ease-out) 900ms both;
 }
-.journey .btn.lg:not(.quiet, .ghost, .link):hover::after {
-  animation: btn-shine-again 850ms var(--ease-out) both;
+.journey .btn.lg:not(.quiet, .ghost, .link, [aria-disabled="true"]):hover::after {
+  animation: btn-shine 850ms var(--ease-out) both;
 }
 @keyframes btn-shine {
-  from {
-    transform: translateX(-110%);
-  }
-  to {
-    transform: translateX(110%);
-  }
-}
-@keyframes btn-shine-again {
   from {
     transform: translateX(-110%);
   }
@@ -3422,7 +3458,7 @@ body:has(.journey-sky)::before {
   position: relative;
   overflow: hidden;
   transition:
-    transform var(--d-slow) var(--ease-spring),
+    transform var(--d-slow) var(--ease-out),
     box-shadow var(--d-base) var(--ease-out),
     border-color var(--d-fast);
 }
@@ -3433,7 +3469,7 @@ body:has(.journey-sky)::before {
   pointer-events: none;
   background: linear-gradient(115deg, transparent 35%, var(--glass-edge) 50%, transparent 65%);
   transform: translateX(-120%);
-  transition: transform 700ms var(--ease-out);
+  transition: transform var(--d-scene) var(--ease-out);
 }
 .journey .path:hover {
   transform: perspective(700px) rotateX(4deg) rotateY(-3deg) translateY(-5px);
@@ -3449,7 +3485,7 @@ body:has(.journey-sky)::before {
 .journey .path[aria-pressed="true"],
 .journey .goal[aria-pressed="true"],
 .journey .chip-radio:has(input:checked) {
-  animation: chosen-pop 440ms var(--ease-spring) both;
+  animation: chosen-pop var(--d-enter) var(--ease-spring) both;
 }
 @keyframes chosen-pop {
   0% {
@@ -3476,7 +3512,7 @@ body:has(.journey-sky)::before {
 }
 /* Les interrupteurs basculent avec un rebond et s'écrasent un peu sous le doigt. */
 .journey .switch span::after {
-  transition: transform 420ms var(--ease-spring);
+  transition: transform var(--d-enter) var(--ease-spring);
 }
 .journey .switch input:active + span::after {
   transform: scaleX(1.25);
@@ -3485,29 +3521,32 @@ body:has(.journey-sky)::before {
   transform: translateX(1.15rem) scaleX(1.25);
 }
 
-/* La fin : un badge qui « pope », des confettis dans la carte (jamais plein écran), ce qui est réglé qui se compte. */
+/* La fin : le badge « pope », sa coche se trace, puis — seulement là — une gerbe part du badge, sous le texte ; ce qui
+   est réglé se compte (anneau et chiffre d'un même mouvement). Tout est posé en moins d'une seconde et demie. */
 .journey-finale {
   position: relative;
   overflow: hidden;
+  isolation: isolate;
   justify-items: center;
   text-align: center;
   gap: 0.75rem;
 }
 .journey-finale > :not(.finale-confetti) {
   position: relative;
+  z-index: 1;
 }
 .journey-finale h1 {
-  animation: rise 520ms var(--ease-out) 260ms both;
+  animation: rise var(--d-slow) var(--ease-out) 160ms both;
 }
 .journey-finale .journey-goal {
   margin-inline: auto;
-  animation: rise 520ms var(--ease-out) 360ms both;
+  animation: rise var(--d-slow) var(--ease-out) 200ms both;
 }
 .finale-badge {
   display: block;
   width: 6rem;
   height: 6rem;
-  animation: finale-pop 760ms var(--ease-spring) 120ms both;
+  animation: finale-pop 520ms var(--ease-spring) 80ms both;
 }
 .finale-badge svg {
   display: block;
@@ -3519,7 +3558,7 @@ body:has(.journey-sky)::before {
   fill: var(--positive-soft);
   transform-box: fill-box;
   transform-origin: center;
-  animation: finale-halo 1.2s var(--ease-out) 350ms both;
+  animation: finale-halo 800ms var(--ease-out) 200ms both;
 }
 .finale-badge-check {
   fill: none;
@@ -3528,7 +3567,7 @@ body:has(.journey-sky)::before {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-dasharray: 1;
-  animation: art-draw 560ms var(--ease-out) 560ms both;
+  animation: art-draw 360ms var(--ease-out) 300ms both;
 }
 @keyframes finale-pop {
   0% {
@@ -3549,64 +3588,62 @@ body:has(.journey-sky)::before {
     transform: scale(1.12);
   }
 }
+/* La gerbe : quatorze éclats, sept de chaque côté, qui partent du centre du badge quand la coche est tracée,
+   montent un peu, retombent de 120 à 160 px et ont disparu aux 70 % — sous le texte, jamais à travers. */
 .finale-confetti {
   position: absolute;
   inset: 0;
+  z-index: 0;
   pointer-events: none;
 }
 .finale-confetti > i {
   position: absolute;
-  top: 4.5rem;
+  top: calc(clamp(1.25rem, 4vw, 2rem) + 3rem);
   left: 50%;
   width: 7px;
   height: 13px;
-  margin-left: -3.5px;
+  margin: -6.5px 0 0 -3.5px;
   border-radius: 2px;
   background: var(--c, var(--accent));
   opacity: 0;
-  animation: confetti 1.6s cubic-bezier(0.2, 0.7, 0.4, 1) both;
+  animation: confetti 1.1s var(--ease-out) 640ms both;
 }
 @keyframes confetti {
   0% {
     opacity: 0;
     transform: translate(0, 0) scale(0.4) rotate(0deg);
   }
-  8% {
+  10% {
     opacity: 1;
   }
-  35% {
-    transform: translate(calc(var(--dx) * 0.6), var(--up)) scale(1) rotate(calc(var(--r) * 0.4));
+  40% {
+    transform: translate(calc(var(--dx) * 0.7), var(--up)) scale(1) rotate(calc(var(--r) * 0.5));
   }
-  80% {
+  55% {
     opacity: 1;
   }
+  70%,
   100% {
     opacity: 0;
-    transform: translate(var(--dx), 360px) scale(0.9) rotate(var(--r));
+  }
+  100% {
+    transform: translate(var(--dx), var(--fall)) scale(0.9) rotate(var(--r));
   }
 }
-.finale-confetti > i:nth-child(1) { --dx: 88px; --up: -55px; --r: -270deg; --c: var(--grad-a); animation-delay: 97ms; animation-duration: 1530ms; border-radius: 50%; height: 8px; }
-.finale-confetti > i:nth-child(2) { --dx: -68px; --up: -82px; --r: -239deg; --c: var(--grad-b); animation-delay: 145ms; animation-duration: 1309ms; }
-.finale-confetti > i:nth-child(3) { --dx: -143px; --up: -67px; --r: 535deg; --c: var(--coin); animation-delay: 162ms; animation-duration: 1687ms; }
-.finale-confetti > i:nth-child(4) { --dx: -179px; --up: -43px; --r: 363deg; --c: var(--positive); animation-delay: 18ms; animation-duration: 1646ms; }
-.finale-confetti > i:nth-child(5) { --dx: -72px; --up: -57px; --r: -237deg; --c: var(--negative); animation-delay: 130ms; animation-duration: 1371ms; border-radius: 50%; height: 8px; }
-.finale-confetti > i:nth-child(6) { --dx: 67px; --up: -45px; --r: 341deg; --c: var(--accent); animation-delay: 27ms; animation-duration: 1596ms; }
-.finale-confetti > i:nth-child(7) { --dx: -158px; --up: -33px; --r: 229deg; --c: var(--grad-a); animation-delay: 122ms; animation-duration: 1787ms; }
-.finale-confetti > i:nth-child(8) { --dx: -107px; --up: -70px; --r: -312deg; --c: var(--grad-b); animation-delay: 191ms; animation-duration: 1553ms; }
-.finale-confetti > i:nth-child(9) { --dx: -151px; --up: -33px; --r: 543deg; --c: var(--coin); animation-delay: 9ms; animation-duration: 1636ms; border-radius: 50%; height: 8px; }
-.finale-confetti > i:nth-child(10) { --dx: -61px; --up: -65px; --r: 482deg; --c: var(--positive); animation-delay: 205ms; animation-duration: 1853ms; }
-.finale-confetti > i:nth-child(11) { --dx: -124px; --up: -56px; --r: 413deg; --c: var(--negative); animation-delay: 203ms; animation-duration: 1654ms; }
-.finale-confetti > i:nth-child(12) { --dx: -188px; --up: -37px; --r: 260deg; --c: var(--accent); animation-delay: 2ms; animation-duration: 1528ms; }
-.finale-confetti > i:nth-child(13) { --dx: 96px; --up: -36px; --r: 362deg; --c: var(--grad-a); animation-delay: 144ms; animation-duration: 1503ms; border-radius: 50%; height: 8px; }
-.finale-confetti > i:nth-child(14) { --dx: -145px; --up: -36px; --r: 354deg; --c: var(--grad-b); animation-delay: 28ms; animation-duration: 1529ms; }
-.finale-confetti > i:nth-child(15) { --dx: -65px; --up: -69px; --r: 569deg; --c: var(--coin); animation-delay: 12ms; animation-duration: 1785ms; }
-.finale-confetti > i:nth-child(16) { --dx: -177px; --up: -73px; --r: -508deg; --c: var(--positive); animation-delay: 188ms; animation-duration: 1305ms; }
-.finale-confetti > i:nth-child(17) { --dx: 130px; --up: -59px; --r: 510deg; --c: var(--negative); animation-delay: 16ms; animation-duration: 1578ms; border-radius: 50%; height: 8px; }
-.finale-confetti > i:nth-child(18) { --dx: 142px; --up: -49px; --r: 320deg; --c: var(--accent); animation-delay: 45ms; animation-duration: 1836ms; }
-.finale-confetti > i:nth-child(19) { --dx: -96px; --up: -74px; --r: -619deg; --c: var(--grad-a); animation-delay: 215ms; animation-duration: 1362ms; }
-.finale-confetti > i:nth-child(20) { --dx: -70px; --up: -66px; --r: 213deg; --c: var(--grad-b); animation-delay: 131ms; animation-duration: 1637ms; }
-.finale-confetti > i:nth-child(21) { --dx: 184px; --up: -61px; --r: -325deg; --c: var(--coin); animation-delay: 125ms; animation-duration: 1607ms; border-radius: 50%; height: 8px; }
-.finale-confetti > i:nth-child(22) { --dx: 164px; --up: -48px; --r: 460deg; --c: var(--positive); animation-delay: 115ms; animation-duration: 1374ms; }
+.finale-confetti > i:nth-child(1) { --dx: -150px; --up: -46px; --fall: 130px; --r: -260deg; --c: var(--grad-a); }
+.finale-confetti > i:nth-child(2) { --dx: 150px; --up: -46px; --fall: 130px; --r: 260deg; --c: var(--grad-b); animation-delay: 660ms; }
+.finale-confetti > i:nth-child(3) { --dx: -122px; --up: -78px; --fall: 150px; --r: 320deg; --c: var(--coin); animation-delay: 680ms; border-radius: 50%; height: 8px; }
+.finale-confetti > i:nth-child(4) { --dx: 122px; --up: -78px; --fall: 150px; --r: -320deg; --c: var(--positive); animation-delay: 650ms; border-radius: 50%; height: 8px; }
+.finale-confetti > i:nth-child(5) { --dx: -96px; --up: -60px; --fall: 140px; --r: 240deg; --c: var(--accent); animation-delay: 700ms; }
+.finale-confetti > i:nth-child(6) { --dx: 96px; --up: -60px; --fall: 140px; --r: -240deg; --c: var(--grad-a); animation-delay: 690ms; }
+.finale-confetti > i:nth-child(7) { --dx: -70px; --up: -84px; --fall: 160px; --r: -300deg; --c: var(--grad-b); animation-delay: 720ms; }
+.finale-confetti > i:nth-child(8) { --dx: 70px; --up: -84px; --fall: 160px; --r: 300deg; --c: var(--coin); animation-delay: 710ms; }
+.finale-confetti > i:nth-child(9) { --dx: -46px; --up: -52px; --fall: 120px; --r: 200deg; --c: var(--positive); animation-delay: 740ms; border-radius: 50%; height: 8px; }
+.finale-confetti > i:nth-child(10) { --dx: 46px; --up: -52px; --fall: 120px; --r: -200deg; --c: var(--accent); animation-delay: 730ms; border-radius: 50%; height: 8px; }
+.finale-confetti > i:nth-child(11) { --dx: -134px; --up: -30px; --fall: 125px; --r: 380deg; --c: var(--accent); animation-delay: 760ms; }
+.finale-confetti > i:nth-child(12) { --dx: 134px; --up: -30px; --fall: 125px; --r: -380deg; --c: var(--grad-b); animation-delay: 750ms; }
+.finale-confetti > i:nth-child(13) { --dx: -24px; --up: -70px; --fall: 145px; --r: -220deg; --c: var(--coin); animation-delay: 670ms; }
+.finale-confetti > i:nth-child(14) { --dx: 24px; --up: -70px; --fall: 145px; --r: 220deg; --c: var(--positive); animation-delay: 700ms; }
 .finale-count {
   display: flex;
   align-items: center;
@@ -3616,7 +3653,7 @@ body:has(.journey-sky)::before {
   border-radius: var(--r-card);
   background: var(--accent-wash);
   text-align: left;
-  animation: rise 520ms var(--ease-out) 460ms both;
+  animation: rise var(--d-slow) var(--ease-out) 240ms both;
 }
 .finale-count .ring {
   width: 4.5rem;
@@ -3640,6 +3677,7 @@ body:has(.journey-sky)::before {
   border-radius: var(--r-control);
   background: var(--surface-2);
   color: var(--ink-2);
+  animation: rise var(--d-slow) var(--ease-out) 280ms both;
 }
 .finale-list li.is-done {
   color: var(--ink);
@@ -3660,24 +3698,20 @@ body:has(.journey-sky)::before {
 }
 .finale-list .is-done .finale-tick .icon {
   stroke-dasharray: 30;
-  animation: check-draw 420ms var(--ease-out) both;
+  animation: check-draw var(--d-slow) var(--ease-out) 480ms both;
 }
-.journey-finale .finale-list > li:nth-child(1) { animation-delay: 600ms; }
-.journey-finale .finale-list > li:nth-child(2) { animation-delay: 650ms; }
-.journey-finale .finale-list > li:nth-child(3) { animation-delay: 700ms; }
-.journey-finale .finale-list > li:nth-child(4) { animation-delay: 750ms; }
-.journey-finale .finale-list > li:nth-child(5) { animation-delay: 800ms; }
-.journey-finale .finale-list > li:nth-child(6) { animation-delay: 850ms; }
-.finale-list > li:nth-child(1) .icon { animation-delay: 800ms; }
-.finale-list > li:nth-child(2) .icon { animation-delay: 850ms; }
-.finale-list > li:nth-child(3) .icon { animation-delay: 900ms; }
-.finale-list > li:nth-child(4) .icon { animation-delay: 950ms; }
-.finale-list > li:nth-child(5) .icon { animation-delay: 1000ms; }
-.finale-list > li:nth-child(6) .icon { animation-delay: 1050ms; }
+.finale-list > li:nth-child(2) { animation-delay: 320ms; }
+.finale-list > li:nth-child(3) { animation-delay: 360ms; }
+.finale-list > li:nth-child(n + 4) { animation-delay: 400ms; }
+.finale-list > li:nth-child(2) .icon { animation-delay: 520ms; }
+.finale-list > li:nth-child(3) .icon { animation-delay: 560ms; }
+.finale-list > li:nth-child(4) .icon { animation-delay: 600ms; }
+.finale-list > li:nth-child(5) .icon { animation-delay: 640ms; }
+.finale-list > li:nth-child(n + 6) .icon { animation-delay: 680ms; }
 .journey-finale .journey-actions {
   justify-content: center;
   width: min(100%, 26rem);
-  animation: rise 520ms var(--ease-out) 900ms both;
+  animation: rise var(--d-slow) var(--ease-out) 440ms both;
 }
 @media (max-width: 760px) {
   .finale-count {
@@ -3686,7 +3720,8 @@ body:has(.journey-sky)::before {
 }
 
 /* Mouvement réduit : tout est déjà à sa place (la règle globale coupe animations et transitions) ; pas de
-   confettis, pas de transition de vue, aucune carte qui se soulève. */
+   confettis, pas de transition de vue, aucune carte qui se soulève, le ciel immobile (sa dérive et son will-change
+   ne sont déclarés que sans préférence). */
 @media (prefers-reduced-motion: reduce) {
   .finale-confetti {
     display: none;
@@ -3749,7 +3784,7 @@ body:has(.journey-sky)::before {
   display: grid;
   gap: 0.6rem;
   justify-items: start;
-  animation: step-in-forward 480ms var(--ease-spring) both;
+  animation: step-in-forward var(--d-enter) var(--ease-out) both;
 }
 .tour-screen.is-back {
   animation-name: step-in-back;
@@ -3977,15 +4012,11 @@ body:has(.journey-sky)::before {
 .start-items a:active {
   transform: scale(0.985);
 }
-/* Les éléments arrivent l'un après l'autre ; l'icône se tourne vers toi au survol. */
+/* Aujourd'hui se voit tous les jours : les éléments apparaissent d'un seul fondu bref, sans cascade ; l'icône se tourne
+   vers toi au survol. */
 .start-items li {
-  animation: rise 440ms var(--ease-out) both;
-  animation-delay: 120ms;
+  animation: fade-in var(--d-base) var(--ease-out) both;
 }
-.start-items li:nth-child(2) { animation-delay: 170ms; }
-.start-items li:nth-child(3) { animation-delay: 220ms; }
-.start-items li:nth-child(4) { animation-delay: 270ms; }
-.start-items li:nth-child(n + 5) { animation-delay: 310ms; }
 .start-icon {
   transition: transform var(--d-slow) var(--ease-spring);
 }
@@ -4004,7 +4035,7 @@ body:has(.journey-sky)::before {
   stroke-dasharray: 30;
   animation: check-draw 500ms var(--ease-out) 160ms both;
 }
-/* « Reprendre le parcours » : un reflet passe une fois. */
+/* « Reprendre le parcours » : un reflet passe au survol (jamais tout seul, sur un écran vu chaque jour). */
 .start-resume {
   overflow: hidden;
 }
@@ -4016,10 +4047,9 @@ body:has(.journey-sky)::before {
   pointer-events: none;
   background: linear-gradient(110deg, transparent 30%, var(--glass-edge) 50%, transparent 70%);
   transform: translateX(-110%);
-  animation: btn-shine 1.1s var(--ease-out) 700ms both;
 }
-.start-card .ring-value {
-  animation: count-flip 420ms var(--ease-spring) 200ms both;
+.start-resume:hover::after {
+  animation: btn-shine 850ms var(--ease-out) both;
 }
 .start-items a:focus-visible {
   outline: 2px solid var(--accent);
@@ -9832,6 +9862,10 @@ label {
 }
 .ring.is-full svg {
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--positive) 45%, transparent));
+}
+/* Anneau piloté par script (useTween) : l'arc suit la même valeur que son chiffre, sans tracé CSS par-dessus. */
+.ring.is-live .ring-arc {
+  animation: none;
 }
 @keyframes ring-draw {
   from {

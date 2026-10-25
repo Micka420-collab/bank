@@ -2,12 +2,13 @@
 // « 5 sur 8 », les trois prochains éléments, chacun avec son lien direct. Tout vient du serveur (/api/start) : la
 // liste dit la même chose sur chaque appareil. La fête n'a lieu que si l'anneau se ferme après un geste fait pendant
 // que la page est ouverte, jamais au chargement. Terminée, elle se replie en pilule une semaine ; « Masquer » la
-// retire d'Aujourd'hui (elle reste dans Réglages). Mouvement (§ 3.7) : l'anneau se remplit et son chiffre se compte,
-// les éléments arrivent l'un après l'autre, et celui qui vient d'être fait sous tes yeux se coche en se traçant.
+// retire d'Aujourd'hui (elle reste dans Réglages). Mouvement (§ 3.7) : Aujourd'hui se voit tous les jours, donc rien ne
+// se rejoue à chaque visite — l'anneau et son chiffre ne bougent que si le compte a changé depuis la dernière fois qu'on
+// les a montrés (retenu pour la session), d'un même mouvement ; celui qui vient d'être fait sous tes yeux se coche.
 
 import { useEffect, useRef, useState } from "react";
 import { api, useApi, type StartItem, type StartView } from "../api";
-import { useCountUp } from "../motion";
+import { useTween } from "../motion";
 import { Icon, type IconName } from "./Icon";
 import { Ring } from "./Ring";
 import { useAsyncAction, useCelebrate } from "./ui";
@@ -74,7 +75,6 @@ export function StartChecklist() {
   // Ce qui vient d'être fait pendant que la page est ouverte (après un geste, jamais au chargement) : coché en direct.
   const doneBefore = useRef<Set<string> | null>(null);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
-  const counted = useCountUp(data?.checklist.done ?? 0);
 
   // L'anneau se ferme sous tes yeux (après un geste, pas au chargement) : la fête du § 3.6, une fois.
   useEffect(() => {
@@ -113,10 +113,7 @@ export function StartChecklist() {
   return (
     <section className="card start-card" aria-labelledby="start-title">
       <div className="start-head">
-        {/* La clé rejoue le remplissage de l'anneau quand le compte change. */}
-        <Ring key={cl.done} value={cl.done} max={cl.total} label={`${cl.done} éléments sur ${cl.total} faits`}>
-          {counted}<small>/{cl.total}</small>
-        </Ring>
+        <CountRing done={cl.done} total={cl.total} />
         <div className="start-intro">
           <h2 id="start-title">Bien démarrer</h2>
           <p className="muted">{todo.length === 1 ? "Plus qu'une chose à régler." : `${todo.length} choses à régler, à ton rythme.`}</p>
@@ -153,6 +150,37 @@ export function StartChecklist() {
       </div>
       {error && <p className="error" role="alert">{error}</p>}
     </section>
+  );
+}
+
+const SEEN = "bank:start-seen-done";
+
+/**
+ * L'anneau de « Bien démarrer » : il part du compte montré la dernière fois (cette session), pas de zéro — à la
+ * première visite il est simplement là. L'arc et le chiffre suivent la même valeur, donc ils ne se contredisent jamais.
+ */
+function CountRing({ done, total }: { done: number; total: number }) {
+  const [from] = useState(() => {
+    try {
+      const raw = window.sessionStorage.getItem(SEEN);
+      const n = raw === null ? NaN : Number(raw);
+      return Number.isFinite(n) ? n : undefined;
+    } catch {
+      return undefined;
+    }
+  });
+  const value = useTween(done, { from, delay: 120 });
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(SEEN, String(done));
+    } catch {
+      // stockage indisponible (navigation privée) : l'anneau sera juste à sa place la prochaine fois
+    }
+  }, [done]);
+  return (
+    <Ring live value={value} max={total} label={`${done} éléments sur ${total} faits`}>
+      {Math.round(value)}<small>/{total}</small>
+    </Ring>
   );
 }
 
