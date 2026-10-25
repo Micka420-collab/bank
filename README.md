@@ -748,7 +748,7 @@ plateformes qui vérifient chaque signature et refusent les droits trop larges, 
 de référence — fins de mois, heures d'été et d'hiver, pauses, refus —, alertes de cours franchies une seule fois par
 deux relèves simultanées, barèmes relus sur les vraies réponses de la CRE, de la Caisse des Dépôts, de
 l'INSEE et d'OpenFisca, jours fériés, vacances scolaires et géocodage sur les vraies réponses des services publics),
-couverture 92 %, 242 tests front (parcours de première ouverture,
+couverture 92 %, 243 tests front (parcours de première ouverture,
 coffre et partage d'un papier, démarches, opportunités, veille, assistant, chat interactif et réponse en direct,
 notifications sur l'appareil, plan B, crédits, retraite, logement, sauvegardes, boîte mail, crypto et plateformes reliées,
 alertes de cours, pilote, pilote vs consigne, déclarations, corrélations, année qui vient, passkeys, erreurs qui

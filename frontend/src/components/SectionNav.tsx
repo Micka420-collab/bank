@@ -86,9 +86,14 @@ export function SectionNav({ items, label = "Sections de la page" }: { items: Se
     return () => window.clearInterval(timer);
   }, [ids]);
   useEffect(() => {
-    // La puce en cours reste visible dans la rangée (qui défile de côté sur un téléphone), sans bouger la page.
+    // La puce en cours reste visible dans la rangée (qui défile de côté sur un téléphone), sans bouger la page :
+    // seule la rangée défile. Pas de scrollIntoView, qui sur une barre collante ramène la page à sa place d'origine.
     const active = document.querySelector<HTMLElement>('.secnav button[aria-current="true"]');
-    active?.scrollIntoView?.({ inline: "nearest", block: "nearest" });
+    const row = active?.closest("ul");
+    if (!active || !row) return;
+    const left = active.offsetLeft - row.offsetLeft;
+    if (left < row.scrollLeft) row.scrollLeft = left;
+    else if (left + active.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = left + active.offsetWidth - row.clientWidth;
   }, [current]);
   const shown = items.filter((i) => present.includes(i.id));
   if (shown.length < 3) return null;
