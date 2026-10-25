@@ -114,40 +114,51 @@ prises, le Chromium sans tête de Playwright n'a pas ses bibliothèques système
 
 ### 3.3 Jetons
 
+**Palette « Lagon »** (choisie par Micka le 25/10/2026, voir l'historique en fin de section) : turquoise, aqua et
+sarcelle sous un soleil jaune, sur un ciel très clair ; la nuit, l'océan profond. Elle remplace la première
+palette violette (lavande / nuit violette) sans toucher aux noms : seules les valeurs changent.
+
 Les noms existants (`--bg`, `--surface`, `--ink`, `--accent`, `--positive`…) et leurs alias historiques sont
 gardés : les composants actuels changent d'apparence sans changer de classe. Les nouveaux jetons s'ajoutent.
 Les trois blocs habituels sont tenus à jour ensemble : `:root` (clair), `@media (prefers-color-scheme: dark)
 :root:not([data-theme="light"])`, et `:root[data-theme="dark"]` (choix de `theme.ts`, qui peint aussi
-`meta[name="theme-color"]` : `#f4f3fb` / `#0c0b1d`).
+`meta[name="theme-color"]` : `#effafc` / `#03141c`, comme `index.html` ; le manifeste PWA prend `#EFFAFC` en
+fond et `#16C8E4` en couleur de thème). Le logo (`public/icon.svg`, rail, parcours, connexion) est le dégradé
+de l'accent clair, turquoise `#16C8E4` → aqua `#2FDCB4`, trait `#04222A` et point du jour soleil, le même dans
+les deux thèmes.
 
 #### Fond et halos
 
 | Jeton | Clair | Sombre | Rôle |
 |---|---|---|---|
-| `--bg` | `#F4F3FB` | `#0C0B1D` | Fond de page (lavande très pâle / nuit violette) |
-| `--halo-1` (violet) | `#8B7CFF` à 40 % | `#6D5CFF` à 35 % | Haut gauche, derrière le rail et le chiffre du jour |
-| `--halo-2` (rose) | `#FF8FB8` à 40 % | `#FF5FA2` à 30 % | Haut droit |
-| `--halo-3` (menthe) | `#5EE0C0` à 40 % | `#22C9A0` à 28 % | Bas gauche ; teinte « tout va bien » |
-| `--halo-4` (soleil) | `#FFC65C` à 40 % | `#F7B73B` à 24 % | Bas droit ; teinte « pièce », allumée par les gains |
+| `--bg` | `#EFFAFC` | `#03141C` | Fond de page (ciel très clair / océan profond) |
+| `--halo-1` (aqua) | `#22D3EE` à 36 % | `#22D3EE` à 26 % | Haut gauche, derrière le rail et le chiffre du jour |
+| `--halo-2` (turquoise / sarcelle) | `#2DD4BF` à 38 % | `#14B8A6` à 28 % | Haut droit ; teinte « tout va bien » |
+| `--halo-3` (soleil) | `#FFD54A` à 48 % | `#FACC15` à 16 % | Bas gauche ; teinte « pièce », allumée par les gains |
+| `--halo-4` (ciel) | `#60A5FA` à 30 % | `#3B82F6` à 26 % | Bas droit |
 
 Les halos sont quatre `radial-gradient` (rayon 38–48 vmax, transparent au bord) sur un calque
 `body::before` en `position: fixed; inset: 0; z-index: -1; pointer-events: none` : aucune image, aucun script,
-rien à recalculer au défilement. Pas d'animation continue. Sur téléphone, deux halos seulement (violet en haut,
-menthe en bas) pour garder le fond calme sous le pouce.
+rien à recalculer au défilement. Pas d'animation continue. Sur téléphone, deux halos seulement (aqua en haut,
+soleil en bas) pour garder le fond calme sous le pouce. Le rôle d'un halo est le même dans les deux thèmes
+(`--halo-2` sarcelle, `--halo-3` soleil) : les états qui s'en servent ne changent pas de couleur avec le thème.
+Halo du héros « Aujourd'hui » : `ok` → `--halo-2`, `tight` → `--halo-3`, `risk` → `--negative` à 30 % (la
+palette n'a pas de halo chaud) ; tirelire et fête « pièce » → `--halo-3`, fête « fait » → `--halo-2`.
 
 #### Verre
 
 | Jeton | Clair | Sombre | Usage |
 |---|---|---|---|
-| `--glass` | `rgba(255,255,255,.74)` | `rgba(26,24,56,.70)` | Grandes surfaces : héros (posé sur son halo, sans flou), rail, toasts, feuille de l'assistant |
-| `--glass-strong` | `rgba(255,255,255,.88)` | `rgba(26,24,56,.86)` | Cartes ordinaires, listes, formulaires, tableaux (beaucoup de texte) |
+| `--glass` | `rgba(250,255,255,.74)` | `rgba(8,36,50,.70)` | Grandes surfaces : héros (posé sur son halo, sans flou), rail, toasts, feuille de l'assistant |
+| `--glass-strong` | `rgba(250,255,255,.88)` | `rgba(8,36,50,.86)` | Cartes ordinaires, listes, formulaires, tableaux (beaucoup de texte) |
 | `--glass-blur` | `blur(20px) saturate(160%)` | `blur(24px) saturate(140%)` | **Seulement** ce qui est fixe ou collant : rail, barre d'onglets (flou 28 px, verre à 90 %), toasts, assistant, modales. Pas le héros : il défile, le flou s'y recalculerait à chaque image pour un effet invisible |
 | `--glass-edge` | `rgba(255,255,255,.70)` | `rgba(255,255,255,.10)` | Bordure 1 px |
 | `--glass-shine` | `inset 0 1px 0 rgba(255,255,255,.90)` | `inset 0 1px 0 rgba(255,255,255,.08)` | Reflet du haut, comme une arête de verre |
-| `--glass-shadow` | `0 12px 32px -14px rgba(52,40,120,.28), 0 2px 6px -2px rgba(52,40,120,.10)` | `0 20px 40px -20px rgba(0,0,0,.70)` | Élévation |
-| `--surface` (opaque) | `#FFFFFF` | `#17152F` | Repli sans transparence, champs de saisie, menus |
-| `--surface-2` | `#F0EEFA` | `#201D40` | Creux (pistes de jauge, segments) |
-| `--line` / `--line-strong` | `#E4E1F3` / `#8C89B0` | `#2C2858` / `#6F6B9E` | Traits ; `--line-strong` borde les champs (3,3:1 / 3,5:1, ≥ 3:1 exigé) |
+| `--glass-shadow` | `0 12px 32px -14px rgba(11,74,90,.28), 0 2px 6px -2px rgba(11,74,90,.10)` | `0 20px 40px -20px rgba(0,0,0,.70)` | Élévation (ombre bleu-vert en clair, jamais grise) |
+| `--surface` (opaque) | `#FFFFFF` | `#0A2230` | Repli sans transparence, champs de saisie, menus |
+| `--surface-2` | `#E5F6F8` | `#0F2D3D` | Creux (pistes de jauge, segments) |
+| `--line` / `--line-strong` | `#D2EBEE` / `#6B98A1` | `#173C4D` / `#5F8E9C` | Traits ; `--line-strong` borde les champs (3,2:1 / 4,5:1, ≥ 3:1 exigé) |
+| `--chart-grid` | `#DCF0F2` | `#123445` | Grille des graphiques |
 
 Pourquoi les cartes ordinaires n'ont pas de flou : les halos sont déjà des dégradés très doux, un `backdrop-filter`
 derrière une carte n'y changerait presque rien à l'œil mais coûterait une couche de composition par carte. Elles
@@ -158,14 +169,22 @@ transparaît.
 
 | Jeton | Clair | Sombre |
 |---|---|---|
-| `--accent` (liens, anneau de focus, icônes actives) | `#4B3BEA` | `#A99DFF` |
-| `--accent-grad` (bouton principal, onglet actif, anneau de progression) | `linear-gradient(135deg, #5B4BFF, #9B3FD8)` | `linear-gradient(135deg, #8C7CFF, #D07BFF)` |
-| `--on-accent` | `#FFFFFF` | `#0C0B1D` |
-| `--accent-soft` / texte dessus `--accent-ink` | `#EBE8FF` / `#3F32C8` | `#2A2560` / `#C9C1FF` |
-| `--glow` (survol, focus des boutons principaux) | `0 0 0 4px rgba(91,75,255,.18), 0 10px 28px -8px rgba(123,69,236,.60)` | `0 0 0 4px rgba(169,157,255,.22), 0 10px 32px -6px rgba(208,123,255,.55)` |
-| `--glow-coin` (gain) | `0 0 0 4px rgba(233,164,0,.22), 0 10px 28px -8px rgba(233,164,0,.65)` | `0 0 0 4px rgba(247,197,72,.22), 0 10px 32px -6px rgba(247,197,72,.50)` |
+| `--accent` (liens, anneau de focus, icônes actives) | `#0B7480` | `#4FE0F0` |
+| `--accent-grad` (bouton principal, onglet actif, anneau de progression, logo) | `linear-gradient(135deg, #16C8E4, #2FDCB4)` | `linear-gradient(135deg, #22D3EE, #5EEAD4)` |
+| `--on-accent` (texte sur `--accent-grad`) | `#04222A` | `#03202A` |
+| `--on-solid` (texte sur un aplat plein `--accent`, `--positive`, `--negative`, `--warning`) | `#FFFFFF` | `#03141C` |
+| `--accent-soft` / texte dessus `--accent-ink` | `#D6F5F7` / `#08636D` | `#0E3A47` / `#8CF0FA` |
+| `--glow` (survol, focus des boutons principaux) | `0 0 0 4px rgba(22,200,228,.18), 0 10px 28px -8px rgba(47,220,180,.55)` | `0 0 0 4px rgba(34,211,238,.22), 0 10px 32px -6px rgba(94,234,212,.55)` |
+| `--glow-coin` (gain) | `0 0 0 4px rgba(245,184,0,.22), 0 10px 28px -8px rgba(245,184,0,.60)` | `0 0 0 4px rgba(255,210,63,.22), 0 10px 28px -8px rgba(255,210,63,.60)` |
+| `--glow-ok` (fait) | `0 0 0 4px rgba(11,122,85,.18), 0 8px 22px -8px rgba(11,122,85,.50)` | `0 0 0 4px rgba(95,224,173,.18), 0 8px 22px -8px rgba(95,224,173,.50)` |
 | `--r-pill` | `999px` | |
 | `--r-card` / `--r-hero` / `--r-control` | `22px` / `32px` / `14px` | |
+
+Le dégradé « Lagon » est lumineux : le texte dessus est **sombre** (`--on-accent`) dans les deux thèmes. Un
+aplat plein `--accent` clair (`#0B7480`) est trop foncé pour ce texte sombre (3,0:1) : bulle de l'utilisateur,
+puce de démarche active, pastille pressée, lien d'évitement, numéro d'étape prennent `--on-solid` (blanc en
+clair, encre océan en sombre). Les compteurs posés sur une puce en dégradé (`.chip-count`, état du sous-menu)
+sont des pastilles `--surface` avec texte `--accent-ink`.
 
 Le rayon passe de 16 à 22 px pour les cartes, 32 px pour le héros ; boutons, pastilles, segments, recherche
 et barre d'onglets en pilule (`--r-pill`) ; champs de saisie à 14 px (un champ en pilule se lit mal sur
@@ -175,53 +194,76 @@ plusieurs lignes). `--r-s`, `--r-m`, `--r-l` deviennent des alias de `--r-contro
 
 | Jeton | Clair | Sombre | Pastille (`-soft`) clair / sombre |
 |---|---|---|---|
-| `--positive` (argent arrivé, fait, relié) | `#127A4C` | `#5AD39B` | `#DDF5EA` / `#163A2C` |
-| `--negative` (action requise : découvert, échéance ratée) | `#C42B4E` | `#FF8597` | `#FDE6EC` / `#3F1A28` |
-| `--warning` (à surveiller) | `#8F5407` | `#F2B65B` | `#FDF0D9` / `#3A2C14` |
-| `--coin` (ce qu'on peut gagner ; remplissage seulement) | `#E9A400` | `#F7C548` | `#FFF1C7` / `#3B2F10` |
-| `--coin-ink` (texte « pièce ») | `#7A4D00` | `#F9D77E` | |
-| `--ink` / `--ink-2` / `--ink-3` | `#17163A` / `#4A4870` / `#5B5980` | `#F1EFFF` / `#BDB9E0` / `#A29ECB` | |
+| `--positive` (argent arrivé, fait, relié) | `#0B7A55` | `#5FE0AD` | `#D8F5EA` / `#0F3A2E` |
+| `--negative` (action requise : découvert, échéance ratée) | `#C2304B` | `#FF8A9E` | `#FDE5EA` / `#3D1822` |
+| `--warning` (à surveiller) | `#8A5300` | `#FFD166` | `#FFF2CF` / `#382C0E` |
+| `--coin` (ce qu'on peut gagner ; remplissage seulement) | `#F5B800` | `#FFD23F` | `#FFF3C4` / `#3A300C` |
+| `--coin-ink` (texte « pièce ») | `#7A4C00` | `#FFE08A` | |
+| `--ink` / `--ink-2` / `--ink-3` | `#082730` / `#2F5560` / `#41656F` | `#E9FBFF` / `#A8D4DD` / `#8DBCC6` | |
+
+#### Teintes de données (crypto, graphiques de l'assistant)
+
+| Jeton | `--c1` | `--c2` | `--c3` | `--c4` | `--c5` | `--c6` |
+|---|---|---|---|---|---|---|
+| Clair | `#0B7480` sarcelle | `#2F6FE0` bleu | `#D99A00` soleil | `#0FA37F` émeraude | `#E0566E` corail | `#5A7A88` ardoise |
+| Sombre | `#4FE0F0` | `#8FB4FF` | `#FFD23F` | `#5FE0AD` | `#FF8A9E` | `#9AB8C2` |
+| Contraste sur verre clair · sombre | 5,1 · 9,0 | 4,3 · 6,9 | 2,3 · 9,9 | 2,9 · 8,7 | 3,4 · 6,4 | 4,2 · 6,8 |
+
+Les donuts de l'assistant (`components/chat/Blocks.tsx`) prennent ces jetons (`var(--c1)`…) quand le bloc ne donne
+pas sa couleur. En clair, `--c3` et `--c4` restent sous 3:1 : une teinte ne porte jamais seule l'information, la
+légende donne le nom et la valeur de chaque part. Les couleurs de catégories (`categorize.py`) sont des données
+du serveur, hors de ces jetons.
 
 #### Contrastes vérifiés (WCAG 2.2, texte ≥ 4,5:1, éléments d'interface ≥ 3:1)
 
-Calculés sur le fond **réel** : verre composé au-dessus du pic du halo le plus défavorable (violet en clair,
-menthe en sombre), avec les opacités ci-dessus. Script de calcul : luminance relative sRGB, composition alpha.
+Calculés sur le fond **réel** : verre composé au-dessus du pic du halo le plus défavorable, minimum sur les
+quatre halos, avec les opacités ci-dessus (script `gen.py` de la palette : luminance relative sRGB, composition
+alpha).
 
-| Texte | sur `--glass` clair (pire : `#F1F0FE`) | sur `--glass-strong` clair (`#F9F8FF`) | sur `--glass` sombre (pire : `#18243B`) | sur `--glass-strong` sombre (`#191E39`) |
+| Texte | sur `--glass` clair (pire halo) | sur `--glass-strong` clair | sur `--glass` sombre (pire halo) | sur `--glass-strong` sombre |
 |---|---|---|---|---|
-| `--ink` | 15,3 | 16,4 | 13,7 | 14,5 |
-| `--ink-2` | 7,6 | 8,1 | 8,3 | 8,7 |
-| `--ink-3` | 5,8 | 6,2 | 6,1 | 6,5 |
-| `--accent` | 6,0 | 6,4 | 6,6 | 7,0 |
-| `--positive` | 4,8 | 5,1 | 8,3 | 8,8 |
-| `--negative` | 4,9 | 5,2 | 6,7 | 7,1 |
-| `--warning` | 5,4 | 5,8 | 8,6 | 9,1 |
-| `--coin-ink` | 6,4 | 6,9 | 11,1 | 11,7 |
+| `--ink` | 14,4 | 15,0 | 13,4 | 14,3 |
+| `--ink-2` | 7,5 | 7,8 | 8,9 | 9,5 |
+| `--ink-3` | 5,8 | 6,1 | 6,9 | 7,4 |
+| `--accent` | 5,1 | 5,3 | 9,0 | 9,6 |
+| `--accent-ink` | 6,4 | 6,7 | 10,9 | 11,6 |
+| `--positive` | 4,9 | 5,1 | 8,7 | 9,3 |
+| `--negative` | 5,1 | 5,3 | 6,4 | 6,8 |
+| `--warning` | 5,8 | 6,1 | 9,9 | 10,6 |
+| `--coin-ink` | 6,8 | 7,0 | 11,1 | 11,8 |
 
 | Paire | Ratio |
 |---|---|
-| `#FFFFFF` sur `--accent-grad` clair (début `#5B4BFF` / milieu `#7B45EC` / fin `#9B3FD8`) | 5,4 / 5,4 / 5,1 |
-| `#0C0B1D` sur `--accent-grad` sombre (début `#8C7CFF` / milieu / fin `#D07BFF`) | 6,0 / 6,6 / 7,4 |
-| `#FFFFFF` sur `--negative` clair (bouton danger plein) · `#0C0B1D` sur `#FF8597` sombre | 5,5 · 8,4 |
-| Pastilles : positive 4,7 · negative 4,7 · warning 5,4 · coin 6,5 · accent 7,0 (clair) ; 6,7 · 6,5 · 7,5 · 9,4 · 8,2 (sombre) | ✓ |
-| Toast `#FFFFFF` sur `#17163A` (clair) · `#17163A` sur `#F1EFFF` (sombre) | 17,3 · 15,3 |
-| Repli opaque : `--ink-3` sur `#FFFFFF` · sur `#17152F` | 6,6 · 7,0 |
-| Anneau de focus `--accent` sur `--bg` | 6,1 (clair) · 8,3 (sombre) |
-| Bordure de champ `--line-strong` sur `--surface` | 3,3 (clair) · 3,5 (sombre) |
-| Arc de progression `#5B4BFF` sur verre clair · `#8C7CFF` sur verre sombre | 4,8 · 4,8 |
+| `--on-accent` sur `--accent-grad` clair (début `#16C8E4` / fin `#2FDCB4`) | 8,2 / 9,5 |
+| `--on-accent` sur `--accent-grad` sombre (début `#22D3EE` / fin `#5EEAD4`) | 9,3 / 11,4 |
+| `--on-solid` sur `--accent` · `--positive` · `--negative` · `--warning` (clair) | 5,5 · 5,3 · 5,5 · 6,3 |
+| `--on-solid` sur `--accent` · `--positive` · `--negative` · `--warning` (sombre) | 11,8 · 11,4 · 8,4 · 13,0 |
+| Pastilles : positive 4,6 · negative 4,6 · warning 5,7 · coin 6,6 · accent 6,1 (clair) ; 7,7 · 6,9 · 9,5 · 10,1 · 9,3 (sombre) | ✓ |
+| Toast `--ink` / `--bg` (clair) · (sombre) | 14,7 · 17,6 |
+| Repli opaque : `--ink-3` sur `--surface` clair · sombre | 6,3 · 7,9 |
+| Anneau de focus `--accent` sur `--bg` | 5,2 (clair) · 11,8 (sombre) |
+| Bordure de champ `--line-strong` sur `--surface` | 3,2 (clair) · 4,5 (sombre) |
+| Arc de progression `--grad-a` sur verre sombre | 7,9 (en clair, l'arc turquoise `#16C8E4` est décoratif : le chiffre au centre, en `--ink`, porte l'information) |
 
 **Héros** : son halo est peint **sous** le verre (`linear-gradient(var(--glass))` par-dessus un radial
-`--hero-halo` par-dessus `--bg`), donc voilé lui aussi. Pire coin (en haut à droite, halo à pleine force) :
-clair `--ink-3` 5,5 · `--accent` 5,6 · `--negative` 4,6 · `--positive` 4,47 ; sombre `--ink-2` 7,3 · `--ink-3` 5,4
-· `--accent` 5,8. `--positive` clair frôle 4,5 : **tout texte coloré d'un héros va sur une pastille `-soft`
-opaque** (verdict, delta), jamais à nu. Le halo du héros suit les replis : 50 % en transparence réduite ou sans
-`backdrop-filter`, retiré en contraste renforcé (`--hero-halo-mix`).
+`--hero-halo` par-dessus `--bg`), donc voilé lui aussi : le pire coin vaut la colonne « `--glass` (pire halo) »
+ci-dessus. Le halo `risk` (`--negative` à 30 %) garde en clair `--ink-3` 5,5 · `--accent` 4,8 · `--negative` 4,8 ·
+`--positive` 4,7 ; en sombre `--ink-3` 7,1 · `--negative` 6,5. **Tout texte coloré d'un héros va quand même sur
+une pastille `-soft` opaque** (verdict, delta), jamais à nu. Le halo du héros suit les replis : 50 % en
+transparence réduite ou sans `backdrop-filter`, retiré en contraste renforcé (`--hero-halo-mix`).
 
 **Règle du fond nu** : directement sur `--bg` + halos (titres de page, en-têtes de section hors carte), seuls
-`--ink` (≥ 10) et `--ink-2` (≥ 5,2) sont permis. `--ink-3` y tombe à 4,0 en clair, les couleurs de sens à
-3,3–3,7 : tout texte `.faint`, `.muted` coloré, montant signé ou `.notice` va **dans** une surface de verre.
-`--coin` (`#E9A400`, 1,9:1 sur verre) ne porte jamais de sens seul : il remplit, et le chiffre ou le contour en
+`--ink` (≥ 9,8) et `--ink-2` (≥ 6,0) sont permis. `--ink-3` y tombe à 4,7 en clair, `--accent` et les couleurs de
+sens à 3,9–4,1 : tout texte `.faint`, `.muted` coloré, montant signé ou `.notice` va **dans** une surface de verre.
+`--coin` (`#F5B800`, 1,7:1 sur verre) ne porte jamais de sens seul : il remplit, et le chiffre ou le contour en
 `--coin-ink` porte l'information.
+
+#### Historique des palettes
+
+| Date | Palette | Note |
+|---|---|---|
+| octobre 2026 | « Verre lumineux » violet | Lavande très pâle / nuit violette, accent `#4B3BEA`, halos violet, rose, menthe, soleil |
+| 25/10/2026 | **« Lagon »** | Choisie par Micka parmi les palettes proposées : turquoise, aqua, sarcelle sous un soleil jaune, ciel très clair ; sombre : océan profond. Logo, `theme-color`, manifeste et teintes de données suivent ; ajout de `--on-solid` |
 
 ### 3.4 Composants
 
@@ -255,7 +297,7 @@ Les listes à l'intérieur (`.ledger`, `.opp-list`, `.proc-card`…) n'ont **ni*
 séparateur 1 px `--line` et, au survol, `--accent-soft` à 50 %.
 
 **Chiffre du jour** (`.today-figure`) : 92 % de chasse, graisse 750 (inchangé), couleur `--ink` ; derrière, le
-halo du héros prend la couleur de l'état du mois : menthe (`ok`), soleil (`tight`), rose (`risk`) — jamais de
+halo du héros prend la couleur de l'état du mois : sarcelle (`ok`), soleil (`tight`), corail voilé (`risk`) — jamais de
 rouge vif. Le verdict passe en pastille sous le chiffre (`.verdict[data-status]`, pastille `-soft`) et, en cas de
 découvert prévu, porte un lien « Que faire ? » vers « Je peux m'acheter… ? » / l'assistant.
 
@@ -324,7 +366,7 @@ aucun document → « Prends un papier en photo : Bank le lit pour toi. »
   deviennent des filtres en pastilles au téléphone.
 - **Épargne, Aides, Crypto, Pilote** : une phrase « ce que ça veut dire pour toi » en tête de page, chiffres clés
   en pastilles, tableaux repliés.
-- **Plus** (téléphone) : tuiles en verre fort avec l'icône dans une pastille de couleur (violet, rose, menthe,
+- **Plus** (téléphone) : tuiles en verre fort avec l'icône dans une pastille de couleur (aqua, ciel, turquoise,
   soleil en alternance), Épargne en premier.
 - **Réglages, Connecteurs** : groupes en cartes ; un service relié porte une pastille `--positive` qui
   s'allume (`--glow` vert) au moment où la liaison réussit.
@@ -433,7 +475,7 @@ changement de jetons.
    réduit ; vérification 390 px clair/sombre et suite Vitest.
 
 *Fondations réalisées (octobre 2026).* Écarts assumés par rapport au § 3.4 :
-- `.hub-tabs` : piste en verre fort (une piste `--surface-2` disparaît sur le fond lavande) et onglet actif en
+- `.hub-tabs` : piste en verre fort (une piste `--surface-2` disparaît sur le fond clair) et onglet actif en
   `--accent-grad`, comme la bulle de l'île ; `.segmented` aussi depuis la relecture (le verre enfoncé était
   illisible en sombre).
 - La bulle de l'île glisse par `left` (un seul petit élément) : `transform` en pourcentage se rapporte à la bulle,

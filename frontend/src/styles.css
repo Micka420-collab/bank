@@ -1,4 +1,4 @@
-/* Bank — design system « Verre lumineux » (voir docs/DESIGN.md § 3).
+/* Bank — design system « Verre lumineux », palette « Lagon » (voir docs/DESIGN.md § 3).
    Des halos de lumière douce au fond, des surfaces en verre dépoli posées dessus, des boutons en pilule qui
    s'allument au survol, et un petit moment de fête quand une corvée est finie. Les chiffres restent le héros :
    plus il y a de texte, plus le verre est opaque. Le flou n'est posé que sur quelques grandes surfaces. */
@@ -7,49 +7,50 @@
 
 /* ------------------------------------------------------------------ jetons */
 :root {
-  --bg: #f4f3fb;
-  --halo-1: rgba(139, 124, 255, 0.4); /* violet */
-  --halo-2: rgba(255, 143, 184, 0.4); /* rose */
-  --halo-3: rgba(94, 224, 192, 0.4); /* menthe */
-  --halo-4: rgba(255, 198, 92, 0.4); /* soleil */
+  --bg: #effafc;
+  --halo-1: rgba(34, 211, 238, 0.36); /* aqua */
+  --halo-2: rgba(45, 212, 191, 0.38); /* turquoise */
+  --halo-3: rgba(255, 213, 74, 0.48); /* soleil */
+  --halo-4: rgba(96, 165, 250, 0.30); /* ciel */
   --surface: #ffffff; /* opaque : champs, menus, repli sans transparence */
-  --surface-2: #f0eefa;
-  --glass: rgba(255, 255, 255, 0.74);
-  --glass-strong: rgba(255, 255, 255, 0.88);
+  --surface-2: #e5f6f8;
+  --glass: rgba(250, 255, 255, 0.74);
+  --glass-strong: rgba(250, 255, 255, 0.88);
   --glass-blur: blur(20px) saturate(160%);
   --glass-edge: rgba(255, 255, 255, 0.7);
   --glass-shine: inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  --glass-shadow: 0 12px 32px -14px rgba(52, 40, 120, 0.28), 0 2px 6px -2px rgba(52, 40, 120, 0.1);
+  --glass-shadow: 0 12px 32px -14px rgba(11, 74, 90, 0.28), 0 2px 6px -2px rgba(11, 74, 90, 0.1);
   --card-shadow: var(--glass-shine), var(--glass-shadow);
-  --line: #e4e1f3;
-  --line-strong: #8c89b0; /* bord des champs : 3,3:1 sur --surface */
-  --ink: #17163a;
-  --ink-2: #4a4870;
-  --ink-3: #5b5980; /* 5,8:1 sur verre ; jamais sur le fond nu */
-  --accent: #4b3bea;
-  --accent-ink: #3f32c8;
-  --accent-soft: #ebe8ff;
-  --accent-grad: linear-gradient(135deg, #5b4bff, #9b3fd8);
-  --grad-a: #5b4bff; /* bouts du dégradé, pour les SVG (anneau de progression) */
-  --grad-b: #9b3fd8;
-  --accent-wash: linear-gradient(135deg, rgba(91, 75, 255, 0.14), rgba(155, 63, 216, 0.14));
-  --on-accent: #ffffff;
-  --glow: 0 0 0 4px rgba(91, 75, 255, 0.18), 0 10px 28px -8px rgba(123, 69, 236, 0.6);
-  --glow-coin: 0 0 0 4px rgba(233, 164, 0, 0.22), 0 10px 28px -8px rgba(233, 164, 0, 0.65);
-  --glow-ok: 0 0 0 4px rgba(18, 122, 76, 0.16), 0 8px 22px -8px rgba(18, 122, 76, 0.55);
-  --positive: #127a4c;
-  --positive-soft: #ddf5ea;
-  --negative: #c42b4e;
-  --negative-soft: #fde6ec;
-  --warning: #8f5407;
-  --warning-soft: #fdf0d9;
-  --coin: #e9a400; /* remplissage seulement : le texte « pièce » est en --coin-ink */
-  --coin-soft: #fff1c7;
-  --coin-ink: #7a4d00;
-  --shadow-1: 0 1px 2px rgba(52, 40, 120, 0.08), 0 1px 1px rgba(52, 40, 120, 0.04);
-  --shadow-2: 0 10px 26px -12px rgba(52, 40, 120, 0.32), 0 2px 6px -2px rgba(52, 40, 120, 0.1);
-  --shadow-3: 0 24px 48px -22px rgba(52, 40, 120, 0.45);
-  --chart-grid: #e9e6f5;
+  --line: #d2ebee;
+  --line-strong: #6b98a1; /* bord des champs : 3,2:1 sur --surface */
+  --ink: #082730;
+  --ink-2: #2f5560;
+  --ink-3: #41656f; /* 5,8:1 sur verre ; jamais sur le fond nu */
+  --accent: #0b7480;
+  --accent-ink: #08636d;
+  --accent-soft: #d6f5f7;
+  --accent-grad: linear-gradient(135deg, #16c8e4, #2fdcb4);
+  --grad-a: #16c8e4; /* bouts du dégradé, pour les SVG (anneau de progression) */
+  --grad-b: #2fdcb4;
+  --accent-wash: linear-gradient(135deg, rgba(22, 200, 228, 0.14), rgba(47, 220, 180, 0.14));
+  --on-accent: #04222a;
+  --on-solid: #ffffff; /* texte sur un aplat plein (--accent, --positive, --negative, --warning) : 5,3:1 au pire */
+  --glow: 0 0 0 4px rgba(22, 200, 228, 0.18), 0 10px 28px -8px rgba(47, 220, 180, 0.55);
+  --glow-coin: 0 0 0 4px rgba(245, 184, 0, 0.22), 0 10px 28px -8px rgba(245, 184, 0, 0.6);
+  --glow-ok: 0 0 0 4px rgba(11, 122, 85, 0.18), 0 8px 22px -8px rgba(11, 122, 85, 0.5);
+  --positive: #0b7a55;
+  --positive-soft: #d8f5ea;
+  --negative: #c2304b;
+  --negative-soft: #fde5ea;
+  --warning: #8a5300;
+  --warning-soft: #fff2cf;
+  --coin: #f5b800; /* remplissage seulement : le texte « pièce » est en --coin-ink */
+  --coin-soft: #fff3c4;
+  --coin-ink: #7a4c00;
+  --shadow-1: 0 1px 2px rgba(11, 74, 90, 0.08), 0 1px 1px rgba(11, 74, 90, 0.04);
+  --shadow-2: 0 10px 26px -12px rgba(11, 74, 90, 0.32), 0 2px 6px -2px rgba(11, 74, 90, 0.1);
+  --shadow-3: 0 24px 48px -22px rgba(11, 74, 90, 0.45);
+  --chart-grid: #dcf0f2;
 
   --font: "Bricolage Grotesque Variable", system-ui, sans-serif;
   --t-xs: 0.75rem;
@@ -107,94 +108,96 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0c0b1d;
-    --halo-1: rgba(109, 92, 255, 0.35);
-    --halo-2: rgba(255, 95, 162, 0.3);
-    --halo-3: rgba(34, 201, 160, 0.28);
-    --halo-4: rgba(247, 183, 59, 0.24);
-    --surface: #17152f;
-    --surface-2: #201d40;
-    --glass: rgba(26, 24, 56, 0.7);
-    --glass-strong: rgba(26, 24, 56, 0.86);
+    --bg: #03141c;
+    --halo-1: rgba(34, 211, 238, 0.26);
+    --halo-2: rgba(20, 184, 166, 0.28); /* sarcelle */
+    --halo-3: rgba(250, 204, 21, 0.16); /* soleil */
+    --halo-4: rgba(59, 130, 246, 0.26);
+    --surface: #0a2230;
+    --surface-2: #0f2d3d;
+    --glass: rgba(8, 36, 50, 0.70);
+    --glass-strong: rgba(8, 36, 50, 0.86);
     --glass-blur: blur(24px) saturate(140%);
     --glass-edge: rgba(255, 255, 255, 0.1);
     --glass-shine: inset 0 1px 0 rgba(255, 255, 255, 0.08);
     --glass-shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.7);
-    --line: #2c2858;
-    --line-strong: #6f6b9e;
-    --ink: #f1efff;
-    --ink-2: #bdb9e0;
-    --ink-3: #a29ecb;
-    --accent: #a99dff;
-    --accent-ink: #c9c1ff;
-    --accent-soft: #2a2560;
-    --accent-grad: linear-gradient(135deg, #8c7cff, #d07bff);
-    --grad-a: #8c7cff;
-    --grad-b: #d07bff;
-    --accent-wash: linear-gradient(135deg, rgba(140, 124, 255, 0.2), rgba(208, 123, 255, 0.16));
-    --on-accent: #0c0b1d;
-    --glow: 0 0 0 4px rgba(169, 157, 255, 0.22), 0 10px 32px -6px rgba(208, 123, 255, 0.55);
-    --glow-coin: 0 0 0 4px rgba(247, 197, 72, 0.22), 0 10px 32px -6px rgba(247, 197, 72, 0.5);
-    --glow-ok: 0 0 0 4px rgba(90, 211, 155, 0.2), 0 8px 26px -6px rgba(90, 211, 155, 0.45);
-    --positive: #5ad39b;
-    --positive-soft: #163a2c;
-    --negative: #ff8597;
-    --negative-soft: #3f1a28;
-    --warning: #f2b65b;
-    --warning-soft: #3a2c14;
-    --coin: #f7c548;
-    --coin-soft: #3b2f10;
-    --coin-ink: #f9d77e;
+    --line: #173c4d;
+    --line-strong: #5f8e9c;
+    --ink: #e9fbff;
+    --ink-2: #a8d4dd;
+    --ink-3: #8dbcc6;
+    --accent: #4fe0f0;
+    --accent-ink: #8cf0fa;
+    --accent-soft: #0e3a47;
+    --accent-grad: linear-gradient(135deg, #22d3ee, #5eead4);
+    --grad-a: #22d3ee;
+    --grad-b: #5eead4;
+    --accent-wash: linear-gradient(135deg, rgba(34, 211, 238, 0.2), rgba(94, 234, 212, 0.16));
+    --on-accent: #03202a;
+    --on-solid: #03141c;
+    --glow: 0 0 0 4px rgba(34, 211, 238, 0.22), 0 10px 32px -6px rgba(94, 234, 212, 0.55);
+    --glow-coin: 0 0 0 4px rgba(255, 210, 63, 0.22), 0 10px 28px -8px rgba(255, 210, 63, 0.6);
+    --glow-ok: 0 0 0 4px rgba(95, 224, 173, 0.18), 0 8px 22px -8px rgba(95, 224, 173, 0.5);
+    --positive: #5fe0ad;
+    --positive-soft: #0f3a2e;
+    --negative: #ff8a9e;
+    --negative-soft: #3d1822;
+    --warning: #ffd166;
+    --warning-soft: #382c0e;
+    --coin: #ffd23f;
+    --coin-soft: #3a300c;
+    --coin-ink: #ffe08a;
     --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
     --shadow-2: 0 10px 26px -12px rgba(0, 0, 0, 0.65);
     --shadow-3: 0 24px 48px -22px rgba(0, 0, 0, 0.75);
-    --chart-grid: #26224d;
+    --chart-grid: #123445;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0c0b1d;
-  --halo-1: rgba(109, 92, 255, 0.35);
-  --halo-2: rgba(255, 95, 162, 0.3);
-  --halo-3: rgba(34, 201, 160, 0.28);
-  --halo-4: rgba(247, 183, 59, 0.24);
-  --surface: #17152f;
-  --surface-2: #201d40;
-  --glass: rgba(26, 24, 56, 0.7);
-  --glass-strong: rgba(26, 24, 56, 0.86);
+  --bg: #03141c;
+  --halo-1: rgba(34, 211, 238, 0.26);
+  --halo-2: rgba(20, 184, 166, 0.28); /* sarcelle */
+  --halo-3: rgba(250, 204, 21, 0.16); /* soleil */
+  --halo-4: rgba(59, 130, 246, 0.26);
+  --surface: #0a2230;
+  --surface-2: #0f2d3d;
+  --glass: rgba(8, 36, 50, 0.70);
+  --glass-strong: rgba(8, 36, 50, 0.86);
   --glass-blur: blur(24px) saturate(140%);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shine: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --glass-shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.7);
-  --line: #2c2858;
-  --line-strong: #6f6b9e;
-  --ink: #f1efff;
-  --ink-2: #bdb9e0;
-  --ink-3: #a29ecb;
-  --accent: #a99dff;
-  --accent-ink: #c9c1ff;
-  --accent-soft: #2a2560;
-  --accent-grad: linear-gradient(135deg, #8c7cff, #d07bff);
-  --grad-a: #8c7cff;
-  --grad-b: #d07bff;
-  --accent-wash: linear-gradient(135deg, rgba(140, 124, 255, 0.2), rgba(208, 123, 255, 0.16));
-  --on-accent: #0c0b1d;
-  --glow: 0 0 0 4px rgba(169, 157, 255, 0.22), 0 10px 32px -6px rgba(208, 123, 255, 0.55);
-  --glow-coin: 0 0 0 4px rgba(247, 197, 72, 0.22), 0 10px 32px -6px rgba(247, 197, 72, 0.5);
-  --glow-ok: 0 0 0 4px rgba(90, 211, 155, 0.2), 0 8px 26px -6px rgba(90, 211, 155, 0.45);
-  --positive: #5ad39b;
-  --positive-soft: #163a2c;
-  --negative: #ff8597;
-  --negative-soft: #3f1a28;
-  --warning: #f2b65b;
-  --warning-soft: #3a2c14;
-  --coin: #f7c548;
-  --coin-soft: #3b2f10;
-  --coin-ink: #f9d77e;
+  --line: #173c4d;
+  --line-strong: #5f8e9c;
+  --ink: #e9fbff;
+  --ink-2: #a8d4dd;
+  --ink-3: #8dbcc6;
+  --accent: #4fe0f0;
+  --accent-ink: #8cf0fa;
+  --accent-soft: #0e3a47;
+  --accent-grad: linear-gradient(135deg, #22d3ee, #5eead4);
+  --grad-a: #22d3ee;
+  --grad-b: #5eead4;
+  --accent-wash: linear-gradient(135deg, rgba(34, 211, 238, 0.2), rgba(94, 234, 212, 0.16));
+  --on-accent: #03202a;
+  --on-solid: #03141c;
+  --glow: 0 0 0 4px rgba(34, 211, 238, 0.22), 0 10px 32px -6px rgba(94, 234, 212, 0.55);
+  --glow-coin: 0 0 0 4px rgba(255, 210, 63, 0.22), 0 10px 28px -8px rgba(255, 210, 63, 0.6);
+  --glow-ok: 0 0 0 4px rgba(95, 224, 173, 0.18), 0 8px 22px -8px rgba(95, 224, 173, 0.5);
+  --positive: #5fe0ad;
+  --positive-soft: #0f3a2e;
+  --negative: #ff8a9e;
+  --negative-soft: #3d1822;
+  --warning: #ffd166;
+  --warning-soft: #382c0e;
+  --coin: #ffd23f;
+  --coin-soft: #3a300c;
+  --coin-ink: #ffe08a;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
   --shadow-2: 0 10px 26px -12px rgba(0, 0, 0, 0.65);
   --shadow-3: 0 24px 48px -22px rgba(0, 0, 0, 0.75);
-  --chart-grid: #26224d;
+  --chart-grid: #123445;
   color-scheme: dark;
 }
 
@@ -299,7 +302,7 @@ a.sr-only:focus-visible {
   padding: 0.6rem 0.9rem;
   border-radius: var(--r-s);
   background: var(--accent);
-  color: var(--on-accent);
+  color: var(--on-solid);
   font-weight: 600;
   text-decoration: none;
   box-shadow: var(--shadow-2, 0 6px 20px rgba(0, 0, 0, 0.2));
@@ -686,7 +689,7 @@ a.sr-only:focus-visible {
   text-align: center;
 }
 .chip[aria-pressed="true"] .chip-count {
-  background: var(--on-accent);
+  background: var(--surface);
   color: var(--accent-ink);
 }
 .verdict {
@@ -2465,7 +2468,7 @@ input[aria-invalid="true"] {
 .sync-steps li.is-done .dot {
   background: var(--positive);
   border-color: var(--positive);
-  color: #fff;
+  color: var(--on-solid);
 }
 
 /* Intro et retour de la banque : ce qui était en style en ligne (CSP, § 3.8) devient des classes. */
@@ -3694,7 +3697,7 @@ input[aria-invalid="true"] {
 }
 .finale-list .is-done .finale-tick {
   background: var(--positive);
-  color: var(--on-accent);
+  color: var(--on-solid);
 }
 .finale-list .is-done .finale-tick .icon {
   stroke-dasharray: 30;
@@ -4156,7 +4159,7 @@ input[aria-invalid="true"] {
   color: var(--positive);
 }
 .secnav button[aria-current="true"] .secnav-state {
-  background: color-mix(in srgb, var(--on-accent) 85%, transparent);
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
   color: var(--accent-ink);
 }
 .conn-fold {
@@ -4299,11 +4302,11 @@ input[aria-invalid="true"] {
 }
 .bank-state.ok {
   background: var(--positive);
-  color: #fff;
+  color: var(--on-solid);
 }
 .bank-state.error {
   background: var(--negative);
-  color: #fff;
+  color: var(--on-solid);
 }
 .bank-state.busy {
   border: 2px solid var(--accent);
@@ -4565,7 +4568,7 @@ input[aria-invalid="true"] {
   display: grid;
   place-items: center;
   background: var(--accent);
-  color: var(--on-accent);
+  color: var(--on-solid);
   font-size: var(--t-xs);
   font-weight: 700;
 }
@@ -5020,7 +5023,7 @@ input[aria-invalid="true"] {
   justify-self: end;
   max-width: 85%;
   background: var(--accent);
-  color: var(--on-accent);
+  color: var(--on-solid);
   border-bottom-right-radius: 4px;
 }
 .assistant-turn.is-assistant {
@@ -5131,7 +5134,7 @@ input[aria-invalid="true"] {
 }
 
 .bank-mark.is-app {
-  --brand: var(--accent);
+  --brand: var(--accent-grad);
   color: var(--on-accent);
 }
 
@@ -6437,7 +6440,7 @@ input[aria-invalid="true"] {
 .proc-phases li.is-active > span:not(.phase-label) {
   background: var(--accent);
   border-color: var(--accent);
-  color: var(--on-accent);
+  color: var(--on-solid);
 }
 .proc-layout {
   display: grid;
@@ -7757,30 +7760,30 @@ main.sheet details.card {
    Un seul moment animé : le ruban de répartition qui se dessine à l'ouverture. Six teintes de données, pensées
    pour se distinguer côte à côte (et en sombre), jamais les couleurs de marque des actifs. */
 :root {
-  --c1: #2f4bdf;
-  --c2: #0f8f8a;
-  --c3: #d99100;
-  --c4: #7b5cd6;
-  --c5: #d6533a;
-  --c6: #5a6488;
+  --c1: #0b7480;
+  --c2: #2f6fe0;
+  --c3: #d99a00;
+  --c4: #0fa37f;
+  --c5: #e0566e;
+  --c6: #5a7a88;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --c1: #8fa3ff;
-    --c2: #4fd1c5;
-    --c3: #f7c548;
-    --c4: #b49cff;
-    --c5: #ff8f73;
-    --c6: #9aa3c7;
+    --c1: #4fe0f0;
+    --c2: #8fb4ff;
+    --c3: #ffd23f;
+    --c4: #5fe0ad;
+    --c5: #ff8a9e;
+    --c6: #9ab8c2;
   }
 }
 :root[data-theme="dark"] {
-  --c1: #8fa3ff;
-  --c2: #4fd1c5;
-  --c3: #f7c548;
-  --c4: #b49cff;
-  --c5: #ff8f73;
-  --c6: #9aa3c7;
+  --c1: #4fe0f0;
+  --c2: #8fb4ff;
+  --c3: #ffd23f;
+  --c4: #5fe0ad;
+  --c5: #ff8a9e;
+  --c6: #9ab8c2;
 }
 .cx-vault {
   position: relative;
@@ -8596,7 +8599,7 @@ details.card.cx-details > summary {
 }
 .pb-drop .pill[aria-pressed="true"] {
   background: var(--accent);
-  color: var(--on-accent, #fff);
+  color: var(--on-solid);
   border-color: var(--accent);
 }
 .pb-figure {
@@ -9412,7 +9415,7 @@ label {
   gap: 0.4rem;
   padding: calc(0.45rem + env(safe-area-inset-top)) 1rem 0.45rem;
   background: var(--warning);
-  color: #fff;
+  color: var(--on-solid);
   font-size: var(--t-sm);
   font-weight: 600;
 }
@@ -9741,13 +9744,14 @@ label {
 
 /* ---------------------------------------------------------------- Aujourd'hui : salut, halo d'humeur, verdict */
 .today[data-status="ok"] {
-  --hero-halo: var(--halo-3);
+  --hero-halo: var(--halo-2); /* sarcelle : tout va bien */
 }
 .today[data-status="tight"] {
-  --hero-halo: var(--halo-4);
+  --hero-halo: var(--halo-3); /* soleil : à surveiller */
 }
 .today[data-status="risk"] {
-  --hero-halo: var(--halo-2);
+  /* corail : la palette « Lagon » n'a pas de halo chaud ; 30 % sous le verre garde --negative à 4,8:1 (clair) */
+  --hero-halo: color-mix(in srgb, var(--negative) 30%, transparent);
 }
 .today-hello {
   margin: 0;
@@ -10040,7 +10044,7 @@ label {
 
 /* ---------------------------------------------------------------- Gagner : tirelire héros, pièces, chance */
 .piggy.card-hero {
-  --hero-halo: var(--halo-4);
+  --hero-halo: var(--halo-3);
 }
 .piggy-badges li.is-new {
   animation: badge-pop 560ms var(--ease-spring) both;
@@ -10177,12 +10181,12 @@ label {
   overflow: hidden;
 }
 .celebrate.is-coin {
-  --c-glow: var(--halo-4);
+  --c-glow: var(--halo-3);
   --c-a: var(--coin);
   --c-b: var(--coin);
 }
 .celebrate.is-done {
-  --c-glow: var(--halo-3);
+  --c-glow: var(--halo-2);
   --c-a: var(--positive);
   --c-b: var(--grad-b);
 }
@@ -10458,7 +10462,7 @@ label {
 .wizard-steps li.is-active > span {
   border-color: var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-solid);
 }
 .wizard-panel {
   display: grid;

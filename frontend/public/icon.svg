@@ -1,7 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Bank — « Encre claire » : une encre, une courbe qui monte, un point du jour. Zone sûre maskable : 20 % de marge. -->
-  <rect width="64" height="64" rx="15" fill="#2F4BDF"/>
-  <path d="M15 42 L25 34 L33 38 L49 20" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="49" cy="20" r="4.5" fill="#FFFFFF"/>
-  <path d="M15 42 L25 34 L33 38 L49 20 L49 48 L15 48 Z" fill="#FFFFFF" opacity="0.14"/>
+  <!-- Bank, palette « Lagon » : un dégradé turquoise → aqua (jetons grad-a → grad-b), une courbe qui monte, un
+       point du jour. Trait couleur on-accent (#04222A, 8,2:1 sur le turquoise). Zone sûre maskable : 20 % de marge. -->
+  <defs>
+    <linearGradient id="lagon" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16C8E4"/>
+      <stop offset="1" stop-color="#2FDCB4"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#lagon)"/>
+  <path d="M15 42 L25 34 L33 38 L49 20 L49 48 L15 48 Z" fill="#04222A" opacity="0.12"/>
+  <path d="M15 42 L25 34 L33 38 L49 20" fill="none" stroke="#04222A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="49" cy="20" r="4.5" fill="#FFD54A" stroke="#04222A" stroke-width="2.5"/>
 </svg>

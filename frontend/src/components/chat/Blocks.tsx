@@ -17,7 +17,8 @@ export type BlockHandlers = {
   onActed?: () => void;
 };
 
-const PALETTE = ["#2f5bea", "#1f9d55", "#e0a100", "#c0392b", "#7b61ff", "#0f8b8d", "#d35400", "#8a91ac"];
+// Les teintes de données du thème (--c1…--c6, palette « Lagon »), clair comme sombre.
+const PALETTE = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)", "var(--c6)"];
 
 function unitFormat(unit: string, v: number, whole = true): string {
   if (unit === "eur") return money(v, { whole });
