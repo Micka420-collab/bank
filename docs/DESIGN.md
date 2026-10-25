@@ -363,6 +363,27 @@ L'ouverture du jour (chiffre qui se compte, cartes qui montent avec 45 ms d'éca
 demandée. `prefers-reduced-motion: reduce` coupe tout (règle globale existante) : les moments de fête se
 réduisent à l'état final (badge visible, coche pleine) et au toast.
 
+**Exception : « Démarrer avec Bank » (§ 3.10, retour de Micka « plus animé, plus dynamique, plus moderne »).** Le
+parcours est le seul écran qui vit en continu, parce qu'on n'y passe que quelques minutes :
+
+| Quoi | Comment | Coût |
+|---|---|---|
+| Ciel vivant | Trois halos (`--halo-1..3`, deux au téléphone) qui dérivent en 23–31 s, `transform` seul, `will-change` ; ils remplacent les halos fixes de `body::before` le temps du parcours | Trois calques composés, aucun repaint |
+| Changement d'étape | View Transitions API quand le navigateur la connaît : l'étape qui part glisse de 56 px et s'efface (260 ms), la nouvelle arrive de l'autre côté avec `--ease-spring` (560 ms) ; le sens suit l'ordre (en avant / en arrière, `data-journey-dir`). Sinon, repli CSS : entrée de 40 px du bon côté (520 ms). On remonte en haut avant la capture | Une transition à la fois ; garde-fou de 450 ms si la nouvelle étape tarde |
+| Barre d'étapes | Segments aplatis (`scaleY(.5)`) ; l'étape en cours et les faites prennent leur hauteur avec un ressort, leur remplissage s'étire (`scaleX`, 520–640 ms), un reflet passe trois fois sur l'étape en cours ; « Étape 3 sur 7 » : le chiffre monte en place | `transform` seul |
+| Scène de l'étape | SVG inline par étape (carte et flèches de synchro, maison et foyer, bouclier et interrupteurs, feuille qui vole dans le dossier, cible et flèche, cloche et téléphone, trois écrans) : formes qui « popent », se tracent (`stroke-dashoffset`) ou volent en place en moins d'1,2 s, puis la scène flotte doucement (5 s, aller-retour) | Une animation continue par écran |
+| Contenu | Titre, but puis lignes de l'étape montent l'une après l'autre (50 ms d'écart, 480 ms) | Une fois à l'arrivée |
+| Gestes | Action principale : reflet qui passe une fois à l'arrivée puis au survol, ressort à l'appui (`scale(.95)`) ; cartes de chemin : soulevées et légèrement inclinées au survol avec un reflet ; pastilles et priorités choisies : petit « pop » ; interrupteurs : bascule avec rebond (`--ease-spring`) | `transform`, `opacity` |
+| Fin | Voir § 3.10 (a) : badge qui « pope », coche qui se trace, confettis **dans la carte** (22, CSS seul, 1,3–1,9 s, jamais plein écran), compte des réglages qui monte (`requestAnimationFrame`, 1,1 s) | Une fois |
+
+« Bien démarrer » sur Aujourd'hui suit le même vocabulaire, une fois à l'arrivée : l'anneau se remplit (et se
+rejoue quand le compte change), son chiffre se compte, les éléments montent l'un après l'autre (50 ms), l'icône se
+tourne au survol, et l'élément fait pendant que la page est ouverte « pope » et se coche en se traçant (jamais au
+chargement). Mouvement réduit : pas de transition de vue (le script ne l'appelle pas), chiffres finaux d'emblée,
+scènes immobiles dans leur état final (l'état de base de chaque forme **est** son état final), pas de confettis,
+rien qui se soulève. Aucune couleur n'est écrite dans ces animations : tout passe par les jetons du § 3.3, pour
+qu'un changement de palette reste un changement de jetons.
+
 ### 3.8 Replis et accessibilité
 
 - `@media (prefers-reduced-transparency: reduce)` **et** `@supports not ((backdrop-filter: blur(1px)) or
@@ -514,9 +535,13 @@ trace sur le segment quand le serveur confirme l'étape (2xx), sans gerbe : la f
 
 Les étapes déjà faites quand on arrive (banque reliée ailleurs, foyer répondu dans Ma situation) apparaissent
 cochées dans la barre et sont sautées. La dernière étape franchie déclenche **le** moment de fête du parcours
-(gerbe `done` existante, toast `.is-success`) — uniquement si au moins une étape, hors visite, a été faite pendant
-ce passage, et il dit ce qui est fait et ce qui reste (« 3 étapes faites — il en reste 2, quand tu veux. ») ;
-« Bank est prêt. » est réservé à l'anneau qui se ferme à 8 sur 8. Aucun autre toast dans le parcours (il couvrirait
+— uniquement si au moins une étape, hors visite, a été faite pendant ce passage ; sinon le parcours se ferme
+simplement. C'est un **écran de fin** dans la carte du parcours (pas un toast) : badge qui « pope » et coche qui se
+trace, confettis dans la carte, titre qui reçoit le focus et que décrit la phrase de ce qui est fait et de ce qui
+reste (« 3 étapes faites — il en reste 2, quand tu veux. »), l'anneau « Bien démarrer » dont le chiffre se compte
+(« 5 réglages faits sur 8 »), la liste des six étapes (faite / plus tard), et « Voir mon tableau de bord ». Le titre
+est « C'est parti ! », « Parcours terminé ! » quand les six étapes sont faites, et « Bank est prêt. » seulement à 8
+sur 8 — comme pour l'anneau qui se ferme. Aucun autre toast dans le parcours (il couvrirait
 les boutons du bas au téléphone) : la confirmation d'une étape faite ou passée s'affiche en tête de la suivante.
 
 **Tes accords, groupés par ce qu'ils envoient.** Seuls les groupes 1 et 2 sont proposés dans le parcours ; les
@@ -654,9 +679,12 @@ existant, refus d'une finalité non publique dans `public-consents`, journal d'a
 - Cibles ≥ 44 px, action principale pleine largeur au téléphone, « Passer » et « Quitter » toujours atteignables au
   clavier, Échap = « Quitter » (avec la même conservation d'état). Aucune limite de temps : la visite n'avance
   jamais seule (l'intro actuelle à 3,6 s par écran garde son « Suivant » et s'arrête sur le dernier écran).
-- Mouvement : entrée d'étape en `opacity` + `translateY(8px)` 200 ms `--ease-out`, coche qui se trace 400 ms,
-  anneau qui avance 320 ms ; tout est coupé par `prefers-reduced-motion` (état final directement) ; la seule fête
-  est celle de fin (§ 3.6), sous une seconde.
+- Mouvement : voir l'exception du § 3.7 (ciel vivant, étapes qui glissent dans le sens du parcours par View
+  Transitions ou repli CSS, scène animée par étape, gestes à ressort, écran de fin) ; coche qui se trace 400 ms,
+  anneau qui se remplit. Le focus et `aria-describedby` ne dépendent pas de la transition : le nouveau `h1` est dans
+  le DOM et reçoit le focus pendant qu'elle joue ; une transition qui ne voit pas venir l'étape est libérée au bout
+  de 450 ms. Tout est coupé par `prefers-reduced-motion` (état final directement, pas de transition de vue) ; la
+  seule fête est celle de fin.
 - Verre et contrastes du § 3.3 : texte des étapes sur `.card` (`--glass-strong`), jamais `--ink-3` sur le fond nu ;
   replis transparence réduite / contraste renforcé / couleurs forcées hérités des primitives.
 - CSP : aucun `style` statique (les marges en ligne d'`Onboarding.tsx` deviennent des classes), aperçus de la

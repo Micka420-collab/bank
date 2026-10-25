@@ -1,5 +1,6 @@
 // Démarrer avec Bank (#44) : parcours plein écran (navigation, reprise, passer, focus), liste « Bien démarrer »
-// (anneau, liens, repli, fête), accords groupés (« Tout activer » n'accorde que les données publiques, après un clic).
+// (anneau, liens, repli, fête), accords groupés (« Tout activer » n'accorde que les données publiques, après un clic),
+// mouvement (transitions de vue qui gardent le focus, mouvement réduit qui va droit à l'état final).
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -280,10 +281,38 @@ describe("le parcours", () => {
     await settle();
     expect(host.textContent).toContain("Étape faite : Tes priorités.");
     await click("Passer la visite");
-    expect(onExit).toHaveBeenCalled();
-    expect(document.querySelector(".celebrate")).not.toBeNull();
-    expect(host.textContent).toContain("1 étape faite — il en reste 5, quand tu veux.");
+    // La fête est l'écran de fin, dans le parcours : son titre reçoit le focus et dit ce qui est fait et ce qui reste.
+    expect(onExit).not.toHaveBeenCalled();
+    const h1 = host.querySelector<HTMLHeadingElement>(".journey-finale h1")!;
+    expect(h1.textContent).toBe("C'est parti !");
+    expect(document.activeElement).toBe(h1);
+    expect(document.getElementById(h1.getAttribute("aria-describedby")!)?.textContent).toBe("1 étape faite — il en reste 5, quand tu veux.");
     expect(host.textContent).not.toContain("Bank est prêt");
+    expect(host.querySelector(".finale-confetti")).not.toBeNull();
+    expect(host.querySelector(".finale-count .ring")?.getAttribute("aria-label")).toBe("1 éléments sur 8 faits");
+    expect(host.querySelector(".finale-count .ring-value")?.textContent).toBe("1/8");
+    expect(host.querySelector("[style]")).toBeNull(); // CSP : les confettis sont réglés en CSS, pas en ligne
+    await click("Voir mon tableau de bord");
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it("« Bank est prêt » only when the eight items are done", async () => {
+    server.status = "in_progress";
+    window.location.hash = "#/bienvenue/priorites";
+    serve({
+      "/api/opportunities/top": () => ({ opportunities: [], value: {}, priorities: ["reduire"] }),
+      "/api/opportunities/settings": () => { server.done.add("priorites"); return {}; },
+    });
+    server.done = new Set(ESSENTIALS.map(([k]) => k).filter((k) => k !== "priorites"));
+    await journeyAt();
+    await settle();
+    await click("Garder ces priorités");
+    await journeyAt();
+    await settle();
+    await click("Passer la visite");
+    expect(host.querySelector(".journey-finale h1")?.textContent).toBe("Bank est prêt.");
+    expect(host.textContent).toContain("1 étape faite : le parcours est complet.");
+    expect(host.querySelectorAll(".finale-list li.is-done")).toHaveLength(6);
   });
 
   it("skipping the tour finishes without a celebration: nothing to celebrate", async () => {
@@ -307,6 +336,127 @@ describe("le parcours", () => {
     expect(nextAfter(server.view(), "prevenir")).toBe("visite");
     server.done.add("visite");
     expect(nextAfter(server.view(), "visite")).toBeNull();
+  });
+});
+
+describe("mouvement", () => {
+  type Started = { update: () => Promise<void>; done: Promise<void> };
+  let started: Started[];
+  /** Préférence de mouvement du navigateur ; et une View Transitions API factice qui attend le nouvel état. */
+  const motion = (reduce: boolean) => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (q: string) => ({ matches: reduce && q.includes("reduce"), media: q, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false }),
+    });
+    started = [];
+    Object.defineProperty(document, "startViewTransition", {
+      configurable: true,
+      value: (update: () => Promise<void>) => {
+        const done = update();
+        started.push({ update, done });
+        return { finished: done, ready: Promise.resolve(), updateCallbackDone: done, skipTransition() {} };
+      },
+    });
+  };
+  afterEach(() => {
+    delete (window as { matchMedia?: unknown }).matchMedia;
+    delete (document as { startViewTransition?: unknown }).startViewTransition;
+  });
+
+  it("a step change runs in a view transition, slides the right way and still lands the focus on the new title", async () => {
+    motion(false);
+    window.location.hash = "#/bienvenue/banque";
+    serve({ "/api/onboarding": () => ({ questions: [], answers: {}, suggestions: [] }), "/api/territory": () => ({ consents: { geocoding: false }, place: null }), "/api/consents": () => [] });
+    await journeyAt();
+    await settle();
+    await click("Plus tard");
+    expect(started).toHaveLength(1);
+    expect(document.documentElement.dataset.journeyDir).toBe("forward");
+    expect(document.documentElement.classList.contains("is-view-transition")).toBe(true);
+    // App rend la nouvelle étape au « hashchange » : la transition est libérée dès qu'elle est dans le DOM.
+    await journeyAt();
+    await settle();
+    await started[0]!.done;
+    await settle();
+    expect(document.documentElement.classList.contains("is-view-transition")).toBe(false);
+    const h1 = host.querySelector("h1")!;
+    expect(h1.textContent).toBe("Ton foyer");
+    expect(document.activeElement).toBe(h1);
+    expect(document.getElementById(h1.getAttribute("aria-describedby")!)?.textContent).toContain("Étape passée : Ta banque.");
+    // Revenir en arrière par la barre : même transition, dans l'autre sens.
+    await act(async () => { host.querySelector<HTMLAnchorElement>(".journey-progress a")!.click(); });
+    expect(started).toHaveLength(2);
+    expect(document.documentElement.dataset.journeyDir).toBe("back");
+    expect(window.location.hash).toBe("#/bienvenue/banque");
+    await journeyAt();
+    await settle();
+    expect(host.querySelector("h1")?.textContent).toBe("Ta banque");
+    expect(document.activeElement).toBe(host.querySelector("h1"));
+    // Née dans une transition de vue, l'étape ne rejoue pas d'entrée CSS par-dessus (ni à la fin de la transition).
+    expect(host.querySelector(".journey-body")?.className).toBe("journey-body");
+  });
+
+  it("a transition that never sees the new step is released by its safety timer", async () => {
+    motion(false);
+    window.location.hash = "#/bienvenue/banque";
+    serve({ "/api/onboarding": () => ({ questions: [], answers: {}, suggestions: [] }), "/api/territory": () => ({ consents: { geocoding: false }, place: null }), "/api/consents": () => [] });
+    await journeyAt();
+    await settle();
+    await click("Plus tard");
+    let released = false;
+    void started[0]!.done.then(() => { released = true; });
+    await act(async () => { await new Promise((r) => setTimeout(r, 500)); });
+    expect(released).toBe(true);
+  });
+
+  it("with reduced motion: no view transition, the focus moves at once, numbers are final straight away", async () => {
+    motion(true);
+    serve({ "/api/onboarding": () => ({ questions: [], answers: {}, suggestions: [] }), "/api/territory": () => ({ consents: { geocoding: false }, place: null }), "/api/consents": () => [] });
+    await journeyAt();
+    await settle();
+    await click("Plus tard");
+    expect(started).toHaveLength(0);
+    expect(document.documentElement.classList.contains("is-view-transition")).toBe(false);
+    await journeyAt();
+    await settle();
+    expect(document.activeElement).toBe(host.querySelector("h1"));
+    expect(host.querySelector("h1")?.textContent).toBe("Ton foyer");
+    expect(host.querySelector(".journey-body")?.classList.contains("is-forward")).toBe(true); // l'entrée CSS, coupée par le média
+
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    server.done = new Set(["banque", "foyer", "accords", "papier", "priorites"]);
+    await render(<StartChecklist />);
+    await settle();
+    expect(host.querySelector(".start-card .ring-value")?.textContent).toBe("5/8");
+  });
+
+  it("without reduced motion, the checklist count climbs to its value", async () => {
+    motion(false);
+    server.status = "in_progress";
+    server.done = new Set(["banque", "foyer", "accords", "papier", "priorites"]);
+    serve();
+    await render(<StartChecklist />);
+    await settle();
+    const value = () => host.querySelector(".start-card .ring-value")?.textContent;
+    expect(value()).not.toBe("5/8"); // il compte encore
+    await act(async () => { await new Promise((r) => setTimeout(r, 1200)); });
+    expect(value()).toBe("5/8");
+    expect(host.querySelector(".ring")?.getAttribute("aria-label")).toBe("5 éléments sur 8 faits"); // le nom ne compte pas
+  });
+
+  it("an item done while the page is open ticks itself; nothing ticks on load", async () => {
+    server.status = "in_progress";
+    server.done = new Set(["banque"]);
+    serve();
+    await render(<StartChecklist />);
+    await settle();
+    expect(host.querySelector(".is-fresh")).toBeNull();
+    server.done.add("foyer");
+    await act(async () => { window.dispatchEvent(new Event("bank:changed")); await new Promise((r) => setTimeout(r, 450)); });
+    await settle();
+    await click("Voir");
+    expect([...host.querySelectorAll(".start-items li.is-fresh")].map((li) => li.textContent)).toEqual([expect.stringContaining("Décrire ton foyer")]);
   });
 });
 

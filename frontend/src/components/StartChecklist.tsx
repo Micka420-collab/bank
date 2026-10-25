@@ -2,10 +2,12 @@
 // « 5 sur 8 », les trois prochains éléments, chacun avec son lien direct. Tout vient du serveur (/api/start) : la
 // liste dit la même chose sur chaque appareil. La fête n'a lieu que si l'anneau se ferme après un geste fait pendant
 // que la page est ouverte, jamais au chargement. Terminée, elle se replie en pilule une semaine ; « Masquer » la
-// retire d'Aujourd'hui (elle reste dans Réglages).
+// retire d'Aujourd'hui (elle reste dans Réglages). Mouvement (§ 3.7) : l'anneau se remplit et son chiffre se compte,
+// les éléments arrivent l'un après l'autre, et celui qui vient d'être fait sous tes yeux se coche en se traçant.
 
 import { useEffect, useRef, useState } from "react";
 import { api, useApi, type StartItem, type StartView } from "../api";
+import { useCountUp } from "../motion";
 import { Icon, type IconName } from "./Icon";
 import { Ring } from "./Ring";
 import { useAsyncAction, useCelebrate } from "./ui";
@@ -69,6 +71,10 @@ export function StartChecklist() {
   const [busy, error, run] = useAsyncAction();
   const celebrate = useCelebrate();
   const wasComplete = useRef<boolean | null>(null);
+  // Ce qui vient d'être fait pendant que la page est ouverte (après un geste, jamais au chargement) : coché en direct.
+  const doneBefore = useRef<Set<string> | null>(null);
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
+  const counted = useCountUp(data?.checklist.done ?? 0);
 
   // L'anneau se ferme sous tes yeux (après un geste, pas au chargement) : la fête du § 3.6, une fois.
   useEffect(() => {
@@ -76,6 +82,9 @@ export function StartChecklist() {
     const complete = data.checklist.completed_at !== null;
     if (wasComplete.current === false && complete && reloaded) celebrate("done", "Bank est prêt.");
     wasComplete.current = complete;
+    const now = new Set(data.checklist.items.filter((i) => i.done).map((i) => i.key));
+    if (doneBefore.current && reloaded) setFresh(new Set([...now].filter((k) => !doneBefore.current!.has(k))));
+    doneBefore.current = now;
   }, [data, reloaded, celebrate]);
 
   if (!data || !data.checklist.visible) return null;
@@ -104,8 +113,9 @@ export function StartChecklist() {
   return (
     <section className="card start-card" aria-labelledby="start-title">
       <div className="start-head">
-        <Ring value={cl.done} max={cl.total} label={`${cl.done} éléments sur ${cl.total} faits`}>
-          {cl.done}<small>/{cl.total}</small>
+        {/* La clé rejoue le remplissage de l'anneau quand le compte change. */}
+        <Ring key={cl.done} value={cl.done} max={cl.total} label={`${cl.done} éléments sur ${cl.total} faits`}>
+          {counted}<small>/{cl.total}</small>
         </Ring>
         <div className="start-intro">
           <h2 id="start-title">Bien démarrer</h2>
@@ -115,10 +125,10 @@ export function StartChecklist() {
           <a className="btn sm start-resume" href={`#/bienvenue${journey.current ? `/${journey.current}` : ""}`}>Reprendre le parcours <Icon name="arrow" /></a>
         )}
       </div>
-      <ItemList items={shown} />
+      <ItemList items={shown} fresh={fresh} />
       {rest.length > 0 && (
         <>
-          {open && <ItemList items={rest} />}
+          {open && <ItemList items={rest} fresh={fresh} />}
           <button type="button" className="btn link start-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
             {open ? "Voir moins" : restLabel}
           </button>
@@ -154,12 +164,12 @@ export function moreLabel(todo: number, done: number): string {
   return `Voir ${parts.join(" · ")}`;
 }
 
-function ItemList({ items }: { items: StartItem[] }) {
+function ItemList({ items, fresh }: { items: StartItem[]; fresh?: Set<string> }) {
   if (items.length === 0) return null;
   return (
     <ul className="start-items">
       {items.map((i) => (
-        <li key={i.key} className={i.done ? "is-done" : undefined}>
+        <li key={i.key} className={i.done ? `is-done${fresh?.has(i.key) ? " is-fresh" : ""}` : undefined}>
           <a href={i.href}>
             <span className="start-icon" aria-hidden="true"><Icon name={i.done ? "check" : ICONS[i.key] ?? "spark"} /></span>
             <span className="start-text"><b>{i.title}</b><span>{i.why}</span></span>

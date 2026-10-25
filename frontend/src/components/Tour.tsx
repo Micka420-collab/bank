@@ -20,6 +20,7 @@ export function Tour({ onFinish, onSkip, skipLabel = "Passer la visite", busy = 
   busy?: boolean;
 }) {
   const [i, setI] = useState(0);
+  const [dir, setDir] = useState<"forward" | "back">("forward");
   const heading = useRef<HTMLHeadingElement>(null);
   const moved = useRef(false);
   const screen = TOUR[i]!;
@@ -31,12 +32,13 @@ export function Tour({ onFinish, onSkip, skipLabel = "Passer la visite", busy = 
   }, [i]);
   const go = (n: number) => {
     moved.current = true;
+    setDir(n >= i ? "forward" : "back");
     setI(n);
   };
 
   return (
     <div className="tour">
-      <div className="tour-screen" key={screen.key}>
+      <div className={`tour-screen is-${dir}`} key={screen.key}>
         <TourPreview which={screen.key} />
         {/* La position est dans le titre, qui reçoit le focus : une seule lecture, pas de seconde annonce. */}
         <h2 ref={heading} tabIndex={-1} className="tour-title">{screen.tab}<span className="sr-only">, écran {i + 1} sur {TOUR.length}</span></h2>
