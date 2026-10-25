@@ -37,6 +37,7 @@ _QUERY = re.compile(r"^[a-z_]+=[a-z0-9_]+$")
 _CONTROL = re.compile(r"[\x00-\x1f\x7f\u200b-\u200f\u202a-\u202e\u2066-\u2069]")
 _LINK = re.compile(r"\S*(?:https?://|www\.)\S*", re.I)  # le lien entier, pas seulement son début
 CHART_KINDS = frozenset({"donut", "bars", "pairs", "line"})
+CHART_TONES = frozenset({"c1", "c2", "c3", "c4", "c5", "c6", "muted"})  # jetons de styles.css (categorize.TONES)
 DIAGRAM_KINDS = frozenset({"flow", "steps"})
 _ID = re.compile(r"^[a-z0-9_\-]{1,24}$")
 
@@ -145,7 +146,7 @@ def chart_block(
     source: str = "",
     dataset: str = "",
 ) -> dict[str, Any]:
-    """Un graphique prêt à dessiner. ``items`` selon le genre : donut/bars → {label, value, color?} ; pairs →
+    """Un graphique prêt à dessiner. ``items`` selon le genre : donut/bars → {label, value, color?, tone?} ; pairs →
     {label, a, b} (reçu/dépensé) ; line → {label, value}. Tout est entier (centimes ou unités)."""
     if kind not in CHART_KINDS:
         raise BlockError("Genre de graphique inconnu")
@@ -162,6 +163,9 @@ def chart_block(
         color = it.get("color")
         if isinstance(color, str) and re.match(r"^#[0-9a-fA-F]{6}$", color):
             row["color"] = color
+        tone = it.get("tone")
+        if isinstance(tone, str) and tone in CHART_TONES:
+            row["tone"] = tone  # teinte du thème (--c1…), prioritaire sur ``color`` côté interface
         rows.append(row)
     return {
         "type": "chart",

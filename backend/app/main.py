@@ -57,6 +57,7 @@ from app.api import (
     retirement,
     search,
     shares,
+    start,
     state_accounts,
     system,
     territory,
@@ -493,6 +494,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         territory,
         housing,
         state_accounts,
+        start,
     )
     for r in routers:
         app.include_router(r.router)

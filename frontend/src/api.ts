@@ -253,6 +253,8 @@ export type Category = {
   name: string;
   kind: string;
   color: string;
+  /** Teinte du thème (--c1…) tant que la couleur est celle par défaut ; null si l'utilisateur l'a choisie. */
+  tone?: string | null;
   monthly_budget_cents: number | null;
 };
 
@@ -1293,7 +1295,7 @@ export type History = {
   balances: { date: string; balance_cents: number }[];
   now: HistoryTotals;
   previous: HistoryTotals;
-  categories: { slug: string; name: string; color: string; cents: number; share: number }[];
+  categories: { slug: string; name: string; color: string; tone?: string | null; cents: number; share: number }[];
   periods: { key: string; start: string; label: string; income_cents: number; spent_cents: number }[];
   anomalies: { slug: string; name: string; cents: number; previous_cents: number; ratio: number }[];
   latest: { id: number; date: string; merchant: string; label: string; amount_cents: number; category: string | null; category_name: string | null; is_transfer: boolean }[];
@@ -1307,7 +1309,7 @@ export type ChatActionItem =
   | { key: string; label: string; kind: "navigate"; page: string }
   | { key: string; label: string; kind: "ask"; prompt: string }
   | { key: string; label: string; kind: "act"; card: string; action: string };
-export type ChartItem = { label: string; value?: number; a?: number; b?: number; color?: string };
+export type ChartItem = { label: string; value?: number; a?: number; b?: number; color?: string; tone?: string };
 export type ChatBlock =
   | { type: "actions"; items: ChatActionItem[] }
   | { type: "chart"; kind: "donut" | "bars" | "pairs" | "line"; title: string; unit: "eur" | "pct" | "kwh" | "count"; items: ChartItem[]; source: string; dataset: string }
@@ -1447,6 +1449,40 @@ export type ConsentView = {
   decided: boolean;
   updated_at: string | null;
   default: boolean;
+  /** Groupe d'affichage (ce qui part) et la ligne « Envoie : … » (DESIGN.md § 3.10). */
+  group?: ConsentGroup;
+  sends?: string;
+};
+export type ConsentGroup = "public" | "zone" | "adresse" | "contenus";
+
+// ------------------------------------------------------------------ démarrer avec Bank (#44)
+export type StartStepKey = "banque" | "foyer" | "accords" | "papier" | "priorites" | "prevenir" | "visite";
+export type StartStep = { key: StartStepKey; title: string; done: boolean; skipped: boolean; minutes: number; href: string };
+export type StartItem = {
+  key: string;
+  title: string;
+  why: string;
+  minutes: number;
+  done: boolean;
+  group: "essentiel" | "plus";
+  href: string;
+  value_cents: number | null;
+};
+export type PublicConsent = { purpose: string; group: ConsentGroup; title: string; sends: string; text: string; granted: boolean; decided: boolean };
+export type StartView = {
+  journey: { status: "new" | "in_progress" | "finished"; current: StartStepKey | null; steps: StartStep[] };
+  checklist: {
+    visible: boolean;
+    collapsed: boolean;
+    dismissed: boolean;
+    done: number;
+    total: number;
+    completed_at: string | null;
+    just_completed: boolean;
+    items: StartItem[];
+  };
+  public_consents: PublicConsent[];
+  connectors: { key: string; title: string; linked: boolean; section: string }[];
 };
 export type AssistantHints = { suggested: number; merchants: number; hints: Record<string, string> };
 

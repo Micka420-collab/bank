@@ -7,6 +7,7 @@ import { api, type ChatActionItem, type ChatBlock } from "../../api";
 import { money } from "../../format";
 import { Bars } from "../charts/Bars";
 import { Donut } from "../charts/Donut";
+import { sliceColors } from "../charts/tones";
 import { TrendChart } from "../charts/TrendChart";
 import { Icon } from "../Icon";
 import { useToast } from "../ui";
@@ -17,7 +18,6 @@ export type BlockHandlers = {
   onActed?: () => void;
 };
 
-const PALETTE = ["#2f5bea", "#1f9d55", "#e0a100", "#c0392b", "#7b61ff", "#0f8b8d", "#d35400", "#8a91ac"];
 
 function unitFormat(unit: string, v: number, whole = true): string {
   if (unit === "eur") return money(v, { whole });
@@ -94,7 +94,8 @@ function ChatChart({ block }: { block: Extract<ChatBlock, { type: "chart" }> }) 
   let body: React.ReactNode;
   if (kind === "donut") {
     const total = items.reduce((s, it) => s + Math.max(0, it.value ?? 0), 0);
-    const slices = items.map((it, i) => ({ slug: `${i}`, name: it.label, color: it.color ?? PALETTE[i % PALETTE.length]!, cents: it.value ?? 0, share: total ? Math.max(0, it.value ?? 0) / total : 0 }));
+    const colors = sliceColors(items); // teintes du thème (clé `tone`), couleur choisie sinon, palette en dernier
+    const slices = items.map((it, i) => ({ slug: `${i}`, name: it.label, color: colors[i]!, cents: it.value ?? 0, share: total ? Math.max(0, it.value ?? 0) / total : 0 }));
     body = <Donut slices={slices} total={total} label={block.title} centerLabel={unit === "eur" ? "dépensé" : "total"} />;
   } else if (kind === "pairs") {
     body = <Bars periods={items.map((it, i) => ({ key: `${i}`, label: it.label, income_cents: it.a ?? 0, spent_cents: it.b ?? 0 }))} />;

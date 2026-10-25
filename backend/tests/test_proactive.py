@@ -26,6 +26,8 @@ def world(app, auth_client: TestClient) -> Iterator[TestClient]:  # type: ignore
     app.dependency_overrides[deps.today] = lambda: TODAY
     with app.state.sessionmaker() as db:
         seed_household(db)
+    # Les cartes de mise en route se taisent tant que « Bien démarrer » se voit (test_start) : ici, liste masquée.
+    assert auth_client.post("/api/start/checklist", json={"action": "dismiss"}).status_code == 200
     yield auth_client
     app.dependency_overrides.clear()
 

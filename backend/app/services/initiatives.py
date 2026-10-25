@@ -44,7 +44,7 @@ from app.models import (
     User,
 )
 from app.security import audit
-from app.services import advisor, analytics, correlations, documents, planning, yearahead
+from app.services import advisor, analytics, correlations, documents, planning, start, yearahead
 from app.services import energy as energy_service
 from app.services import obligations as obligations_service
 from app.services.categories import recategorize
@@ -307,8 +307,14 @@ def cards(db: Session, today: date) -> list[Card]:
     return build_cards(build_context(db, today))
 
 
+# Cartes de mise en route : tues tant que la liste « Bien démarrer » se voit (elle pose déjà ces questions-là).
+SETUP_KEYS = frozenset({"start:data", "security:totp", "planning:connect"})
+
+
 def listing(db: Session, today: date, limit: int = DEFAULT_LIMIT) -> dict[str, Any]:
     all_cards = cards(db, today)
+    if start.checklist_visible(db):
+        all_cards = [c for c in all_cards if c.key not in SETUP_KEYS]
     return {
         "cards": [card_to_dict(c) for c in all_cards[:limit]],
         "total": len(all_cards),

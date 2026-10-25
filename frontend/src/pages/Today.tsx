@@ -5,6 +5,7 @@ import { useState } from "react";
 import { api, useApi, type AidsResponse, type BudgetResponse, type Category, type History, type HistoryRange, type MonthForecast } from "../api";
 import { Bars } from "../components/charts/Bars";
 import { Donut } from "../components/charts/Donut";
+import { toneSlices } from "../components/charts/tones";
 import { TrendChart } from "../components/charts/TrendChart";
 import { Copilot } from "../components/Copilot";
 import { CountUp } from "../components/CountUp";
@@ -13,6 +14,7 @@ import { Icon } from "../components/Icon";
 import { Initiatives } from "../components/Initiatives";
 import { MonthChart } from "../components/MonthChart";
 import { Segmented } from "../components/Segmented";
+import { StartChecklist } from "../components/StartChecklist";
 import { Amount, ErrorNote, Loading, useToast } from "../components/ui";
 import { Welcome } from "../components/Welcome";
 import { YearAhead } from "../components/YearAhead";
@@ -61,7 +63,8 @@ export function Today({ name }: { name?: string } = {}) {
   if (!budget.data) return <Loading />;
   const { forecast: f, suggested_budgets: suggested, settings } = budget.data;
   const isEmpty = f.current_balance_cents === 0 && f.history.every((p) => p.balance_cents === 0) && f.upcoming.length === 0;
-  if (isEmpty) return <Welcome onStarted={budget.reload} />;
+  // Rien encore : la liste « Bien démarrer » (et son « Reprendre le parcours ») passe avant les trois chemins.
+  if (isEmpty) return <><StartChecklist /><Welcome onStarted={budget.reload} /></>;
 
   const applySuggestion = async (slug: string, cents: number) => {
     await api(`/api/categories/${slug}`, { method: "PATCH", body: { monthly_budget_cents: cents } });
@@ -108,6 +111,8 @@ export function Today({ name }: { name?: string } = {}) {
           </div>
         )}
       </section>
+
+      <StartChecklist />
 
       <Initiatives onChanged={reload} title="La prochaine chose à faire" />
 
@@ -166,7 +171,7 @@ export function Today({ name }: { name?: string } = {}) {
         <div className="split reveal" style={{ marginTop: "1rem", ["--i" as string]: 4 }}>
           <section className="card" aria-labelledby="donut-title">
             <div className="card-head"><h2 id="donut-title">Où part l'argent</h2><span className="faint">{rangeLabel(range)}</span></div>
-            <Donut slices={h.categories} total={h.now.spent_cents} label="Dépenses par catégorie" />
+            <Donut slices={toneSlices(h.categories)} total={h.now.spent_cents} label="Dépenses par catégorie" />
             {h.anomalies.length > 0 && (
               <ul className="stack" style={{ marginTop: "1rem", listStyle: "none", padding: 0 }}>
                 {h.anomalies.map((a) => (

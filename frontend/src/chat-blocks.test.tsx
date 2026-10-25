@@ -33,7 +33,7 @@ const OPENING: AssistantOpening = {
 };
 const BLOCKS: ChatBlock[] = [
   { type: "chart", kind: "donut", title: "Dépenses par catégorie · 3 derniers mois", unit: "eur", dataset: "spend_by_category", source: "Bank · opérations", items: [
-    { label: "Logement", value: 195_000, color: "#2f5bea" }, { label: "Courses", value: 90_000 },
+    { label: "Logement", value: 195_000, color: "#0b7480", tone: "c1" }, { label: "Courses", value: 90_000, color: "#123456" },
   ] },
   { type: "diagram", kind: "flow", title: "D'où vient le reste à dépenser", nodes: [
     { id: "rev", label: "Revenus", note: "salaire + aides" }, { id: "fix", label: "Charges fixes" }, { id: "rad", label: "Reste à dépenser" },
@@ -140,6 +140,8 @@ describe("chat interactif", () => {
     expect(chart.textContent).toContain("Dépenses par catégorie");
     expect(chart.textContent).toContain("Bank · opérations");
     expect(chart.querySelector("svg[role=img]")!.getAttribute("aria-label")).toContain("Logement 68 %");
+    // La teinte du thème prime sur l'hexadécimal par défaut ; une couleur choisie reste telle quelle.
+    expect([...chart.querySelectorAll(".donut-arc")].map((a) => a.getAttribute("stroke"))).toEqual(["var(--c1)", "#123456"]);
     const flow = host.querySelector<SVGSVGElement>(".chat-flow")!;
     expect(flow.querySelectorAll(".chat-node")).toHaveLength(3);
     expect(flow.querySelectorAll(".chat-edge")).toHaveLength(2);

@@ -1,4 +1,4 @@
-/* Bank — design system « Verre lumineux » (voir docs/DESIGN.md § 3).
+/* Bank — design system « Verre lumineux », palette « Lagon » (voir docs/DESIGN.md § 3).
    Des halos de lumière douce au fond, des surfaces en verre dépoli posées dessus, des boutons en pilule qui
    s'allument au survol, et un petit moment de fête quand une corvée est finie. Les chiffres restent le héros :
    plus il y a de texte, plus le verre est opaque. Le flou n'est posé que sur quelques grandes surfaces. */
@@ -7,49 +7,55 @@
 
 /* ------------------------------------------------------------------ jetons */
 :root {
-  --bg: #f4f3fb;
-  --halo-1: rgba(139, 124, 255, 0.4); /* violet */
-  --halo-2: rgba(255, 143, 184, 0.4); /* rose */
-  --halo-3: rgba(94, 224, 192, 0.4); /* menthe */
-  --halo-4: rgba(255, 198, 92, 0.4); /* soleil */
+  --bg: #effafc;
+  --halo-1: rgba(34, 211, 238, 0.36); /* aqua */
+  --halo-2: rgba(45, 212, 191, 0.38); /* turquoise */
+  --halo-3: rgba(255, 213, 74, 0.36); /* soleil */
+  --halo-4: rgba(96, 165, 250, 0.30); /* ciel */
+  --halo-foot: rgba(255, 213, 74, 0.24); /* bas du fond : un soleil léger (plus fort, il vire au kaki sur l'aqua) ;
+                                           la nuit, le ciel (le jaune y vire à l'olive) */
+  --tint-sun: var(--halo-3); /* pastille « soleil » des tuiles (.more) */
   --surface: #ffffff; /* opaque : champs, menus, repli sans transparence */
-  --surface-2: #f0eefa;
-  --glass: rgba(255, 255, 255, 0.74);
-  --glass-strong: rgba(255, 255, 255, 0.88);
+  --surface-2: #e5f6f8;
+  --glass: rgba(250, 255, 255, 0.74);
+  --glass-strong: rgba(250, 255, 255, 0.88);
   --glass-blur: blur(20px) saturate(160%);
   --glass-edge: rgba(255, 255, 255, 0.7);
   --glass-shine: inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  --glass-shadow: 0 12px 32px -14px rgba(52, 40, 120, 0.28), 0 2px 6px -2px rgba(52, 40, 120, 0.1);
+  --glass-shadow: 0 12px 32px -14px rgba(11, 74, 90, 0.28), 0 2px 6px -2px rgba(11, 74, 90, 0.1);
   --card-shadow: var(--glass-shine), var(--glass-shadow);
-  --line: #e4e1f3;
-  --line-strong: #8c89b0; /* bord des champs : 3,3:1 sur --surface */
-  --ink: #17163a;
-  --ink-2: #4a4870;
-  --ink-3: #5b5980; /* 5,8:1 sur verre ; jamais sur le fond nu */
-  --accent: #4b3bea;
-  --accent-ink: #3f32c8;
-  --accent-soft: #ebe8ff;
-  --accent-grad: linear-gradient(135deg, #5b4bff, #9b3fd8);
-  --grad-a: #5b4bff; /* bouts du dégradé, pour les SVG (anneau de progression) */
-  --grad-b: #9b3fd8;
-  --accent-wash: linear-gradient(135deg, rgba(91, 75, 255, 0.14), rgba(155, 63, 216, 0.14));
-  --on-accent: #ffffff;
-  --glow: 0 0 0 4px rgba(91, 75, 255, 0.18), 0 10px 28px -8px rgba(123, 69, 236, 0.6);
-  --glow-coin: 0 0 0 4px rgba(233, 164, 0, 0.22), 0 10px 28px -8px rgba(233, 164, 0, 0.65);
-  --glow-ok: 0 0 0 4px rgba(18, 122, 76, 0.16), 0 8px 22px -8px rgba(18, 122, 76, 0.55);
-  --positive: #127a4c;
-  --positive-soft: #ddf5ea;
-  --negative: #c42b4e;
-  --negative-soft: #fde6ec;
-  --warning: #8f5407;
-  --warning-soft: #fdf0d9;
-  --coin: #e9a400; /* remplissage seulement : le texte « pièce » est en --coin-ink */
-  --coin-soft: #fff1c7;
-  --coin-ink: #7a4d00;
-  --shadow-1: 0 1px 2px rgba(52, 40, 120, 0.08), 0 1px 1px rgba(52, 40, 120, 0.04);
-  --shadow-2: 0 10px 26px -12px rgba(52, 40, 120, 0.32), 0 2px 6px -2px rgba(52, 40, 120, 0.1);
-  --shadow-3: 0 24px 48px -22px rgba(52, 40, 120, 0.45);
-  --chart-grid: #e9e6f5;
+  --line: #d2ebee;
+  --line-strong: #6b98a1; /* bord des champs : 3,2:1 sur --surface */
+  --ink: #082730;
+  --ink-2: #2f5560;
+  --ink-3: #41656f; /* 5,8:1 sur verre ; jamais sur le fond nu */
+  --accent: #0b7480;
+  --accent-ink: #08636d;
+  --accent-soft: #d6f5f7;
+  --accent-grad: linear-gradient(135deg, #16c8e4, #2fdcb4);
+  --grad-a: #16c8e4; /* bouts du dégradé, pour les SVG (anneau de progression) */
+  --grad-b: #2fdcb4;
+  --arc-a: #0b93a8; /* anneau de progression : sarcelle plus profonde, 3,4:1 sur verre (le logo garde --grad-a) */
+  --arc-b: #0d9a7d; /* 3,3:1 */
+  --accent-wash: linear-gradient(135deg, rgba(22, 200, 228, 0.14), rgba(47, 220, 180, 0.14));
+  --on-accent: #04222a;
+  --on-solid: #ffffff; /* texte sur un aplat plein (--accent, --positive, --negative, --warning) : 5,3:1 au pire */
+  --glow: 0 0 0 4px rgba(22, 200, 228, 0.18), 0 10px 28px -8px rgba(47, 220, 180, 0.55);
+  --glow-coin: 0 0 0 4px rgba(245, 184, 0, 0.22), 0 10px 28px -8px rgba(245, 184, 0, 0.6);
+  --glow-ok: 0 0 0 4px rgba(15, 122, 62, 0.18), 0 8px 22px -8px rgba(15, 122, 62, 0.5);
+  --positive: #0f7a3e; /* un vert franc, distinct de la sarcelle --accent */
+  --positive-soft: #dcf4e3;
+  --negative: #c2304b;
+  --negative-soft: #fde5ea;
+  --warning: #8a5300;
+  --warning-soft: #fff2cf;
+  --coin: #f5b800; /* remplissage seulement : le texte « pièce » est en --coin-ink */
+  --coin-soft: #fff3c4;
+  --coin-ink: #7a4c00;
+  --shadow-1: 0 1px 2px rgba(11, 74, 90, 0.08), 0 1px 1px rgba(11, 74, 90, 0.04);
+  --shadow-2: 0 10px 26px -12px rgba(11, 74, 90, 0.32), 0 2px 6px -2px rgba(11, 74, 90, 0.1);
+  --shadow-3: 0 24px 48px -22px rgba(11, 74, 90, 0.45);
+  --chart-grid: #dcf0f2;
 
   --font: "Bricolage Grotesque Variable", system-ui, sans-serif;
   --t-xs: 0.75rem;
@@ -72,6 +78,12 @@
   --d-base: 200ms;
   --d-slow: 320ms;
   --d-glow: 240ms;
+  /* Le parcours (§ 3.7) : sortie, entrée d'une surface, scène ; --ease-out pour les surfaces, --ease-spring pour les
+     petits objets seulement (pastilles, boutons de bascule, badges), --ease-in pour ce qui part. */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --d-exit: 120ms;
+  --d-enter: 380ms;
+  --d-scene: 600ms;
   --sidebar: 15.5rem;
   --content: 72rem;
 
@@ -101,94 +113,104 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0c0b1d;
-    --halo-1: rgba(109, 92, 255, 0.35);
-    --halo-2: rgba(255, 95, 162, 0.3);
-    --halo-3: rgba(34, 201, 160, 0.28);
-    --halo-4: rgba(247, 183, 59, 0.24);
-    --surface: #17152f;
-    --surface-2: #201d40;
-    --glass: rgba(26, 24, 56, 0.7);
-    --glass-strong: rgba(26, 24, 56, 0.86);
+    --bg: #03141c;
+    --halo-1: rgba(34, 211, 238, 0.26);
+    --halo-2: rgba(20, 184, 166, 0.28); /* sarcelle */
+    --halo-3: rgba(250, 204, 21, 0.16); /* soleil */
+    --halo-4: rgba(59, 130, 246, 0.26);
+    --halo-foot: var(--halo-4);
+    --tint-sun: #85610b; /* mêlé à 70 % au --surface : un or chaud #604e16, pas un kaki */
+    --surface: #0a2230;
+    --surface-2: #0f2d3d;
+    --glass: rgba(8, 36, 50, 0.70);
+    --glass-strong: rgba(8, 36, 50, 0.86);
     --glass-blur: blur(24px) saturate(140%);
     --glass-edge: rgba(255, 255, 255, 0.1);
     --glass-shine: inset 0 1px 0 rgba(255, 255, 255, 0.08);
     --glass-shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.7);
-    --line: #2c2858;
-    --line-strong: #6f6b9e;
-    --ink: #f1efff;
-    --ink-2: #bdb9e0;
-    --ink-3: #a29ecb;
-    --accent: #a99dff;
-    --accent-ink: #c9c1ff;
-    --accent-soft: #2a2560;
-    --accent-grad: linear-gradient(135deg, #8c7cff, #d07bff);
-    --grad-a: #8c7cff;
-    --grad-b: #d07bff;
-    --accent-wash: linear-gradient(135deg, rgba(140, 124, 255, 0.2), rgba(208, 123, 255, 0.16));
-    --on-accent: #0c0b1d;
-    --glow: 0 0 0 4px rgba(169, 157, 255, 0.22), 0 10px 32px -6px rgba(208, 123, 255, 0.55);
-    --glow-coin: 0 0 0 4px rgba(247, 197, 72, 0.22), 0 10px 32px -6px rgba(247, 197, 72, 0.5);
-    --glow-ok: 0 0 0 4px rgba(90, 211, 155, 0.2), 0 8px 26px -6px rgba(90, 211, 155, 0.45);
-    --positive: #5ad39b;
-    --positive-soft: #163a2c;
-    --negative: #ff8597;
-    --negative-soft: #3f1a28;
-    --warning: #f2b65b;
-    --warning-soft: #3a2c14;
-    --coin: #f7c548;
-    --coin-soft: #3b2f10;
-    --coin-ink: #f9d77e;
+    --line: #173c4d;
+    --line-strong: #5f8e9c;
+    --ink: #e9fbff;
+    --ink-2: #a8d4dd;
+    --ink-3: #8dbcc6;
+    --accent: #4fe0f0;
+    --accent-ink: #8cf0fa;
+    --accent-soft: #0e3a47;
+    --accent-grad: linear-gradient(135deg, #22d3ee, #5eead4);
+    --grad-a: #22d3ee;
+    --grad-b: #5eead4;
+    --arc-a: #22d3ee;
+    --arc-b: #5eead4;
+    --accent-wash: linear-gradient(135deg, rgba(34, 211, 238, 0.2), rgba(94, 234, 212, 0.16));
+    --on-accent: #03202a;
+    --on-solid: #03141c;
+    --glow: 0 0 0 4px rgba(34, 211, 238, 0.22), 0 10px 32px -6px rgba(94, 234, 212, 0.55);
+    --glow-coin: 0 0 0 4px rgba(255, 210, 63, 0.22), 0 10px 28px -8px rgba(255, 210, 63, 0.6);
+    --glow-ok: 0 0 0 4px rgba(95, 224, 173, 0.18), 0 8px 22px -8px rgba(95, 224, 173, 0.5);
+    --positive: #5fe0ad;
+    --positive-soft: #0f3a2e;
+    --negative: #ff8a9e;
+    --negative-soft: #3d1822;
+    --warning: #ffd166;
+    --warning-soft: #382c0e;
+    --coin: #ffd23f;
+    --coin-soft: #3a300c;
+    --coin-ink: #ffe08a;
     --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
     --shadow-2: 0 10px 26px -12px rgba(0, 0, 0, 0.65);
     --shadow-3: 0 24px 48px -22px rgba(0, 0, 0, 0.75);
-    --chart-grid: #26224d;
+    --chart-grid: #123445;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0c0b1d;
-  --halo-1: rgba(109, 92, 255, 0.35);
-  --halo-2: rgba(255, 95, 162, 0.3);
-  --halo-3: rgba(34, 201, 160, 0.28);
-  --halo-4: rgba(247, 183, 59, 0.24);
-  --surface: #17152f;
-  --surface-2: #201d40;
-  --glass: rgba(26, 24, 56, 0.7);
-  --glass-strong: rgba(26, 24, 56, 0.86);
+  --bg: #03141c;
+  --halo-1: rgba(34, 211, 238, 0.26);
+  --halo-2: rgba(20, 184, 166, 0.28); /* sarcelle */
+  --halo-3: rgba(250, 204, 21, 0.16); /* soleil */
+  --halo-4: rgba(59, 130, 246, 0.26);
+  --halo-foot: var(--halo-4);
+  --tint-sun: #85610b; /* mêlé à 70 % au --surface : un or chaud #604e16, pas un kaki */
+  --surface: #0a2230;
+  --surface-2: #0f2d3d;
+  --glass: rgba(8, 36, 50, 0.70);
+  --glass-strong: rgba(8, 36, 50, 0.86);
   --glass-blur: blur(24px) saturate(140%);
   --glass-edge: rgba(255, 255, 255, 0.1);
   --glass-shine: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --glass-shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.7);
-  --line: #2c2858;
-  --line-strong: #6f6b9e;
-  --ink: #f1efff;
-  --ink-2: #bdb9e0;
-  --ink-3: #a29ecb;
-  --accent: #a99dff;
-  --accent-ink: #c9c1ff;
-  --accent-soft: #2a2560;
-  --accent-grad: linear-gradient(135deg, #8c7cff, #d07bff);
-  --grad-a: #8c7cff;
-  --grad-b: #d07bff;
-  --accent-wash: linear-gradient(135deg, rgba(140, 124, 255, 0.2), rgba(208, 123, 255, 0.16));
-  --on-accent: #0c0b1d;
-  --glow: 0 0 0 4px rgba(169, 157, 255, 0.22), 0 10px 32px -6px rgba(208, 123, 255, 0.55);
-  --glow-coin: 0 0 0 4px rgba(247, 197, 72, 0.22), 0 10px 32px -6px rgba(247, 197, 72, 0.5);
-  --glow-ok: 0 0 0 4px rgba(90, 211, 155, 0.2), 0 8px 26px -6px rgba(90, 211, 155, 0.45);
-  --positive: #5ad39b;
-  --positive-soft: #163a2c;
-  --negative: #ff8597;
-  --negative-soft: #3f1a28;
-  --warning: #f2b65b;
-  --warning-soft: #3a2c14;
-  --coin: #f7c548;
-  --coin-soft: #3b2f10;
-  --coin-ink: #f9d77e;
+  --line: #173c4d;
+  --line-strong: #5f8e9c;
+  --ink: #e9fbff;
+  --ink-2: #a8d4dd;
+  --ink-3: #8dbcc6;
+  --accent: #4fe0f0;
+  --accent-ink: #8cf0fa;
+  --accent-soft: #0e3a47;
+  --accent-grad: linear-gradient(135deg, #22d3ee, #5eead4);
+  --grad-a: #22d3ee;
+  --grad-b: #5eead4;
+  --arc-a: #22d3ee;
+  --arc-b: #5eead4;
+  --accent-wash: linear-gradient(135deg, rgba(34, 211, 238, 0.2), rgba(94, 234, 212, 0.16));
+  --on-accent: #03202a;
+  --on-solid: #03141c;
+  --glow: 0 0 0 4px rgba(34, 211, 238, 0.22), 0 10px 32px -6px rgba(94, 234, 212, 0.55);
+  --glow-coin: 0 0 0 4px rgba(255, 210, 63, 0.22), 0 10px 28px -8px rgba(255, 210, 63, 0.6);
+  --glow-ok: 0 0 0 4px rgba(95, 224, 173, 0.18), 0 8px 22px -8px rgba(95, 224, 173, 0.5);
+  --positive: #5fe0ad;
+  --positive-soft: #0f3a2e;
+  --negative: #ff8a9e;
+  --negative-soft: #3d1822;
+  --warning: #ffd166;
+  --warning-soft: #382c0e;
+  --coin: #ffd23f;
+  --coin-soft: #3a300c;
+  --coin-ink: #ffe08a;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
   --shadow-2: 0 10px 26px -12px rgba(0, 0, 0, 0.65);
   --shadow-3: 0 24px 48px -22px rgba(0, 0, 0, 0.75);
-  --chart-grid: #26224d;
+  --chart-grid: #123445;
   color-scheme: dark;
 }
 
@@ -223,7 +245,7 @@ body::before {
   background:
     radial-gradient(42vmax 42vmax at 4% 0%, var(--halo-1), transparent 70%),
     radial-gradient(38vmax 38vmax at 100% 6%, var(--halo-2), transparent 70%),
-    radial-gradient(46vmax 46vmax at 0% 100%, var(--halo-3), transparent 70%),
+    radial-gradient(46vmax 46vmax at 0% 100%, var(--halo-foot), transparent 70%),
     radial-gradient(40vmax 40vmax at 100% 100%, var(--halo-4), transparent 70%);
 }
 @media (max-width: 760px) {
@@ -231,7 +253,7 @@ body::before {
   body::before {
     background:
       radial-gradient(70vmax 50vmax at 10% -6%, var(--halo-1), transparent 70%),
-      radial-gradient(70vmax 50vmax at 90% 106%, var(--halo-3), transparent 70%);
+      radial-gradient(70vmax 50vmax at 90% 106%, var(--halo-foot), transparent 70%);
   }
 }
 h1,
@@ -293,7 +315,7 @@ a.sr-only:focus-visible {
   padding: 0.6rem 0.9rem;
   border-radius: var(--r-s);
   background: var(--accent);
-  color: var(--on-accent);
+  color: var(--on-solid);
   font-weight: 600;
   text-decoration: none;
   box-shadow: var(--shadow-2, 0 6px 20px rgba(0, 0, 0, 0.2));
@@ -680,7 +702,7 @@ a.sr-only:focus-visible {
   text-align: center;
 }
 .chip[aria-pressed="true"] .chip-count {
-  background: var(--on-accent);
+  background: var(--surface);
   color: var(--accent-ink);
 }
 .verdict {
@@ -1576,6 +1598,12 @@ input[aria-invalid="true"] {
   box-shadow: none;
   transform: none;
 }
+/* Le bouton principal désactivé ne ressemble pas à une pastille --accent-soft : un aplat neutre, net. */
+.btn:disabled:not(.quiet, .ghost, .link, .danger, .coin, .is-loading) {
+  opacity: 1;
+  background: var(--surface-2);
+  color: var(--ink-3);
+}
 .btn.quiet {
   background: var(--glass-strong);
   border-color: color-mix(in srgb, var(--line-strong) 45%, var(--glass-edge));
@@ -2418,7 +2446,6 @@ input[aria-invalid="true"] {
   justify-content: space-between;
   gap: 1rem;
   animation: reveal var(--d-slow) var(--ease-out) both;
-  animation-delay: calc(var(--i, 0) * 180ms);
 }
 .sync-steps {
   list-style: none;
@@ -2460,7 +2487,1747 @@ input[aria-invalid="true"] {
 .sync-steps li.is-done .dot {
   background: var(--positive);
   border-color: var(--positive);
-  color: #fff;
+  color: var(--on-solid);
+}
+
+/* Intro et retour de la banque : ce qui était en style en ligne (CSP, § 3.8) devient des classes. */
+.intro-actions {
+  margin-top: 1.5rem;
+}
+.intro-art .mini-card:nth-child(2) {
+  animation-delay: 180ms;
+}
+.intro-art .mini-card:nth-child(3) {
+  animation-delay: 360ms;
+}
+.intro-art .mini-card:nth-child(4) {
+  animation-delay: 540ms;
+}
+.intro-ask {
+  animation-delay: 200ms;
+}
+.sync-error {
+  margin-top: 1rem;
+}
+.connected-name {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* ------------------------------------------------------------------ démarrer avec Bank (§ 3.10) */
+/* Le parcours : plein écran, sans rail ni île. En haut la marque, « Étape 2 sur 7 », « Quitter » ; dessous une barre
+   de sept segments (des liens : on revient à une étape d'un geste) ; au centre une carte de verre. */
+.journey {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+}
+.journey-top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem clamp(1rem, 4vw, 2.5rem) 0.25rem;
+}
+.journey-top .brand {
+  margin-right: auto;
+}
+.journey-count {
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.journey-quit {
+  min-height: 2.75rem;
+}
+.journey-progress {
+  list-style: none;
+  margin: 0 auto;
+  padding: 0 clamp(1rem, 4vw, 2.5rem);
+  width: min(100%, 46rem);
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+.journey-progress a {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem; /* la cible fait 44 px, le segment dessiné 8 px */
+  border-radius: var(--r-pill);
+}
+/* Un segment : une piste, un remplissage (.journey-fill) qui s'étire de gauche à droite (transform seul, sur l'enfant :
+   la piste arrondie, elle, ne se déforme jamais). À venir et passés : une piste fine de vraie hauteur ; en cours et
+   faits : pleine hauteur. Le changement de hauteur se fait pendant le fondu de la transition de vue, sans transition. */
+.journey-seg {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 0.5rem;
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--line-strong) 40%, var(--line));
+  color: var(--on-accent);
+  transition: background-color var(--d-fast);
+}
+.journey-progress a:hover .journey-seg {
+  background: var(--line-strong);
+}
+/* Passée : la même piste fine, plus soutenue — pas de rayures. */
+.journey-progress .is-skipped .journey-seg {
+  background: var(--line-strong);
+}
+.journey-progress .is-done .journey-seg,
+.journey-progress [aria-current="step"] .journey-seg {
+  height: 1rem;
+}
+/* La lueur du segment en cours : une ombre posée une fois (pas de filtre sur un contenu qui s'anime). */
+.journey-progress [aria-current="step"] .journey-seg {
+  box-shadow: 0 4px 10px -2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.journey-fill {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+.journey-progress .is-done .journey-fill {
+  background: var(--accent);
+  transform: none;
+  animation: seg-fill var(--d-enter) var(--ease-out) both;
+}
+.journey-progress [aria-current="step"] .journey-fill {
+  background: var(--accent-grad);
+  transform: none;
+  animation: seg-fill var(--d-scene) var(--ease-out) 120ms both;
+}
+/* Un reflet passe une fois sur le segment en cours, juste après son remplissage. */
+.journey-progress [aria-current="step"] .journey-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--glass-edge), transparent);
+  transform: translateX(-100%);
+  animation: seg-sheen 1.2s var(--ease-out) 720ms 1;
+}
+.journey-progress .is-done .journey-seg .icon {
+  position: relative;
+  width: 0.75rem;
+  height: 0.75rem;
+  color: var(--surface);
+  stroke-dasharray: 30;
+  animation: check-draw 400ms var(--ease-out) 300ms both;
+}
+@keyframes seg-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes seg-sheen {
+  to {
+    transform: translateX(100%);
+  }
+}
+.journey-body {
+  width: min(100%, 46rem);
+  margin: 0 auto;
+  padding: 0.75rem clamp(1rem, 4vw, 2.5rem) 2.5rem;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  view-transition-name: journey-step;
+}
+.journey-card {
+  padding: clamp(1.25rem, 4vw, 2rem);
+  display: grid;
+  gap: 0.5rem;
+}
+.journey-card h1 {
+  font-size: clamp(1.6rem, 6vw, 2.5rem);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.journey-card h1:focus,
+.journey-card h1:focus-visible {
+  outline: none; /* le focus y est posé par script pour les lecteurs d'écran ; le titre n'est pas une commande */
+}
+.journey-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--accent-ink);
+  font-size: var(--t-sm);
+  font-weight: 650;
+}
+.journey-goal {
+  color: var(--ink-2);
+  font-size: var(--t-lg);
+  line-height: 1.4;
+  max-width: 40ch;
+  margin-bottom: 0.75rem;
+}
+.journey-stack {
+  gap: 1.25rem;
+}
+.journey-lead {
+  margin-top: 0.5rem;
+}
+.journey-note {
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  max-width: 60ch;
+}
+.journey-note.faint {
+  color: var(--ink-3);
+}
+.journey-actions {
+  margin-top: 0.25rem;
+}
+.journey-skip {
+  display: flex;
+  justify-content: center;
+}
+.journey-skip .btn {
+  min-height: 2.75rem;
+}
+.journey-panel {
+  display: grid;
+  gap: 0.5rem;
+}
+/* Dans la carte du parcours, les trois chemins s'empilent tant qu'il n'y a pas la place de trois colonnes. */
+.journey-card .paths-grid {
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  margin-top: 0;
+}
+.journey-card .path {
+  min-height: 0;
+}
+.journey-bank {
+  display: grid;
+  gap: 1rem;
+}
+.journey-form {
+  max-width: 34rem;
+}
+.journey-field {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+.journey-field legend {
+  font-weight: 600;
+  margin-bottom: 0.45rem;
+  padding: 0;
+}
+.journey-field .chip {
+  min-height: 2.75rem;
+}
+.journey-field select,
+.journey-field input {
+  min-height: 2.75rem;
+}
+.journey-extra {
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+}
+.journey-extra summary,
+.consent-more summary,
+.start-more summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--accent-ink);
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.journey-extra[open] summary {
+  margin-bottom: 0.5rem;
+}
+.journey-drop {
+  margin: 0;
+  padding: 1.75rem 1rem;
+  gap: 0.6rem;
+}
+.journey-drop > .icon {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+.journey-ideas {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+}
+.journey-ideas .tag {
+  font-size: var(--t-sm);
+  padding: 0.25rem 0.75rem;
+  color: var(--ink-2);
+}
+.journey-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+}
+.journey-choice {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+}
+.journey-choice h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--t-lg);
+}
+.journey-choice h2 .icon {
+  color: var(--accent);
+}
+/* Ce que l'étape précédente a donné, en tête de la suivante (pas de toast dans le parcours : il couvrirait les
+   boutons du bas au téléphone). */
+.journey-flash {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: var(--r-control);
+  background: var(--positive-soft);
+  color: var(--ink);
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+.journey-flash .icon {
+  flex: none;
+  margin-top: 0.15rem;
+  color: var(--positive);
+}
+/* Une étape passée n'est pas une réussite : même place, sans le vert. */
+.journey-flash.is-skipped {
+  background: var(--surface-2);
+}
+.journey-flash.is-skipped .icon {
+  color: var(--ink-2);
+}
+/* Le volet ouvert par une carte de chemin : il reçoit le focus par script, on le montre sans anneau. */
+.journey-reveal {
+  scroll-margin-top: 1rem;
+}
+.journey-reveal:focus {
+  outline: none;
+}
+/* Pastilles à choix unique : un vrai bouton radio (masqué) dans chaque pastille. */
+.chip-radio:has(input:checked) {
+  background: var(--accent-grad);
+  border-color: transparent;
+  color: var(--on-accent);
+  box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+.chip-radio:has(input:focus-visible) {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+/* La visite : « Précédent » en lien, « Passer » discret, sur une même ligne sous l'action. */
+.tour-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+}
+.tour-foot .btn {
+  min-height: 2.75rem;
+}
+.tour-foot .btn:only-child {
+  margin-inline: auto;
+}
+/* Sorti du parcours vers une page (Messageries, Opérations) : le chemin du retour, en haut. */
+.journey-return {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+  padding: 0.6rem 0.6rem 0.6rem 1rem;
+  border-radius: var(--r-pill);
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-shine);
+  font-weight: 600;
+}
+@media (max-width: 760px) {
+  .journey-top .brand {
+    font-size: var(--t-md);
+  }
+  /* Dans le parcours, la zone reste au téléphone : elle porte les idées de papiers (le bouton fait le dépôt). */
+  .vault-drop.journey-drop {
+    display: grid;
+  }
+  /* Au téléphone, l'action principale prend toute la largeur. */
+  .journey-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .journey-actions > .btn {
+    width: 100%;
+  }
+}
+
+/* ------------------------------------------------------------------ démarrer : mouvement (§ 3.7, § 3.10 e) */
+/* Le parcours vit, puis se pose : un ciel qui dérive lentement (et s'arrête), des étapes qui se passent le relais
+   dans le sens du parcours, une scène par étape jouée une fois, des cartes qui se soulèvent. Un seul maître pour
+   chaque entrée. On n'anime que transform, opacity et stroke-dashoffset (les ombres de survol des boutons et des
+   cartes, courtes, sont la seule exception) ; mouvement réduit : la règle globale coupe tout et chaque chose est
+   dessinée dans son état final. Durées : --d-exit, --d-enter, --d-scene ; --ease-spring pour les petits objets. */
+:root {
+  --step-shift: 32px;
+}
+@media (max-width: 760px) {
+  :root {
+    --step-shift: 20px; /* au téléphone, la carte arrive sans dépasser du bord */
+  }
+}
+.journey {
+  position: relative;
+  isolation: isolate;
+}
+.journey > :not(.journey-sky) {
+  position: relative;
+  z-index: 1;
+}
+/* Le ciel vivant remplace les halos fixes du fond pendant le parcours (classe posée par Journey sur la racine). */
+:root.in-journey body::before {
+  opacity: 0;
+}
+.journey-sky {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* Chaque halo est peint petit (18vmax) puis agrandi ×4 : un dégradé radial s'agrandit sans perte visible, pour un
+   seizième de la mémoire. */
+.journey-sky > i {
+  position: absolute;
+  width: 18vmax;
+  height: 18vmax;
+  border-radius: 50%;
+  transform: scale(4);
+}
+.journey-sky > i:nth-child(1) {
+  left: -3vmax;
+  top: -7vmax;
+  background: radial-gradient(closest-side, var(--halo-1), transparent);
+}
+.journey-sky > i:nth-child(2) {
+  right: -7vmax;
+  top: calc(4vh + 27vmax);
+  background: radial-gradient(closest-side, var(--halo-2), transparent);
+}
+.journey-sky > i:nth-child(3) {
+  left: 13vmax;
+  bottom: -13vmax;
+  background: radial-gradient(closest-side, var(--halo-foot), transparent);
+}
+/* La dérive : translation seule, lente, deux allers-retours (une minute et demie environ), puis le ciel se pose. */
+@media (prefers-reduced-motion: no-preference) {
+  .journey-sky > i {
+    will-change: transform;
+    animation: sky-drift-a 44s ease-in-out 2 alternate;
+  }
+  .journey-sky > i:nth-child(2) {
+    animation-name: sky-drift-b;
+    animation-duration: 52s;
+  }
+  .journey-sky > i:nth-child(3) {
+    animation-name: sky-drift-c;
+    animation-duration: 38s;
+  }
+}
+@keyframes sky-drift-a {
+  to {
+    transform: translate3d(16vmax, 12vmax, 0) scale(4);
+  }
+}
+@keyframes sky-drift-b {
+  to {
+    transform: translate3d(-18vmax, 16vmax, 0) scale(4);
+  }
+}
+@keyframes sky-drift-c {
+  to {
+    transform: translate3d(14vmax, -14vmax, 0) scale(4);
+  }
+}
+/* Pendant qu'on remplit un champ, rien ne bouge autour. */
+.journey:has(input:focus, select:focus, textarea:focus) .journey-sky > i,
+.journey:has(input:focus, select:focus, textarea:focus) .journey-art {
+  animation-play-state: paused;
+}
+@media (max-width: 760px) {
+  /* Au téléphone, deux halos : moins de calques à composer. */
+  .journey-sky > i:nth-child(2) {
+    display: none;
+  }
+}
+
+/* « Étape 3 sur 7 » : le chiffre monte en place. */
+.journey-count-n {
+  display: inline-block;
+  animation: count-flip var(--d-slow) var(--ease-spring) both;
+}
+@keyframes count-flip {
+  from {
+    opacity: 0;
+    transform: translateY(70%);
+  }
+}
+
+/* Changement d'étape, repli CSS (sans View Transitions) : l'étape glisse du côté où l'on va. */
+.journey-body.is-forward {
+  animation: step-in-forward var(--d-enter) var(--ease-out) both;
+}
+.journey-body.is-back {
+  animation: step-in-back var(--d-enter) var(--ease-out) both;
+}
+@keyframes step-in-forward {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--step-shift), 0, 0);
+  }
+}
+@keyframes step-in-back {
+  from {
+    opacity: 0;
+    transform: translate3d(calc(-1 * var(--step-shift)), 0, 0);
+  }
+}
+/* Avec View Transitions : un passage de relais, pas un fondu enchaîné. L'étape qui part est capturée sous un autre
+   nom (journey-out, classe vt-old) : elle s'efface vite, sur place, là où on la voyait — même descendu dans un long
+   formulaire ; la nouvelle (journey-step) arrive en haut juste après. Deux groupes séparés : les deux images ne se
+   superposent jamais en un mélange, et aucune taille ni position n'est interpolée entre elles. */
+:root.vt-old .journey-body {
+  view-transition-name: journey-out;
+}
+/* Pendant les ~0,5 s du relais, les clics vont à la page (déjà en place sous le calque) plutôt qu'au calque. */
+::view-transition {
+  pointer-events: none;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--d-base);
+}
+::view-transition-group(journey-step),
+::view-transition-group(journey-out) {
+  animation: none;
+}
+::view-transition-old(journey-out) {
+  animation: vt-out-forward var(--d-exit) var(--ease-in) both;
+}
+::view-transition-new(journey-step) {
+  animation: vt-in-forward var(--d-enter) var(--ease-out) var(--d-exit) both; /* après la sortie : jamais deux titres */
+}
+:root[data-journey-dir="back"]::view-transition-old(journey-out) {
+  animation-name: vt-out-back;
+}
+:root[data-journey-dir="back"]::view-transition-new(journey-step) {
+  animation-name: vt-in-back;
+}
+/* La fin ne vient d'aucun côté : elle s'ouvre sur place. */
+:root[data-journey-dir="finale"]::view-transition-old(journey-out) {
+  animation-name: fade-out;
+}
+:root[data-journey-dir="finale"]::view-transition-new(journey-step) {
+  animation-name: vt-in-finale;
+}
+@keyframes vt-out-forward {
+  to {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+@keyframes vt-out-back {
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@keyframes vt-in-forward {
+  from {
+    opacity: 0;
+    transform: translateX(var(--step-shift));
+  }
+}
+@keyframes vt-in-back {
+  from {
+    opacity: 0;
+    transform: translateX(calc(-1 * var(--step-shift)));
+  }
+}
+@keyframes vt-in-finale {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* Le titre et sa scène, côte à côte. */
+.journey-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+.journey-head-text {
+  display: grid;
+  gap: 0.5rem;
+  align-content: center;
+}
+/* La toute première étape (rien ne glisse encore) entre en trois temps, 40 ms d'écart : le titre, le but, le reste.
+   Une étape qui glisse n'en rajoute pas : la glissade est sa seule entrée. */
+.journey-body.is-first .journey-card > *,
+.journey-body.is-first .journey-skip {
+  animation: rise var(--d-slow) var(--ease-out) 60ms both;
+}
+.journey-body.is-first .journey-card > .journey-goal {
+  animation-delay: 100ms;
+}
+.journey-body.is-first .journey-card > .journey-goal ~ *,
+.journey-body.is-first .journey-skip {
+  animation-delay: 140ms;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+/* Les scènes : l'image entière « pope » (un calque HTML, composé à part), deux ou trois gestes signature dans le
+   SVG, le tout posé en moins de 0,7 s ; puis elle flotte quatre fois, et s'arrête. Déjà vue : immobile. */
+.journey-art {
+  display: block;
+  width: clamp(6.25rem, 27vw, 9rem);
+  aspect-ratio: 1;
+  animation:
+    art-in 480ms var(--ease-spring) both,
+    art-float 5s ease-in-out 900ms 4 alternate;
+}
+.journey-art.is-still,
+.journey-art.is-still * {
+  animation: none;
+}
+.journey-art svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.journey-art svg * {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes art-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6) rotate(-6deg);
+  }
+}
+@keyframes art-float {
+  to {
+    transform: translateY(-5px) rotate(-1.5deg);
+  }
+}
+.art-disc {
+  fill: var(--accent-soft);
+}
+.a-pop {
+  animation: art-pop var(--d-enter) var(--ease-spring) both;
+}
+.a-rise {
+  animation: art-rise var(--d-enter) var(--ease-out) both;
+}
+.a-draw {
+  stroke-dasharray: 1;
+  animation: art-draw 500ms var(--ease-out) both;
+}
+.journey-art .d1 { animation-delay: 60ms; }
+.journey-art .d2 { animation-delay: 120ms; }
+.journey-art .d3 { animation-delay: 180ms; }
+.journey-art .d4 { animation-delay: 240ms; }
+.journey-art .d5 { animation-delay: 300ms; }
+@keyframes art-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+}
+@keyframes art-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes art-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+.art-on-accent {
+  fill: var(--on-accent);
+}
+.art-line {
+  fill: var(--line);
+}
+.art-line.is-accent {
+  fill: var(--accent);
+}
+.art-stroke {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.art-check {
+  fill: none;
+  stroke: var(--on-accent);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* Ta banque : la carte arrive en tournant, les flèches de synchro font un tour. */
+.art-coin,
+.art-chip {
+  fill: var(--coin);
+}
+.art-plate {
+  fill: var(--surface);
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
+.art-card {
+  transform: rotate(-8deg);
+  animation: art-card var(--d-scene) var(--ease-spring) 40ms both;
+}
+@keyframes art-card {
+  from {
+    opacity: 0;
+    transform: translateY(18px) rotate(-24deg) scale(0.85);
+  }
+}
+.art-spin {
+  animation: art-spin var(--d-scene) var(--ease-out) 120ms 1;
+}
+@keyframes art-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Ton foyer : la maison se dessine, le foyer arrive devant, le cœur « pope » au-dessus du toit. */
+.art-house {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+.art-window {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.art-person {
+  fill: var(--grad-b);
+}
+.art-person.is-small {
+  fill: var(--coin);
+}
+.art-foyer .a-rise {
+  animation-delay: 180ms;
+}
+.art-heart {
+  fill: var(--grad-b);
+  animation: art-pop var(--d-enter) var(--ease-spring) 280ms both;
+}
+/* Tes accords : la coche se trace sur le bouclier, l'interrupteur bascule avec un rebond. */
+.art-toggle {
+  fill: var(--line-strong);
+}
+.art-toggle.is-on {
+  fill: var(--accent); /* comme le vrai .switch */
+}
+.art-knob {
+  fill: var(--surface);
+}
+.a-knob {
+  animation: art-knob 420ms var(--ease-spring) both;
+}
+@keyframes art-knob {
+  from {
+    transform: translateX(-12px);
+  }
+}
+/* Ton premier papier : la feuille vole jusque dans le dossier, une petite coche se trace. */
+.art-folder-back {
+  fill: var(--accent);
+  opacity: 0.45;
+}
+.art-paper {
+  fill: var(--surface);
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+}
+.art-doc {
+  animation: art-doc var(--d-scene) var(--ease-out) 60ms both;
+}
+@keyframes art-doc {
+  0% {
+    opacity: 0;
+    transform: translate(34px, -40px) rotate(28deg) scale(0.8);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(0, -10px) rotate(-5deg);
+  }
+  85% {
+    transform: translate(0, 3px) rotate(1deg);
+  }
+}
+.art-ok {
+  fill: var(--positive);
+}
+.art-check.is-small {
+  stroke-width: 3;
+  stroke-dasharray: 1;
+  animation: art-draw 240ms var(--ease-out) 480ms both;
+}
+/* Tes priorités : la flèche se plante dans la cible. */
+.art-ring {
+  fill: var(--surface);
+  stroke: var(--line);
+  stroke-width: 2;
+}
+.art-ring.is-inner {
+  stroke: none;
+}
+.art-bull {
+  fill: var(--coin);
+}
+.art-shaft {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+.art-fletch {
+  fill: var(--grad-b);
+}
+.art-arrow {
+  animation: art-arrow var(--d-enter) var(--ease-spring) 240ms both;
+}
+@keyframes art-arrow {
+  from {
+    opacity: 0;
+    transform: translate(40px, -40px);
+  }
+}
+/* Où te prévenir : la notification descend, la cloche sonne une fois, la pastille « pope ». */
+.art-phone {
+  fill: var(--surface);
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+.art-notch {
+  fill: var(--ink);
+}
+.art-notif {
+  animation: art-notif var(--d-enter) var(--ease-spring) 120ms both;
+}
+@keyframes art-notif {
+  from {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.9);
+  }
+}
+.art-bell-body {
+  fill: var(--coin);
+}
+.journey-art .art-bell {
+  transform-origin: 50% 0;
+  animation: art-bell var(--d-scene) ease-in-out 240ms 1;
+}
+@keyframes art-bell {
+  15% {
+    transform: rotate(16deg);
+  }
+  35% {
+    transform: rotate(-14deg);
+  }
+  55% {
+    transform: rotate(9deg);
+  }
+  75% {
+    transform: rotate(-4deg);
+  }
+}
+.art-badge {
+  fill: var(--negative);
+}
+/* La visite : l'écran central, ses voisins qui glissent de chaque côté ; l'onglet allumé parcourt l'île, une fois. */
+.art-frame {
+  fill: var(--surface);
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+.art-frame.is-faint {
+  opacity: 0.5;
+}
+.art-island {
+  fill: var(--surface-2);
+}
+.art-side.is-left {
+  animation: art-side-l var(--d-enter) var(--ease-out) 120ms both;
+}
+.art-side.is-right {
+  animation: art-side-r var(--d-enter) var(--ease-out) 120ms both;
+}
+@keyframes art-side-l {
+  from {
+    opacity: 0;
+    transform: translateX(28px) scale(0.8);
+  }
+}
+@keyframes art-side-r {
+  from {
+    opacity: 0;
+    transform: translateX(-28px) scale(0.8);
+  }
+}
+.art-island-on {
+  animation: art-tabs 720ms ease-in-out 200ms 1;
+}
+@keyframes art-tabs {
+  30% {
+    transform: translateX(7px);
+  }
+  60% {
+    transform: translateX(14px);
+  }
+  85% {
+    transform: translateX(19px);
+  }
+}
+
+/* Micro-interactions du parcours. Boutons : un ressort à l'appui ; sur l'action principale, un reflet qui passe au
+   survol (jamais tout seul à l'arrivée). Occupé, un bouton reste focalisable (aria-disabled) et le dit. */
+.journey .btn {
+  overflow: hidden;
+  transition:
+    transform var(--d-slow) var(--ease-spring),
+    background-position var(--d-slow) var(--ease-out),
+    background-color var(--d-fast),
+    box-shadow var(--d-glow) var(--ease-out),
+    border-color var(--d-fast),
+    color var(--d-fast);
+}
+.journey .btn:active:not(:disabled, [aria-disabled="true"]) {
+  transform: scale(0.95);
+  transition-duration: 90ms;
+}
+.journey .btn[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: progress;
+  box-shadow: none;
+  transform: none;
+}
+.journey .btn.lg:not(.quiet, .ghost, .link)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, var(--glass-edge) 50%, transparent 70%);
+  transform: translateX(-110%);
+}
+.journey .btn.lg:not(.quiet, .ghost, .link, [aria-disabled="true"]):hover::after {
+  animation: btn-shine 850ms var(--ease-out) both;
+}
+@keyframes btn-shine {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(110%);
+  }
+}
+/* Les cartes de chemin se soulèvent et s'inclinent un peu, un reflet les traverse ; choisie, la carte « pope ». */
+.journey .path {
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform var(--d-slow) var(--ease-out),
+    box-shadow var(--d-base) var(--ease-out),
+    border-color var(--d-fast);
+}
+.journey .path::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, var(--glass-edge) 50%, transparent 65%);
+  transform: translateX(-120%);
+  transition: transform var(--d-scene) var(--ease-out);
+}
+.journey .path:hover {
+  transform: perspective(700px) rotateX(4deg) rotateY(-3deg) translateY(-5px);
+  box-shadow: var(--shadow-3);
+}
+.journey .path:hover::after {
+  transform: translateX(120%);
+}
+.journey .path:active {
+  transform: scale(0.97);
+  transition-duration: 90ms;
+}
+.journey .path[aria-pressed="true"],
+.journey .goal[aria-pressed="true"],
+.journey .chip-radio:has(input:checked) {
+  animation: chosen-pop var(--d-enter) var(--ease-spring) both;
+}
+@keyframes chosen-pop {
+  0% {
+    transform: scale(0.96);
+  }
+  45% {
+    transform: scale(1.03);
+  }
+}
+.journey .goal {
+  transition:
+    border-color var(--d-fast),
+    background var(--d-fast),
+    box-shadow var(--d-base) var(--ease-out),
+    transform var(--d-slow) var(--ease-spring);
+}
+.journey .goal:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-2);
+}
+.journey .goal:active {
+  transform: scale(0.97);
+  transition-duration: 90ms;
+}
+/* Les interrupteurs basculent avec un rebond et s'écrasent un peu sous le doigt. */
+.journey .switch span::after {
+  transition: transform var(--d-enter) var(--ease-spring);
+}
+.journey .switch input:active + span::after {
+  transform: scaleX(1.25);
+}
+.journey .switch input:checked:active + span::after {
+  transform: translateX(1.15rem) scaleX(1.25);
+}
+
+/* La fin : le badge « pope », sa coche se trace, puis — seulement là — une gerbe part du badge, sous le texte ; ce qui
+   est réglé se compte (anneau et chiffre d'un même mouvement). Tout est posé en moins d'une seconde et demie. */
+.journey-finale {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  justify-items: center;
+  text-align: center;
+  gap: 0.75rem;
+}
+.journey-finale > :not(.finale-confetti) {
+  position: relative;
+  z-index: 1;
+}
+.journey-finale h1 {
+  animation: rise var(--d-slow) var(--ease-out) 160ms both;
+}
+.journey-finale .journey-goal {
+  margin-inline: auto;
+  animation: rise var(--d-slow) var(--ease-out) 200ms both;
+}
+.finale-badge {
+  display: block;
+  width: 6rem;
+  height: 6rem;
+  animation: finale-pop 520ms var(--ease-spring) 80ms both;
+}
+.finale-badge svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.finale-badge-halo {
+  fill: var(--positive-soft);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: finale-halo 800ms var(--ease-out) 200ms both;
+}
+.finale-badge-check {
+  fill: none;
+  stroke: var(--on-accent);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  animation: art-draw 360ms var(--ease-out) 300ms both;
+}
+@keyframes finale-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) rotate(-25deg);
+  }
+  60% {
+    opacity: 1;
+  }
+}
+@keyframes finale-halo {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+/* La gerbe : quatorze éclats, sept de chaque côté, qui partent du centre du badge quand la coche est tracée,
+   montent un peu, retombent de 120 à 160 px et ont disparu aux 70 % — sous le texte, jamais à travers. */
+.finale-confetti {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.finale-confetti > i {
+  position: absolute;
+  top: calc(clamp(1.25rem, 4vw, 2rem) + 3rem);
+  left: 50%;
+  width: 7px;
+  height: 13px;
+  margin: -6.5px 0 0 -3.5px;
+  border-radius: 2px;
+  background: var(--c, var(--accent));
+  opacity: 0;
+  animation: confetti 1.1s var(--ease-out) 640ms both;
+}
+@keyframes confetti {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.4) rotate(0deg);
+  }
+  10% {
+    opacity: 1;
+  }
+  40% {
+    transform: translate(calc(var(--dx) * 0.7), var(--up)) scale(1) rotate(calc(var(--r) * 0.5));
+  }
+  55% {
+    opacity: 1;
+  }
+  70%,
+  100% {
+    opacity: 0;
+  }
+  100% {
+    transform: translate(var(--dx), var(--fall)) scale(0.9) rotate(var(--r));
+  }
+}
+.finale-confetti > i:nth-child(1) { --dx: -150px; --up: -46px; --fall: 130px; --r: -260deg; --c: var(--grad-a); }
+.finale-confetti > i:nth-child(2) { --dx: 150px; --up: -46px; --fall: 130px; --r: 260deg; --c: var(--grad-b); animation-delay: 660ms; }
+.finale-confetti > i:nth-child(3) { --dx: -122px; --up: -78px; --fall: 150px; --r: 320deg; --c: var(--coin); animation-delay: 680ms; border-radius: 50%; height: 8px; }
+.finale-confetti > i:nth-child(4) { --dx: 122px; --up: -78px; --fall: 150px; --r: -320deg; --c: var(--positive); animation-delay: 650ms; border-radius: 50%; height: 8px; }
+.finale-confetti > i:nth-child(5) { --dx: -96px; --up: -60px; --fall: 140px; --r: 240deg; --c: var(--accent); animation-delay: 700ms; }
+.finale-confetti > i:nth-child(6) { --dx: 96px; --up: -60px; --fall: 140px; --r: -240deg; --c: var(--grad-a); animation-delay: 690ms; }
+.finale-confetti > i:nth-child(7) { --dx: -70px; --up: -84px; --fall: 160px; --r: -300deg; --c: var(--grad-b); animation-delay: 720ms; }
+.finale-confetti > i:nth-child(8) { --dx: 70px; --up: -84px; --fall: 160px; --r: 300deg; --c: var(--coin); animation-delay: 710ms; }
+.finale-confetti > i:nth-child(9) { --dx: -46px; --up: -52px; --fall: 120px; --r: 200deg; --c: var(--positive); animation-delay: 740ms; border-radius: 50%; height: 8px; }
+.finale-confetti > i:nth-child(10) { --dx: 46px; --up: -52px; --fall: 120px; --r: -200deg; --c: var(--accent); animation-delay: 730ms; border-radius: 50%; height: 8px; }
+.finale-confetti > i:nth-child(11) { --dx: -134px; --up: -30px; --fall: 125px; --r: 380deg; --c: var(--accent); animation-delay: 760ms; }
+.finale-confetti > i:nth-child(12) { --dx: 134px; --up: -30px; --fall: 125px; --r: -380deg; --c: var(--grad-b); animation-delay: 750ms; }
+.finale-confetti > i:nth-child(13) { --dx: -24px; --up: -70px; --fall: 145px; --r: -220deg; --c: var(--coin); animation-delay: 670ms; }
+.finale-confetti > i:nth-child(14) { --dx: 24px; --up: -70px; --fall: 145px; --r: 220deg; --c: var(--positive); animation-delay: 700ms; }
+.finale-count {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: min(100%, 26rem);
+  padding: 0.85rem 1rem;
+  border-radius: var(--r-card);
+  background: var(--accent-wash);
+  text-align: left;
+  animation: rise var(--d-slow) var(--ease-out) 240ms both;
+}
+.finale-count .ring {
+  width: 4.5rem;
+  height: 4.5rem;
+}
+.finale-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: min(100%, 26rem);
+  display: grid;
+  gap: 0.35rem;
+  text-align: left;
+}
+.finale-list li {
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  animation: rise var(--d-slow) var(--ease-out) 280ms both;
+}
+.finale-list li.is-done {
+  color: var(--ink);
+  font-weight: 600;
+}
+.finale-tick {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-2);
+}
+.finale-list .is-done .finale-tick {
+  background: var(--positive);
+  color: var(--on-solid);
+}
+.finale-list .is-done .finale-tick .icon {
+  stroke-dasharray: 30;
+  animation: check-draw var(--d-slow) var(--ease-out) 480ms both;
+}
+.finale-list > li:nth-child(2) { animation-delay: 320ms; }
+.finale-list > li:nth-child(3) { animation-delay: 360ms; }
+.finale-list > li:nth-child(n + 4) { animation-delay: 400ms; }
+.finale-list > li:nth-child(2) .icon { animation-delay: 520ms; }
+.finale-list > li:nth-child(3) .icon { animation-delay: 560ms; }
+.finale-list > li:nth-child(4) .icon { animation-delay: 600ms; }
+.finale-list > li:nth-child(5) .icon { animation-delay: 640ms; }
+.finale-list > li:nth-child(n + 6) .icon { animation-delay: 680ms; }
+.journey-finale .journey-actions {
+  justify-content: center;
+  width: min(100%, 26rem);
+  animation: rise var(--d-slow) var(--ease-out) 440ms both;
+}
+@media (max-width: 760px) {
+  .finale-count {
+    gap: 0.75rem;
+  }
+}
+
+/* Mouvement réduit : tout est déjà à sa place (la règle globale coupe animations et transitions) ; pas de
+   confettis, pas de transition de vue, aucune carte qui se soulève, le ciel immobile (sa dérive et son will-change
+   ne sont déclarés que sans préférence). */
+@media (prefers-reduced-motion: reduce) {
+  .finale-confetti {
+    display: none;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+  .journey .path:hover,
+  .journey .path:active,
+  .journey .goal:hover,
+  .journey .goal:active,
+  .journey .switch input:active + span::after {
+    transform: none;
+  }
+  .journey .switch input:checked:active + span::after {
+    transform: translateX(1.15rem);
+  }
+  .journey .path::after {
+    display: none;
+  }
+}
+
+/* Accords groupés par ce qui part : un titre par groupe, la ligne « Envoie : … », le texte complet replié. */
+.consent-groups {
+  display: grid;
+  gap: 1.25rem;
+}
+.consent-group h3 {
+  font-size: var(--t-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  margin-bottom: 0.25rem;
+}
+.consent-sends {
+  color: var(--ink);
+}
+.consent-sends > span,
+.journey-choice .consent-sends > span {
+  font-weight: 650;
+  color: var(--accent-ink);
+}
+.consent-list .consent-more summary {
+  font-size: var(--t-sm);
+  min-height: 2.25rem;
+}
+.consent-list li > div {
+  min-width: 0;
+}
+
+/* La visite : un aperçu en formes (pas de capture), une phrase, l'île d'onglets dessinée. */
+.tour {
+  display: grid;
+  gap: 1rem;
+}
+.tour-screen {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: start;
+  animation: step-in-forward var(--d-enter) var(--ease-out) both;
+}
+.tour-screen.is-back {
+  animation-name: step-in-back;
+}
+.tour-title {
+  font-size: var(--t-xl);
+}
+.tour-title:focus,
+.tour-title:focus-visible {
+  outline: none;
+}
+.tour-text {
+  font-size: var(--t-lg);
+  line-height: 1.4;
+  max-width: 34ch;
+}
+.tour-ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.tour-preview {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: 8.5rem;
+  border-radius: var(--r-card);
+  background: var(--accent-wash), var(--surface);
+  border: 1px solid var(--line);
+  padding: 1rem;
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+  overflow: hidden;
+}
+.tour-preview i {
+  display: block;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--ink-3) 22%, transparent);
+}
+.tour-preview .tp-label {
+  width: 30%;
+  height: 0.6rem;
+}
+.tour-preview .tp-figure {
+  width: 45%;
+  height: 2.5rem;
+  border-radius: 12px;
+  background: var(--accent-grad);
+}
+.tour-preview .tp-line {
+  width: 70%;
+  height: 0.5rem;
+}
+.tour-preview .tp-card,
+.tour-preview .tp-row {
+  height: 1.5rem;
+  border-radius: 10px;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+}
+.tour-preview .tp-card.is-short {
+  width: 60%;
+}
+.tour-preview.is-gagner {
+  grid-template-columns: 3rem 1fr;
+}
+.tour-preview .tp-coin {
+  grid-row: span 2;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: var(--coin);
+  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--coin-ink) 35%, transparent);
+}
+.tour-preview.is-papiers {
+  grid-template-columns: repeat(3, 1fr);
+  align-items: end;
+}
+.tour-preview .tp-doc {
+  height: 5.5rem;
+  border-radius: 10px;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+}
+.tour-preview .tp-doc:nth-child(2) {
+  height: 6.25rem;
+  border-color: var(--accent);
+}
+.tour-preview.is-plus {
+  grid-template-columns: repeat(2, 1fr);
+}
+.tour-preview .tp-tile {
+  height: 2.75rem;
+  border-radius: 12px;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+}
+.tour-preview .tp-fab {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: var(--accent-grad);
+  z-index: 1;
+}
+.tour-island {
+  width: min(100%, 22rem);
+  height: auto;
+  margin-top: 0.5rem;
+}
+.tour-island-plate {
+  fill: var(--surface);
+  stroke: var(--line);
+}
+.tour-island-bubble {
+  transition: x var(--d-slow) var(--ease-out);
+}
+.tour-island-dot {
+  fill: var(--ink-3);
+}
+.tour-island-label {
+  fill: var(--ink-2);
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 600;
+}
+.tour-island .is-on .tour-island-dot,
+.tour-island .is-on .tour-island-label {
+  fill: var(--on-accent);
+}
+.tour-dots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 0.15rem;
+}
+.tour-dots button {
+  all: unset;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.tour-dots button:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.tour-dots button span {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--line-strong) 60%, transparent);
+  transition:
+    width var(--d-base) var(--ease-out),
+    background-color var(--d-base);
+}
+.tour-dots [aria-current="step"] button span {
+  width: 1.5rem;
+  border-radius: var(--r-pill);
+  background: var(--accent-grad);
+}
+
+/* « Bien démarrer » sur Aujourd'hui : l'anneau à gauche, les trois prochains éléments, chacun un lien. */
+.start-card,
+.start-pill {
+  margin-top: 1rem;
+}
+.start-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+.start-head .ring {
+  width: 3rem;
+  height: 3rem;
+}
+.start-head .ring-value {
+  font-size: var(--t-sm);
+}
+.start-intro {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.start-intro h2 {
+  font-size: var(--t-lg);
+}
+.start-resume {
+  flex: none;
+}
+.start-items {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+}
+.start-items li + li {
+  border-top: 1px solid var(--line);
+}
+.start-items a {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.25rem;
+  padding: 0.55rem 0.25rem;
+  color: var(--ink);
+  text-decoration: none;
+  border-radius: var(--r-control);
+  transition:
+    background-color var(--d-fast),
+    transform var(--d-base) var(--ease-out);
+}
+.start-items a:hover {
+  background: var(--accent-soft);
+  transform: translateX(3px);
+}
+.start-items a:active {
+  transform: scale(0.985);
+}
+/* Aujourd'hui se voit tous les jours : les éléments apparaissent d'un seul fondu bref, sans cascade ; l'icône se tourne
+   vers toi au survol. */
+.start-items li {
+  animation: fade-in var(--d-base) var(--ease-out) both;
+}
+.start-icon {
+  transition: transform var(--d-slow) var(--ease-spring);
+}
+.start-items a:hover .start-icon {
+  transform: scale(1.12) rotate(-8deg);
+}
+.start-items a:hover .start-text b {
+  color: var(--accent-ink);
+}
+/* L'élément qui vient d'être fait sous tes yeux : l'icône « pope » et la coche se trace. */
+.start-items .is-fresh .start-icon {
+  animation: chosen-pop 560ms var(--ease-spring) both;
+  box-shadow: var(--glow-ok);
+}
+.start-items .is-fresh .start-icon .icon {
+  stroke-dasharray: 30;
+  animation: check-draw 500ms var(--ease-out) 160ms both;
+}
+/* « Reprendre le parcours » : un reflet passe au survol (jamais tout seul, sur un écran vu chaque jour). */
+.start-resume {
+  overflow: hidden;
+}
+.start-resume::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, var(--glass-edge) 50%, transparent 70%);
+  transform: translateX(-110%);
+}
+.start-resume:hover::after {
+  animation: btn-shine 850ms var(--ease-out) both;
+}
+.start-items a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.start-icon {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.start-text {
+  display: grid;
+  gap: 0.1rem;
+}
+.start-text span {
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+}
+.start-time {
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.start-items .is-done .start-icon {
+  background: var(--positive-soft);
+  color: var(--positive);
+}
+.start-items .is-done b,
+.start-items .is-done .start-time {
+  color: var(--ink-2);
+}
+.start-items .is-done .start-time {
+  color: var(--positive);
+}
+.start-toggle {
+  margin-top: 0.75rem;
+}
+.start-more {
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.25rem;
+}
+.start-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+.start-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  color: var(--ink-2);
+}
+.start-pill {
+  padding: 0.35rem 1.25rem;
+  border-radius: var(--r-pill);
+}
+.start-pill[open] {
+  border-radius: var(--r-card);
+  padding-bottom: 1rem;
+}
+.start-pill summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+.start-pill summary .icon {
+  color: var(--positive);
+}
+.start-settings .start-actions {
+  margin-top: 0;
+}
+@media (min-width: 900px) {
+  .start-card .start-head .ring {
+    width: 4rem;
+    height: 4rem;
+  }
+  .start-card .start-head .ring-value {
+    font-size: var(--t-md);
+  }
+}
+
+/* Connecteurs : une pastille « relié / à faire » par section dans le sommaire, les sections pas reliées sur une ligne. */
+.secnav-state {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: var(--r-pill);
+  font-size: var(--t-xs);
+  font-weight: 650;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+.secnav-state.is-on {
+  background: var(--positive-soft);
+  color: var(--positive);
+}
+.secnav button[aria-current="true"] .secnav-state {
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  color: var(--accent-ink);
+}
+.conn-fold {
+  margin-top: 1.25rem;
+}
+.conn-fold-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.conn-fold-row h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--t-md);
+  margin: 0;
+}
+.conn-fold-row h2 .tag {
+  vertical-align: 0.1em;
+  margin-left: 0.25rem;
+}
+.conn-fold-row h2 .icon {
+  color: var(--accent);
+}
+.conn-fold-row .btn {
+  flex: none;
+}
+.conn-fold > .faint {
+  margin-top: 0.25rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-screen,
+  .journey-progress .is-done .journey-seg .icon {
+    animation: none;
+  }
+  .journey-seg,
+  .tour-dots button span,
+  .tour-island-bubble,
+  .start-items a {
+    transition: none;
+  }
+  .start-items a:hover,
+  .start-items a:active,
+  .start-items a:hover .start-icon {
+    transform: none;
+  }
 }
 
 /* ------------------------------------------------------------------ connexion bancaire */
@@ -2554,11 +4321,11 @@ input[aria-invalid="true"] {
 }
 .bank-state.ok {
   background: var(--positive);
-  color: #fff;
+  color: var(--on-solid);
 }
 .bank-state.error {
   background: var(--negative);
-  color: #fff;
+  color: var(--on-solid);
 }
 .bank-state.busy {
   border: 2px solid var(--accent);
@@ -2820,7 +4587,7 @@ input[aria-invalid="true"] {
   display: grid;
   place-items: center;
   background: var(--accent);
-  color: var(--on-accent);
+  color: var(--on-solid);
   font-size: var(--t-xs);
   font-weight: 700;
 }
@@ -2893,7 +4660,7 @@ input[aria-invalid="true"] {
   --tint: var(--halo-2);
 }
 .more li:nth-child(4n + 4) a {
-  --tint: var(--halo-3);
+  --tint: var(--tint-sun);
 }
 .more a b {
   display: flex;
@@ -3275,7 +5042,7 @@ input[aria-invalid="true"] {
   justify-self: end;
   max-width: 85%;
   background: var(--accent);
-  color: var(--on-accent);
+  color: var(--on-solid);
   border-bottom-right-radius: 4px;
 }
 .assistant-turn.is-assistant {
@@ -3386,7 +5153,7 @@ input[aria-invalid="true"] {
 }
 
 .bank-mark.is-app {
-  --brand: var(--accent);
+  --brand: var(--accent-grad);
   color: var(--on-accent);
 }
 
@@ -4692,7 +6459,7 @@ input[aria-invalid="true"] {
 .proc-phases li.is-active > span:not(.phase-label) {
   background: var(--accent);
   border-color: var(--accent);
-  color: var(--on-accent);
+  color: var(--on-solid);
 }
 .proc-layout {
   display: grid;
@@ -6012,30 +7779,33 @@ main.sheet details.card {
    Un seul moment animé : le ruban de répartition qui se dessine à l'ouverture. Six teintes de données, pensées
    pour se distinguer côte à côte (et en sombre), jamais les couleurs de marque des actifs. */
 :root {
-  --c1: #2f4bdf;
-  --c2: #0f8f8a;
-  --c3: #d99100;
-  --c4: #7b5cd6;
-  --c5: #d6533a;
-  --c6: #5a6488;
+  --c1: #0b7480;
+  --c2: #2f6fe0;
+  --c3: #b88300; /* soleil, assez profond pour 3:1 sur verre (WCAG 1.4.11) */
+  --c4: #0e9a7a;
+  --c5: #e0566e;
+  --c6: #5a7a88;
+  --c-muted: #7b8588; /* gris neutre : « Autres », « À catégoriser » (3,5:1 sur verre) */
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --c1: #8fa3ff;
-    --c2: #4fd1c5;
-    --c3: #f7c548;
-    --c4: #b49cff;
-    --c5: #ff8f73;
-    --c6: #9aa3c7;
+    --c1: #4fe0f0;
+    --c2: #8fb4ff;
+    --c3: #ffd23f;
+    --c4: #5fe0ad;
+    --c5: #ff8a9e;
+    --c6: #9ab8c2;
+    --c-muted: #7a8a8f;
   }
 }
 :root[data-theme="dark"] {
-  --c1: #8fa3ff;
-  --c2: #4fd1c5;
-  --c3: #f7c548;
-  --c4: #b49cff;
-  --c5: #ff8f73;
-  --c6: #9aa3c7;
+  --c1: #4fe0f0;
+  --c2: #8fb4ff;
+  --c3: #ffd23f;
+  --c4: #5fe0ad;
+  --c5: #ff8a9e;
+  --c6: #9ab8c2;
+  --c-muted: #7a8a8f;
 }
 .cx-vault {
   position: relative;
@@ -6851,7 +8621,7 @@ details.card.cx-details > summary {
 }
 .pb-drop .pill[aria-pressed="true"] {
   background: var(--accent);
-  color: var(--on-accent, #fff);
+  color: var(--on-solid);
   border-color: var(--accent);
 }
 .pb-figure {
@@ -7667,7 +9437,7 @@ label {
   gap: 0.4rem;
   padding: calc(0.45rem + env(safe-area-inset-top)) 1rem 0.45rem;
   background: var(--warning);
-  color: #fff;
+  color: var(--on-solid);
   font-size: var(--t-sm);
   font-weight: 600;
 }
@@ -7996,13 +9766,15 @@ label {
 
 /* ---------------------------------------------------------------- Aujourd'hui : salut, halo d'humeur, verdict */
 .today[data-status="ok"] {
-  --hero-halo: var(--halo-3);
+  /* vert voilé : tout va bien, distinct du halo aqua par défaut ; 30 % sous le verre garde --positive à 4,8:1 */
+  --hero-halo: color-mix(in srgb, var(--positive) 30%, transparent);
 }
 .today[data-status="tight"] {
-  --hero-halo: var(--halo-4);
+  --hero-halo: var(--halo-3); /* soleil : à surveiller */
 }
 .today[data-status="risk"] {
-  --hero-halo: var(--halo-2);
+  /* corail : la palette « Lagon » n'a pas de halo chaud ; 30 % sous le verre garde --negative à 4,8:1 (clair) */
+  --hero-halo: color-mix(in srgb, var(--negative) 30%, transparent);
 }
 .today-hello {
   margin: 0;
@@ -8096,6 +9868,13 @@ label {
 .ring-stop-b {
   stop-color: var(--grad-b);
 }
+/* L'anneau est un objet graphique (≥ 3:1) : il prend la sarcelle profonde ; logo et illustrations gardent l'aqua. */
+.ring .ring-stop-a {
+  stop-color: var(--arc-a);
+}
+.ring .ring-stop-b {
+  stop-color: var(--arc-b);
+}
 .ring-value {
   position: relative;
   font-size: var(--t-sm);
@@ -8117,6 +9896,10 @@ label {
 }
 .ring.is-full svg {
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--positive) 45%, transparent));
+}
+/* Anneau piloté par script (useTween) : l'arc suit la même valeur que son chiffre, sans tracé CSS par-dessus. */
+.ring.is-live .ring-arc {
+  animation: none;
 }
 @keyframes ring-draw {
   from {
@@ -8291,7 +10074,7 @@ label {
 
 /* ---------------------------------------------------------------- Gagner : tirelire héros, pièces, chance */
 .piggy.card-hero {
-  --hero-halo: var(--halo-4);
+  --hero-halo: var(--halo-3);
 }
 .piggy-badges li.is-new {
   animation: badge-pop 560ms var(--ease-spring) both;
@@ -8428,12 +10211,12 @@ label {
   overflow: hidden;
 }
 .celebrate.is-coin {
-  --c-glow: var(--halo-4);
+  --c-glow: var(--halo-3);
   --c-a: var(--coin);
   --c-b: var(--coin);
 }
 .celebrate.is-done {
-  --c-glow: var(--halo-3);
+  --c-glow: var(--halo-2);
   --c-a: var(--positive);
   --c-b: var(--grad-b);
 }
@@ -8699,17 +10482,17 @@ label {
   font-variant-numeric: tabular-nums;
 }
 .wizard-steps li.is-done > span {
-  border-color: var(--positive);
-  color: var(--positive);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .wizard-steps li.is-active {
   color: inherit;
   font-weight: 600;
 }
 .wizard-steps li.is-active > span {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #fff;
+  border-color: transparent;
+  background: var(--accent-grad);
+  color: var(--on-accent);
 }
 .wizard-panel {
   display: grid;

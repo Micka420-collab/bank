@@ -216,6 +216,38 @@ PURPOSES: dict[str, dict[str, Any]] = {
 }
 
 
+# Ce qui part, dit en une ligne, et le groupe où l'accord s'affiche (DESIGN.md § 3.10) : « public » (rien te
+# concernant), « zone » (ta zone, pas ton adresse), « adresse » (ton adresse ou ton immeuble), « contenus » (ce que tu
+# écris, tes documents… vers un service tiers). Le texte complet reste celui de PURPOSES.
+GROUPS: dict[str, str] = {
+    "public": "Rien te concernant",
+    "zone": "Ta zone, pas ton adresse",
+    "adresse": "Ton adresse",
+    "contenus": "Tes contenus, vers un service tiers",
+}
+SENDS: dict[str, tuple[str, str]] = {
+    "watch": ("public", "Rien sur toi : seulement l'adresse IP de ton serveur Bank, vers les sources officielles."),
+    "baremes": ("public", "Rien sur toi : seulement l'adresse IP de ton serveur Bank, vers CRE, INSEE, OpenFisca."),
+    "tempo": ("public", "Des dates, vers api-couleur-tempo.fr."),
+    "calendar": ("zone", "Ta zone, ton département ou ton académie, vers api.gouv.fr."),
+    "home_value": ("zone", "Le nom ou le code de ta commune, vers data.gouv.fr."),
+    "meteo": ("zone", "Ta position à 10 km près environ (le secteur de ta commune, pas ta rue), vers Open-Meteo."),
+    "geocoding": ("adresse", "Ton adresse telle que tu la tapes, vers l'IGN."),
+    "housing": ("adresse", "L'identifiant d'adresse de ton immeuble, vers l'ADEME."),
+    "ai_memory": ("contenus", "Ce que l'assistant retient de toi, vers ton modèle OpenRouter."),
+    "ai_documents": ("contenus", "Une photo de document, vers ton modèle OpenRouter, après ta confirmation."),
+    "web_search": ("contenus", "Une requête nettoyée, vers ton moteur de recherche."),
+    "channels": ("contenus", "Les messages de Bank, par la messagerie que tu choisis."),
+    "push": ("contenus", "Un message chiffré, par le service de notification du navigateur."),
+    "mail": ("contenus", "Ton mot de passe d'application, vers ton serveur mail (lecture seule)."),
+    "crypto_network": ("contenus", "Tes adresses crypto publiques, vers des nœuds publics."),
+    "linky_curve": ("contenus", "Ton jeton Linky, vers Conso API ; la courbe reste chiffrée ici."),
+    "sensitive_documents": ("contenus", "Rien : les pièces restent chiffrées ici, jamais envoyées à un modèle."),
+}
+# « Tout activer pour les données publiques » : ces six-là et eux seuls.
+PUBLIC_PURPOSES: tuple[str, ...] = tuple(p for p, (g, _) in SENDS.items() if g in ("public", "zone"))
+
+
 # Effacements à faire quand un accord est retiré : la donnée gardée grâce à lui n'a plus de raison de rester
 # (courbe de charge, températures de ta commune). Chaque module inscrit le sien à l'import.
 _ON_REVOKE: dict[str, list[Callable[[Session], None]]] = {}
@@ -295,6 +327,8 @@ def _view(db: Session, purpose: str) -> dict[str, Any]:
         "decided": decided(db, purpose),
         "updated_at": row.updated_at.isoformat() if row else None,
         "default": spec["default"],
+        "group": SENDS[purpose][0],
+        "sends": SENDS[purpose][1],
     }
 
 

@@ -105,7 +105,7 @@ describe("Bank te demande", () => {
     await flush();
     expect(host.querySelectorAll(".ask")).toHaveLength(1);
     expect(host.textContent).toContain("Ton salaire net, c'est bien 2 150 € par mois ?");
-    expect(host.textContent).toContain("2 autres — voir");
+    expect(host.textContent).toContain("Voir les 2 autres");
     expect(host.textContent).not.toContain("C'est la base de tout calcul");
     await click("Pourquoi ?");
     expect(host.textContent).toContain("C'est la base de tout calcul");
@@ -221,7 +221,8 @@ describe("première ouverture", () => {
     await act(async () => { host.querySelector("form")!.requestSubmit(); });
     await flush();
     await flush();
-    const bodies = calls.map((c) => [c.url, c.init?.method, c.init?.body ? JSON.parse(String(c.init.body)) : null]);
+    // (/api/banks n'est lu que pour dire honnêtement ce que demande la carte « Connecter ma banque ».)
+    const bodies = calls.filter((c) => c.url !== "/api/banks").map((c) => [c.url, c.init?.method, c.init?.body ? JSON.parse(String(c.init.body)) : null]);
     expect(bodies).toEqual([
       ["/api/accounts", "POST", { name: "Compte courant", kind: "checking", balance_cents: 64000 }],
       ["/api/onboarding/net_monthly_income", "PUT", { value: 190000 }],

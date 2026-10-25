@@ -114,40 +114,56 @@ prises, le Chromium sans tête de Playwright n'a pas ses bibliothèques système
 
 ### 3.3 Jetons
 
+**Palette « Lagon »** (choisie par Micka le 25/10/2026, voir l'historique en fin de section) : turquoise, aqua et
+sarcelle sous un soleil jaune, sur un ciel très clair ; la nuit, l'océan profond. Elle remplace la première
+palette violette (lavande / nuit violette) sans toucher aux noms : seules les valeurs changent.
+
 Les noms existants (`--bg`, `--surface`, `--ink`, `--accent`, `--positive`…) et leurs alias historiques sont
 gardés : les composants actuels changent d'apparence sans changer de classe. Les nouveaux jetons s'ajoutent.
 Les trois blocs habituels sont tenus à jour ensemble : `:root` (clair), `@media (prefers-color-scheme: dark)
 :root:not([data-theme="light"])`, et `:root[data-theme="dark"]` (choix de `theme.ts`, qui peint aussi
-`meta[name="theme-color"]` : `#f4f3fb` / `#0c0b1d`).
+`meta[name="theme-color"]` : `#effafc` / `#03141c`, comme `index.html` ; le manifeste PWA prend `#EFFAFC` en
+fond et `#16C8E4` en couleur de thème). Le logo (`public/icon.svg`, rail, parcours, connexion) est le dégradé
+de l'accent clair, turquoise `#16C8E4` → aqua `#2FDCB4`, trait `#04222A` et point du jour soleil, le même dans
+les deux thèmes.
 
 #### Fond et halos
 
 | Jeton | Clair | Sombre | Rôle |
 |---|---|---|---|
-| `--bg` | `#F4F3FB` | `#0C0B1D` | Fond de page (lavande très pâle / nuit violette) |
-| `--halo-1` (violet) | `#8B7CFF` à 40 % | `#6D5CFF` à 35 % | Haut gauche, derrière le rail et le chiffre du jour |
-| `--halo-2` (rose) | `#FF8FB8` à 40 % | `#FF5FA2` à 30 % | Haut droit |
-| `--halo-3` (menthe) | `#5EE0C0` à 40 % | `#22C9A0` à 28 % | Bas gauche ; teinte « tout va bien » |
-| `--halo-4` (soleil) | `#FFC65C` à 40 % | `#F7B73B` à 24 % | Bas droit ; teinte « pièce », allumée par les gains |
+| `--bg` | `#EFFAFC` | `#03141C` | Fond de page (ciel très clair / océan profond) |
+| `--halo-1` (aqua) | `#22D3EE` à 36 % | `#22D3EE` à 26 % | Haut gauche, derrière le rail et le chiffre du jour |
+| `--halo-2` (turquoise / sarcelle) | `#2DD4BF` à 38 % | `#14B8A6` à 28 % | Haut droit ; teinte « tout va bien » |
+| `--halo-3` (soleil) | `#FFD54A` à 36 % | `#FACC15` à 16 % | Teinte « pièce », allumée par les gains ; bas gauche en clair |
+| `--halo-4` (ciel) | `#60A5FA` à 30 % | `#3B82F6` à 26 % | Bas droit |
+| `--halo-foot` (bas du fond) | `--halo-3` | `--halo-4` | Bas gauche, et bas du téléphone : le soleil en clair, le ciel la nuit |
 
 Les halos sont quatre `radial-gradient` (rayon 38–48 vmax, transparent au bord) sur un calque
 `body::before` en `position: fixed; inset: 0; z-index: -1; pointer-events: none` : aucune image, aucun script,
-rien à recalculer au défilement. Pas d'animation continue. Sur téléphone, deux halos seulement (violet en haut,
-menthe en bas) pour garder le fond calme sous le pouce.
+rien à recalculer au défilement. Pas d'animation continue. Sur téléphone, deux halos seulement (aqua en haut,
+`--halo-foot` en bas) pour garder le fond calme sous le pouce. Le bas du fond passe par `--halo-foot` : en
+sombre, le jaune posé sur l'océan vire à l'olive (`#2A3118`) ; le ciel garde la nuit profonde. Au-delà du fond,
+le rôle d'un halo est le même dans les deux thèmes (`--halo-2` sarcelle, `--halo-3` soleil) : les états qui s'en
+servent ne changent pas de couleur avec le thème. Halo du héros « Aujourd'hui » : `ok` → `--positive` à 30 %
+(distinct du halo aqua par défaut), `tight` → `--halo-3`, `risk` → `--negative` à 30 % ; tirelire et fête
+« pièce » → `--halo-3`, fête « fait » → `--halo-2`. Les tuiles de « Plus » prennent tour à tour aqua, ciel,
+sarcelle et `--tint-sun` (`--halo-3` en clair ; `--coin` à 22 % sur `--surface` en sombre, un ambre net plutôt
+qu'un kaki).
 
 #### Verre
 
 | Jeton | Clair | Sombre | Usage |
 |---|---|---|---|
-| `--glass` | `rgba(255,255,255,.74)` | `rgba(26,24,56,.70)` | Grandes surfaces : héros (posé sur son halo, sans flou), rail, toasts, feuille de l'assistant |
-| `--glass-strong` | `rgba(255,255,255,.88)` | `rgba(26,24,56,.86)` | Cartes ordinaires, listes, formulaires, tableaux (beaucoup de texte) |
+| `--glass` | `rgba(250,255,255,.74)` | `rgba(8,36,50,.70)` | Grandes surfaces : héros (posé sur son halo, sans flou), rail, toasts, feuille de l'assistant |
+| `--glass-strong` | `rgba(250,255,255,.88)` | `rgba(8,36,50,.86)` | Cartes ordinaires, listes, formulaires, tableaux (beaucoup de texte) |
 | `--glass-blur` | `blur(20px) saturate(160%)` | `blur(24px) saturate(140%)` | **Seulement** ce qui est fixe ou collant : rail, barre d'onglets (flou 28 px, verre à 90 %), toasts, assistant, modales. Pas le héros : il défile, le flou s'y recalculerait à chaque image pour un effet invisible |
 | `--glass-edge` | `rgba(255,255,255,.70)` | `rgba(255,255,255,.10)` | Bordure 1 px |
 | `--glass-shine` | `inset 0 1px 0 rgba(255,255,255,.90)` | `inset 0 1px 0 rgba(255,255,255,.08)` | Reflet du haut, comme une arête de verre |
-| `--glass-shadow` | `0 12px 32px -14px rgba(52,40,120,.28), 0 2px 6px -2px rgba(52,40,120,.10)` | `0 20px 40px -20px rgba(0,0,0,.70)` | Élévation |
-| `--surface` (opaque) | `#FFFFFF` | `#17152F` | Repli sans transparence, champs de saisie, menus |
-| `--surface-2` | `#F0EEFA` | `#201D40` | Creux (pistes de jauge, segments) |
-| `--line` / `--line-strong` | `#E4E1F3` / `#8C89B0` | `#2C2858` / `#6F6B9E` | Traits ; `--line-strong` borde les champs (3,3:1 / 3,5:1, ≥ 3:1 exigé) |
+| `--glass-shadow` | `0 12px 32px -14px rgba(11,74,90,.28), 0 2px 6px -2px rgba(11,74,90,.10)` | `0 20px 40px -20px rgba(0,0,0,.70)` | Élévation (ombre bleu-vert en clair, jamais grise) |
+| `--surface` (opaque) | `#FFFFFF` | `#0A2230` | Repli sans transparence, champs de saisie, menus |
+| `--surface-2` | `#E5F6F8` | `#0F2D3D` | Creux (pistes de jauge, segments) |
+| `--line` / `--line-strong` | `#D2EBEE` / `#6B98A1` | `#173C4D` / `#5F8E9C` | Traits ; `--line-strong` borde les champs (3,2:1 / 4,5:1, ≥ 3:1 exigé) |
+| `--chart-grid` | `#DCF0F2` | `#123445` | Grille des graphiques |
 
 Pourquoi les cartes ordinaires n'ont pas de flou : les halos sont déjà des dégradés très doux, un `backdrop-filter`
 derrière une carte n'y changerait presque rien à l'œil mais coûterait une couche de composition par carte. Elles
@@ -158,14 +174,22 @@ transparaît.
 
 | Jeton | Clair | Sombre |
 |---|---|---|
-| `--accent` (liens, anneau de focus, icônes actives) | `#4B3BEA` | `#A99DFF` |
-| `--accent-grad` (bouton principal, onglet actif, anneau de progression) | `linear-gradient(135deg, #5B4BFF, #9B3FD8)` | `linear-gradient(135deg, #8C7CFF, #D07BFF)` |
-| `--on-accent` | `#FFFFFF` | `#0C0B1D` |
-| `--accent-soft` / texte dessus `--accent-ink` | `#EBE8FF` / `#3F32C8` | `#2A2560` / `#C9C1FF` |
-| `--glow` (survol, focus des boutons principaux) | `0 0 0 4px rgba(91,75,255,.18), 0 10px 28px -8px rgba(123,69,236,.60)` | `0 0 0 4px rgba(169,157,255,.22), 0 10px 32px -6px rgba(208,123,255,.55)` |
-| `--glow-coin` (gain) | `0 0 0 4px rgba(233,164,0,.22), 0 10px 28px -8px rgba(233,164,0,.65)` | `0 0 0 4px rgba(247,197,72,.22), 0 10px 32px -6px rgba(247,197,72,.50)` |
+| `--accent` (liens, anneau de focus, icônes actives) | `#0B7480` | `#4FE0F0` |
+| `--accent-grad` (bouton principal, onglet actif, étape en cours, logo) | `linear-gradient(135deg, #16C8E4, #2FDCB4)` | `linear-gradient(135deg, #22D3EE, #5EEAD4)` |
+| `--on-accent` (texte sur `--accent-grad`) | `#04222A` | `#03202A` |
+| `--on-solid` (texte sur un aplat plein `--accent`, `--positive`, `--negative`, `--warning`) | `#FFFFFF` | `#03141C` |
+| `--accent-soft` / texte dessus `--accent-ink` | `#D6F5F7` / `#08636D` | `#0E3A47` / `#8CF0FA` |
+| `--glow` (survol, focus des boutons principaux) | `0 0 0 4px rgba(22,200,228,.18), 0 10px 28px -8px rgba(47,220,180,.55)` | `0 0 0 4px rgba(34,211,238,.22), 0 10px 32px -6px rgba(94,234,212,.55)` |
+| `--glow-coin` (gain) | `0 0 0 4px rgba(245,184,0,.22), 0 10px 28px -8px rgba(245,184,0,.60)` | `0 0 0 4px rgba(255,210,63,.22), 0 10px 28px -8px rgba(255,210,63,.60)` |
+| `--glow-ok` (fait) | `0 0 0 4px rgba(11,122,85,.18), 0 8px 22px -8px rgba(11,122,85,.50)` | `0 0 0 4px rgba(95,224,173,.18), 0 8px 22px -8px rgba(95,224,173,.50)` |
 | `--r-pill` | `999px` | |
 | `--r-card` / `--r-hero` / `--r-control` | `22px` / `32px` / `14px` | |
+
+Le dégradé « Lagon » est lumineux : le texte dessus est **sombre** (`--on-accent`) dans les deux thèmes. Un
+aplat plein `--accent` clair (`#0B7480`) est trop foncé pour ce texte sombre (3,0:1) : bulle de l'utilisateur,
+puce de démarche active, pastille pressée, lien d'évitement, numéro d'étape prennent `--on-solid` (blanc en
+clair, encre océan en sombre). Les compteurs posés sur une puce en dégradé (`.chip-count`, état du sous-menu)
+sont des pastilles `--surface` avec texte `--accent-ink`.
 
 Le rayon passe de 16 à 22 px pour les cartes, 32 px pour le héros ; boutons, pastilles, segments, recherche
 et barre d'onglets en pilule (`--r-pill`) ; champs de saisie à 14 px (un champ en pilule se lit mal sur
@@ -175,53 +199,90 @@ plusieurs lignes). `--r-s`, `--r-m`, `--r-l` deviennent des alias de `--r-contro
 
 | Jeton | Clair | Sombre | Pastille (`-soft`) clair / sombre |
 |---|---|---|---|
-| `--positive` (argent arrivé, fait, relié) | `#127A4C` | `#5AD39B` | `#DDF5EA` / `#163A2C` |
-| `--negative` (action requise : découvert, échéance ratée) | `#C42B4E` | `#FF8597` | `#FDE6EC` / `#3F1A28` |
-| `--warning` (à surveiller) | `#8F5407` | `#F2B65B` | `#FDF0D9` / `#3A2C14` |
-| `--coin` (ce qu'on peut gagner ; remplissage seulement) | `#E9A400` | `#F7C548` | `#FFF1C7` / `#3B2F10` |
-| `--coin-ink` (texte « pièce ») | `#7A4D00` | `#F9D77E` | |
-| `--ink` / `--ink-2` / `--ink-3` | `#17163A` / `#4A4870` / `#5B5980` | `#F1EFFF` / `#BDB9E0` / `#A29ECB` | |
+| `--positive` (argent arrivé, fait, relié) | `#0F7A3E` (un vert franc, distinct de la sarcelle `--accent`) | `#5FE0AD` | `#DCF4E3` / `#0F3A2E` |
+| `--negative` (action requise : découvert, échéance ratée) | `#C2304B` | `#FF8A9E` | `#FDE5EA` / `#3D1822` |
+| `--warning` (à surveiller) | `#8A5300` | `#FFD166` | `#FFF2CF` / `#382C0E` |
+| `--coin` (ce qu'on peut gagner ; remplissage seulement) | `#F5B800` | `#FFD23F` | `#FFF3C4` / `#3A300C` |
+| `--coin-ink` (texte « pièce ») | `#7A4C00` | `#FFE08A` | |
+| `--ink` / `--ink-2` / `--ink-3` | `#082730` / `#2F5560` / `#41656F` | `#E9FBFF` / `#A8D4DD` / `#8DBCC6` | |
+
+#### Teintes de données (crypto, graphiques de l'assistant)
+
+| Jeton | `--c1` | `--c2` | `--c3` | `--c4` | `--c5` | `--c6` |
+|---|---|---|---|---|---|---|
+| Clair | `#0B7480` sarcelle | `#2F6FE0` bleu | `#B88300` soleil | `#0E9A7A` émeraude | `#E0566E` corail | `#5A7A88` ardoise |
+| Sombre | `#4FE0F0` | `#8FB4FF` | `#FFD23F` | `#5FE0AD` | `#FF8A9E` | `#9AB8C2` |
+| Contraste sur verre clair · sombre | 5,1 · 9,0 | 4,3 · 6,9 | 3,1 · 9,9 | 3,3 · 8,7 | 3,4 · 6,4 | 4,2 · 6,8 |
+
+Ce sont des objets graphiques : chaque teinte tient **3:1** sur le verre clair le plus défavorable (WCAG 1.4.11).
+`--c3` et `--c4` clairs sont donc un soleil et une émeraude un peu plus profonds que le nuancier « Lagon »
+(`#D99A00` et `#0FA37F` n'atteignaient que 2,3 et 2,9:1). La légende donne quand même le nom et la valeur de
+chaque part : une teinte ne porte jamais seule l'information.
+
+**Catégories.** Le serveur ne choisit plus de couleur pour l'interface : chaque catégorie intégrée a une teinte
+(`tone` : `c1`…`c6`, ou `muted` pour « À catégoriser », « Divers », « Autres ») dans
+`backend/app/domain/categorize.py` — charges fixes en sarcelle, ciel et ardoise, dépenses courantes en soleil,
+corail et émeraude, épargne en `--c1`. `muted` est `--c-muted`, un gris neutre (`#7B8588` / `#7A8A8F`, 3,5 · 4,0:1
+sur verre), distinct de l'ardoise `--c6`. `/api/categories`, `/api/history` et le donut `spend_by_category` de l'assistant
+envoient `tone` ; l'interface (`components/charts/tones.ts`) dessine `var(--c…)`, donc le sombre suit. Le serveur
+garde six catégories puis « Autres » (`--c-muted`), autant que de teintes ; dans un même donut, une teinte déjà
+prise passe à la première libre (puis `--c-muted`, `--ink-3` pour un bloc plus long), les parts restent
+distinctes. `Category.color` garde la valeur claire de la teinte : au démarrage, une catégorie intégrée qui a
+encore une ancienne couleur par défaut (les violets d'avant) y passe ; une couleur choisie par l'utilisateur
+arrive sans `tone` et reste telle quelle. Le donut « Répartition » du patrimoine prend aussi ces teintes
+(comptes `--c6`, épargne disponible `--c1`, long terme `--c4`, autres actifs `--c3`, logement `--c2`).
 
 #### Contrastes vérifiés (WCAG 2.2, texte ≥ 4,5:1, éléments d'interface ≥ 3:1)
 
-Calculés sur le fond **réel** : verre composé au-dessus du pic du halo le plus défavorable (violet en clair,
-menthe en sombre), avec les opacités ci-dessus. Script de calcul : luminance relative sRGB, composition alpha.
+Calculés sur le fond **réel** : verre composé au-dessus du pic du halo le plus défavorable, minimum sur les
+quatre halos, avec les opacités ci-dessus (script `gen.py` de la palette : luminance relative sRGB, composition
+alpha).
 
-| Texte | sur `--glass` clair (pire : `#F1F0FE`) | sur `--glass-strong` clair (`#F9F8FF`) | sur `--glass` sombre (pire : `#18243B`) | sur `--glass-strong` sombre (`#191E39`) |
+| Texte | sur `--glass` clair (pire halo) | sur `--glass-strong` clair | sur `--glass` sombre (pire halo) | sur `--glass-strong` sombre |
 |---|---|---|---|---|
-| `--ink` | 15,3 | 16,4 | 13,7 | 14,5 |
-| `--ink-2` | 7,6 | 8,1 | 8,3 | 8,7 |
-| `--ink-3` | 5,8 | 6,2 | 6,1 | 6,5 |
-| `--accent` | 6,0 | 6,4 | 6,6 | 7,0 |
-| `--positive` | 4,8 | 5,1 | 8,3 | 8,8 |
-| `--negative` | 4,9 | 5,2 | 6,7 | 7,1 |
-| `--warning` | 5,4 | 5,8 | 8,6 | 9,1 |
-| `--coin-ink` | 6,4 | 6,9 | 11,1 | 11,7 |
+| `--ink` | 14,4 | 15,0 | 13,4 | 14,3 |
+| `--ink-2` | 7,5 | 7,8 | 8,9 | 9,5 |
+| `--ink-3` | 5,8 | 6,1 | 6,9 | 7,4 |
+| `--accent` | 5,1 | 5,3 | 9,0 | 9,6 |
+| `--accent-ink` | 6,4 | 6,7 | 10,9 | 11,6 |
+| `--positive` | 5,0 | 5,2 | 8,7 | 9,3 |
+| `--negative` | 5,1 | 5,3 | 6,4 | 6,8 |
+| `--warning` | 5,8 | 6,1 | 9,9 | 10,6 |
+| `--coin-ink` | 6,8 | 7,0 | 11,1 | 11,8 |
 
 | Paire | Ratio |
 |---|---|
-| `#FFFFFF` sur `--accent-grad` clair (début `#5B4BFF` / milieu `#7B45EC` / fin `#9B3FD8`) | 5,4 / 5,4 / 5,1 |
-| `#0C0B1D` sur `--accent-grad` sombre (début `#8C7CFF` / milieu / fin `#D07BFF`) | 6,0 / 6,6 / 7,4 |
-| `#FFFFFF` sur `--negative` clair (bouton danger plein) · `#0C0B1D` sur `#FF8597` sombre | 5,5 · 8,4 |
-| Pastilles : positive 4,7 · negative 4,7 · warning 5,4 · coin 6,5 · accent 7,0 (clair) ; 6,7 · 6,5 · 7,5 · 9,4 · 8,2 (sombre) | ✓ |
-| Toast `#FFFFFF` sur `#17163A` (clair) · `#17163A` sur `#F1EFFF` (sombre) | 17,3 · 15,3 |
-| Repli opaque : `--ink-3` sur `#FFFFFF` · sur `#17152F` | 6,6 · 7,0 |
-| Anneau de focus `--accent` sur `--bg` | 6,1 (clair) · 8,3 (sombre) |
-| Bordure de champ `--line-strong` sur `--surface` | 3,3 (clair) · 3,5 (sombre) |
-| Arc de progression `#5B4BFF` sur verre clair · `#8C7CFF` sur verre sombre | 4,8 · 4,8 |
+| `--on-accent` sur `--accent-grad` clair (début `#16C8E4` / fin `#2FDCB4`) | 8,2 / 9,5 |
+| `--on-accent` sur `--accent-grad` sombre (début `#22D3EE` / fin `#5EEAD4`) | 9,3 / 11,4 |
+| `--on-solid` sur `--accent` · `--positive` · `--negative` · `--warning` (clair) | 5,5 · 5,4 · 5,5 · 6,3 |
+| `--on-solid` sur `--accent` · `--positive` · `--negative` · `--warning` (sombre) | 11,8 · 11,4 · 8,4 · 13,0 |
+| Pastilles : positive 4,7 · negative 4,6 · warning 5,7 · coin 6,6 · accent 6,1 (clair) ; 7,7 · 6,9 · 9,5 · 10,1 · 9,3 (sombre) | ✓ |
+| Toast `--ink` / `--bg` (clair) · (sombre) | 14,7 · 17,6 |
+| Repli opaque : `--ink-3` sur `--surface` clair · sombre | 6,3 · 7,9 |
+| Anneau de focus `--accent` sur `--bg` | 5,2 (clair) · 11,8 (sombre) |
+| Bordure de champ `--line-strong` sur `--surface` | 3,2 (clair) · 4,5 (sombre) |
+| Arc de progression (`--arc-a` → `--arc-b`) sur verre, pire halo | 3,4 → 3,3 (clair : sarcelle profonde `#0B93A8` → `#0D9A7D`) · 7,9 (sombre : `--grad-a` → `--grad-b`). Le logo garde le dégradé `#16C8E4` → `#2FDCB4` (1,85:1, décoratif) |
 
 **Héros** : son halo est peint **sous** le verre (`linear-gradient(var(--glass))` par-dessus un radial
-`--hero-halo` par-dessus `--bg`), donc voilé lui aussi. Pire coin (en haut à droite, halo à pleine force) :
-clair `--ink-3` 5,5 · `--accent` 5,6 · `--negative` 4,6 · `--positive` 4,47 ; sombre `--ink-2` 7,3 · `--ink-3` 5,4
-· `--accent` 5,8. `--positive` clair frôle 4,5 : **tout texte coloré d'un héros va sur une pastille `-soft`
-opaque** (verdict, delta), jamais à nu. Le halo du héros suit les replis : 50 % en transparence réduite ou sans
-`backdrop-filter`, retiré en contraste renforcé (`--hero-halo-mix`).
+`--hero-halo` par-dessus `--bg`), donc voilé lui aussi : le pire coin vaut la colonne « `--glass` (pire halo) »
+ci-dessus. Le halo `risk` (`--negative` à 30 %) garde en clair `--ink-3` 5,5 · `--accent` 4,8 · `--negative` 4,8 ·
+`--positive` 4,7 ; en sombre `--ink-3` 7,1 · `--negative` 6,5. **Tout texte coloré d'un héros va quand même sur
+une pastille `-soft` opaque** (verdict, delta), jamais à nu. Le halo du héros suit les replis : 50 % en
+transparence réduite ou sans `backdrop-filter`, retiré en contraste renforcé (`--hero-halo-mix`).
 
 **Règle du fond nu** : directement sur `--bg` + halos (titres de page, en-têtes de section hors carte), seuls
-`--ink` (≥ 10) et `--ink-2` (≥ 5,2) sont permis. `--ink-3` y tombe à 4,0 en clair, les couleurs de sens à
-3,3–3,7 : tout texte `.faint`, `.muted` coloré, montant signé ou `.notice` va **dans** une surface de verre.
-`--coin` (`#E9A400`, 1,9:1 sur verre) ne porte jamais de sens seul : il remplit, et le chiffre ou le contour en
+`--ink` (≥ 9,8) et `--ink-2` (≥ 6,0) sont permis. `--ink-3` y tombe à 4,7 en clair, `--accent` et les couleurs de
+sens à 3,9–4,1 : tout texte `.faint`, `.muted` coloré, montant signé ou `.notice` va **dans** une surface de verre.
+`--coin` (`#F5B800`, 1,7:1 sur verre) ne porte jamais de sens seul : il remplit, et le chiffre ou le contour en
 `--coin-ink` porte l'information.
+
+#### Historique des palettes
+
+| Date | Palette | Note |
+|---|---|---|
+| octobre 2026 | « Verre lumineux » violet | Lavande très pâle / nuit violette, accent `#4B3BEA`, halos violet, rose, menthe, soleil |
+| 25/10/2026 | **« Lagon »** | Choisie par Micka parmi les palettes proposées : turquoise, aqua, sarcelle sous un soleil jaune, ciel très clair ; sombre : océan profond. Logo, `theme-color`, manifeste et teintes de données suivent ; ajout de `--on-solid` |
+| 25/10/2026 | « Lagon », relecture | Catégories en teintes du thème (`tone`, fini les violets du serveur), Répartition en `--c*`, `--c3`/`--c4` clairs et arc de progression à 3:1, `--positive` vert franc, `--c-muted`, bas du fond `--halo-foot` (ni kaki en clair ni olive en sombre), une seule règle d'étapes |
 
 ### 3.4 Composants
 
@@ -255,7 +316,7 @@ Les listes à l'intérieur (`.ledger`, `.opp-list`, `.proc-card`…) n'ont **ni*
 séparateur 1 px `--line` et, au survol, `--accent-soft` à 50 %.
 
 **Chiffre du jour** (`.today-figure`) : 92 % de chasse, graisse 750 (inchangé), couleur `--ink` ; derrière, le
-halo du héros prend la couleur de l'état du mois : menthe (`ok`), soleil (`tight`), rose (`risk`) — jamais de
+halo du héros prend la couleur de l'état du mois : sarcelle (`ok`), soleil (`tight`), corail voilé (`risk`) — jamais de
 rouge vif. Le verdict passe en pastille sous le chiffre (`.verdict[data-status]`, pastille `-soft`) et, en cas de
 découvert prévu, porte un lien « Que faire ? » vers « Je peux m'acheter… ? » / l'assistant.
 
@@ -299,14 +360,17 @@ gardé quand il existe) : plus rien « à classer » → « Tout est rangé. » 
 aucun document → « Prends un papier en photo : Bank le lit pour toi. »
 
 **Progression** :
-- **Anneau** (`.ring`, nouveau, SVG inline 48–96 px) : piste `--surface-2`, arc en `--accent-grad` (dégradé SVG
+- **Anneau** (`.ring`, nouveau, SVG inline 48–96 px) : piste `--surface-2`, arc en `--arc-a` → `--arc-b` (dégradé SVG
   `<linearGradient>` dans le JSX, pas d'URL externe), bout rond, valeur en texte au centre et `role="img"` +
   `aria-label` (« 5 papiers sur 7 à jour »). Sert à : opérations classées sur le mois, papiers à jour, dossier
   de démarche.
 - **Barre** (`.meter`, `.piggy-bar`) : 10 px de haut, pilule, remplissage `--accent-grad` (ou `--coin` pour la
   tirelire, `--negative` seulement au-delà de 100 %), repère « rythme attendu » gardé.
 - **Étapes** (`.proc-phases`) : pastilles reliées par un trait qui se remplit ; étape faite = coche sur
-  `--positive-soft`, étape en cours = `--accent-grad` avec `--glow`.
+  `--positive-soft`, étape en cours = `--accent-grad` avec `--glow`. Une seule règle pour toutes les barres
+  d'étapes (parcours, assistants de configuration `.wizard-steps`, visite) : en cours = `--accent-grad`, faite =
+  `--accent` (jamais un second vert collé au dégradé). Bouton principal désactivé : aplat `--surface-2`, texte
+  `--ink-3` (pas le dégradé pâli, qu'on prendrait pour une pastille).
 
 ### 3.5 Pages : ce qui change pour l'expérience
 
@@ -324,7 +388,7 @@ aucun document → « Prends un papier en photo : Bank le lit pour toi. »
   deviennent des filtres en pastilles au téléphone.
 - **Épargne, Aides, Crypto, Pilote** : une phrase « ce que ça veut dire pour toi » en tête de page, chiffres clés
   en pastilles, tableaux repliés.
-- **Plus** (téléphone) : tuiles en verre fort avec l'icône dans une pastille de couleur (violet, rose, menthe,
+- **Plus** (téléphone) : tuiles en verre fort avec l'icône dans une pastille de couleur (aqua, ciel, turquoise,
   soleil en alternance), Épargne en premier.
 - **Réglages, Connecteurs** : groupes en cartes ; un service relié porte une pastille `--positive` qui
   s'allume (`--glow` vert) au moment où la liaison réussit.
@@ -362,6 +426,34 @@ d'animation infinie (les halos sont fixes ; seule l'orbite de chargement tourne 
 L'ouverture du jour (chiffre qui se compte, cartes qui montent avec 45 ms d'écart) reste la seule séquence non
 demandée. `prefers-reduced-motion: reduce` coupe tout (règle globale existante) : les moments de fête se
 réduisent à l'état final (badge visible, coche pleine) et au toast.
+
+**Exception : « Démarrer avec Bank » (§ 3.10, retour de Micka « plus animé, plus dynamique, plus moderne »).** Le
+parcours a plus de mouvement que le reste, mais il se pose : chaque entrée a **un seul maître**, une étape est au
+repos en moins de 0,7 s, et rien n'y boucle sans fin. Jetons : `--d-exit` 120 ms (ce qui part, `--ease-in`),
+`--d-enter` 380 ms (une surface qui arrive, `--ease-out`), `--d-scene` 600 ms (une scène) ; `--ease-spring` est
+réservé aux petits objets (pastilles, boutons de bascule, badges, chiffre « Étape N »), jamais à une carte entière.
+
+| Quoi | Comment | Coût |
+|---|---|---|
+| Ciel vivant | Trois halos (`--halo-1..3`, deux au téléphone) peints petits (18vmax) et agrandis ×4 (un seizième de la mémoire), qui dérivent en 38–52 s, **translation seule**, deux allers-retours puis s'arrêtent ; en pause pendant qu'un champ a le focus. Animation et `will-change` déclarés **seulement** sous `prefers-reduced-motion: no-preference`. Ils remplacent les halos fixes de `body::before` (classe `in-journey` sur la racine, pas de `:has()` sur `<body>`) | Trois calques composés, aucun repaint |
+| Changement d'étape | Un **passage de relais**, pas un fondu enchaîné. View Transitions API quand le navigateur la connaît : l'étape qui part est capturée sous le nom `journey-out` (classe `vt-old` sur la racine, retirée avant le changement) et s'efface **sur place**, là où on la voyait (24 px, `--d-exit`, `--ease-in`) ; la nouvelle (`journey-step`) arrive en haut **après** elle (32 px, 20 px au téléphone, `--d-enter`, `--ease-out`, délai `--d-exit`) — deux groupes séparés, jamais deux titres superposés, aucune taille interpolée. Le défilement en haut se fait après la capture, dans le changement. La transition est libérée quand la nouvelle étape a son **contenu** (plus de squelette), garde-fou 450 ms ; pendant le relais, `::view-transition` laisse passer les clics. La fin s'ouvre sur place (fondu et `scale(.97)`). Repli CSS sans l'API : la même entrée de 32 px | Une transition à la fois ; la classe `is-view-transition` n'est retirée que par la dernière |
+| Barre d'étapes | Pistes fines de **vraie hauteur** (0,5 rem ; 1 rem pour l'étape en cours et les faites — sans `scaleY`, les bouts restent ronds), étape passée en piste pleine `--line-strong` (pas de rayures) ; le remplissage s'étire (`scaleX` sur l'enfant), un reflet passe **une** fois ; lueur de l'étape en cours en `box-shadow` fixe (pas de `filter`) ; « Étape 3 sur 7 » : le chiffre monte en place | `transform` seul |
+| Scène de l'étape | SVG inline par étape (carte et flèches de synchro, maison et foyer, bouclier et interrupteurs, feuille qui vole dans le dossier, cible et flèche, cloche et téléphone, trois écrans), toutes les formes dans le disque. L'image entière « pope » (calque HTML, composé à part), puis deux ou trois gestes signature dans le SVG (la carte, la coche qui se trace, la cloche qui sonne une fois…), posés en ~0,7 s ; elle flotte quatre fois (5 s) puis s'arrête. Déjà vue pendant ce passage : immobile | Une fois par étape |
+| Contenu | Seule la toute première étape entre ligne à ligne : trois temps à 40 ms d'écart (titre, but, reste), 320 ms. Une étape qui glisse n'a pas d'entrée propre : la glissade suffit | Une fois |
+| Gestes | Action principale : reflet **au survol** seulement, ressort à l'appui (`scale(.95)`) ; cartes de chemin : soulevées et légèrement inclinées au survol avec un reflet ; pastilles et priorités choisies : petit « pop » ; interrupteurs : bascule avec rebond. Seule exception au « `transform`/`opacity` seuls » : l'ombre portée des boutons et des cartes au survol (transition courte, ≤ 240 ms, comme partout dans l'application) | `transform`, `opacity` |
+| Occupé | Pendant un envoi, le bouton garde le focus : `aria-disabled="true"` et un garde dans le clic, pas `disabled` (qui renverrait le focus sur `<body>` le temps de l'aller-retour et de la transition) | — |
+| Fin | Voir § 3.10 (a) : badge qui « pope » (80 ms), coche qui se trace (300–660 ms), **puis** une gerbe de 14 éclats (7 de chaque côté, sans `--negative`) qui part du centre du badge, monte un peu et retombe de 120–160 px, disparue aux 70 % — **sous** le texte (calque `z-index: 0` dans la carte isolée) ; l'anneau et son chiffre suivent **la même valeur** (`useTween`, courbe de `--ease-out`) | Une fois |
+
+« Bien démarrer » sur Aujourd'hui se voit tous les jours, donc rien ne s'y rejoue à chaque visite : l'anneau et son
+chiffre ne bougent que si le compte a changé depuis la dernière fois qu'on les a montrés (retenu pour la session),
+d'un même mouvement depuis l'ancienne valeur ; à la première visite ils sont simplement là. Les éléments apparaissent
+d'un seul fondu de 200 ms, sans cascade ; l'icône se tourne au survol ; « Reprendre le parcours » a son reflet au
+survol ; l'élément fait pendant que la page est ouverte « pope » et se coche en se traçant (jamais au chargement).
+Mouvement réduit : pas de transition de vue (le script ne l'appelle pas), chiffres finaux d'emblée (et une
+animation en cours saute à sa fin si la préférence change), scènes immobiles dans leur état final (l'état de base de
+chaque forme **est** son état final), pas de confettis, rien qui se soulève, aucun calque promu. Aucune couleur
+n'est écrite dans ces animations : tout passe par les jetons du § 3.3, pour qu'un changement de palette reste un
+changement de jetons.
 
 ### 3.8 Replis et accessibilité
 
@@ -405,7 +497,7 @@ réduisent à l'état final (badge visible, coche pleine) et au toast.
    réduit ; vérification 390 px clair/sombre et suite Vitest.
 
 *Fondations réalisées (octobre 2026).* Écarts assumés par rapport au § 3.4 :
-- `.hub-tabs` : piste en verre fort (une piste `--surface-2` disparaît sur le fond lavande) et onglet actif en
+- `.hub-tabs` : piste en verre fort (une piste `--surface-2` disparaît sur le fond clair) et onglet actif en
   `--accent-grad`, comme la bulle de l'île ; `.segmented` aussi depuis la relecture (le verre enfoncé était
   illisible en sombre).
 - La bulle de l'île glisse par `left` (un seul petit élément) : `transform` en pourcentage se rapporte à la bulle,
@@ -445,6 +537,245 @@ illustrés (`EmptyState.tsx`), action principale pleine largeur au téléphone. 
 côté serveur : rien n'est fêté là. Reste : mode tri rapide, filtres en pastilles des colonnes de démarches, une seule
 alerte dépliée par page, phrases « ce que ça veut dire pour toi », tuiles colorées de Plus.
 
+### 3.10 Démarrer avec Bank
+
+Retour de Micka (#44) : « l'interface est compliquée, il n'y a pas d'onboarding qui te guide sur l'utilisation et la
+configuration de tout, avec un beau design ». Réponse retenue : un **parcours de première ouverture plein écran**
+(on le quitte et on le reprend où on l'a laissé) puis une **liste « Bien démarrer »** avec son anneau sur
+Aujourd'hui, jusqu'à ce que tout soit configuré. Le § 5 (ancien parcours) est remplacé par celui-ci.
+
+#### Constat (code et captures à 390 px, base de démo, octobre 2026)
+
+Mesures prises sur la base de démo (hauteur de page ÷ 844 px d'écran de téléphone) :
+
+| Écran | Hauteur | Ce qui pèse |
+|---|---|---|
+| Accueil, étape « Connecte ta banque » | 3,6 écrans | Assistant Enable Banking en 6 sous-étapes affiché d'emblée (« Crée ton application », fichier `.pem`) avant même de savoir s'il existe un chemin plus simple ; **deux** boutons principaux (« J'y suis, étape suivante » et « Continuer sans connexion ») plus « Je connecterai mes comptes plus tard » en bas, qui fait la même chose que le second |
+| Accueil, étape « Qu'est-ce qui compte le plus pour toi ? » | **7,7 écrans** | Les 17 accords de `PURPOSES` empilés avec leur texte intégral (mémoire de l'assistant, courbe Linky, messageries…) alors que ni l'assistant, ni Linky, ni une messagerie ne sont reliés : on demande un accord sans contexte, ce qui pousse à tout refuser ou à tout accepter sans lire |
+| Réglages | 20 écrans, 29 champs | Un champ de solde éditable par compte, Confidentialité = la même liste de 17 interrupteurs |
+| Connecteurs | 10,7 écrans, 19 boutons | Neuf sections empilées sans sommaire ni état « relié / à faire » ; l'assistant Enable Banking s'ouvre en tête |
+| Ma situation | 8,7 écrans, 55 boutons | Le questionnaire complet (8 thèmes) est le seul endroit où dire son foyer |
+| Aujourd'hui | 2,3 écrans | Les initiatives de mise en route (`start:data`, `security:totp`, `planning:connect`) se mêlent aux vraies nouvelles : « 19 autres — voir » |
+| Plus | 1,3 écran | Descriptions tronquées par l'ellipse (« et reçois ses… », « documents de l'État,… ») |
+
+Et dans le code : l'état « onboarding en cours » vit dans `localStorage` (`bank:onboarding`) — faux sur un second
+appareil, perdu en navigation privée ; `Welcome.tsx` (trois chemins) n'apparaît que si le budget est vide, donc
+jamais après l'étape banque ; `Onboarding.tsx` pose des `style={{…}}` statiques (règle CSP du § 3.8).
+
+#### Principes du parcours
+
+1. **Une étape = un but, une action principale.** Une phrase de but, un écran, un bouton lumineux qui dit ce
+   qu'il fait ; « Passer » toujours visible en discret, jamais culpabilisant. (Charge cognitive : un seul appel à
+   l'action par point de décision.)
+2. **Le plus utile d'abord, le reste plus tard.** Sept étapes au plus avant le tableau de bord ; tout ce qui
+   est avancé (Powens, crypto, pilote, boîte mail, Linky, planning, assistant IA) va dans la liste, pas dans le
+   parcours.
+3. **Ne jamais redemander ce que Bank sait.** Les réponses déjà détectées (`suggestions` du questionnaire : salaire,
+   loyer, statut) sont pré-remplies et se valident d'un geste ; une étape déjà faite (banque déjà reliée sur un
+   autre appareil) est cochée et sautée.
+4. **Vrai partout.** Fait / passé / terminé se calculent **côté serveur** à partir de l'état réel, pas d'un drapeau
+   local : la liste dit la même chose sur le téléphone et sur l'ordinateur.
+5. **Un accord se donne en connaissance de cause.** On montre ce qui part et vers qui, au moment où ça sert ;
+   jamais d'accord coché d'avance, jamais d'accord accordé en silence (§ « Tes accords » ci-dessous).
+6. **Honnête.** Les gains affichés viennent du serveur (`/api/opportunities/top`), jamais d'un chiffre inventé ;
+   la durée annoncée est la durée réelle (l'application Enable Banking prend cinq minutes, on le dit).
+
+#### (a) Le parcours
+
+Entrée : juste après la création de l'accès (l'intro de trois écrans et le formulaire d'accès restent tels
+quels). Il s'ouvre **seul une seule fois** (état `new`) ; dès qu'on le quitte, il ne s'impose plus et se reprend
+depuis la liste (« Reprendre le parcours »), affichée en tête d'Aujourd'hui même quand il n'y a encore aucun chiffre
+(au-dessus des trois chemins de bienvenue). Adresse : `#/bienvenue`, `#/bienvenue/<étape>` (reprise et lien
+profond).
+
+Gabarit commun (plein écran, sans rail ni île) : en haut la marque, « Étape 2 sur 7 » en texte et une barre de
+sept segments, un bouton « Quitter » (retour à Aujourd'hui, l'étape en cours est gardée) ; au centre une carte de
+verre (`.card`) avec le titre de l'étape (`h1`, reçoit le focus), une phrase de but, le contenu, puis l'action
+principale pleine largeur au téléphone ; dessous, en `.btn.ghost`, « Passer cette étape ». Une coche verte se
+trace sur le segment quand le serveur confirme l'étape (2xx), sans gerbe : la fête est réservée à la fin.
+
+| # | Étape | But (une phrase) | Ce qu'on voit | Action principale | Passer | « Fait » calculé côté serveur | Durée | Pourquoi ça compte |
+|---|---|---|---|---|---|---|---|---|
+| 1 | **Ta banque** | Que Bank connaisse ton argent sans que tu saisisses rien. | Trois chemins en cartes (repris de `Welcome.tsx`) : « Relier ma banque » (recommandé · 2 min chez ta banque **si Enable Banking est déjà configuré** ; sinon la carte dit « compte gratuit à créer chez Enable Banking · environ 15 min · plus simple sur ordinateur », et au téléphone « Trois chiffres » passe en premier, recommandé), « Importer un relevé » (3 min), « Trois chiffres » (30 s). Le volet ouvert par une carte défile en vue et reçoit le focus. Sans Enable Banking configuré, un écran dit ce que ça demande avant l'assistant (`BankSetup`), avec « Je le ferai sur ordinateur » au téléphone (l'étape est passée, « Relier ta banque » reste dans la liste) ; s'il est déjà configuré, on va droit aux tuiles de banques. Retour de la banque : synchronisation visible (existante) puis comptes reliés | Le chemin choisi, puis « Relier ma banque » | « Plus tard » | Une `BankConnection` active **ou** une opération importée **ou** un compte saisi avec un solde | 30 s à 5 min | Sans ça, pas de chiffre du jour ; relié, il n'y a plus jamais de relevé à pointer à la main |
+| 2 | **Ton foyer** | Que Bank sache qui vit de ce budget, pour simuler tes droits. | Cinq questions du questionnaire, une par ligne, pré-remplies quand Bank les a lues dans tes relevés (« Lu dans tes relevés : 2 150 € — c'est juste ? ») : situation pro, revenu net, foyer, enfants à charge, logement (statut + loyer) ; puis, en option, ta commune ou ton adresse (voir l'accord « géocodage » en ligne, décoché) | « Enregistrer mon foyer » | « Plus tard » | Les réponses `employment`, `net_monthly_income`, `household`, `dependents`, `housing_status` existent (même endpoint `PUT /api/onboarding/{question}`) | 1 min | C'est ce qui permet de simuler prime d'activité, aides au logement, impôt : un droit non demandé, c'est de l'argent perdu chaque mois. Le montant estimé s'affiche s'il est calculé |
+| 3 | **Tes accords** | Choisir ce que Bank peut aller chercher pour toi, en sachant ce qui part. | Les accords **utiles maintenant**, groupés par ce qu'ils envoient (tableau suivant), chacun avec une ligne « Envoie : … » et le texte complet dépliable ; « Activer ces 6 accords » en action principale ; interrupteurs individuels à côté et « Continuer avec ces choix », toujours là, qui note chaque interrupteur encore sans réponse tel qu'il est affiché | « Activer ces 6 accords » | « Pas maintenant » | Chaque accord listé a été **décidé** (`consents.decided`), oui ou non — un accord actif par défaut (la veille) laissé tel quel compte comme réglé | 1 min | Barèmes à jour, jours fériés, Tempo : des prévisions justes sans rien saisir |
+| 4 | **Ton premier papier** | Ranger un premier document que Bank lit pour toi. | La zone de dépôt lumineuse de Documents (photo ou PDF), avec trois idées : avis d'impôt, bulletin de paie, attestation CAF | « Prendre en photo ou déposer » | « Plus tard » | Au moins un `VaultDocument` | 1 min | Un avis d'impôt suffit à préremplir revenu fiscal, parts, échéances : moins de questions ensuite |
+| 5 | **Tes priorités** | Dire par quoi Bank commence à chercher. | Les cinq pastilles actuelles (« Récupérer ce à quoi j'ai droit »…) ; dessous, les trois premières pistes du serveur | « Garder ces priorités » | « Plus tard » | `opportunity_priorities` non vide | 20 s | Les pistes qui comptent pour toi remontent en premier dans Gagner |
+| 6 | **Où te prévenir** | Recevoir les alertes importantes (découvert, échéance) là où tu es. | Deux cartes : « Sur ce téléphone » (notifications : l'accord `push` s'affiche ici, avec son texte) et « Dans ta messagerie » (WhatsApp par QR code, Telegram… : ouvre Messageries) | « Accepter et activer les notifications » (le bouton dit qu'il donne l'accord `push`, retiré si l'abonnement échoue) ; sans notifications possibles, « Plus tard » devient l'action principale. « Ouvrir Messageries » y mène avec `?from=bienvenue/prevenir`, et la page montre « Revenir au parcours » | « Plus tard » | Un appareil `push` actif **ou** un `ChannelLink` | 1 min | Un découvert vu trois jours avant coûte 0 € ; vu après, des frais et un rejet |
+| 7 | **La visite** | Savoir où est quoi, en cinq écrans. | Voir (c) | « Suivant », puis « Voir mon tableau de bord » | « Passer la visite » | `tour_done_at` posé | 40 s | On ne cherche plus Papiers dans Plus |
+
+Les étapes déjà faites quand on arrive (banque reliée ailleurs, foyer répondu dans Ma situation) apparaissent
+cochées dans la barre et sont sautées. La dernière étape franchie déclenche **le** moment de fête du parcours
+— uniquement si au moins une étape, hors visite, a été faite pendant ce passage ; sinon le parcours se ferme
+simplement. C'est un **écran de fin** dans la carte du parcours (pas un toast) : badge qui « pope » et coche qui se
+trace, puis seulement une gerbe dans la carte, sous le texte, titre qui reçoit le focus et que décrit la phrase de ce qui est fait et de ce qui
+reste (« 3 étapes faites — il en reste 2, quand tu veux. »), l'anneau « Bien démarrer » dont l'arc et le chiffre se
+comptent ensemble
+(« 5 réglages faits sur 8 »), la liste des six étapes (faite / plus tard), et « Voir mon tableau de bord ». Le titre
+est « C'est parti ! », « Parcours terminé ! » quand les six étapes sont faites, et « Bank est prêt. » seulement à 8
+sur 8 — comme pour l'anneau qui se ferme. Aucun autre toast dans le parcours (il couvrirait
+les boutons du bas au téléphone) : la confirmation d'une étape faite ou passée s'affiche en tête de la suivante.
+
+**Tes accords, groupés par ce qu'ils envoient.** Seuls les groupes 1 et 2 sont proposés dans le parcours ; les
+autres se demandent **là où ils servent**, comme aujourd'hui (Messageries, notifications, boîte mail, crypto,
+Linky, documents) : on ne demande pas « Mémoire de l'assistant » avant qu'il y ait un assistant.
+
+| Groupe (titre affiché) | Accords | Ce qui part (ligne « Envoie : ») | Dans « Tout activer pour les données publiques » |
+|---|---|---|---|
+| Rien te concernant | `watch` (déjà actif par défaut), `baremes`, `tempo` | Seulement l'adresse de ton serveur ; des dates pour Tempo | Oui |
+| Ta zone, pas ton adresse | `calendar` (zone, département ou académie), `home_value` (commune), `meteo` (coordonnées arrondies à ~10 km, si ton adresse est connue) | La zone, la commune ou la maille de 10 km | Oui |
+| Ton adresse | `geocoding` (adresse tapée → IGN), `housing` (identifiant d'adresse BAN → ADEME) | Ton adresse, ou celle de ton immeuble | Non : `geocoding` à côté du champ adresse (étape 2), `housing` dans Ma situation › logement |
+| Tes contenus, vers un service tiers | `ai_memory`, `ai_documents`, `web_search`, `channels`, `push`, `mail`, `crypto_network`, `linky_curve`, `sensitive_documents` | Ce que tu écris, tes documents, tes adresses crypto, ta courbe de charge… | Non : demandés au moment où tu relies le service |
+
+« Activer ces 6 accords » : le bouton est **sous** la liste des six accords concernés, chacun
+avec sa ligne « Envoie : … » et son texte complet dépliable ; un clic les accorde **tous ceux-là et eux seuls**
+(le serveur refuse toute autre finalité dans cet appel), chacun journalisé comme un accord ordinaire
+(`consent.grant`, version du texte). L'étape suivante dit combien sont nouveaux, compté sur la réponse du serveur
+(« 6 accords donnés, modifiables dans Réglages › Confidentialité. », ou « Ces accords étaient déjà donnés. »).
+Les interrupteurs individuels restent à côté pour qui veut choisir. Rien n'est coché d'avance.
+
+#### (b) La liste « Bien démarrer »
+
+Place : sur Aujourd'hui, **sous** le héros (le chiffre du jour reste le premier contenu) et au-dessus de « La
+prochaine chose à faire ». Carte de verre `.card` avec, à gauche, l'anneau `Ring` (48 px au téléphone, 64 au
+bureau) « 5 sur 8 », titre `h2` « Bien démarrer », et **les trois prochains éléments** non faits ; « Voir les 3
+autres » déplie le reste. Chaque élément : icône, titre court, une phrase « pourquoi » (gain ou temps), durée
+(« 2 min »), et un lien qui va **directement** au bon endroit (étape du parcours ou section d'une page, ex.
+`#/connecteurs` + ancre `energie`). Un élément fait passe en bas, coché, barré non (texte `--ink-2`, coche
+`--positive`). En tête de carte : « Reprendre le parcours » tant que le parcours n'est pas `finished`.
+
+Éléments comptés par l'anneau (ce qui sert à tout le monde), dans cet ordre :
+
+1. Relier ta banque (ou importer) — étape 1
+2. Décrire ton foyer — étape 2
+3. Tes accords pour les données publiques — étape 3
+4. Ranger un premier papier — étape 4
+5. Choisir tes priorités — étape 5
+6. Être prévenu (notifications ou messagerie) — étape 6
+7. Protéger ton accès (double authentification **ou** une clé d'accès) — `User.totp_enabled` ou un `Passkey`
+8. Vérifier ta sauvegarde — dernière `BackupRun` de type `verify` en `ok` (la sauvegarde automatique existe déjà ;
+   la vérifier prouve qu'elle se restaure)
+
+« Pour aller plus loin » (repli `<details>` fermé, **non compté** dans l'anneau, pour que 100 % soit atteignable
+par tout le monde) : assistant IA (clé OpenRouter, `LlmProvider`), Linky (`EnergyConnection`), boîte mail
+(`MailAccount`), planning de travail (`WorkPlan` ; montré en premier si la situation pro est à horaires variables),
+banque via Powens (si aucune banque Enable Banking), crypto (si `outside_assets` mentionne de la crypto, sinon en
+dernier), pilote automatique (proposé seulement quand banque + foyer + priorités sont faits).
+
+Cycle de vie :
+- **Visible** tant qu'au moins un élément compté n'est pas fait et que tu ne l'as pas masquée.
+- **Terminée** : quand le serveur constate 8 sur 8 pour la première fois, il pose `checklist_completed_at`. Si
+  c'est la conséquence d'une action faite dans la liste ou le parcours, l'anneau se ferme avec l'étincelle du
+  § 3.6 et le toast « Bank est prêt. » ; jamais au simple chargement de la page.
+- **Repliée** : pendant 7 jours après `checklist_completed_at`, la carte devient une pilule d'une ligne
+  « Bien démarrer : terminé · Pour aller plus loin » (ouvre le repli).
+- **Disparue pour de bon** : après ces 7 jours, ou dès « Masquer » (bouton discret, confirmation intégrée « Tu
+  la retrouveras dans Réglages »), `dismissed_at` est posé. La liste reste accessible dans Réglages › « Bien
+  démarrer » (ligne avec l'anneau), jamais plus sur Aujourd'hui.
+- Un élément qui redevient faux (banque coupée) ne rouvre pas la liste masquée : c'est le rôle des initiatives
+  (« Ta banque n'est plus reliée »).
+
+#### (c) La visite, cinq écrans
+
+Une carte par écran, l'île d'onglets dessinée en SVG inline au bas de la carte avec l'onglet concerné allumé
+(bulle `--accent-grad`), un petit aperçu en CSS au-dessus (pas de capture : rien d'externe, rien de faux).
+« Suivant », « Précédent » en lien, points d'étape, « Passer la visite » (absent au dernier écran, où « Voir mon
+tableau de bord » fait la même chose). Pas d'avance automatique.
+
+| Écran | Phrase |
+|---|---|
+| Jour | « Chaque matin, ce que tu peux dépenser aujourd'hui, et la prochaine chose à faire. » |
+| Opérations | « Tout ce qui entre et sort, rangé pour toi ; tu corriges d'un geste. » |
+| Gagner | « Les aides et économies que Bank a trouvées pour toi, et ta tirelire. » |
+| Papiers | « Prends un papier en photo : Bank le lit, le range et prépare tes démarches. » |
+| Plus | « Épargne, réglages, connecteurs et messageries : tout le reste est ici. » |
+
+Le bouton flottant « Demande à Bank » est montré sur le dernier écran (« Une question ? Demande à Bank, en bas à
+droite. ») sans sixième écran.
+
+#### (d) API et données
+
+`GET /api/onboarding` est **déjà pris** par le questionnaire de Ma situation (`api/agents.py`, utilisé par
+Situation et les initiatives) : le parcours vit sous **`/api/start`** pour ne rien casser.
+
+- `GET /api/start` →
+  ```
+  { "journey": { "status": "new" | "in_progress" | "finished", "current": "foyer" | null,
+                 "steps": [{ "key": "banque", "title": "Ta banque", "done": true, "skipped": false,
+                             "minutes": 5, "href": "#/bienvenue/banque" }, …] },
+    "checklist": { "visible": true, "collapsed": false, "done": 5, "total": 8,
+                   "completed_at": null,
+                   "items": [{ "key": "securite", "title": "Protéger ton accès", "why": "…", "minutes": 2,
+                               "done": false, "group": "essentiel" | "plus", "href": "#/reglages#sec-title",
+                               "value_cents": null }, …] },
+    "public_consents": [{ "purpose": "baremes", "title": "…", "sends": "…", "text": "…", "granted": false,
+                          "decided": false }, …] }
+  ```
+  Tout `done` est recalculé à chaque appel à partir des tables réelles (requêtes `count`/`exists` légères, aucune
+  lecture réseau) ; `value_cents` ne vient que d'une estimation déjà calculée par le serveur.
+- `POST /api/start/steps/{key}` `{ "action": "skip" | "resume" | "current" }` → l'état ; `skip` sur une étape
+  faite est sans effet.
+- `POST /api/start/finish` → `status = finished` (fin de la visite ou « Voir mon tableau de bord »).
+- `POST /api/start/checklist` `{ "action": "dismiss" | "restore" }`.
+- `POST /api/start/public-consents` `{ "purposes": [...] }` → refuse (422) toute finalité hors du groupe public ;
+  appelle `consents.set_consent(…, True, actor="user")` pour chacune, renvoie la liste à jour.
+- Toutes en session humaine (`AuthDep`) avec CSRF, jamais exposées aux jetons d'agent ni au serveur MCP.
+
+Données : **aucune table, aucune colonne**. Une clé `start_journey` dans `app_settings` (déjà là, JSON), lue et
+écrite par `services/start.py` :
+`{ "started_at", "current", "skipped": [clés], "finished_at", "tour_done_at", "checklist_completed_at",
+"dismissed_at" }` — des dates et des clés d'étape, **jamais** une réponse, un montant, une adresse ou un secret.
+Compte existant sans cette clé : s'il porte une trace de mise en route (banque, opérations, compte même à 0 €,
+priorités, un accord explicite, une réponse de Ma situation, un papier, une messagerie, un connecteur), le
+parcours est considéré `finished` (on n'impose pas l'accueil à Micka) mais la liste s'affiche avec ce qui manque. Le drapeau
+`localStorage` `bank:onboarding` disparaît (effacé une fois au démarrage) : `App.tsx` lit `GET /api/start` après la connexion et n'ouvre
+`#/bienvenue` que si `status == "new"`. Les initiatives de mise en route (`start:data`, `security:totp`,
+`planning:connect`) sont tues tant que la liste est visible, pour ne pas poser deux fois la même question.
+
+Tests : un test par règle « fait » (table vide → faux, une ligne → vrai), skip/resume/finish, migration d'un compte
+existant, refus d'une finalité non publique dans `public-consents`, journal d'audit écrit ; côté front, focus sur le
+`h1` de chaque étape, reprise à l'étape `current`, la liste masquée ne revient pas.
+
+#### (e) Accessibilité et mouvement
+
+- Chaque changement d'étape déplace le focus sur le `h1` de l'étape (`tabIndex={-1}`) et met à jour
+  `document.title` (« Ton foyer · Bank ») ; la barre de progression est un `<ol>` avec `aria-current="step"` et un
+  texte « Étape 2 sur 7 » ; « Étape faite » / « Étape passée » est la ligne en tête de l'étape suivante, qui décrit le
+  `h1` (`aria-describedby`) : lue avec le titre, jamais coupée par le déplacement du focus. La visite met
+  « écran 2 sur 5 » dans son `h2`, sans région annoncée en double. Échap quitte, sauf dans un champ, une liste ou un
+  volet déplié. Les choix uniques du foyer sont des boutons radio en pastilles.
+- L'anneau garde `role="img"` + `aria-label` (« 5 éléments sur 8 faits ») ; l'élément « fait » est dit par le
+  texte (« fait »), pas par la seule coche verte.
+- Interrupteurs d'accords : `role="switch"` existant, nom = titre de l'accord, état dit ; le texte complet est dans
+  un `<details>` relié par `aria-describedby` à la ligne « Envoie : … ».
+- Cibles ≥ 44 px, action principale pleine largeur au téléphone, « Passer » et « Quitter » toujours atteignables au
+  clavier, Échap = « Quitter » (avec la même conservation d'état). Aucune limite de temps : la visite n'avance
+  jamais seule (l'intro actuelle à 3,6 s par écran garde son « Suivant » et s'arrête sur le dernier écran).
+- Mouvement : voir l'exception du § 3.7 (ciel vivant qui se pose, passage de relais entre étapes par View
+  Transitions ou repli CSS, scène jouée une fois par étape, gestes à ressort, écran de fin) ; coche qui se trace
+  400 ms, anneau qui se remplit. Le focus et `aria-describedby` ne dépendent pas de la transition : le nouveau `h1`
+  est dans le DOM et reçoit le focus pendant qu'elle joue ; un bouton occupé garde le focus (`aria-disabled`) ; une
+  transition qui ne voit pas venir le contenu de l'étape est libérée au bout de 450 ms. Tout est coupé par `prefers-reduced-motion` (état final directement, pas de transition de vue) ; la
+  seule fête est celle de fin.
+- Verre et contrastes du § 3.3 : texte des étapes sur `.card` (`--glass-strong`), jamais `--ink-3` sur le fond nu ;
+  replis transparence réduite / contraste renforcé / couleurs forcées hérités des primitives.
+- CSP : aucun `style` statique (les marges en ligne d'`Onboarding.tsx` deviennent des classes), aperçus de la
+  visite en CSS et SVG inline ; section `/* ---- démarrer */` ajoutée à `styles.css` avec les jetons existants.
+
+#### Cinq simplifications bon marché, incluses
+
+| # | Où | Changement | Effort | Gain |
+|---|---|---|---|---|
+| 1 | Accueil › accords (7,7 écrans) et Réglages › Confidentialité | Un seul composant `ConsentGroups` : groupes par ce qui part, ligne « Envoie : … », texte complet replié ; le parcours n'en montre que deux groupes, Réglages tous | Faible (le texte est déjà dans `PURPOSES`, on ajoute `group` et `sends`) | La page la plus longue de l'accueil tombe à ~1 écran ; un accord se comprend en une ligne |
+| 2 | Accueil › banque | Trois chemins d'abord, l'assistant Enable Banking après le choix ; **un** bouton principal par écran ; « Continuer sans connexion » et « Je connecterai mes comptes plus tard » fusionnés en « Plus tard » | Faible (réutilise `Welcome.tsx` et `BankSetup`) | Plus de mur technique en première impression ; 30 s possibles au lieu de 5 min |
+| 3 | Connecteurs (10,7 écrans) | `SectionNav` en tête (déjà utilisé par Réglages) avec une pastille par section « relié » (`--positive`) / « à faire » ; les sections non reliées repliées sur une ligne « Relier » | Faible à moyen | On voit d'un coup d'œil ce qui est branché ; la page se lit en un écran |
+| 4 | Aujourd'hui | Initiatives de mise en route tues tant que « Bien démarrer » est visible ; « 19 autres — voir » devient « Voir les 19 autres » | Faible | Une seule liste de choses à configurer, le bouton dit ce qu'il fait |
+| 5 | Plus | Descriptions de tuiles en six mots au plus (« Écris à Bank sur WhatsApp, Signal… », « Banques, Linky, État, IA ») ; pas d'ellipse au téléphone | Faible (texte seul) | La tuile se lit entière, sans deviner la fin |
+
+Hors de ce lot (déjà prévus ou plus gros) : mode tri rapide d'Opérations (16,5 écrans, 103 listes), champs de
+solde de Réglages › Comptes en lecture avec « Modifier », Ma situation allégée maintenant que le foyer se dit dans
+le parcours.
+
 ## 4. Architecture des composants
 
 ```
@@ -483,6 +814,8 @@ Thème : `:root` clair par défaut, sombre via `prefers-color-scheme` **ou** `da
 `theme.ts` (choix dans Réglages → Apparence, mémorisé dans `localStorage`, appliqué avant le premier rendu).
 
 ## 5. Parcours de première ouverture
+
+*Remplacé par le § 3.10 « Démarrer avec Bank » (#44) ; gardé comme historique.*
 
 1. Intro animée (3 écrans, 8 s au total, passables) : « Combien tu peux dépenser aujourd'hui » (le chiffre se
    compte), « Tes aides et ta paie, prévues » (la courbe se trace), « Ton agent, gouverné » (une carte qui se

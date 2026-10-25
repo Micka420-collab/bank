@@ -2,9 +2,16 @@
 // fait défiler jusqu'à une section (le titre visé doit porter l'id donné) et la section en cours se distingue.
 // Des boutons, pas des liens : la route de Bank vit dans le fragment d'adresse, qu'un « #id » casserait.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { parseHash } from "../router";
 
-export type SectionLink = { id: string; label: string };
+/** `state` : une pastille « relié » / « à faire » (Connecteurs). */
+export type SectionLink = { id: string; label: string; state?: "on" | "todo" };
+
+/** La section demandée par l'adresse (`#/reglages?section=sec-title`) : les liens de « Bien démarrer » y mènent. */
+export function sectionFromHash(hash: string = window.location.hash): string | null {
+  return parseHash(hash).params.get("section");
+}
 
 export function targetOf(id: string): HTMLElement | null {
   const el = document.getElementById(id);
@@ -21,6 +28,17 @@ export function currentSection(ids: string[], offset = 72): string | null {
     if (el.getBoundingClientRect().top <= offset) current = id;
   }
   return current;
+}
+
+/** Fait défiler jusqu'à la section (sans animation en mouvement réduit) et y pose le focus. */
+export function goTo(id: string): void {
+  const el = targetOf(id);
+  if (!el) return;
+  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView?.({ behavior: reduced ? "auto" : "smooth", block: "start" });
+  const heading = document.getElementById(id);
+  if (heading && !heading.hasAttribute("tabindex")) heading.setAttribute("tabindex", "-1");
+  heading?.focus({ preventScroll: true });
 }
 
 export function SectionNav({ items, label = "Sections de la page" }: { items: SectionLink[]; label?: string }) {
@@ -49,19 +67,33 @@ export function SectionNav({ items, label = "Sections de la page" }: { items: Se
       if (frame) window.cancelAnimationFrame(frame);
     };
   }, [items]);
-  const go = (id: string) => {
-    const el = targetOf(id);
-    if (!el) return;
-    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
-    const heading = document.getElementById(id);
-    if (heading && !heading.hasAttribute("tabindex")) heading.setAttribute("tabindex", "-1");
-    heading?.focus({ preventScroll: true });
-  };
+  const go = (id: string) => goTo(id);
+  const jumped = useRef(false);
+  const ids = items.map((i) => i.id).join(" ");
   useEffect(() => {
-    // La puce en cours reste visible dans la rangée (qui défile de côté sur un téléphone), sans bouger la page.
+    // Lien profond : on attend que la section soit là (elle arrive avec ses données), puis on y va, une fois.
+    const wanted = sectionFromHash();
+    if (jumped.current || !wanted || !ids.split(" ").includes(wanted)) return undefined;
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      tries += 1;
+      if (document.getElementById(wanted) || tries > 20) {
+        window.clearInterval(timer);
+        jumped.current = true;
+        goTo(wanted);
+      }
+    }, 150);
+    return () => window.clearInterval(timer);
+  }, [ids]);
+  useEffect(() => {
+    // La puce en cours reste visible dans la rangée (qui défile de côté sur un téléphone), sans bouger la page :
+    // seule la rangée défile. Pas de scrollIntoView, qui sur une barre collante ramène la page à sa place d'origine.
     const active = document.querySelector<HTMLElement>('.secnav button[aria-current="true"]');
-    active?.scrollIntoView?.({ inline: "nearest", block: "nearest" });
+    const row = active?.closest("ul");
+    if (!active || !row) return;
+    const left = active.offsetLeft - row.offsetLeft;
+    if (left < row.scrollLeft) row.scrollLeft = left;
+    else if (left + active.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = left + active.offsetWidth - row.clientWidth;
   }, [current]);
   const shown = items.filter((i) => present.includes(i.id));
   if (shown.length < 3) return null;
@@ -70,7 +102,10 @@ export function SectionNav({ items, label = "Sections de la page" }: { items: Se
       <ul>
         {shown.map((i) => (
           <li key={i.id}>
-            <button type="button" aria-current={current === i.id ? "true" : undefined} onClick={() => go(i.id)}>{i.label}</button>
+            <button type="button" aria-current={current === i.id ? "true" : undefined} onClick={() => go(i.id)}>
+              {i.label}
+              {i.state && <span className={`secnav-state is-${i.state}`}>{i.state === "on" ? "relié" : "à faire"}</span>}
+            </button>
           </li>
         ))}
       </ul>

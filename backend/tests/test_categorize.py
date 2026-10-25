@@ -3,10 +3,13 @@ import pytest
 from app.domain.categorize import (
     BUILTIN_CATEGORIES,
     BUILTIN_RULES,
+    LEGACY_COLORS,
+    TONES,
     Categorizer,
     Rule,
     TokenBayes,
     builtin_category,
+    category_tone,
 )
 from app.domain.normalize import merchant_key, searchable
 
@@ -107,3 +110,13 @@ def test_categorizer_precedence() -> None:
     # Une règle « entrées » ne s'applique pas à une sortie
     c2 = Categorizer([Rule("REMBOURSEMENT", "contains", "in", "remboursements", "user")])
     assert c2.decide("REMBOURSEMENT X", "X", -100).source != "user_rule"
+
+
+def test_builtin_colors_are_lagon_tones_and_only_defaults_follow_the_theme() -> None:
+    old_violets = {"#7c3aed", "#9333ea", "#a855f7", "#6d28d9", "#c026d3", "#be185d", "#9f1239", "#d946ef"}
+    assert all(c.tone in TONES and c.color == TONES[c.tone] for c in BUILTIN_CATEGORIES)
+    assert not {c.color for c in BUILTIN_CATEGORIES} & old_violets
+    assert set(LEGACY_COLORS) == {c.slug for c in BUILTIN_CATEGORIES}
+    assert category_tone("logement", TONES["c1"].upper()) == "c1"
+    assert category_tone("logement", "#123456") is None  # couleur choisie : elle fait foi
+    assert category_tone("ma_categorie", TONES["c1"]) is None

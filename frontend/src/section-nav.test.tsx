@@ -52,6 +52,18 @@ describe("sommaire de page", () => {
     expect(charlie.getAttribute("tabindex")).toBe("-1");
   });
 
+  it("keeps the current chip visible by scrolling the row only, never the page", async () => {
+    // scrollIntoView sur la barre collante ramenait la page en haut à chaque changement de section (défilement bloqué).
+    const intoView = vi.fn();
+    Element.prototype.scrollIntoView = intoView; // absent de jsdom
+    page(["a", "b", "c"], { a: -500, b: 20, c: 900 });
+    await act(async () => root.render(<SectionNav items={[{ id: "a", label: "A" }, { id: "b", label: "B" }, { id: "c", label: "C" }]} />));
+    await flush();
+    expect(host.querySelector('button[aria-current="true"]')?.textContent).toBe("B");
+    expect(intoView.mock.contexts.filter((el) => (el as Element).closest(".secnav"))).toHaveLength(0);
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
   it("stays hidden with fewer than three sections", async () => {
     page(["a", "b"], {});
     await act(async () => root.render(<SectionNav items={[{ id: "a", label: "A" }, { id: "b", label: "B" }, { id: "c", label: "C" }]} />));

@@ -1,7 +1,7 @@
 // Connecteurs : tout ce qui alimente Bank en quelques clics — banques (DSP2), compteur Linky, documents
 // de l'État (impôts, CAF, France Travail), et les agents IA.
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   api,
   useApi,
@@ -11,13 +11,15 @@ import {
   type OfficialFact,
   type ParsedDocument,
   type Portal,
+  type StartView,
 } from "../api";
 import { BankConnect, BankMark } from "../components/BankConnect";
 import { BankSetup, setupReady } from "../components/BankSetup";
 import { PowensSetup } from "../components/PowensSetup";
 import { EnergySignals } from "../components/EnergySignals";
 import { StateAccounts } from "../components/StateAccounts";
-import { Icon } from "../components/Icon";
+import { Icon, type IconName } from "../components/Icon";
+import { SectionNav, sectionFromHash, type SectionLink } from "../components/SectionNav";
 import { ErrorNote, EuroInput, Field, Loading, useAsyncAction, useCelebrate, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
 import { AgentTokens } from "./Agents";
@@ -27,6 +29,15 @@ import { SearchSettings } from "./SearchSettings";
 import { Planning } from "./Planning";
 
 export function Connecteurs({ bankResult, bankProvider = null }: { bankResult: string | null; bankProvider?: string | null }) {
+  // Ce qui est branché, d'un coup d'œil : l'état vient du serveur (/api/start), le même que « Bien démarrer ».
+  const start = useApi<StartView>("/api/start");
+  const known = !!start.data;
+  const linked = (key: string) => start.data?.connectors.find((c) => c.key === key)?.linked ?? false;
+  const nav = useMemo<SectionLink[]>(
+    () => (start.data?.connectors ?? []).map((c) => ({ id: c.section, label: c.title, state: c.linked ? "on" : "todo" })),
+    [start.data],
+  );
+  const fold = (key: string) => ({ known, linked: linked(key), ...FOLDS[key]! });
   return (
     <>
       <div className="page-head">
@@ -35,14 +46,15 @@ export function Connecteurs({ bankResult, bankProvider = null }: { bankResult: s
           <p className="muted">Branche tes sources en quelques clics : plus Bank en sait, plus ses conseils sont justes.</p>
         </div>
       </div>
+      {nav.length > 0 && <SectionNav items={nav} label="Tes connecteurs" />}
       <Banks result={bankResult} provider={bankProvider} />
-      <Planning />
-      <Linky />
-      <Etat />
-      <AssistantSettings />
-      <SearchSettings />
-      <MailSettings />
-      <AgentTokens />
+      <Fold {...fold("planning")}><Planning /></Fold>
+      <Fold {...fold("linky")}><Linky /></Fold>
+      <Fold {...fold("etat")}><Etat /></Fold>
+      <Fold {...fold("assistant")}><AssistantSettings /></Fold>
+      <Fold {...fold("recherche")}><SearchSettings /></Fold>
+      <Fold {...fold("mail")}><MailSettings /></Fold>
+      <Fold {...fold("agents")}><AgentTokens /></Fold>
       <section className="section" aria-labelledby="ch-link-title">
         <div className="section-head"><h2 id="ch-link-title"><Icon name="chat" /> Messageries</h2></div>
         <p className="section-note">
@@ -51,6 +63,55 @@ export function Connecteurs({ bankResult, bankProvider = null }: { bankResult: s
         </p>
       </section>
     </>
+  );
+}
+
+// Les sections pas encore reliées tiennent sur une ligne : leur titre (le même id, pour le sommaire), « à faire » et
+// « Relier », qui déplie la section complète. Tant que l'état n'est pas connu, rien n'est replié.
+const FOLDS: Record<string, { section: string; title: string; icon: IconName; hint: string }> = {
+  planning: { section: "planning-title", title: "Planning de travail", icon: "calendar", hint: "Ta paie prévue au jour près, depuis ton agenda de travail." },
+  linky: { section: "linky-title", title: "Électricité (Linky)", icon: "bolt", hint: "Ta consommation et ta facture prévue, par Conso API." },
+  etat: { section: "etat-title", title: "Comptes de l'État", icon: "doc", hint: "Impôts, CAF, France Travail : tes attestations lues pour toi." },
+  assistant: { section: "assistant-title", title: "Assistant (OpenRouter)", icon: "spark", hint: "Tes questions d'argent en français, avec ta clé OpenRouter." },
+  recherche: { section: "search-title", title: "Recherche web de l'assistant", icon: "search", hint: "SearXNG chez toi ou Brave, pour les questions d'actualité." },
+  mail: { section: "mail-title", title: "Boîte mail, en lecture seule", icon: "doc", hint: "Factures et attestations reçues par mail, proposées dans Papiers." },
+  agents: { section: "agents-title", title: "Agents IA", icon: "robot", hint: "Un jeton pour qu'un agent lise ton dossier, dans tes limites." },
+};
+
+function Fold({ known, linked, section, title, icon, hint, children }: {
+  known: boolean;
+  linked: boolean;
+  section: string;
+  title: string;
+  icon: IconName;
+  hint: string;
+  children: ReactNode;
+}) {
+  const [opened, setOpened] = useState(false);
+  const focusAfter = useRef(false);
+  const folded = known && !linked && !opened && sectionFromHash() !== section;
+  useEffect(() => {
+    if (!opened || !focusAfter.current) return;
+    focusAfter.current = false;
+    // La section dépliée prend le focus sur son titre (elle charge ses données : on lui laisse un instant).
+    const t = window.setTimeout(() => {
+      const h = document.getElementById(section);
+      if (h && !h.hasAttribute("tabindex")) h.setAttribute("tabindex", "-1");
+      h?.focus();
+    }, 50);
+    return () => window.clearTimeout(t);
+  }, [opened, section]);
+  if (!folded) return <>{children}</>;
+  return (
+    <section className="section conn-fold" aria-labelledby={section}>
+      <div className="conn-fold-row">
+        <h2 id={section}><Icon name={icon} /> <span>{title} <span className="tag">à faire</span></span></h2>
+        <button type="button" className="btn quiet sm" aria-expanded={false} onClick={() => { focusAfter.current = true; setOpened(true); }}>
+          Relier <Icon name="arrow" />
+        </button>
+      </div>
+      <p className="faint">{hint}</p>
+    </section>
   );
 }
 

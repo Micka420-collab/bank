@@ -7,7 +7,9 @@ import { labelAction } from "../audit-labels";
 import { Baremes } from "../components/Baremes";
 import { Territory } from "../components/Territory";
 import { Icon } from "../components/Icon";
+import { ConsentGroups } from "../components/ConsentGroups";
 import { SectionNav } from "../components/SectionNav";
+import { StartSettings } from "../components/StartChecklist";
 import { Segmented } from "../components/Segmented";
 import { EuroInput, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { money, shortDate } from "../format";
@@ -32,6 +34,7 @@ export const KIND_LABELS: Record<AccountKind, string> = {
 };
 
 const SETTINGS_SECTIONS = [
+  { id: "start-settings-title", label: "Bien démarrer" },
   { id: "acc-title", label: "Comptes" },
   { id: "bud-title", label: "Budget" },
   { id: "look-title", label: "Apparence" },
@@ -54,6 +57,7 @@ export function Settings({ me, onMeChange }: { me: Me; onMeChange: () => void })
         </div>
       </div>
       <SectionNav items={SETTINGS_SECTIONS} />
+      <StartSettings />
       <Accounts />
       <BudgetSettings />
       <Appearance />
@@ -213,7 +217,7 @@ export function Notifications() {
       </p>
       {st.error && <p className="error" role="alert">{st.error}</p>}
       {!supported && <p className="notice"><Icon name="alert" /> Ce navigateur ne sait pas recevoir de notifications. Sur iPhone : ajoute Bank à l'écran d'accueil (Partager → Sur l'écran d'accueil), puis reviens ici.</p>}
-      {supported && permission === "denied" && <p className="notice"><Icon name="alert" /> Les notifications sont bloquées par le navigateur pour Bank : réautorise-les dans ses réglages de site.</p>}
+      {supported && permission === "denied" && <p className="notice warn"><Icon name="alert" /> Les notifications sont bloquées par le navigateur pour Bank : réautorise-les dans ses réglages de site.</p>}
       {st.data && (
         <>
           {here ? (
@@ -359,28 +363,12 @@ export function Privacy() {
         <h2 id="privacy-title">Confidentialité</h2>
         <a className="btn link" href="#/memoire">Ce que l'assistant retient</a>
       </div>
-      <p className="muted">Ce que Bank fait de plus avec tes données dépend de ton accord, finalité par finalité. Retirer un accord prend effet tout de suite.</p>
+      <p className="muted">Ce que Bank fait de plus avec tes données dépend de ton accord, finalité par finalité. Chaque accord dit ce qui part, et vers qui ; le retirer prend effet tout de suite.</p>
       {error && <p className="error" role="alert">{error}</p>}
       {!consents.data && <Loading />}
       {consents.data && (
-        <ul className="consent-list">
-          {consents.data.map((c) => (
-            <li key={c.purpose}>
-              <div>
-                <b>{c.title}</b>
-                <p className="muted">{c.text}</p>
-                <span className="faint">
-                  {c.explicit && c.updated_at ? `${c.granted ? "Accordé" : "Refusé"} le ${shortDate(c.updated_at)}` : c.granted ? "Actif par défaut" : "Pas encore demandé"}
-                </span>
-              </div>
-              <label className="switch">
-                <input type="checkbox" role="switch" checked={c.granted} disabled={busy} onChange={() => toggle(c)}
-                       aria-label={`${c.title} : ${c.granted ? "accordé" : "refusé"}`} />
-                <span aria-hidden="true" />
-              </label>
-            </li>
-          ))}
-        </ul>
+        <ConsentGroups consents={consents.data} busy={busy} onToggle={toggle}
+                       meta={(c) => (c.explicit && c.updated_at ? `${c.granted ? "Accordé" : "Refusé"} le ${shortDate(c.updated_at)}` : c.granted ? "Actif par défaut" : "Pas encore demandé")} />
       )}
     </section>
   );

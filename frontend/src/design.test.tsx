@@ -10,11 +10,13 @@ import { BankConnect, tileState } from "./components/BankConnect";
 import { Bars } from "./components/charts/Bars";
 import { Donut } from "./components/charts/Donut";
 import { scaleY, TrendChart } from "./components/charts/TrendChart";
-import { Onboarding, onboardingWanted, setOnboarding } from "./components/Onboarding";
+import { Journey } from "./components/Journey";
+import { Onboarding } from "./components/Onboarding";
 import { ToastProvider } from "./components/ui";
 import { merchantCase } from "./format";
 import { Login } from "./pages/Auth";
 import { bucketSlices, sliceRange } from "./pages/Wealth";
+import { sliceColors, toneSlices } from "./components/charts/tones";
 import { applyTheme, readTheme } from "./theme";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -131,22 +133,17 @@ describe("connexion bancaire", () => {
 });
 
 describe("première ouverture", () => {
-  it("walks intro → access → bank and never blocks: « plus tard » ends the onboarding", async () => {
+  it("walks intro → access, then hands over to the journey", async () => {
     mockApi({
       "/api/setup": () => ({ ok: true }),
       "/api/auth/login": () => ({ mfa_required: false }),
-      "/api/banks/setup": () => SETUP_READY,
-      "/api/banks/aspsps": () => ASPSPS.map((name) => ({ name })),
-      "/api/banks": () => ({ enabled: true, connections: [] }),
-      "/api/consents/watch": () => ({ purpose: "watch", granted: false }),
-      "/api/consents": () => [{ purpose: "watch", title: "Veille sur les sources officielles", text: "Bank interroge des sources publiques.", granted: true, explicit: false, decided: false, updated_at: null, default: true }],
-      "/api/opportunities/top": () => ({ opportunities: [{ key: "sub:x", title: "Netflix.com : 13,49 € par mois, tu t'en sers encore ?", amount_cents: 1349, period: "month" }], value: {} }),
-      "/api/opportunities/settings": () => new Response(null, { status: 204 }),
     });
     const onAccess = vi.fn();
-    await render(<ToastProvider><Onboarding stage="intro" onAccess={onAccess} /></ToastProvider>);
+    await render(<ToastProvider><Onboarding onAccess={onAccess} /></ToastProvider>);
     expect(host.textContent).toContain("Combien tu peux dépenser aujourd'hui");
-    expect(host.querySelectorAll(".onboarding-steps i")).toHaveLength(4);
+    expect(host.querySelectorAll(".onboarding-steps i")).toHaveLength(2);
+    // Aucun style en ligne (CSP) : les marges et les délais d'animation sont des classes.
+    expect(host.querySelector("[style]")).toBeNull();
     await click("Suivant");
     expect(host.textContent).toContain("Tes aides, ta paie, tes abonnements");
     await click("Passer l'introduction");
@@ -161,80 +158,71 @@ describe("première ouverture", () => {
     await flush();
     expect(calls.map((c) => c.url)).toEqual(["/api/setup", "/api/auth/login"]);
     expect(onAccess).toHaveBeenCalled();
-    expect(onboardingWanted()).toBe(true);
-
-    const onDone = vi.fn();
-    // L'application remonte un nouvel Onboarding à l'étape banque après la création de l'accès.
-    await render(<ToastProvider><Onboarding key="bank" stage="bank" onDone={onDone} /></ToastProvider>);
-    await settle();
-    expect(host.querySelectorAll(".bank-tile").length).toBeGreaterThan(0);
-    expect(host.textContent).toContain("Je connecterai mes comptes plus tard");
-    await click("Je connecterai mes comptes plus tard");
-    // Dernière étape : tes priorités, tes accords (chacun modifiable), tes premières pistes
-    await settle();
-    expect(host.textContent).toContain("Qu'est-ce qui compte le plus pour toi ?");
-    expect(onDone).not.toHaveBeenCalled();
-    await click("Payer moins");
-    expect(button("Payer moins").getAttribute("aria-pressed")).toBe("true");
-    await act(async () => { host.querySelector<HTMLInputElement>('.consent-list input[role="switch"]')!.click(); });
-    await settle();
-    expect(calls.find((c) => c.url === "/api/consents/watch")?.init?.method).toBe("PUT");
-    expect(host.textContent).toContain("Tes premières pistes");
-    await click("Voir mon tableau de bord");
-    await settle();
-    const saved = calls.find((c) => c.url === "/api/opportunities/settings");
-    expect(JSON.parse(String(saved?.init?.body))).toEqual({ priorities: ["reduire"] });
-    expect(onDone).toHaveBeenCalled();
-    expect(onboardingWanted()).toBe(false);
-    expect(window.localStorage.getItem("bank:onboarding")).toBe("done");
+    // Plus de drapeau local : c'est le serveur qui dit si le parcours reste à faire.
+    expect(window.localStorage.getItem("bank:onboarding")).toBeNull();
   });
 
-  it("leaves the welcome for the dashboard even when the address already is #/aujourdhui", async () => {
-    // Accueil repris depuis un favori ou l'historique : le hash ne change pas à la fin, l'app doit quand même suivre.
-    setOnboarding("pending");
+  it("opens the journey once for a new account, and Quitter lands on the dashboard", async () => {
     window.location.hash = "#/aujourdhui";
+    let status = "new";
     mockApi({
       "/api/setup/status": () => ({ needs_setup: false }),
       "/api/auth/me": () => ({ username: "micka", totp_enabled: false, recovery_codes_left: 0, session_expires_at: "2026-10-22T10:00:00Z" }),
+      "/api/start/steps/banque": () => { status = "in_progress"; return startView(status); },
+      "/api/start": () => startView(status),
       "/api/banks/setup": () => SETUP_EMPTY,
       "/api/banks": () => ({ enabled: false, connections: [] }),
-      "/api/consents": () => [],
-      "/api/opportunities/top": () => ({ opportunities: [], value: {} }),
-      "/api/opportunities/settings": () => new Response(null, { status: 204 }),
     });
     await render(<App />);
     await settle();
-    expect(host.querySelector(".onboarding")).not.toBeNull();
-    await click("Je connecterai mes comptes plus tard");
     await settle();
-    await click("Voir mon tableau de bord");
+    expect(host.querySelector(".journey")).not.toBeNull();
+    expect(host.querySelector("h1")?.textContent).toBe("Ta banque");
+    await click("Quitter");
     await settle();
-    expect(window.localStorage.getItem("bank:onboarding")).toBe("done");
-    expect(host.querySelector(".onboarding")).toBeNull();
+    expect(host.querySelector(".journey")).toBeNull();
     expect(host.querySelector(".shell")).not.toBeNull();
+    expect(window.location.hash).toBe("#/aujourdhui");
     window.location.hash = "";
   });
 
-  it("guides through the Enable Banking setup when nothing is configured, and still lets you continue", async () => {
-    mockApi({ "/api/banks/setup": () => SETUP_EMPTY, "/api/banks": () => ({ enabled: false, connections: [] }) });
-    await render(<ToastProvider><Onboarding stage="bank" onDone={() => undefined} /></ToastProvider>);
+  it("guides through the Enable Banking setup only after you choose to link your bank", async () => {
+    mockApi({
+      "/api/start/steps": () => startView("in_progress"),
+      "/api/start": () => startView("in_progress"),
+      "/api/banks/setup": () => SETUP_EMPTY,
+      "/api/banks": () => ({ enabled: false, connections: [] }),
+    });
+    await render(<ToastProvider><Journey stepKey="banque" onExit={() => undefined} /></ToastProvider>);
+    await settle();
+    // Trois chemins d'abord, aucun assistant technique en première impression ; un seul « Plus tard ».
+    expect(host.querySelectorAll(".path")).toHaveLength(3);
+    expect(host.textContent).not.toContain("Crée ton application Enable Banking");
+    expect([...host.querySelectorAll("button")].filter((b) => /^(Plus tard|Je connecterai|Continuer sans)/.test(b.textContent?.trim() ?? ""))).toHaveLength(1);
+    // Sans Enable Banking configuré, la carte dit ce qu'elle demande : un compte tiers, ~15 min, plutôt sur ordinateur.
+    expect(host.querySelector(".path")?.textContent).toContain("créer un compte gratuit chez Enable Banking");
+    expect(host.querySelector(".path")?.textContent).not.toContain("Recommandé");
+    await act(async () => { [...host.querySelectorAll<HTMLButtonElement>(".path")][0]!.click(); });
+    await settle();
+    expect(host.textContent).toContain("Avant ta banque, un compte chez Enable Banking.");
+    expect(host.textContent).not.toContain("Crée ton application Enable Banking");
+    await act(async () => { [...host.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Configurer Enable Banking"))!.click(); });
     await settle();
     expect(host.textContent).toContain("Crée ton application Enable Banking");
     expect(host.querySelector(".wizard-steps li.is-active")?.textContent).toContain("Créer l'application");
     expect(host.querySelector(".bank-grid")).toBeNull();
-    expect(button("Continuer sans connexion")).not.toBeNull();
     expect(calls.some((c) => c.url.startsWith("/api/banks/aspsps"))).toBe(false);
   });
 
   it("back from the bank: visible sync steps, then the connected accounts and a way to add another bank", async () => {
-    setOnboarding("pending");
     mockApi({
+      "/api/start/steps": () => startView("in_progress"),
+      "/api/start": () => startView("in_progress"),
       "/api/banks/1/sync": () => ({ inserted: 184, reconciled: 0, errors: [] }),
       "/api/banks": () => ({ enabled: true, connections: [{ id: 1, aspsp_name: "Boursorama", aspsp_country: "FR", status: "active", valid_until: null, last_sync_at: null, last_error: null, accounts: ["Compte courant"] }] }),
       "/api/accounts": () => [{ id: 1, name: "Compte courant", kind: "checking", institution: "Boursorama", iban_masked: "FR76 •••• 1234", balance_cents: 64000, balance_at: null, include_in_budget: true, archived: false, provider: "enablebanking" }],
     });
-    const onDone = vi.fn();
-    await render(<ToastProvider><Onboarding stage="bank" bankResult="connected" onDone={onDone} /></ToastProvider>);
+    await render(<ToastProvider><Journey stepKey="banque" bankResult="connected" onExit={() => undefined} /></ToastProvider>);
     await settle();
     expect(host.textContent).toContain("Bank lit tes comptes");
     expect(calls.find((c) => c.url === "/api/banks/1/sync")?.init?.method).toBe("POST");
@@ -244,14 +232,20 @@ describe("première ouverture", () => {
     expect(host.textContent).toContain("1 compte relié");
     expect(host.textContent).toContain("FR76 •••• 1234");
     expect(button("Ajouter une autre banque")).not.toBeNull();
-    await click("Continuer");
-    await settle();
-    await click("Voir mon tableau de bord");
-    await settle();
-    expect(onDone).toHaveBeenCalled();
-    expect(window.localStorage.getItem("bank:onboarding")).toBe("done");
   }, 10000);
 });
+
+/** Un état de parcours minimal, comme le renvoie /api/start. */
+function startView(status: string) {
+  const keys = ["banque", "foyer", "accords", "papier", "priorites", "prevenir", "visite"];
+  const titles = ["Ta banque", "Ton foyer", "Tes accords", "Ton premier papier", "Tes priorités", "Où te prévenir", "La visite"];
+  return {
+    journey: { status, current: "banque", steps: keys.map((k, i) => ({ key: k, title: titles[i], done: false, skipped: false, minutes: 1, href: `#/bienvenue/${k}` })) },
+    checklist: { visible: true, collapsed: false, dismissed: false, done: 0, total: 8, completed_at: null, just_completed: false, items: [] },
+    public_consents: [],
+    connectors: [],
+  };
+}
 
 describe("connexion rapide", () => {
   it("greets a remembered user and validates the six-digit code by itself", async () => {
@@ -327,6 +321,7 @@ describe("graphiques", () => {
     const slices = bucketSlices({ liquidites: 64_000, epargne_disponible: 790_000, dettes: -20_000, autres_actifs: 0 });
     expect(slices.map((s) => s.slug)).toEqual(["epargne_disponible", "liquidites"]);
     expect(slices[0]!.share + slices[1]!.share).toBeCloseTo(1);
+    expect(slices.map((s) => s.color)).toEqual(["var(--c1)", "var(--c6)"]); // teintes de données, distinctes
     const series = Array.from({ length: 400 }, (_, i) => i);
     expect(sliceRange(series, "7d")).toHaveLength(7);
     expect(sliceRange(series, "1y")).toHaveLength(365);
@@ -405,5 +400,15 @@ describe("erreurs qui disent quoi faire", () => {
     const text = host.textContent ?? "";
     expect(text).toMatch(/patiente une minute/);
     expect(text).not.toMatch(/Erreur 429/);
+  });
+});
+
+describe("chart tones", () => {
+  it("draws theme tones, keeps chosen colours and keeps slices distinct", () => {
+    expect(sliceColors([{ tone: "c1" }, { tone: "c1" }, { color: "#123456" }, {}, { tone: "muted" }, { tone: "nope", color: "#abcdef" }]))
+      .toEqual(["var(--c1)", "var(--c2)", "#123456", "var(--c3)", "var(--c-muted)", "#abcdef"]);
+    const many = sliceColors(Array.from({ length: 9 }, () => ({ tone: "c4" })));
+    expect(new Set(many.slice(0, 8)).size).toBe(8);
+    expect(toneSlices([{ slug: "x", tone: "c5", color: "#e0566e" }])[0]!.color).toBe("var(--c5)");
   });
 });
