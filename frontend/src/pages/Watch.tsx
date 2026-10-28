@@ -5,6 +5,8 @@
 
 import { useState, type FormEvent } from "react";
 import { api, useApi, type ReferenceCheck, type WatchItemView, type WatchListing, type WatchSourceView } from "../api";
+import { CrsTransparency } from "../components/CrsTransparency";
+import { FutureRadar } from "../components/FutureRadar";
 import { Icon } from "../components/Icon";
 import { ErrorNote, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { plural, safeHref, shortDate } from "../format";
@@ -69,6 +71,9 @@ export function Watch() {
           {view.engine.advice ? <p className="muted">{view.engine.advice}</p> : <p className="faint">{view.engine.used ? "À jour." : "Lance une simulation de tes aides pour comparer."}</p>}
         </section>
       )}
+
+      <FutureRadar />
+      <CrsTransparency />
 
       <section className="section" aria-labelledby="news-title">
         <div className="section-head">
