@@ -93,8 +93,8 @@ describe("sondage, courbe et plan liés dans le chat", () => {
 
   it("disables all inputs and submission during a running assistant response", async () => {
     await render(true);
-    expect(element.querySelector<HTMLInputElement>('input[type="radio"]')?.disabled).toBe(true);
-    expect(element.querySelector<HTMLInputElement>('.chat-board-plan input[type="checkbox"]')?.disabled).toBe(true);
+    expect(element.querySelector<HTMLInputElement>('input[type="radio"]')?.closest("fieldset")?.disabled).toBe(true);
+    expect(element.querySelector<HTMLInputElement>('.chat-board-plan input[type="checkbox"]')?.closest("fieldset")?.disabled).toBe(true);
     expect(element.querySelector<HTMLButtonElement>(".chat-board-footer button")?.disabled).toBe(true);
     expect(ask).not.toHaveBeenCalled();
   });
