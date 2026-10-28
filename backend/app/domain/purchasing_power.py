@@ -8,7 +8,6 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from app.domain.forecast import CategoryInfo
