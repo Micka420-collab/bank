@@ -357,6 +357,16 @@ def scenario_block(raw: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def decision_board_block(raw: Mapping[str, Any]) -> dict[str, Any]:
+    """Une seule donnée chiffrée source, plusieurs vues et actions locales synchronisées."""
+    scenario = scenario_block(raw)
+    return {
+        **scenario,
+        "type": "decision_board",
+        "title": clean(raw.get("title"), MAX_TITLE) or "Mon plan, en direct",
+    }
+
+
 # ------------------------------------------------------------------ sources (recherche faite par Bank)
 def sources_block(results: Sequence[Mapping[str, Any]], query: str = "") -> dict[str, Any] | None:
     items = []
@@ -420,6 +430,8 @@ def validate_blocks(raw: Any) -> list[dict[str, Any]]:
                 out.append(interactive_block(b))
             elif kind == "scenario":
                 out.append(scenario_block(b))
+            elif kind == "decision_board":
+                out.append(decision_board_block(b))
             elif kind == "sources":
                 rows = [it for it in (b.get("items") or []) if isinstance(it, Mapping)]
                 block = sources_block(rows, str(b.get("query") or ""))
@@ -451,4 +463,6 @@ def text_fallback(blocks: Sequence[Mapping[str, Any]]) -> list[str]:
             lines.append(f"(questionnaire « {b.get('title')} » à remplir dans Bank)")
         elif b.get("type") == "scenario":
             lines.append("(simulateur de budget interactif à utiliser dans Bank)")
+        elif b.get("type") == "decision_board":
+            lines.append("(tableau de décision lié, à explorer dans Bank)")
     return lines
