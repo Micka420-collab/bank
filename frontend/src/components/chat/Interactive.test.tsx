@@ -116,7 +116,7 @@ describe("widgets de conversation Bank", () => {
     expect(new Set(markers).size).toBe(2);
     const node = diagrams[0]!.querySelector<SVGGElement>('[role="button"][aria-label="Annoter l\'étape Décision"]')!;
     expect(node).toBeTruthy();
-    await click(node);
+    await act(async () => { node.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
     expect(node.getAttribute("aria-pressed")).toBe("true");
     const annot = el.querySelector<HTMLDetailsElement>(".chat-annotate")!;
     expect(annot.open).toBe(true);
