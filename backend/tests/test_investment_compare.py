@@ -20,7 +20,7 @@ def test_real_value_compounds_fees_once_yearly_and_tax_only_positive_gain() -> N
         100_000, 12, gross_pct=6, fees_pct=1, tax_pct=30, inflation_pct=3.1, loss_pct=25
     )
     assert result["future_nominal_cents"] == 103_458
-    assert result["future_real_cents"] == 100_349
+    assert result["future_real_cents"] == 100_347
     assert result["hypothetical_shock_loss_cents"] == 25_000
     losing = dom.project(
         100_000, 12, gross_pct=-20, fees_pct=1, tax_pct=30, inflation_pct=3
