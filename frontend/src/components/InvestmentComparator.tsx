@@ -26,6 +26,11 @@ type Comparison = {
     declared_horizon: string | null; reserve_gap_cents: number | null;
     overdraft_risk: boolean | null; data_complete: boolean;
   };
+  inventory?: {
+    holdings: { kind: string; label: string; value_cents: number; source: string;
+      valuation: string; document_status: string; missing: string[] }[];
+    holdings_count: number; total_cents: null; total_note: string; source_note: string; documents_note: string;
+  };
   scenarios: Scenario[]; note: string;
 };
 
@@ -144,6 +149,17 @@ export function InvestmentComparator({ suggestedCapitalCents }: { suggestedCapit
           </p>
           {result.context.overdraft_risk && <p className="error">Découvert prévisible : priorité à la trésorerie.</p>}
         </div>
+        {result.inventory && <div className="investment-comparator-inventory">
+          <h3><Icon name="wealth" /> Placements déjà renseignés dans Bank</h3>
+          {result.inventory.holdings.length === 0
+            ? <p className="faint">Aucun placement identifié : renseigne les comptes ou les avoirs externes dans ton profil.</p>
+            : <ul>{result.inventory.holdings.map((item, i) => <li key={`${item.source}-${item.kind}-${i}`}>
+              <div><strong>{item.label}</strong><span className="faint">{item.source === "compte_enregistre" ? "Compte enregistré" : "Avoir déclaré manuellement"}</span></div>
+              <strong>{money(item.value_cents)}</strong>
+              <small>Documents non vérifiés · frais, liquidité et risques à compléter</small>
+            </li>)}</ul>}
+          <p className="faint">{result.inventory.total_note} {result.inventory.source_note}</p>
+        </div>}
         <div className="investment-comparator-grid">
           {result.scenarios.map(row => <article key={row.kind} className="investment-comparator-card">
             <div className="investment-comparator-head">
