@@ -71,7 +71,7 @@ describe("simulation financière dans le chat", () => {
   it("shows live bank and scenario curves, reacts to a surprise expense, never sends automatically", async () => {
     await render();
     expect(container.querySelector(".chat-scenario-chart svg")).not.toBeNull();
-    expect(container.querySelector(".chat-scenario-results")?.textContent).toContain("40 €");
+    expect(container.querySelector(".chat-scenario-results")?.textContent).toContain("40,00");
     const original = container.querySelector(".chat-scenario-original")?.getAttribute("d");
     const modifiedInitial = container.querySelector(".chat-scenario-simulated")?.getAttribute("d");
     expect(modifiedInitial).toBe(original);
@@ -82,7 +82,7 @@ describe("simulation financière dans le chat", () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "50");
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    expect(container.querySelector(".chat-scenario-results")?.textContent).toContain("-10 €");
+    expect(container.querySelector(".chat-scenario-results")?.textContent).toContain("10,00");
     expect(container.querySelector(".chat-scenario-warning")?.textContent).toContain("sous 0");
     expect(container.querySelector(".chat-scenario-original")?.getAttribute("d")).not.toBe(container.querySelector(".chat-scenario-simulated")?.getAttribute("d"));
     expect(ask).not.toHaveBeenCalled();
@@ -91,7 +91,7 @@ describe("simulation financière dans le chat", () => {
       button.click();
     });
     expect(ask).toHaveBeenCalledTimes(1);
-    expect(ask.mock.calls[0]![0]).toContain("Dépense imprévue : 50 €");
-    expect(ask.mock.calls[0]![0]).toContain("hypothèses");
+    expect(ask.mock.calls[0]![0]).toContain("Dépense imprévue : 50,00");
+    expect(ask.mock.calls[0]![0]).toContain("certitude");
   });
 });
