@@ -30,6 +30,7 @@ export function Watch() {
   const listing = useApi<WatchListing>("/api/watch");
   const [data, setData] = useState<WatchListing | null>(null);
   const [onlyMine, setOnlyMine] = useState(true);
+  const [investmentCapital, setInvestmentCapital] = useState<number | null>(null);
   const [busy, error, run] = useAsyncAction();
   const toast = useToast();
   const view = data ?? listing.data;
@@ -77,8 +78,8 @@ export function Watch() {
 
       <FutureRadar />
       <PurchasingPower />
-      <InvestmentHoldings />
-      <InvestmentComparator />
+      <InvestmentHoldings onCompare={setInvestmentCapital} />
+      <InvestmentComparator suggestedCapitalCents={investmentCapital} />
       <CrsTransparency />
 
       <section className="section" aria-labelledby="news-title">
