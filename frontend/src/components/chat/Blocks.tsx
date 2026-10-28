@@ -11,6 +11,7 @@ import { sliceColors } from "../charts/tones";
 import { TrendChart } from "../charts/TrendChart";
 import { Icon } from "../Icon";
 import { ChatInteractive } from "./Interactive";
+import { ChatScenario } from "./Scenario";
 import { useToast } from "../ui";
 
 export type BlockHandlers = {
@@ -27,15 +28,16 @@ function unitFormat(unit: string, v: number, whole = true): string {
   return v.toLocaleString("fr-FR");
 }
 
-export function ChatBlocks({ blocks, handlers }: { blocks: ChatBlock[]; handlers: BlockHandlers }) {
+export function ChatBlocks({ blocks, handlers, disabled = false }: { blocks: ChatBlock[]; handlers: BlockHandlers; disabled?: boolean }) {
   if (blocks.length === 0) return null;
   return (
     <div className="chat-blocks">
       {blocks.map((b, i) => {
-        if (b.type === "actions") return <Actions key={i} items={b.items} handlers={handlers} />;
+        if (b.type === "actions") return <Actions key={i} items={b.items} handlers={handlers} disabled={disabled} />;
         if (b.type === "chart") return <ChatChart key={i} block={b} />;
-        if (b.type === "diagram") return <Diagram key={i} block={b} handlers={handlers} />;
-        if (b.type === "interactive") return <ChatInteractive key={i} block={b} onAsk={handlers.onAsk} />;
+        if (b.type === "diagram") return <Diagram key={i} block={b} handlers={handlers} disabled={disabled} />;
+        if (b.type === "interactive") return <ChatInteractive key={i} block={b} onAsk={handlers.onAsk} disabled={disabled} />;
+        if (b.type === "scenario") return <ChatScenario key={i} block={b} onAsk={handlers.onAsk} disabled={disabled} />;
         if (b.type === "sources") return <Sources key={i} block={b} />;
         return <p key={i} className={`chat-note faint${b.tone === "warning" ? " is-warning" : ""}`}>{b.text}</p>;
       })}
@@ -44,7 +46,7 @@ export function ChatBlocks({ blocks, handlers }: { blocks: ChatBlock[]; handlers
 }
 
 // ------------------------------------------------------------------ boutons
-function Actions({ items, handlers }: { items: ChatActionItem[]; handlers: BlockHandlers }) {
+function Actions({ items, handlers, disabled = false }: { items: ChatActionItem[]; handlers: BlockHandlers; disabled?: boolean }) {
   const toast = useToast();
   const [done, setDone] = useState<Record<string, "busy" | "done" | "failed">>({});
   const buttons = items.filter((it) => it.kind !== "ask");
@@ -72,7 +74,7 @@ function Actions({ items, handlers }: { items: ChatActionItem[]; handlers: Block
                 {it.label} <Icon name="arrow" />
               </button>
             ) : (
-              <button key={it.key} type="button" className={`btn sm secondary${done[it.key] === "done" ? " is-done" : ""}`} disabled={done[it.key] === "busy" || done[it.key] === "done"} onClick={() => void run(it)}>
+              <button key={it.key} type="button" className={`btn sm secondary${done[it.key] === "done" ? " is-done" : ""}`} disabled={disabled || done[it.key] === "busy" || done[it.key] === "done"} onClick={() => void run(it)}>
                 {done[it.key] === "done" ? <Icon name="check" /> : null} {it.label}
               </button>
             ),
@@ -82,7 +84,7 @@ function Actions({ items, handlers }: { items: ChatActionItem[]; handlers: Block
       {asks.length > 0 && (
         <div className="chat-followups">
           {asks.map((it) => (
-            <button key={it.key} type="button" className="pill" onClick={() => handlers.onAsk(it.prompt)}>{it.label}</button>
+            <button key={it.key} type="button" className="pill" disabled={disabled} onClick={() => handlers.onAsk(it.prompt)}>{it.label}</button>
           ))}
         </div>
       )}
@@ -190,7 +192,7 @@ function wrap(text: string, max: number): string[] {
   return lines.slice(0, 3);
 }
 
-function Diagram({ block, handlers }: { block: Extract<ChatBlock, { type: "diagram" }>; handlers: BlockHandlers }) {
+function Diagram({ block, handlers, disabled = false }: { block: Extract<ChatBlock, { type: "diagram" }>; handlers: BlockHandlers; disabled?: boolean }) {
   const [selected, setSelected] = useState<string | null>(null);
   if (block.kind === "steps") {
     return (
@@ -200,7 +202,7 @@ function Diagram({ block, handlers }: { block: Extract<ChatBlock, { type: "diagr
           {block.nodes.map((n) => (
             <li key={n.id} className={selected === n.id ? "is-selected" : undefined}>
               <button type="button" className="chat-step-trigger" aria-pressed={selected === n.id}
-                      onClick={() => setSelected(n.id)}>
+                      disabled={disabled} onClick={() => setSelected(n.id)}>
                 <b>{n.label}</b> {n.note && <span className="faint"> — {n.note}</span>}
                 <span className="chat-step-hint">Annoter</span>
               </button>
@@ -208,11 +210,11 @@ function Diagram({ block, handlers }: { block: Extract<ChatBlock, { type: "diagr
           ))}
         </ol>
         <p className="faint chat-chart-source">Schéma proposé par le modèle, à lire avec tes chiffres</p>
-        <AnnotateDiagram block={block} onAsk={handlers.onAsk} selectedNode={selected} />
+        <AnnotateDiagram block={block} onAsk={handlers.onAsk} selectedNode={selected} disabled={disabled} />
       </figure>
     );
   }
-  return <FlowDiagram block={block} onAsk={handlers.onAsk} />;
+  return <FlowDiagram block={block} onAsk={handlers.onAsk} disabled={disabled} />;
 }
 
 const W = 360;
@@ -220,7 +222,7 @@ const BOX_H = 44;
 const GAP_Y = 46;
 const CHAR_W = 6.2;
 
-function FlowDiagram({ block, onAsk }: { block: Extract<ChatBlock, { type: "diagram" }>; onAsk: (prompt: string) => void }) {
+function FlowDiagram({ block, onAsk, disabled = false }: { block: Extract<ChatBlock, { type: "diagram" }>; onAsk: (prompt: string) => void; disabled?: boolean }) {
   const { nodes, edges } = block;
   const [selected, setSelected] = useState<string | null>(null);
   const marker = useId().replaceAll(":", "");
@@ -273,10 +275,10 @@ function FlowDiagram({ block, onAsk }: { block: Extract<ChatBlock, { type: "diag
           if (!p) return null;
           return (
             <g key={n.id} className={`chat-node${selected === n.id ? " is-selected" : ""}`} role="button" tabIndex={0}
-               aria-label={`Annoter l'étape ${n.label}`} aria-pressed={selected === n.id}
-               onClick={() => setSelected(n.id)}
+               aria-label={`Annoter l'étape ${n.label}`} aria-pressed={selected === n.id} aria-disabled={disabled}
+               onClick={() => { if (!disabled) setSelected(n.id); }}
                onKeyDown={(e) => {
-                 if (e.key === "Enter" || e.key === " ") {
+                 if (!disabled && (e.key === "Enter" || e.key === " ")) {
                    e.preventDefault();
                    setSelected(n.id);
                  }
@@ -297,18 +299,19 @@ function FlowDiagram({ block, onAsk }: { block: Extract<ChatBlock, { type: "diag
       )}
       <p className="faint chat-chart-source">Schéma proposé par le modèle, à lire avec tes chiffres</p>
       <p className="chat-diagram-hint faint">Touche une boîte pour l'annoter, ou utilise le menu ci-dessous.</p>
-      <AnnotateDiagram block={block} onAsk={onAsk} selectedNode={selected} />
+      <AnnotateDiagram block={block} onAsk={onAsk} selectedNode={selected} disabled={disabled} />
     </figure>
   );
 }
 
 /** Les annotations font partie de la conversation. Ni modification de la base ni dessin arbitraire exécuté. */
 function AnnotateDiagram({
-  block, onAsk, selectedNode,
+  block, onAsk, selectedNode, disabled = false,
 }: {
   block: Extract<ChatBlock, { type: "diagram" }>;
   onAsk: (text: string) => void;
   selectedNode: string | null;
+  disabled?: boolean;
 }) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const [node, setNode] = useState(block.nodes[0]?.id ?? "");
@@ -326,7 +329,7 @@ function AnnotateDiagram({
       <form onSubmit={(e) => {
         e.preventDefault();
         const remark = note.trim();
-        if (!remark || !selected) return;
+        if (disabled || !remark || !selected) return;
         onAsk(`Concernant le schéma « ${block.title || "Schéma"} », j'annote l'étape « ${selected.label} » : ${remark}`);
         setSent(true);
         setNote("");
@@ -342,7 +345,7 @@ function AnnotateDiagram({
           <textarea value={note} onChange={(e) => { setNote(e.target.value); setSent(false); }}
                     maxLength={220} rows={2} placeholder="Ce que tu veux modifier ou préciser…" />
         </label>
-        <button type="submit" className="btn sm" disabled={!note.trim()}>Envoyer l'annotation <Icon name="arrow" /></button>
+        <button type="submit" className="btn sm" disabled={disabled || !note.trim()}>Envoyer l'annotation <Icon name="arrow" /></button>
         {sent && <p role="status" className="faint">Annotation envoyée au chat. Tu peux en ajouter une autre.</p>}
       </form>
     </details>
