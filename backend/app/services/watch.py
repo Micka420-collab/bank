@@ -76,8 +76,8 @@ BUILTIN_SOURCES: tuple[dict[str, Any], ...] = (
     {
         "slug": "eu-finance-press",
         "kind": "rss",
-        "name": "Commission européenne — stabilité financière",
-        "url": "https://finance.ec.europa.eu/node/2/rss_en",
+        "name": "Commission européenne — sanctions et conformité",
+        "url": "https://finance.ec.europa.eu/node/1296/rss_en",
         "trust": "officiel",
         "interval_hours": 24,
     },
