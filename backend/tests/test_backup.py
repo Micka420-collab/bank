@@ -159,7 +159,7 @@ def test_backups_are_visible_in_bank_scheduled_and_alert_on_failure(world: TestC
     with app.state.sessionmaker() as db:
         tz_now = datetime(2026, 10, 24, 2, 30, tzinfo=UTC)  # 4 h 30 à Paris, samedi
         assert svc.due(db, settings, local_now=tz_now.astimezone(svc.ZoneInfo("Europe/Paris"))) == (False, False)
-        tomorrow = datetime(2026, 11, 1, 2, 30, tzinfo=UTC)  # dimanche 3 h 30, semaine suivante : les deux sont dus
+        tomorrow = datetime(2026, 11, 8, 2, 30, tzinfo=UTC)  # dimanche 3 h 30, semaine suivante : les deux sont dus
         local = tomorrow.astimezone(svc.ZoneInfo("Europe/Paris"))
         assert svc.due(db, settings, local_now=local) == (True, True)
         report = svc.tick(db, settings, now=tomorrow)
@@ -184,17 +184,17 @@ def test_backups_are_visible_in_bank_scheduled_and_alert_on_failure(world: TestC
         and bad["level"] == "failed"
     )
     with app.state.sessionmaker() as db:
-        notices = svc.alerts(db, now=datetime(2026, 11, 1, 4, 0, tzinfo=UTC), public_url="https://bank.lan")
+        notices = svc.alerts(db, now=datetime(2026, 11, 8, 4, 0, tzinfo=UTC), public_url="https://bank.lan")
         assert len(notices) == 1 and notices[0][2] is True and "ne se relit pas" in notices[0][1]
         # Plus de 48 h sans sauvegarde réussie : alerte aussi.
-        stale = svc.alerts(db, now=datetime(2026, 11, 4, 4, 0, tzinfo=UTC), public_url="https://bank.lan")
+        stale = svc.alerts(db, now=datetime(2026, 11, 11, 4, 0, tzinfo=UTC), public_url="https://bank.lan")
         assert any(k.startswith("backup:stale:") for k, _, _ in stale)
         # Une sauvegarde impossible (base déplacée) : échec enregistré, pas de trace, et réessai une heure plus tard.
         broken = settings.model_copy(update={"database_url": f"sqlite:///{settings.backup_dir}/absente.db"})
         row = svc.backup_and_record(db, broken, actor="test", trigger="auto")
         assert row.status == "failed" and "introuvable" in row.details
         db.commit()
-        later = datetime(2026, 11, 2, 2, 30, tzinfo=UTC).astimezone(svc.ZoneInfo("Europe/Paris"))
+        later = datetime(2026, 11, 9, 2, 30, tzinfo=UTC).astimezone(svc.ZoneInfo("Europe/Paris"))
         assert svc.due(db, settings, local_now=later)[0] is True
         assert db.query(BackupRun).count() == 6
     st = world.get("/api/system/backups").json()
