@@ -1309,11 +1309,29 @@ export type ChatActionItem =
   | { key: string; label: string; kind: "navigate"; page: string }
   | { key: string; label: string; kind: "ask"; prompt: string }
   | { key: string; label: string; kind: "act"; card: string; action: string };
+export type InteractiveField = {
+  id: string;
+  label: string;
+  kind: "single" | "multiple" | "text" | "number" | "boolean" | "scale";
+  required: boolean;
+  options?: string[];
+  min?: number;
+  max?: number;
+};
+export type InteractiveBlock = {
+  type: "interactive";
+  kind: "poll" | "checklist" | "form";
+  title: string;
+  description: string;
+  submit_label: string;
+  fields: InteractiveField[];
+};
 export type ChartItem = { label: string; value?: number; a?: number; b?: number; color?: string; tone?: string };
 export type ChatBlock =
   | { type: "actions"; items: ChatActionItem[] }
   | { type: "chart"; kind: "donut" | "bars" | "pairs" | "line"; title: string; unit: "eur" | "pct" | "kwh" | "count"; items: ChartItem[]; source: string; dataset: string }
   | { type: "diagram"; kind: "flow" | "steps"; title: string; nodes: { id: string; label: string; note?: string }[]; edges: { from: string; to: string; label?: string }[] }
+  | InteractiveBlock
   | { type: "sources"; query: string; items: { n: number; title: string; url: string; host: string; snippet: string; date: string }[] }
   | { type: "note"; tone: "info" | "warning"; text: string };
 export type AssistantOpening = {
