@@ -1,4 +1,5 @@
 """Link factual salary/payment history and dated Insee benchmark to the purchasing-power engine."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -29,12 +30,8 @@ def view(db: Session, today: date) -> dict[str, Any]:
             "note": "Relie ou importe un compte courant pour établir une comparaison de salaire.",
         }
     first = today.replace(day=1)
-    history = analytics.load_txns(
-        db, [a.id for a in accounts], add_months(first, -15)
-    )
-    comparison = domain.compare(
-        history, category_infos(db), today, inflation_pct=benchmark["annual_pct"]
-    )
+    history = analytics.load_txns(db, [a.id for a in accounts], add_months(first, -15))
+    comparison = domain.compare(history, category_infos(db), today, inflation_pct=benchmark["annual_pct"])
     return {
         "available": True,
         "benchmark": benchmark,
