@@ -10746,3 +10746,52 @@ label {
 .future-radar-stress span { color: var(--ink-2); font-size: var(--t-xs); }
 .future-radar-stress strong { font-variant-numeric: tabular-nums; }
 @media (max-width: 420px) { .future-radar-stress { grid-template-columns: 1fr; } }
+
+/* Pouvoir d'achat : salaire réel, coût de vie et scénario net après inflation. */
+.purchasing-power-benchmark { border: 1px solid var(--line); padding: 0.9rem 1rem; border-radius: var(--r-card);
+  display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; background: var(--surface-2); flex-wrap: wrap; }
+.purchasing-power-benchmark > div { display: grid; gap: 0.25rem; }
+.purchasing-power-benchmark span { color: var(--ink-2); font-size: var(--t-xs); }
+.purchasing-power-benchmark strong { font-variant-numeric: tabular-nums; font-size: 1.4rem; }
+.purchasing-power-benchmark p { font-size: var(--t-xs); flex-basis: 100%; margin: 0; }
+.purchasing-power-benchmark a { display: inline-flex; align-items: center; gap: 0.3rem; }
+.purchasing-power-benchmark .tag { margin-left: 0.5rem; }
+.purchasing-power-figures { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 0.65rem; margin: 0.8rem 0; }
+.purchasing-power-figures > div { padding: 0.95rem; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-control); display: grid; gap: 0.4rem; min-width: 0; }
+.purchasing-power-figures span, .purchasing-power-yield-result span { color: var(--ink-2); font-size: var(--t-xs); }
+.purchasing-power-figures strong { font-size: 1.2rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.purchasing-power .is-negative { color: var(--danger); }
+.purchasing-power .is-positive { color: var(--positive); }
+.purchasing-power-insight { display: flex; gap: 0.65rem; align-items: center;
+  padding: 0.85rem 1rem; margin: 0.8rem 0; border-radius: var(--r-control);
+  background: var(--surface-2); font-size: var(--t-sm); }
+.purchasing-power-insight .icon { flex: 0 0 auto; }
+.purchasing-power-insight.is-risk { border-left: 3px solid var(--danger); }
+.purchasing-power-spending { padding: 0.95rem 1rem; border: 1px solid var(--line); border-radius: var(--r-card); }
+.purchasing-power-spending h3 { font-size: var(--t-md); }
+.purchasing-power-spending p { margin: 0.6rem 0; font-size: var(--t-sm); }
+.purchasing-power-spending ul { list-style: none; padding: 0; margin: 0.65rem 0 0; }
+.purchasing-power-spending li { display: flex; justify-content: space-between; gap: 0.55rem; padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line); font-size: var(--t-sm); }
+.purchasing-power-spending li:last-child { border-bottom: none; }
+.purchasing-power-spending li span { text-transform: capitalize; }
+.purchasing-power-spending li strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.purchasing-power-yield { padding: 1rem; background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: var(--r-card); margin: 1.1rem 0 0; }
+.purchasing-power-yield h3 { display: flex; align-items: center; gap: 0.45rem; font-size: var(--t-md); }
+.purchasing-power-yield p { font-size: var(--t-sm); }
+.purchasing-power-yield form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0.8rem; }
+.purchasing-power-yield form label { display: grid; gap: 0.35rem; font-size: var(--t-sm); font-weight: 600; }
+.purchasing-power-yield input { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.purchasing-power-yield form button { justify-self: start; grid-column: 1/-1; }
+.purchasing-power-yield-result { border-top: 1px solid var(--line); margin-top: 0.85rem;
+  padding-top: 0.9rem; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0.6rem; }
+.purchasing-power-yield-result > div { display: grid; gap: 0.35rem; }
+.purchasing-power-yield-result strong { font-variant-numeric: tabular-nums; font-size: 1.2rem; }
+.purchasing-power-yield-result p { grid-column: 1/-1; margin: 0; }
+@media(max-width: 590px) {
+  .purchasing-power-figures { grid-template-columns: 1fr; }
+  .purchasing-power-yield form { grid-template-columns: 1fr; }
+  .purchasing-power-yield-result { grid-template-columns: 1fr; }
+}
