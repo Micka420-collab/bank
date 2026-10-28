@@ -999,8 +999,10 @@ def _tool_purchase_coach(ctx: _ToolContext, args: dict[str, Any]) -> str:
         return json.dumps({"error": "Montant hors limites."}, ensure_ascii=False)
     if not analytics.budget_accounts(ctx.db):
         return json.dumps(
-            {"error": "Pas de compte budgétaire pour établir un verdict fiable. "
-             "Propose de connecter un compte ou importer des transactions."},
+            {
+                "error": "Pas de compte budgétaire pour établir un verdict fiable. "
+                "Propose de connecter un compte ou importer des transactions."
+            },
             ensure_ascii=False,
         )
     label = blocks.clean(args.get("label"), 80) or "Cet achat"
