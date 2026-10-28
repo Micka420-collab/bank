@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import date
 from types import SimpleNamespace
 
@@ -272,6 +273,20 @@ def test_purchase_coach_validates_bank_verdict_and_is_idempotent() -> None:
     assert b.validate_blocks([{**data, "answer": "inventé"}]) == []
     assert b.validate_blocks([{**data, "amount_cents": True}]) == []
     assert b.validate_blocks([{**data, "this_month": {"before": snapshot, "after": {}}}]) == []
+    discounted = {
+        "discount_percent": 20,
+        "amount_cents": 28_000,
+        "answer": "oui",
+        "headline": "Compatible",
+        "after": {**snapshot, "lowest_cents": 11_000},
+        "best_date": None,
+    }
+    with_prices = b.purchase_coach_block({**data, "alternatives": [discounted]})
+    assert with_prices["alternatives"][0]["amount_cents"] == 28_000
+    assert b.validate_blocks([with_prices]) == [with_prices], "Les réponses sauvegardées restent lisibles"
+    assert b.validate_blocks([{**data, "alternatives": [{**discounted, "amount_cents": 10}]}]) == []
+    assert b.validate_blocks([{**data, "alternatives": [{**discounted, "answer": "guaranteed"}]}]) == []
+    assert b.validate_blocks([{**data, "alternatives": [discounted, discounted]}]) == []
 
 
 def test_purchase_coach_tool_is_sourced_from_bank_not_model_data(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -292,16 +307,22 @@ def test_purchase_coach_tool_is_sourced_from_bank_not_model_data(monkeypatch: py
 
     def purchase_stub(db: object, today: date, *, amount_cents: int, label: str, category: str | None) -> PurchasePlan:
         called.append((amount_cents, label))
-        return purchase
+        return replace(
+            purchase, amount_cents=amount_cents, this_month=replace(verdict, amount_cents=amount_cents)
+        )
 
     monkeypatch.setattr(assistant.decisions, "purchase", purchase_stub)
     ctx = assistant._ToolContext(None, "user", date(2026, 10, 28), 7, False)  # type: ignore[arg-type]
     result = json.loads(assistant._execute_tool(ctx, "show_purchase_coach", '{"amount_eur":350,"label":"Vélo"}'))
     assert result["done"] is True
-    assert called == [(35_000, "Vélo")]
+    assert called == [(35_000, "Vélo"), (28_000, "Vélo"), (21_000, "Vélo")]
     assert ctx.purchase_coach is not None
     assert ctx.purchase_coach["amount_cents"] == 35_000
     assert ctx.purchase_coach["answer"] == "oui_mais"
+    assert [
+        (p["discount_percent"], p["amount_cents"], p["answer"])
+        for p in ctx.purchase_coach["alternatives"]
+    ] == [(20, 28_000, "oui_mais"), (40, 21_000, "oui_mais")]
     assert ctx.blocks() == [ctx.purchase_coach]
     assert "error" in json.loads(assistant._execute_tool(ctx, "show_purchase_coach", '{"amount_eur":200}'))
     assert "error" in json.loads(
