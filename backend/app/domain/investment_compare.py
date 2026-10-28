@@ -76,7 +76,7 @@ def assess(
     if eligible is False:
         blockers.append("Conditions d'accès non remplies.")
     elif eligible is None and investment_kind == "lep":
-        cautions.append("Éligibilité au LEP à confirmer avec le revenu fiscal de référence.")
+        blockers.append("Éligibilité au LEP non vérifiée : consulter le revenu fiscal de référence.")
     if not full_room:
         blockers.append("Plafond ou place disponible insuffisante pour le montant comparé.")
     if locked_months > horizon_months:
@@ -93,5 +93,12 @@ def assess(
         if loss_pct == 0:
             cautions.append("Aucun choc négatif saisi : l'absence de stress n'implique pas l'absence de risque.")
     if reserve_gap_cents is None:
-        cautions.append("La réserve de sécurité ne peut pas encore être vérifiée dans Bank.")
+        if investment_kind == "market":
+            blockers.append("Réserve de sécurité inconnue : relier ses comptes avant d'évaluer le risque.")
+        else:
+            cautions.append("La réserve de sécurité ne peut pas encore être vérifiée dans Bank.")
+    if overdraft_risk is None and investment_kind == "market":
+        blockers.append("Trésorerie à court terme inconnue : vérifier le risque de découvert.")
+    if risk_label == "inconnu" and investment_kind == "market":
+        blockers.append("Profil de risque incomplet : répondre aux questions de capacité de perte.")
     return {"eligible_to_consider": not blockers, "blockers": blockers, "cautions": cautions}
