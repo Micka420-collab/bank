@@ -28,6 +28,7 @@ ECO = "https://www.economie.gouv.fr/rss/toutesactualites"
 PYPI = "https://pypi.org/rss/project/openfisca-france/releases.xml"
 SERVICE_PUBLIC = "https://www.service-public.gouv.fr/abonnements/rss/actu-actualites-particuliers.rss"
 ECB = "https://www.ecb.europa.eu/rss/press.html"
+ECB = "https://www.ecb.europa.eu/rss/press.html"
 EU_COUNCIL = "https://www.consilium.europa.eu/en/rss/pressreleases.ashx"
 EU_FINANCE = "https://finance.ec.europa.eu/node/2/rss_en"
 SP_FEED = (Path(__file__).parent / "fixtures" / "calendrier" / "service_public_actualites.rss").read_bytes()
@@ -89,6 +90,7 @@ def fetcher(app, world: TestClient) -> FakeFetcher:  # type: ignore[no-untyped-d
     fake.serve(ECO, rss(LIVRET, FRENCH_TECH), etag='"v1"')
     fake.serve(PYPI, ENGINE)
     fake.serve(SERVICE_PUBLIC, rss())  # flux vide ici ; son vrai contenu a son propre test
+    fake.serve(ECB, rss())  # institution officielle ; le flux réel est testé via le parseur RSS
     fake.serve(ECB, rss())  # relai financier officiel, vide par défaut pour les autres scénarios
     fake.serve(EU_COUNCIL, rss())
     fake.serve(EU_FINANCE, rss())
@@ -338,9 +340,9 @@ def test_fetch_bounds_size_time_and_compression() -> None:
 # ============================================================================ scénario A : de la source à toi
 def test_official_news_is_picked_up_dated_and_matched_to_you(app, world: TestClient, fetcher: FakeFetcher) -> None:  # type: ignore[no-untyped-def]
     data = _refresh(world)
-    assert data["report"]["checked"] == 3 and data["report"]["new"] == 4 and data["report"]["errors"] == 0
+    assert data["report"]["checked"] == 4 and data["report"]["new"] == 4 and data["report"]["errors"] == 0
     assert all(
-        url in (ECO, PYPI, SERVICE_PUBLIC) for url, _, _ in fetcher.calls
+        url in (ECO, PYPI, SERVICE_PUBLIC, ECB) for url, _, _ in fetcher.calls
     )  # seules des adresses publiques connues
     items = data["items"]
     livret = items[0]
@@ -425,7 +427,7 @@ def test_watch_respects_consent_and_schedule(app, world: TestClient, fetcher: Fa
     with app.state.sessionmaker() as db:
         now = utcnow()
         first = ws.housekeeping(db, now=now, fetcher=fetcher)
-        assert first["watch_checked"] == 3
+        assert first["watch_checked"] == 4
         assert ws.housekeeping(db, now=now + timedelta(hours=1), fetcher=fetcher)["watch_checked"] == 0
         assert ws.housekeeping(db, now=now + timedelta(hours=13), fetcher=fetcher)["watch_checked"] == 2  # 12 h
         old = db.scalars(select(WatchItem)).first()
