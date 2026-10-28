@@ -45,6 +45,50 @@ def real_yield_pct(gross_pct: float, fees_pct: float, tax_pct: float, inflation_
     }
 
 
+
+def detect_pressures(
+    *,
+    nominal_salary_pct: float | None,
+    real_salary_pct: float | None,
+    spending_pct: float | None,
+    spending_share_points: float | None,
+) -> list[dict[str, str]]:
+    """Rapprochements observables, jamais une affirmation de cause à effet ni une prédiction boursière."""
+    findings: list[dict[str, str]] = []
+    if nominal_salary_pct is not None and real_salary_pct is not None and nominal_salary_pct > 0 and real_salary_pct < 0:
+        findings.append(
+            {
+                "key": "salary_vs_inflation",
+                "level": "watch",
+                "title": "Ton salaire augmente, mais ton pouvoir d'achat estimé recule",
+                "evidence": (
+                    f"Salaire nominal : +{nominal_salary_pct:.2f} % ; "
+                    f"évolution réelle sur le repère national : {real_salary_pct:.2f} %."
+                ),
+                "action": "Comparer les salaires et l'IPC sur leurs périodes et vérifier les relevés.",
+            }
+        )
+    if (
+        spending_pct is not None
+        and spending_share_points is not None
+        and spending_pct > 0
+        and spending_share_points >= 3
+    ):
+        findings.append(
+            {
+                "key": "spending_share_rises",
+                "level": "watch",
+                "title": "Tes dépenses occupent une place plus grande dans ton salaire",
+                "evidence": (
+                    f"Dépenses observées : +{spending_pct:.2f} % ; "
+                    f"part du salaire : +{spending_share_points:.2f} points."
+                ),
+                "action": "Examiner les catégories et les achats ponctuels avant d'en déduire une hausse des prix.",
+            }
+        )
+    return findings
+
+
 def compare(
     txns: Sequence[Txn], categories: Mapping[str, CategoryInfo], today: date, *, inflation_pct: float
 ) -> dict[str, Any]:
@@ -124,6 +168,12 @@ def compare(
         "spending_change_pct": spending_change,
         "spending_share_change_points": pressure if spending_change is not None else None,
         "spending_drivers": drivers[:5],
+        "correlations": detect_pressures(
+            nominal_salary_pct=nominal,
+            real_salary_pct=real,
+            spending_pct=spending_change,
+            spending_share_points=pressure if spending_change is not None else None,
+        ),
         "note": "Salaire net observé uniquement si six mois de salaires classés sont présents. "
         "Comparaison de trois mois complets avec les mêmes trois mois un an plus tôt. "
         "L'IPC national publié pour septembre sert de repère annuel indicatif, et non "
