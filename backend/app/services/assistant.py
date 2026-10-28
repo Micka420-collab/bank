@@ -1011,9 +1011,19 @@ def _tool_purchase_coach(ctx: _ToolContext, args: dict[str, Any]) -> str:
             ensure_ascii=False,
         )
     label = blocks.clean(args.get("label"), 80) or "Cet achat"
-    plan = decisions.purchase(ctx.db, ctx.today, amount_cents=round(amount * 100), label=label, category=None)
+    amount_cents = round(amount * 100)
+    plan = decisions.purchase(ctx.db, ctx.today, amount_cents=amount_cents, label=label, category=None)
+    # Ce sont des OBJECTIFS DE PRIX, pas des offres disponibles sur un site marchand.
+    # Chaque point de comparaison est lui aussi calculé par le moteur de décision de Bank.
+    alternatives = []
+    for discount in (20, 40):
+        price = amount_cents * (100 - discount) // 100
+        if price < 1 or price >= amount_cents:
+            continue
+        option = decisions.purchase(ctx.db, ctx.today, amount_cents=price, label=label, category=None)
+        alternatives.append({**asdict(option), "discount_percent": discount})
     ctx.purchase_coach = blocks.purchase_coach_block(
-        {**asdict(plan), "label": label, "title": "Dois-je vraiment l'acheter ?"}
+        {**asdict(plan), "label": label, "title": "Dois-je vraiment l'acheter ?", "alternatives": alternatives}
     )
     return json.dumps(
         {
@@ -1021,9 +1031,11 @@ def _tool_purchase_coach(ctx: _ToolContext, args: dict[str, Any]) -> str:
             "answer": plan.answer,
             "headline": plan.headline,
             "explanation": plan.explanation[:1_000],
+            "alternatives_calculated": len(alternatives),
             "note": "La carte interactive affiche les chiffres de Bank. "
             "Tu peux aider la personne à réfléchir sans lui imposer la décision. "
-            "Si elle change le prix, recalcule via cet outil sur un nouveau message.",
+            "Les cibles -20 % et -40 % sont hypothétiques, sans offre commerciale vérifiée. "
+            "Si elle change le prix librement, recalcule via cet outil sur un nouveau message.",
         },
         ensure_ascii=False,
         default=str,
