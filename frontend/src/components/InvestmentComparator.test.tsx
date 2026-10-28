@@ -22,6 +22,15 @@ const comparison = {
     declared_horizon: "plus_10", reserve_gap_cents: 200_000,
     overdraft_risk: false, data_complete: true,
   },
+  inventory: {
+    holdings: [{ kind: "pea", label: "PEA connecté", value_cents: 150_000,
+      source: "compte_enregistre", valuation: "solde_compte",
+      document_status: "non_verifie", missing: ["frais_produit"] }],
+    holdings_count: 1, total_cents: null,
+    total_note: "Total non additionné : un avoir déclaré peut recouvrir un compte connecté.",
+    source_note: "Soldes, pas des cotations en direct.",
+    documents_note: "Aucun document vérifié.",
+  },
   scenarios: [
     {
       kind: "livret_a", label: "Livret A", status: "taux_dated", gross_pct: 1.7,
@@ -113,6 +122,8 @@ describe("comparateur de placements personnels", () => {
     expect(host.textContent).toContain("Matelas à compléter");
     expect(host.textContent).toContain("Constituer l'épargne de précaution.");
     expect(host.textContent).toContain("Choc négatif isolé");
+    expect(host.textContent).toContain("PEA connecté");
+    expect(host.textContent).toContain("Documents non vérifiés");
     expect(host.textContent).toContain("Taux annuel à la date du 2026-08-01");
   });
 });
