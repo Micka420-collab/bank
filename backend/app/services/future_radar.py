@@ -3,6 +3,7 @@
 Le mois estimé et les montants proviennent de yearahead ; les articles, uniquement de flux déjà
 collectés avec consentement et horodatage. Aucune donnée bancaire n'est envoyée aux flux publics.
 """
+
 from __future__ import annotations
 
 import json
@@ -50,10 +51,14 @@ def build_signals(y: yd.YearAhead, *, today: date, buffer_cents: int = 0) -> lis
                 "projected_month_end_cents": point.end_balance_cents,
                 "level": "risk" if at_risk else "watch",
                 "basis": (
-                    "Dépense saisie par toi" if spike.source == "planned"
-                    else "Prévision Bank" if spike.source == "forecast"
-                    else "Récurrence détectée" if spike.source == "detected"
-                    else "Échéance ajoutée" if spike.source == "custom"
+                    "Dépense saisie par toi"
+                    if spike.source == "planned"
+                    else "Prévision Bank"
+                    if spike.source == "forecast"
+                    else "Récurrence détectée"
+                    if spike.source == "detected"
+                    else "Échéance ajoutée"
+                    if spike.source == "custom"
                     else "Estimation"
                 ),
                 "source": spike.source,
@@ -146,9 +151,9 @@ def view(db: Session, today: date) -> dict[str, Any]:
         "horizon_days": WINDOW_DAYS,
         "crypto_stress": crypto_stress(db, today),
         "available": connected,
-        "signals": build_signals(
-            forecast, today=today, buffer_cents=int(get_setting(db, "buffer_cents"))
-        ) if forecast else [],
+        "signals": build_signals(forecast, today=today, buffer_cents=int(get_setting(db, "buffer_cents")))
+        if forecast
+        else [],
         "news_consent": consents.granted(db, "watch"),
         "macro_context": macro_context(db, today) if consents.granted(db, "watch") else [],
         "disclaimer": "Scénarios construits à partir des opérations connues. Une actualité mondiale ne prouve "
