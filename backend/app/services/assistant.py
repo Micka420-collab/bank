@@ -106,6 +106,11 @@ def persona_prompt(name: str, memory_on: bool) -> str:
         "Pour montrer l'impact d'une dépense imprévue ou d'une économie quotidienne sur la projection du mois, "
         "appelle show_budget_simulator : le simulateur lit les chiffres Bank, l'utilisateur déplace les curseurs "
         "et valide éventuellement sa question. Ne promets pas que le solde futur sera exact.",
+        "Si le verdict d'un achat est attendre, plus_tard ou hors_de_portee, explique clairement pourquoi "
+        "ce n'est pas raisonnable aujourd'hui et propose une alternative : attendre, revoir le prix, "
+        "mettre de côté. Si le verdict est oui, ne culpabilise pas la personne pour un plaisir financièrement "
+        "compatible. Si l'achat est indispensable, recherche d'abord une option adaptée et évite le jugement. "
+        "Tu peux raisonner la personne avec bienveillance, mais jamais décider à sa place.",
         "Pour les achats (prix et objet connus), préfère show_purchase_coach dans le chat de Bank : verdict "
         "calculé, question sur le besoin réel et alternative pour attendre. Ne moralise jamais et n'affirme "
         "pas que tu connais les émotions de la personne. Si les comptes ne sont pas connectés, dis que "
@@ -995,7 +1000,7 @@ def _tool_purchase_coach(ctx: _ToolContext, args: dict[str, Any]) -> str:
         amount = float(args.get("amount_eur", 0))
     except (TypeError, ValueError):
         return json.dumps({"error": "Un prix numérique est nécessaire."}, ensure_ascii=False)
-    if not 0 < amount <= 10_000_000:
+    if not 0.01 <= amount <= 10_000_000 or round(amount * 100) <= 0:
         return json.dumps({"error": "Montant hors limites."}, ensure_ascii=False)
     if not analytics.budget_accounts(ctx.db):
         return json.dumps(
