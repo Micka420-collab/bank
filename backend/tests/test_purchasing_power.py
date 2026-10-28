@@ -126,7 +126,6 @@ def test_authenticated_purchasing_power_and_real_yield_routes(world: TestClient)
     )
 
 
-
 def test_assistant_can_ground_salary_and_yield_in_bank_not_guesswork(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         svc,
