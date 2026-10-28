@@ -73,6 +73,20 @@ describe("coach d'achat dans le chat", () => {
     expect(host.querySelector<HTMLButtonElement>(".chat-purchase-buttons button")?.disabled).toBe(true);
   });
 
+  it("Raisonne-moi asks the assistant to challenge an unwise purchase with numbers, not guilt", async () => {
+    await render({ ...card, after: { ...card.after, overdraft_date: "2026-10-30" } });
+    expect(host.querySelector(".chat-scenario-warning")?.textContent).toContain("découvert");
+    const buttons = [...host.querySelectorAll<HTMLButtonElement>(".chat-purchase-buttons button")];
+    expect(buttons.map((b) => b.textContent).join(" ")).toContain("Raisonne-moi");
+    expect(ask).not.toHaveBeenCalled();
+    await click(buttons[1]!);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(ask.mock.calls[0]![0]).toContain("Je veux que tu me raisonnes");
+    expect(ask.mock.calls[0]![0]).toContain("fondés sur mon budget");
+    expect(buttons[0]!.disabled).toBe(true);
+    expect(buttons[1]!.disabled).toBe(true);
+  });
+
   it("changing the price shows that the old verdict is stale and requests a fresh Bank calculation", async () => {
     await render();
     const input = host.querySelector<HTMLInputElement>('input[type="number"]')!;
