@@ -24,7 +24,18 @@ export type RadarArticle = {
   source: string;
   topics: string[];
 };
+export type RadarCryptoStress = {
+  tracked_count: number;
+  priced_count: number;
+  stale_count: number;
+  assets: { asset: string; value_cents: number; as_of: string }[];
+  valued_cents: number;
+  shock_10_cents: number;
+  shock_25_cents: number;
+  note: string;
+};
 export type RadarView = {
+  crypto_stress: RadarCryptoStress;
   horizon_days: number;
   available: boolean;
   news_consent: boolean;
@@ -71,6 +82,26 @@ export function FutureRadar() {
           ))}
         </ul>
       )}
+      <section className="future-radar-crypto" aria-labelledby="radar-crypto-title">
+        <h3 id="radar-crypto-title"><Icon name="crypto" /> Tes investissements crypto · test de résistance</h3>
+        {data.crypto_stress.tracked_count === 0 ? (
+          <p className="muted">Aucun avoir crypto renseigné. <a href="#/crypto">Ajouter mes avoirs</a> pour explorer un scénario.</p>
+        ) : data.crypto_stress.priced_count === 0 ? (
+          <p className="muted">Aucun cours récent pour tes avoirs. Réactualise les cours depuis Crypto avant de calculer une simulation.</p>
+        ) : (
+          <>
+            <p>Valeur des avoirs avec cotations récentes : <strong>{money(data.crypto_stress.valued_cents)}</strong>.</p>
+            <div className="future-radar-stress" role="group" aria-label="Scénarios de baisse hypothétique">
+              <div><span>Si les cours reculaient de 10 %</span><strong>−{money(data.crypto_stress.shock_10_cents)}</strong></div>
+              <div><span>Si les cours reculaient de 25 %</span><strong>−{money(data.crypto_stress.shock_25_cents)}</strong></div>
+            </div>
+            <p className="faint">Actifs cotés inclus : {data.crypto_stress.assets.map((a) => a.asset).join(", ")}.
+              {data.crypto_stress.stale_count > 0 ? ` ${data.crypto_stress.stale_count} actif(s) sans cours récent exclu(s).` : ""}
+            </p>
+          </>
+        )}
+        <p className="faint">{data.crypto_stress.note}</p>
+      </section>
       <div className="future-radar-context">
         <h3><Icon name="news" /> Actualités financières et internationales vérifiables</h3>
         {!data.news_consent ? <p className="muted">La veille réseau est désactivée. <a href="#/reglages">Donner ton accord dans Confidentialité</a> pour lire des sources publiques.</p> : data.macro_context.length === 0 ? <p className="muted">Aucun titre officiel récent indexé sur ces thèmes. L'absence de titre ne signifie pas que les marchés sont sans risque.</p> : (
