@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import AuthDep, DbDep, TodayDep, client_ip
 from app.db import utcnow
-from app.services import future_radar, investment_compare, purchasing_power, watch
+from app.services import future_radar, investment_compare, investment_holdings, purchasing_power, watch
 
 router = APIRouter(prefix="/api/watch", tags=["watch"])
 
@@ -72,6 +72,12 @@ def estimate_real_yield(body: YieldScenario, _: AuthDep) -> dict[str, Any]:
         "note": "Simulation annuelle théorique. La fiscalité réelle dépend de l'enveloppe, de la durée "
         "et de la situation personnelle. Rendement et capital des placements risqués non garantis.",
     }
+
+
+@router.get("/investments/holdings")
+def tracked_investments(_: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
+    """Avoirs locaux, provenance et pièces à vérifier. Aucune donnée envoyée à un fournisseur externe."""
+    return investment_holdings.view(db, today)
 
 
 class InvestmentCompareIn(BaseModel):
