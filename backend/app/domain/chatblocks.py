@@ -373,7 +373,7 @@ PURCHASE_ANSWERS = frozenset({"oui", "oui_mais", "attendre", "plus_tard", "hors_
 def purchase_coach_block(raw: Mapping[str, Any]) -> dict[str, Any]:
     """Verdict déjà calculé par Bank. L'interface ne peut pas le recalculer librement."""
     answer = raw.get("answer")
-    if answer not in PURCHASE_ANSWERS:
+    if not isinstance(answer, str) or answer not in PURCHASE_ANSWERS:
         raise BlockError("Verdict d'achat invalide")
     amount = raw.get("amount_cents")
     if not isinstance(amount, int) or isinstance(amount, bool) or not 0 < amount <= 1_000_000_000:
