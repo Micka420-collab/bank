@@ -168,13 +168,9 @@ def test_budget_simulator_tool_uses_bank_data_not_the_models_arguments(monkeypat
         SimpleNamespace(date=date(2026, 10, 22), balance_cents=48_000),
         SimpleNamespace(date=date(2026, 10, 23), balance_cents=46_000),
     ]
-    forecast = SimpleNamespace(
-        projection=points, daily_variable_rate_cents=900, projected_end_balance_cents=46_000
-    )
+    forecast = SimpleNamespace(projection=points, daily_variable_rate_cents=900, projected_end_balance_cents=46_000)
     monkeypatch.setattr(assistant.analytics, "budget_accounts", lambda db: [object()])
-    monkeypatch.setattr(
-        assistant.analytics, "forecast_inputs", lambda db, today: SimpleNamespace(run=lambda: forecast)
-    )
+    monkeypatch.setattr(assistant.analytics, "forecast_inputs", lambda db, today: SimpleNamespace(run=lambda: forecast))
     ctx = assistant._ToolContext(None, "user", date(2026, 10, 21), 7, False)  # type: ignore[arg-type]
     result = json.loads(
         assistant._execute_tool(
@@ -184,9 +180,7 @@ def test_budget_simulator_tool_uses_bank_data_not_the_models_arguments(monkeypat
         )
     )
     assert result["done"] is True and ctx.scenario is not None
-    assert ctx.scenario["points"] == [
-        {"date": p.date.isoformat(), "balance_cents": p.balance_cents} for p in points
-    ]
+    assert ctx.scenario["points"] == [{"date": p.date.isoformat(), "balance_cents": p.balance_cents} for p in points]
     assert ctx.scenario["daily_savings_cap_cents"] == 900
     assert ctx.blocks()[0]["type"] == "scenario"
     assert "error" in json.loads(assistant._execute_tool(ctx, "show_budget_simulator", "{}"))
@@ -223,17 +217,11 @@ def test_decision_board_and_scenario_are_exclusive(monkeypatch: pytest.MonkeyPat
         SimpleNamespace(date=date(2026, 10, 28), balance_cents=70_000),
         SimpleNamespace(date=date(2026, 10, 29), balance_cents=65_000),
     ]
-    forecast = SimpleNamespace(
-        projection=points, daily_variable_rate_cents=1_400, projected_end_balance_cents=65_000
-    )
+    forecast = SimpleNamespace(projection=points, daily_variable_rate_cents=1_400, projected_end_balance_cents=65_000)
     monkeypatch.setattr(assistant.analytics, "budget_accounts", lambda db: [object()])
-    monkeypatch.setattr(
-        assistant.analytics, "forecast_inputs", lambda db, today: SimpleNamespace(run=lambda: forecast)
-    )
+    monkeypatch.setattr(assistant.analytics, "forecast_inputs", lambda db, today: SimpleNamespace(run=lambda: forecast))
     ctx = assistant._ToolContext(None, "user", date(2026, 10, 28), 7, False)  # type: ignore[arg-type]
-    response = json.loads(
-        assistant._execute_tool(ctx, "show_decision_board", '{"daily_savings_cap_cents":999999999}')
-    )
+    response = json.loads(assistant._execute_tool(ctx, "show_decision_board", '{"daily_savings_cap_cents":999999999}'))
     assert response["done"] is True
     assert ctx.decision_board is not None and ctx.scenario is None
     assert ctx.decision_board["daily_savings_cap_cents"] == 1_400
