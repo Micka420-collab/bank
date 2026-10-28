@@ -26,6 +26,10 @@ MAX_NODE_NOTE = 90
 MAX_CHART_ITEMS = 24
 MAX_SOURCES = 6
 MAX_SNIPPET = 300
+MAX_INTERACTIVE_FIELDS = 6
+MAX_INTERACTIVE_OPTIONS = 8
+INTERACTIVE_KINDS = frozenset({"poll", "checklist", "form"})
+FIELD_KINDS = frozenset({"single", "multiple", "text", "number", "boolean", "scale"})
 
 PAGES = frozenset(
     {
@@ -227,6 +231,83 @@ def diagram_block(raw: Mapping[str, Any]) -> dict[str, Any]:
     return {"type": "diagram", "kind": kind, "title": title, "nodes": nodes, "edges": edges}
 
 
+# ------------------------------------------------------------------ petites interfaces proposées par le modèle
+def interactive_block(raw: Mapping[str, Any]) -> dict[str, Any]:
+    """Questionnaire local, jamais du HTML ni un ordre bancaire.
+
+    La liste blanche des champs, le nombre d'options et leurs textes sont vérifiés côté
+    serveur. Les réponses sont renvoyées comme un nouveau message si l'utilisateur valide.
+    Un widget n'exécute aucune action, ne sauvegarde aucun choix et n'envoie aucune requête seul.
+    """
+    kind = raw.get("kind")
+    if kind not in INTERACTIVE_KINDS:
+        raise BlockError("Type d'interaction inconnu")
+    title = clean(raw.get("title"), MAX_TITLE)
+    if not title:
+        raise BlockError("Le titre est requis")
+    description = clean(raw.get("description"), 240)
+    submit_label = clean(raw.get("submit_label"), 32) or "Envoyer mes réponses"
+    fields: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    raw_fields = raw.get("fields")
+    if not isinstance(raw_fields, list):
+        raise BlockError("Champs manquants")
+    for f in raw_fields[:MAX_INTERACTIVE_FIELDS]:
+        if not isinstance(f, Mapping):
+            continue
+        fid = str(f.get("id") or "").strip().lower()
+        label = clean(f.get("label"), MAX_LABEL)
+        fkind = f.get("kind")
+        if not _ID.fullmatch(fid) or fid in seen or not label or fkind not in FIELD_KINDS:
+            continue
+        options: list[str] = []
+        if fkind in ("single", "multiple"):
+            raw_options = f.get("options")
+            if not isinstance(raw_options, list):
+                continue
+            for item in raw_options[:MAX_INTERACTIVE_OPTIONS]:
+                option = clean(item, MAX_LABEL)
+                if option and option not in options:
+                    options.append(option)
+            if len(options) < 2:
+                continue
+        elif kind in ("poll", "checklist"):
+            # Un sondage et une checklist ne peuvent afficher un champ libre caché.
+            continue
+        if kind == "poll" and fkind not in ("single", "multiple"):
+            continue
+        if kind == "checklist" and fkind != "multiple":
+            continue
+        if kind in ("poll", "checklist") and fields:
+            break
+        entry: dict[str, Any] = {
+            "id": fid, "label": label, "kind": fkind, "required": f.get("required") is True,
+        }
+        if options:
+            entry["options"] = options
+        if fkind == "scale":
+            lo, hi = f.get("min"), f.get("max")
+            if (isinstance(lo, int) and not isinstance(lo, bool) and
+                isinstance(hi, int) and not isinstance(hi, bool) and 0 <= lo < hi <= 100):
+                entry["min"], entry["max"] = lo, hi
+            else:
+                entry["min"], entry["max"] = 0, 10
+        seen.add(fid)
+        fields.append(entry)
+    if not fields:
+        raise BlockError("Aucune question exploitable")
+    if kind in ("poll", "checklist") and len(fields) != 1:
+        raise BlockError("Un sondage ou une checklist contient une seule question")
+    return {
+        "type": "interactive",
+        "kind": kind,
+        "title": title,
+        "description": description,
+        "submit_label": submit_label,
+        "fields": fields,
+    }
+
+
 # ------------------------------------------------------------------ sources (recherche faite par Bank)
 def sources_block(results: Sequence[Mapping[str, Any]], query: str = "") -> dict[str, Any] | None:
     items = []
@@ -286,6 +367,8 @@ def validate_blocks(raw: Any) -> list[dict[str, Any]]:
                 )
             elif kind == "diagram":
                 out.append(diagram_block(b))
+            elif kind == "interactive":
+                out.append(interactive_block(b))
             elif kind == "sources":
                 rows = [it for it in (b.get("items") or []) if isinstance(it, Mapping)]
                 block = sources_block(rows, str(b.get("query") or ""))
@@ -313,4 +396,6 @@ def text_fallback(blocks: Sequence[Mapping[str, Any]]) -> list[str]:
             lines.append(f"(graphique « {b.get('title')} » à voir dans Bank)")
         elif b.get("type") == "diagram":
             lines.append(f"(schéma « {b.get('title') or 'étapes'} » à voir dans Bank)")
+        elif b.get("type") == "interactive":
+            lines.append(f"(questionnaire « {b.get('title')} » à remplir dans Bank)")
     return lines
