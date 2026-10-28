@@ -11,9 +11,8 @@ from sqlalchemy.orm import Session
 from starlette.testclient import TestClient
 
 from app.domain import watch as dw
-from app.services import crypto_value, future_radar, yearahead
-
 from app.domain.yearahead import MonthPoint, Spike, YearAhead
+from app.services import crypto_value, future_radar, yearahead
 from app.services.future_radar import build_signals
 
 
