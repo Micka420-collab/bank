@@ -10842,3 +10842,11 @@ label {
 .investment-holdings-card details { padding: 0.7rem; border: 1px solid var(--line); border-radius: var(--r-control); }
 .investment-holdings-card details ul { font-size: var(--t-sm); padding-left: 1rem; margin: 0.75rem 0; }
 .investment-holdings-card .notice { align-items: center; gap: 0.5rem; }
+
+.investment-comparator-inventory { display: grid; gap: 0.65rem; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface-2); padding: 1rem; }
+.investment-comparator-inventory h3 { margin: 0; display: flex; align-items: center; gap: 0.4rem; font-size: var(--t-md); }
+.investment-comparator-inventory ul { list-style: none; display: grid; gap: 0.5rem; padding: 0; margin: 0; }
+.investment-comparator-inventory li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.35rem 1rem; border-radius: var(--r-control); padding: 0.75rem; background: var(--surface); }
+.investment-comparator-inventory li > div { display: grid; gap: 0.2rem; }
+.investment-comparator-inventory li small { flex-basis: 100%; color: var(--ink-2); }
+.investment-comparator-inventory p { margin: 0; font-size: var(--t-sm); }
