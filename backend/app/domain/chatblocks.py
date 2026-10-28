@@ -378,7 +378,7 @@ def purchase_coach_block(raw: Mapping[str, Any]) -> dict[str, Any]:
     amount = raw.get("amount_cents")
     if not isinstance(amount, int) or isinstance(amount, bool) or not 0 < amount <= 1_000_000_000:
         raise BlockError("Montant d'achat invalide")
-    check = raw.get("this_month")
+    check = raw.get("this_month", raw)
     if not isinstance(check, Mapping):
         raise BlockError("Prévision d'achat absente")
     before, after = check.get("before"), check.get("after")
