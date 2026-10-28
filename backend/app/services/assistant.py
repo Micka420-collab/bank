@@ -100,6 +100,9 @@ def persona_prompt(name: str, memory_on: bool) -> str:
         "Pour montrer des chiffres, appelle show_chart (c'est Bank qui dessine, avec ses données) et commente le "
         "graphique en deux phrases ; n'écris pas de tableau à la place. Pour expliquer un mécanisme (comment une "
         "aide se calcule, les étapes d'une démarche, d'où vient le reste à dépenser), appelle draw_diagram.",
+        "Quand un choix est nécessaire, appelle ask_interactive : sondage pour une préférence, checklist pour "
+        "une liste d’étapes, formulaire pour quelques informations à préciser. Laisse la personne répondre "
+        "et valider avant de poursuivre. Le widget ne réalise aucune démarche ni aucun paiement.",
         "Pour une règle, un barème, une actualité ou une information extérieure à Bank, utilise web_search quand il "
         "est disponible, lis la page utile avec read_page si l'extrait ne suffit pas, et cite tes sources dans le "
         "texte sous la forme [1], [2]. Sans source, dis que tu n'es pas sûr : jamais d'affirmation inventée.",
@@ -325,6 +328,50 @@ TOOL_DIAGRAM: dict[str, Any] = {
         },
     },
 }
+TOOL_INTERACTIVE: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "ask_interactive",
+        "description": (
+            "Afficher une interaction dans le chat Bank. poll : sondage à choix simple ou multiple ; "
+            "checklist : cases à cocher ; form : texte court, montant, cases, choix ou curseur. "
+            "Un seul bloc par réponse. Le clic Envoyer déclenche un nouveau message de l'utilisateur, "
+            "jamais une écriture bancaire. Ne demande aucun secret, mot de passe, carte ni IBAN."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "enum": ["poll", "checklist", "form"]},
+                "title": {"type": "string", "maxLength": 80},
+                "description": {"type": "string", "maxLength": 240},
+                "submit_label": {"type": "string", "maxLength": 32},
+                "fields": {
+                    "type": "array", "minItems": 1, "maxItems": 6,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string", "maxLength": 24},
+                            "label": {"type": "string", "maxLength": 60},
+                            "kind": {"type": "string", "enum": [
+                                "single", "multiple", "text", "number", "boolean", "scale"
+                            ]},
+                            "required": {"type": "boolean"},
+                            "options": {"type": "array", "maxItems": 8, "items": {
+                                "type": "string", "maxLength": 60
+                            }},
+                            "min": {"type": "integer", "minimum": 0, "maximum": 100},
+                            "max": {"type": "integer", "minimum": 1, "maximum": 100},
+                        },
+                        "required": ["id", "label", "kind"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["kind", "title", "fields"],
+            "additionalProperties": False,
+        },
+    },
+}
 TOOL_SEARCH: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -380,6 +427,7 @@ TOOL_STATUS = {
     "read_page": "lit une page",
     "show_chart": "dessine le graphique",
     "draw_diagram": "dessine un schéma",
+    "ask_interactive": "prépare une interface interactive",
     "propose_actions": "prépare les boutons",
     "can_i_buy": "fait le calcul",
     "plan_b": "calcule ton plan B",
@@ -716,6 +764,7 @@ class _ToolContext:
     followups: list[str] = field(default_factory=list)
     chart: dict[str, Any] | None = None
     diagram: dict[str, Any] | None = None
+    interactive: dict[str, Any] | None = None
     sources: list[dict[str, Any]] = field(default_factory=list)
     dropped_keys: int = 0
 
@@ -726,6 +775,8 @@ class _ToolContext:
             out.append(self.chart)
         if self.diagram:
             out.append(self.diagram)
+        if self.interactive:
+            out.append(self.interactive)
         if self.sources:
             out.append({"type": "sources", "query": "", "items": self.sources[: blocks.MAX_SOURCES]})
         actions = list(self.actions)
@@ -811,6 +862,20 @@ def _tool_diagram(ctx: _ToolContext, args: dict[str, Any]) -> str:
          "note": "Le schéma est affiché : une phrase pour le présenter suffit."},
         ensure_ascii=False,
     )  # fmt: skip
+
+
+def _tool_interactive(ctx: _ToolContext, args: dict[str, Any]) -> str:
+    if ctx.interactive is not None:
+        return json.dumps({"error": "Une seule interface interactive par réponse."}, ensure_ascii=False)
+    try:
+        result = blocks.interactive_block(args)
+    except blocks.BlockError as exc:
+        return json.dumps({"error": str(exc)}, ensure_ascii=False)
+    ctx.interactive = result
+    return json.dumps({
+        "done": True, "kind": result["kind"], "questions": len(result["fields"]),
+        "note": "Le widget est affiché. Ne devine pas les réponses ; l'utilisateur doit le remplir et valider.",
+    }, ensure_ascii=False)
 
 
 def _tool_search(ctx: _ToolContext, args: dict[str, Any]) -> str:
@@ -975,6 +1040,8 @@ def _execute_tool(ctx: _ToolContext, name: str, raw_args: str) -> str:
         return _tool_chart(ctx, args)
     if name == "draw_diagram":
         return _tool_diagram(ctx, args)
+    if name == "ask_interactive":
+        return _tool_interactive(ctx, args)
     if name == "web_search":
         return _tool_search(ctx, args)
     if name == "read_page":
@@ -1042,6 +1109,8 @@ def ask(
         messages.append({"role": "system", "content": conv.memory_snapshot})
     messages += [*previous, {"role": "user", "content": q}]
     tools: list[dict[str, Any]] = [TOOL_CAN_I_BUY, TOOL_PLANB, TOOL_RETIREMENT, TOOL_ACTIONS, TOOL_CHART, TOOL_DIAGRAM]
+    if not channel:
+        tools.append(TOOL_INTERACTIVE)
     if memory_on:
         tools = [TOOL_MEMORY, TOOL_RECALL, *tools]
     if search_on:
@@ -1134,7 +1203,8 @@ def interactive_prompt(srcs: list[coverage_domain.Source], catalogue: blocks.Cat
     """Ce que Bank sait ou pas, les boutons proposables, les graphiques disponibles : des données pour le modèle."""
     lines = ["<couverture>", *coverage_domain.prompt_lines(srcs), "</couverture>", "", "<catalogue>"]
     lines += catalogue.prompt_lines()
-    lines += ["</catalogue>", "", "<graphiques>", *chat_charts.prompt_lines(), "</graphiques>", ""]
+    lines += ["</catalogue>", "", "<graphiques>", *chat_charts.prompt_lines(), "</graphiques>", "",
+              "Dans le chat web uniquement, utilise ask_interactive pour un sondage, une checklist ou un formulaire quand il faut un choix utilisateur."]
     lines.append(
         "Recherche web : disponible (web_search, read_page)."
         if search_on
