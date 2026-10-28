@@ -106,6 +106,8 @@ def persona_prompt(name: str, memory_on: bool) -> str:
         "Pour montrer l'impact d'une dépense imprévue ou d'une économie quotidienne sur la projection du mois, "
         "appelle show_budget_simulator : le simulateur lit les chiffres Bank, l'utilisateur déplace les curseurs "
         "et valide éventuellement sa question. Ne promets pas que le solde futur sera exact.",
+        "Pour une interface vraiment liée où une préférence change simultanément le graphique et le plan, "
+        "appelle show_decision_board. Les économies sont purement hypothétiques et rien ne modifie les comptes.",
         "Pour une règle, un barème, une actualité ou une information extérieure à Bank, utilise web_search quand il "
         "est disponible, lis la page utile avec read_page si l'extrait ne suffit pas, et cite tes sources dans le "
         "texte sous la forme [1], [2]. Sans source, dis que tu n'es pas sûr : jamais d'affirmation inventée.",
@@ -389,6 +391,18 @@ TOOL_SCENARIO: dict[str, Any] = {
         "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
     },
 }
+TOOL_BOARD: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "show_decision_board",
+        "description": (
+            "Créer dans le chat un tableau lié (sondage de préférence, graphique et checklist) "
+            "qui réagit immédiatement aux choix. Les chiffres proviennent de la vraie prévision de Bank. "
+            "Lecture seule, sans virement ni envoi automatique."
+        ),
+        "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+}
 TOOL_SEARCH: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -446,6 +460,7 @@ TOOL_STATUS = {
     "draw_diagram": "dessine un schéma",
     "ask_interactive": "prépare une interface interactive",
     "show_budget_simulator": "prépare une simulation de budget",
+    "show_decision_board": "prépare un sondage et un graphique liés",
     "propose_actions": "prépare les boutons",
     "can_i_buy": "fait le calcul",
     "plan_b": "calcule ton plan B",
@@ -784,6 +799,7 @@ class _ToolContext:
     diagram: dict[str, Any] | None = None
     interactive: dict[str, Any] | None = None
     scenario: dict[str, Any] | None = None
+    decision_board: dict[str, Any] | None = None
     sources: list[dict[str, Any]] = field(default_factory=list)
     dropped_keys: int = 0
 
@@ -798,6 +814,8 @@ class _ToolContext:
             out.append(self.interactive)
         if self.scenario:
             out.append(self.scenario)
+        if self.decision_board:
+            out.append(self.decision_board)
         if self.sources:
             out.append({"type": "sources", "query": "", "items": self.sources[: blocks.MAX_SOURCES]})
         actions = list(self.actions)
@@ -905,7 +923,7 @@ def _tool_interactive(ctx: _ToolContext, args: dict[str, Any]) -> str:
 
 
 def _tool_scenario(ctx: _ToolContext) -> str:
-    if ctx.scenario is not None:
+    if ctx.scenario is not None or ctx.decision_board is not None:
         return json.dumps({"error": "Un simulateur par réponse."}, ensure_ascii=False)
     if not analytics.budget_accounts(ctx.db):
         return json.dumps(
@@ -934,6 +952,28 @@ def _tool_scenario(ctx: _ToolContext) -> str:
             "current_end_balance_cents": f.projected_end_balance_cents,
             "note": "L'utilisateur peut explorer la simulation dans le chat. "
             "Les économies affichées sont des hypothèses, jamais un gain réalisé.",
+        },
+        ensure_ascii=False,
+    )
+
+
+def _tool_decision_board(ctx: _ToolContext) -> str:
+    """Le même moteur Bank pilote trois composants synchronisés dans le navigateur."""
+    if ctx.decision_board is not None or ctx.scenario is not None:
+        return json.dumps({"error": "Un simulateur ou tableau lié par réponse."}, ensure_ascii=False)
+    result = _tool_scenario(ctx)
+    if ctx.scenario is None:
+        return result
+    ctx.decision_board = blocks.decision_board_block(
+        {**ctx.scenario, "title": "Mon plan budgétaire interactif"}
+    )
+    ctx.scenario = None
+    return json.dumps(
+        {
+            "done": True,
+            "view": "sondage, courbe et checklist liés",
+            "source": "Projection réelle de Bank",
+            "note": "Les trois niveaux (0, 25 et 50 pour cent) sont des hypothèses, pas des économies réalisées.",
         },
         ensure_ascii=False,
     )
@@ -1105,6 +1145,8 @@ def _execute_tool(ctx: _ToolContext, name: str, raw_args: str) -> str:
         return _tool_interactive(ctx, args)
     if name == "show_budget_simulator":
         return _tool_scenario(ctx)
+    if name == "show_decision_board":
+        return _tool_decision_board(ctx)
     if name == "web_search":
         return _tool_search(ctx, args)
     if name == "read_page":
@@ -1173,7 +1215,7 @@ def ask(
     messages += [*previous, {"role": "user", "content": q}]
     tools: list[dict[str, Any]] = [TOOL_CAN_I_BUY, TOOL_PLANB, TOOL_RETIREMENT, TOOL_ACTIONS, TOOL_CHART, TOOL_DIAGRAM]
     if not channel:
-        tools.extend([TOOL_INTERACTIVE, TOOL_SCENARIO])
+        tools.extend([TOOL_INTERACTIVE, TOOL_SCENARIO, TOOL_BOARD])
     if memory_on:
         tools = [TOOL_MEMORY, TOOL_RECALL, *tools]
     if search_on:
