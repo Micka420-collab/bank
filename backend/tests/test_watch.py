@@ -522,7 +522,7 @@ def test_monetary_policy_watch_is_sourced_and_radar_separates_macro_from_forecas
         "ECB monetary policy: interest rates and inflation",
         "https://www.ecb.europa.eu/press/press_conference/2026/html/ecb.is-not-an-offer.html",
         "A central bank monetary policy update, not a prediction of future returns.",
-        "2026-10-27 10:00:00",
+        "2026-10-20 10:00:00",
     )
     fetcher.serve(ECB, rss(news))
     data = _refresh(world)
