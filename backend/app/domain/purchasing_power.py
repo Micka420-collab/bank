@@ -54,7 +54,12 @@ def detect_pressures(
 ) -> list[dict[str, str]]:
     """Rapprochements observables, jamais une affirmation de cause à effet ni une prédiction boursière."""
     findings: list[dict[str, str]] = []
-    if nominal_salary_pct is not None and real_salary_pct is not None and nominal_salary_pct > 0 and real_salary_pct < 0:
+    if (
+        nominal_salary_pct is not None
+        and real_salary_pct is not None
+        and nominal_salary_pct > 0
+        and real_salary_pct < 0
+    ):
         findings.append(
             {
                 "key": "salary_vs_inflation",
