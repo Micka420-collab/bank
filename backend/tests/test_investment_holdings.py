@@ -36,8 +36,12 @@ def test_holding_inventory_uses_real_accounts_and_marks_stale_crypto_and_duplica
     with app.state.sessionmaker() as db:
         db.add(
             Account(
-                name="PEA banque test", kind=AccountKind.PEA, currency="EUR",
-                provider=Provider.MANUAL, balance_cents=250_000, balance_at=utcnow(),
+                name="PEA banque test",
+                kind=AccountKind.PEA,
+                currency="EUR",
+                provider=Provider.MANUAL,
+                balance_cents=250_000,
+                balance_at=utcnow(),
             )
         )
         advisor.set_answer(
