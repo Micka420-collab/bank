@@ -324,6 +324,10 @@ describe("veille", () => {
       "/api/watch/refresh": () => ({ ...watchListing(), report: { checked: 2, new: 3, changed: 1, errors: 0, skipped: 0 } }),
       "/api/watch/sources": () => ({ id: 2, name: "Mon blog" }),
       "/api/watch/items/1": () => undefined,
+      "/api/watch/investments/holdings": () => ({
+        as_of: "2026-10-28", positions: [],
+        counts: { total: 0, unpriced_or_unverified: 0, potential_overlaps: 0 }, note: "",
+      }),
       "/api/watch": () => watchListing(),
     });
     await render(<Watch />);
