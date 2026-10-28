@@ -102,6 +102,39 @@ def macro_context(db: Session, today: date) -> list[dict[str, Any]]:
     return out
 
 
+def crypto_stress(db: Session, today: date) -> dict[str, Any]:
+    """Test de résistance HYPOTHÉTIQUE : ni rendement futur ni recommandation de transaction."""
+    from app.services import crypto_value
+
+    holdings = crypto_value.holdings_value(db)
+    prices = crypto_value.latest_prices(db)
+    assets: list[dict[str, Any]] = []
+    total_fresh_cents = 0
+    stale_count = 0
+    for asset, position in sorted(holdings.items()):
+        value = int(position["value_cents"])
+        quote = prices.get(asset)
+        recent = bool(quote and 0 <= (today - quote.fetched_at.date()).days <= 2)
+        if not recent:
+            stale_count += 1
+        if value <= 0 or not recent:
+            continue
+        assets.append({"asset": asset[:16], "value_cents": value, "as_of": quote.fetched_at.date().isoformat()})
+        total_fresh_cents += value
+    return {
+        "tracked_count": len(holdings),
+        "priced_count": len(assets),
+        "stale_count": stale_count,
+        "assets": sorted(assets, key=lambda x: -x["value_cents"])[:8],
+        "valued_cents": total_fresh_cents,
+        "shock_10_cents": total_fresh_cents // 10,
+        "shock_25_cents": total_fresh_cents // 4,
+        "note": "Chocs fictifs de -10 % / -25 % sur la valeur des cryptoactifs avec cours récent "
+        "(48 h max). Ils ne prédisent pas une baisse et n'incluent pas les actions, livrets ou "
+        "placements sans inventaire/cotation disponible. Aucun achat ni vente automatique.",
+    }
+
+
 def view(db: Session, today: date) -> dict[str, Any]:
     # Pas de faux signal de trésorerie si aucun compte courant n'alimente le modèle.
     from app.services import analytics, consents
@@ -111,6 +144,7 @@ def view(db: Session, today: date) -> dict[str, Any]:
     forecast = yearahead.compute(db, today) if connected else None
     return {
         "horizon_days": WINDOW_DAYS,
+        "crypto_stress": crypto_stress(db, today),
         "available": connected,
         "signals": build_signals(
             forecast, today=today, buffer_cents=int(get_setting(db, "buffer_cents"))
