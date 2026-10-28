@@ -7,8 +7,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain import investment_compare as domain
 from app.domain import invest
+from app.domain import investment_compare as domain
 from app.domain.onboarding import risk_profile
 from app.domain.wealth import emergency_fund, load_regulated_products, regulated_status
 from app.services import advisor, analytics
@@ -70,10 +70,7 @@ def view(
             "Il peut être révisé ; intérêts et calcul des quinzaines simplifiés.",
         })
     if custom_gross_pct is not None:
-        if "actions" in excluded:
-            blocked = "Ligne rouge du mandat : exposition boursière exclue."
-        else:
-            blocked = None
+        blocked = "Ligne rouge du mandat : exposition boursière exclue." if "actions" in excluded else None
         result = domain.project(
             capital_cents, horizon_months, gross_pct=custom_gross_pct, fees_pct=custom_fees_pct,
             tax_pct=custom_tax_pct, inflation_pct=inflation_pct, loss_pct=custom_loss_pct,
