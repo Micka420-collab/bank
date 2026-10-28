@@ -40,7 +40,7 @@ const STATUS: Record<string, string> = {
   cours_absent_ou_perime: "Cours absent ou périmé",
 };
 
-export function InvestmentHoldings() {
+export function InvestmentHoldings({ onCompare }: { onCompare?: (capitalCents: number) => void }) {
   const inventory = useApi<Inventory>("/api/watch/investments/holdings");
   if (inventory.error) return <ErrorNote message={inventory.error} onRetry={inventory.reload} />;
   if (!inventory.data) return <Loading what="Lecture des placements suivis" />;
@@ -79,6 +79,13 @@ export function InvestmentHoldings() {
             {position.quantity !== null && <p>Quantité : <b>{position.quantity}</b></p>}
             {position.rate_pct !== null && <p className="faint">Taux réglementé : {position.rate_pct.toLocaleString("fr-FR")} %
               {position.rate_as_of ? ` · référence du ${position.rate_as_of}` : ""}. Taux susceptible de changer.</p>}
+            {onCompare && position.value_cents !== null
+              && position.value_cents >= 10_000 && position.value_cents <= 100_000_000
+              && (position.valuation_status === "solde_date" || position.valuation_status === "cours_date") && (
+                <button type="button" className="btn quiet sm" onClick={() => onCompare(position.value_cents!)}>
+                  <Icon name="arrow" /> Comparer ce montant, sans transaction
+                </button>
+              )}
             {position.potential_overlap && <p className="notice warn"><Icon name="alert" /> Possiblement déjà compté dans une autre ligne.</p>}
             <details>
               <summary>Frais, risques et documents à vérifier</summary>
