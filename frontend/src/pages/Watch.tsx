@@ -7,6 +7,7 @@ import { useState, type FormEvent } from "react";
 import { api, useApi, type ReferenceCheck, type WatchItemView, type WatchListing, type WatchSourceView } from "../api";
 import { CrsTransparency } from "../components/CrsTransparency";
 import { FutureRadar } from "../components/FutureRadar";
+import { PurchasingPower } from "../components/PurchasingPower";
 import { Icon } from "../components/Icon";
 import { ErrorNote, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { plural, safeHref, shortDate } from "../format";
@@ -73,6 +74,7 @@ export function Watch() {
       )}
 
       <FutureRadar />
+      <PurchasingPower />
       <CrsTransparency />
 
       <section className="section" aria-labelledby="news-title">
