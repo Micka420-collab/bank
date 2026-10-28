@@ -24,11 +24,11 @@ from app.services import (
     autonomy,
     correlations,
     future_radar,
-    purchasing_power,
     obligations,
     opportunities,
     price_alerts,
     procedures,
+    purchasing_power,
     tempo,
     yearahead,
 )
