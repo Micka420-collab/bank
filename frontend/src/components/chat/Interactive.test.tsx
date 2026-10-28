@@ -103,6 +103,30 @@ describe("widgets de conversation Bank", () => {
     expect(ask.mock.calls[0]![0]).toContain("- Vérifié : Oui");
   });
 
+  it("selects a flowchart box by tap or keyboard, focuses its contextual annotation, and keeps unique markers", async () => {
+    const flow: ChatBlock = {
+      type: "diagram", title: "Projet", kind: "flow",
+      nodes: [{ id: "a", label: "Budget" }, { id: "b", label: "Décision" }],
+      edges: [{ from: "a", to: "b" }],
+    };
+    await render([flow, flow]);
+    const diagrams = [...el.querySelectorAll(".chat-flow")];
+    expect(diagrams).toHaveLength(2);
+    const markers = diagrams.map((d) => d.querySelector("marker")?.id);
+    expect(new Set(markers).size).toBe(2);
+    const node = diagrams[0]!.querySelector<SVGGElement>('[role="button"][aria-label="Annoter l\'étape Décision"]')!;
+    expect(node).toBeTruthy();
+    await click(node);
+    expect(node.getAttribute("aria-pressed")).toBe("true");
+    const annot = el.querySelector<HTMLDetailsElement>(".chat-annotate")!;
+    expect(annot.open).toBe(true);
+    expect(annot.querySelector("select")?.value).toBe("b");
+    await act(async () => {
+      node.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(annot.querySelector("select")?.value).toBe("b");
+  });
+
   it("can annotate a specific diagram node with a textual follow-up", async () => {
     await render([{
       type: "diagram", title: "Dossier APL", kind: "steps",
