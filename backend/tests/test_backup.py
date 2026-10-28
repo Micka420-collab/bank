@@ -187,7 +187,7 @@ def test_backups_are_visible_in_bank_scheduled_and_alert_on_failure(world: TestC
         notices = svc.alerts(db, now=datetime(2026, 11, 9, 4, 0, tzinfo=UTC), public_url="https://bank.lan")
         assert len(notices) == 1 and notices[0][2] is True and "ne se relit pas" in notices[0][1]
         # Plus de 48 h sans sauvegarde réussie : alerte aussi.
-        stale = svc.alerts(db, now=datetime(2026, 11, 4, 4, 0, tzinfo=UTC), public_url="https://bank.lan")
+        stale = svc.alerts(db, now=datetime(2026, 11, 12, 4, 0, tzinfo=UTC), public_url="https://bank.lan")
         assert any(k.startswith("backup:stale:") for k, _, _ in stale)
         # Une sauvegarde impossible (base déplacée) : échec enregistré, pas de trace, et réessai une heure plus tard.
         broken = settings.model_copy(update={"database_url": f"sqlite:///{settings.backup_dir}/absente.db"})
