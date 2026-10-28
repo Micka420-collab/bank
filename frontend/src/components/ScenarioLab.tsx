@@ -50,7 +50,7 @@ export function ScenarioLab({ forecast, value, result, onChange }: Props) {
             <button className="btn ghost sm" type="button" disabled={presetSaving === 0}
                     aria-pressed={value.expenseCents === 0 && value.savingPerDayCents === presetSaving && presetSaving > 0}
                     onClick={() => preset(0, presetSaving)}>
-              Dépenser 5 € de moins par jour
+              Dépenser {money(presetSaving)} de moins par jour
             </button>
             <button className="btn ghost sm" type="button" disabled={presetSaving === 0}
                     aria-pressed={value.expenseCents === 15000 && value.savingPerDayCents === presetSaving && presetSaving > 0}
