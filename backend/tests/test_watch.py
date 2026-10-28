@@ -32,7 +32,7 @@ FED = "https://www.federalreserve.gov/feeds/press_monetary.xml"
 ECB = "https://www.ecb.europa.eu/rss/press.html"
 FED = "https://www.federalreserve.gov/feeds/press_monetary.xml"
 EU_COUNCIL = "https://www.consilium.europa.eu/en/rss/pressreleases.ashx"
-EU_FINANCE = "https://finance.ec.europa.eu/node/2/rss_en"
+EU_FINANCE = "https://finance.ec.europa.eu/node/1296/rss_en"
 SP_FEED = (Path(__file__).parent / "fixtures" / "calendrier" / "service_public_actualites.rss").read_bytes()
 
 
