@@ -42,8 +42,8 @@ from app.security import audit, netfetch
 from app.services import advisor, chat_actions, chat_charts, consents, coverage, decisions, websearch
 from app.services import memory as memory_service
 from app.services import planb as planb_service
-from app.services import retirement as retirement_service
 from app.services import purchasing_power as power_service
+from app.services import retirement as retirement_service
 from app.services.initiatives import _uncategorized
 from app.services.settings_store import get_setting, set_setting
 
@@ -1095,7 +1095,15 @@ def ask(
     if memory_on and conv.memory_snapshot:
         messages.append({"role": "system", "content": conv.memory_snapshot})
     messages += [*previous, {"role": "user", "content": q}]
-    tools: list[dict[str, Any]] = [TOOL_CAN_I_BUY, TOOL_PURCHASING_POWER, TOOL_PLANB, TOOL_RETIREMENT, TOOL_ACTIONS, TOOL_CHART, TOOL_DIAGRAM]
+    tools: list[dict[str, Any]] = [
+        TOOL_CAN_I_BUY,
+        TOOL_PURCHASING_POWER,
+        TOOL_PLANB,
+        TOOL_RETIREMENT,
+        TOOL_ACTIONS,
+        TOOL_CHART,
+        TOOL_DIAGRAM,
+    ]
     if memory_on:
         tools = [TOOL_MEMORY, TOOL_RECALL, *tools]
     if search_on:
