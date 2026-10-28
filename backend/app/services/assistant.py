@@ -37,7 +37,7 @@ from app.fiscal.client import FiscalClient
 from app.models import Category, Conversation, LlmProvider, LlmUsage, MerchantHint, Transaction
 from app.providers.openrouter import ChatResult, OpenRouterClient, OpenRouterError, looks_like_key, valid_model_id
 from app.security import audit, netfetch
-from app.services import advisor, chat_actions, chat_charts, consents, coverage, decisions, websearch
+from app.services import advisor, analytics, chat_actions, chat_charts, consents, coverage, decisions, websearch
 from app.services import memory as memory_service
 from app.services import planb as planb_service
 from app.services import retirement as retirement_service
@@ -103,6 +103,9 @@ def persona_prompt(name: str, memory_on: bool) -> str:
         "Quand un choix est nécessaire, appelle ask_interactive : sondage pour une préférence, checklist pour "
         "une liste d’étapes, formulaire pour quelques informations à préciser. Laisse la personne répondre "
         "et valider avant de poursuivre. Le widget ne réalise aucune démarche ni aucun paiement.",
+        "Pour montrer l'impact d'une dépense imprévue ou d'une économie quotidienne sur la projection du mois, "
+        "appelle show_budget_simulator : le simulateur lit les chiffres Bank, l'utilisateur déplace les curseurs "
+        "et valide éventuellement sa question. Ne promets pas que le solde futur sera exact.",
         "Pour une règle, un barème, une actualité ou une information extérieure à Bank, utilise web_search quand il "
         "est disponible, lis la page utile avec read_page si l'extrait ne suffit pas, et cite tes sources dans le "
         "texte sous la forme [1], [2]. Sans source, dis que tu n'es pas sûr : jamais d'affirmation inventée.",
@@ -373,6 +376,19 @@ TOOL_INTERACTIVE: dict[str, Any] = {
         },
     },
 }
+TOOL_SCENARIO: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "show_budget_simulator",
+        "description": (
+            "Afficher dans le chat un simulateur financier interactif fondé sur la vraie projection du mois de Bank. "
+            "L'utilisateur ajuste une dépense imprévue et la réduction de dépenses quotidiennes : le graphique et "
+            "le solde prévisionnel réagissent immédiatement. Aucune modification de solde ni de paiement. "
+            "N'invente jamais un solde, une économie ou une date : aucun argument n'est nécessaire."
+        ),
+        "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+}
 TOOL_SEARCH: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -429,6 +445,7 @@ TOOL_STATUS = {
     "show_chart": "dessine le graphique",
     "draw_diagram": "dessine un schéma",
     "ask_interactive": "prépare une interface interactive",
+    "show_budget_simulator": "prépare une simulation de budget",
     "propose_actions": "prépare les boutons",
     "can_i_buy": "fait le calcul",
     "plan_b": "calcule ton plan B",
@@ -766,6 +783,7 @@ class _ToolContext:
     chart: dict[str, Any] | None = None
     diagram: dict[str, Any] | None = None
     interactive: dict[str, Any] | None = None
+    scenario: dict[str, Any] | None = None
     sources: list[dict[str, Any]] = field(default_factory=list)
     dropped_keys: int = 0
 
@@ -778,6 +796,8 @@ class _ToolContext:
             out.append(self.diagram)
         if self.interactive:
             out.append(self.interactive)
+        if self.scenario:
+            out.append(self.scenario)
         if self.sources:
             out.append({"type": "sources", "query": "", "items": self.sources[: blocks.MAX_SOURCES]})
         actions = list(self.actions)
@@ -879,6 +899,41 @@ def _tool_interactive(ctx: _ToolContext, args: dict[str, Any]) -> str:
             "kind": result["kind"],
             "questions": len(result["fields"]),
             "note": "Le widget est affiché. Ne devine pas les réponses ; l'utilisateur doit le remplir et valider.",
+        },
+        ensure_ascii=False,
+    )
+
+
+def _tool_scenario(ctx: _ToolContext) -> str:
+    if ctx.scenario is not None:
+        return json.dumps({"error": "Un simulateur par réponse."}, ensure_ascii=False)
+    if not analytics.budget_accounts(ctx.db):
+        return json.dumps(
+            {"error": "Pas de compte courant de budget : propose de connecter une banque ou importer un relevé."},
+            ensure_ascii=False,
+        )
+    f = analytics.forecast_inputs(ctx.db, ctx.today).run()
+    if len(f.projection) < 2:
+        return json.dumps({"error": "Pas assez de jours restants dans ce mois."}, ensure_ascii=False)
+    try:
+        result = blocks.scenario_block(
+            {
+                "title": "Et si… ? Explore ton mois",
+                "source": "Bank · projection du mois (hypothèses, non garantie)",
+                "points": [{"date": p.date.isoformat(), "balance_cents": p.balance_cents} for p in f.projection],
+                "daily_savings_cap_cents": max(0, f.daily_variable_rate_cents),
+            }
+        )
+    except blocks.BlockError as exc:
+        return json.dumps({"error": str(exc)}, ensure_ascii=False)
+    ctx.scenario = result
+    return json.dumps(
+        {
+            "done": True,
+            "source": "Prévision Bank ; les chiffres ne sont pas calculés par le modèle.",
+            "current_end_balance_cents": f.projected_end_balance_cents,
+            "note": "L'utilisateur peut explorer la simulation dans le chat. "
+            "Les économies affichées sont des hypothèses, jamais un gain réalisé.",
         },
         ensure_ascii=False,
     )
@@ -1048,6 +1103,8 @@ def _execute_tool(ctx: _ToolContext, name: str, raw_args: str) -> str:
         return _tool_diagram(ctx, args)
     if name == "ask_interactive":
         return _tool_interactive(ctx, args)
+    if name == "show_budget_simulator":
+        return _tool_scenario(ctx)
     if name == "web_search":
         return _tool_search(ctx, args)
     if name == "read_page":
@@ -1116,7 +1173,7 @@ def ask(
     messages += [*previous, {"role": "user", "content": q}]
     tools: list[dict[str, Any]] = [TOOL_CAN_I_BUY, TOOL_PLANB, TOOL_RETIREMENT, TOOL_ACTIONS, TOOL_CHART, TOOL_DIAGRAM]
     if not channel:
-        tools.append(TOOL_INTERACTIVE)
+        tools.extend([TOOL_INTERACTIVE, TOOL_SCENARIO])
     if memory_on:
         tools = [TOOL_MEMORY, TOOL_RECALL, *tools]
     if search_on:
