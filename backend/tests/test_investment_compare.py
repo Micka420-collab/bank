@@ -71,7 +71,7 @@ def test_suitability_is_separate_from_paper_profit_and_checks_restrictions() -> 
         investment_kind="lep", eligible=None, full_room=False,
     )
     assert not lep["eligible_to_consider"]
-    assert any("éligibilité" in item.lower() for item in lep["cautions"])
+    assert any("éligibilité" in item.lower() for item in lep["blockers"])
 
 
 def test_personal_reserve_red_lines_and_cap_block_unsupported_investments(monkeypatch: pytest.MonkeyPatch) -> None:
