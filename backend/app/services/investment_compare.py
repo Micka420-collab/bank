@@ -14,6 +14,47 @@ from app.domain.wealth import emergency_fund, load_regulated_products, regulated
 from app.services import advisor, analytics
 
 
+
+_INVESTMENT_ACCOUNT_KINDS = frozenset({"livret_a", "ldds", "lep", "pel", "cel", "pea", "assurance_vie", "per", "crypto", "savings"})
+_INVESTMENT_DECLARED_KINDS = frozenset({"pea", "assurance_vie", "per", "epargne_salariale", "crypto", "autre"})
+
+
+def inventory(accounts: list[Any], values: dict[str, Any]) -> dict[str, Any]:
+    """Inventaire sans dédoublonnage trompeur entre avoirs déclarés et comptes connectés."""
+    rows: list[dict[str, Any]] = []
+    for account in accounts:
+        if account.kind in _INVESTMENT_ACCOUNT_KINDS and account.balance_cents >= 0:
+            rows.append({
+                "kind": account.kind,
+                "label": account.name,
+                "value_cents": account.balance_cents,
+                "source": "compte_enregistre",
+                "valuation": "solde_compte",
+                "document_status": "non_verifie",
+                "missing": ["frais_produit", "conditions_de_sortie", "risques_documentes", "fiscalite_personnelle"],
+            })
+    for asset in values.get("outside_assets") or []:
+        if asset.get("kind") in _INVESTMENT_DECLARED_KINDS:
+            rows.append({
+                "kind": asset["kind"],
+                "label": asset["label"],
+                "value_cents": int(asset["value_cents"]),
+                "source": "declare_par_utilisateur",
+                "valuation": "montant_declare_non_cote",
+                "document_status": "non_verifie",
+                "missing": ["date_valorisation", "frais_produit", "conditions_de_sortie",
+                            "risques_documentes", "fiscalite_personnelle"],
+            })
+    return {
+        "holdings": rows,
+        "holdings_count": len(rows),
+        "total_cents": None,
+        "total_note": "Total non additionné : un avoir déclaré peut recouvrir un compte connecté.",
+        "source_note": "Ce sont des soldes ou déclarations, pas des positions titre par titre ni des cotations en direct.",
+        "documents_note": "Aucun DIC, prospectus ou document contractuel n'a été associé et validé par cet inventaire.",
+    }
+
+
 def view(
     db: Session,
     today: date,
@@ -147,6 +188,7 @@ def view(
             "overdraft_risk": overdraft_risk,
             "data_complete": bool(accounts) and essentials > 0,
         },
+        "inventory": inventory(accounts, values),
         "scenarios": records,
         "note": "Comparaison informative, pas une recommandation d'achat ni un classement par gain. "
         "Aucun capital n'est déplacé. Les produits de marché sont exclus de la comparaison "
