@@ -340,7 +340,7 @@ def test_fetch_bounds_size_time_and_compression() -> None:
 # ============================================================================ scénario A : de la source à toi
 def test_official_news_is_picked_up_dated_and_matched_to_you(app, world: TestClient, fetcher: FakeFetcher) -> None:  # type: ignore[no-untyped-def]
     data = _refresh(world)
-    assert data["report"]["checked"] == 5 and data["report"]["new"] == 4 and data["report"]["errors"] == 0
+    assert data["report"]["checked"] == 7 and data["report"]["new"] == 4 and data["report"]["errors"] == 0
     assert all(
         url in (ECO, PYPI, SERVICE_PUBLIC, ECB, FED) for url, _, _ in fetcher.calls
     )  # seules des adresses publiques connues
@@ -427,9 +427,9 @@ def test_watch_respects_consent_and_schedule(app, world: TestClient, fetcher: Fa
     with app.state.sessionmaker() as db:
         now = utcnow()
         first = ws.housekeeping(db, now=now, fetcher=fetcher)
-        assert first["watch_checked"] == 5
+        assert first["watch_checked"] == 7
         assert ws.housekeeping(db, now=now + timedelta(hours=1), fetcher=fetcher)["watch_checked"] == 0
-        assert ws.housekeeping(db, now=now + timedelta(hours=13), fetcher=fetcher)["watch_checked"] == 2  # 12 h
+        assert ws.housekeeping(db, now=now + timedelta(hours=13), fetcher=fetcher)["watch_checked"] == 5  # cinq flux à 12 h
         old = db.scalars(select(WatchItem)).first()
         assert old is not None
         old.first_seen_at = now - timedelta(days=400)
