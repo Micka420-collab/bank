@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
 
 MAX_BLOCKS = 6
@@ -28,6 +29,8 @@ MAX_SOURCES = 6
 MAX_SNIPPET = 300
 MAX_INTERACTIVE_FIELDS = 6
 MAX_INTERACTIVE_OPTIONS = 8
+MAX_SCENARIO_DAYS = 35
+MAX_SCENARIO_BALANCE_CENTS = 10**12
 INTERACTIVE_KINDS = frozenset({"poll", "checklist", "form"})
 FIELD_KINDS = frozenset({"single", "multiple", "text", "number", "boolean", "scale"})
 
@@ -316,6 +319,45 @@ def interactive_block(raw: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+# ------------------------------------------------------------------ simulateur : montants calculés par Bank, pas par le modèle
+def scenario_block(raw: Mapping[str, Any]) -> dict[str, Any]:
+    """L'IA peut demander un simulateur mais ne fournit jamais la courbe ni les calculs."""
+    points = raw.get("points")
+    if not isinstance(points, list) or not 2 <= len(points) <= MAX_SCENARIO_DAYS:
+        raise BlockError("Prévision du mois manquante")
+    validated: list[dict[str, Any]] = []
+    previous: date | None = None
+    for point in points:
+        if not isinstance(point, Mapping):
+            raise BlockError("Point de prévision invalide")
+        try:
+            day = date.fromisoformat(str(point.get("date")))
+        except ValueError as exc:
+            raise BlockError("Date invalide") from exc
+        value = point.get("balance_cents")
+        if (not isinstance(value, int) or isinstance(value, bool) or
+                abs(value) > MAX_SCENARIO_BALANCE_CENTS):
+            raise BlockError("Solde invalide")
+        if previous is not None and (day <= previous or (day - previous).days != 1):
+            raise BlockError("Dates de la prévision non consécutives")
+        if previous is not None and (day.year, day.month) != (validated[0]["year"], validated[0]["month"]):
+            raise BlockError("Mois de la prévision incohérent")
+        validated.append({"date": day.isoformat(), "balance_cents": value, "year": day.year, "month": day.month})
+        previous = day
+    raw_cap = raw.get("daily_savings_cap_cents")
+    if not isinstance(raw_cap, int) or isinstance(raw_cap, bool):
+        raise BlockError("Plafond de simulation invalide")
+    cap = max(0, min(100_000, raw_cap))
+    return {
+        "type": "scenario",
+        "title": clean(raw.get("title"), MAX_TITLE) or "Et si… ?",
+        "source": clean(raw.get("source"), 100) or "Bank · prévision du mois",
+        "points": [{"date": p["date"], "balance_cents": p["balance_cents"]} for p in validated],
+        "daily_savings_cap_cents": cap,
+        "expense_cap_cents": 200_000,
+    }
+
+
 # ------------------------------------------------------------------ sources (recherche faite par Bank)
 def sources_block(results: Sequence[Mapping[str, Any]], query: str = "") -> dict[str, Any] | None:
     items = []
@@ -377,6 +419,8 @@ def validate_blocks(raw: Any) -> list[dict[str, Any]]:
                 out.append(diagram_block(b))
             elif kind == "interactive":
                 out.append(interactive_block(b))
+            elif kind == "scenario":
+                out.append(scenario_block(b))
             elif kind == "sources":
                 rows = [it for it in (b.get("items") or []) if isinstance(it, Mapping)]
                 block = sources_block(rows, str(b.get("query") or ""))
@@ -406,4 +450,6 @@ def text_fallback(blocks: Sequence[Mapping[str, Any]]) -> list[str]:
             lines.append(f"(schéma « {b.get('title') or 'étapes'} » à voir dans Bank)")
         elif b.get("type") == "interactive":
             lines.append(f"(questionnaire « {b.get('title')} » à remplir dans Bank)")
+        elif b.get("type") == "scenario":
+            lines.append("(simulateur de budget interactif à utiliser dans Bank)")
     return lines
