@@ -194,3 +194,54 @@ def test_budget_simulator_tool_uses_bank_data_not_the_models_arguments(monkeypat
     other = assistant._ToolContext(None, "user", date(2026, 10, 21), 7, False)  # type: ignore[arg-type]
     no_account = json.loads(assistant._execute_tool(other, "show_budget_simulator", "{}"))
     assert "error" in no_account and other.scenario is None
+
+
+def test_decision_board_validates_same_grounded_forecast_schema() -> None:
+    raw = {
+        "type": "decision_board",
+        "title": "Mon plan",
+        "source": "Bank",
+        "daily_savings_cap_cents": 1_400,
+        "points": [
+            {"date": "2026-10-28", "balance_cents": 70_000},
+            {"date": "2026-10-29", "balance_cents": 65_000},
+        ],
+        "model_defined_payout": 900_000_000,
+    }
+    result = b.decision_board_block(raw)
+    assert result["type"] == "decision_board"
+    assert result["points"] == raw["points"]
+    assert result["daily_savings_cap_cents"] == 1_400
+    assert "model_defined_payout" not in result
+    assert b.validate_blocks([result]) == [result]
+    assert "tableau de décision" in b.text_fallback([result])[0]
+    assert b.validate_blocks([{**raw, "points": [{"date": "x", "balance_cents": 90}]}]) == []
+
+
+def test_decision_board_and_scenario_are_exclusive(monkeypatch: pytest.MonkeyPatch) -> None:
+    points = [
+        SimpleNamespace(date=date(2026, 10, 28), balance_cents=70_000),
+        SimpleNamespace(date=date(2026, 10, 29), balance_cents=65_000),
+    ]
+    forecast = SimpleNamespace(
+        projection=points, daily_variable_rate_cents=1_400, projected_end_balance_cents=65_000
+    )
+    monkeypatch.setattr(assistant.analytics, "budget_accounts", lambda db: [object()])
+    monkeypatch.setattr(
+        assistant.analytics, "forecast_inputs", lambda db, today: SimpleNamespace(run=lambda: forecast)
+    )
+    ctx = assistant._ToolContext(None, "user", date(2026, 10, 28), 7, False)  # type: ignore[arg-type]
+    response = json.loads(
+        assistant._execute_tool(ctx, "show_decision_board", '{"daily_savings_cap_cents":999999999}')
+    )
+    assert response["done"] is True
+    assert ctx.decision_board is not None and ctx.scenario is None
+    assert ctx.decision_board["daily_savings_cap_cents"] == 1_400
+    assert ctx.blocks()[0]["type"] == "decision_board"
+    assert "error" in json.loads(assistant._execute_tool(ctx, "show_decision_board", "{}"))
+    assert "error" in json.loads(assistant._execute_tool(ctx, "show_budget_simulator", "{}"))
+    assert assistant.TOOL_BOARD["function"]["parameters"]["additionalProperties"] is False
+    monkeypatch.setattr(assistant.analytics, "budget_accounts", lambda db: [])
+    empty = assistant._ToolContext(None, "user", date(2026, 10, 28), 7, False)  # type: ignore[arg-type]
+    assert "error" in json.loads(assistant._execute_tool(empty, "show_decision_board", "{}"))
+    assert empty.decision_board is None
