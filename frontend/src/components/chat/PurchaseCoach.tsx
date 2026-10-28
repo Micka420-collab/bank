@@ -68,8 +68,9 @@ export function ChatPurchaseCoach({ block, onAsk, disabled = false }: {
   const validPrice = targetPrice !== null && Number.isFinite(targetPrice)
     && targetPrice > 0 && targetPrice <= 10_000_000;
   const changedPrice = validPrice && Math.round(targetPrice * 100) !== block.amount_cents;
+  const invalidPrice = alternatePrice.trim().length > 0 && !validPrice;
   const finalMessage = (recalculate: boolean) => {
-    if (disabled || sent) return;
+    if (disabled || sent || invalidPrice) return;
     const answers = [
       `Je réfléchis à l'achat « ${block.label} ».`,
       recalculate && changedPrice
@@ -163,8 +164,9 @@ export function ChatPurchaseCoach({ block, onAsk, disabled = false }: {
                value={alternatePrice} disabled={disabled}
                onChange={(e) => { setAlternatePrice(e.target.value); setSent(false); }} />
         {changedPrice && <p className="chat-purchase-caution">Le verdict affiché concerne toujours {money(block.amount_cents)}. Recalcul nécessaire pour {money(Math.round(targetPrice! * 100))}.</p>}
+        {invalidPrice && <p className="chat-purchase-caution" role="alert">Indique un prix valide et positif avant de continuer.</p>}
         <div className="chat-purchase-buttons">
-          <button type="button" className="btn sm" disabled={disabled || sent}
+          <button type="button" className="btn sm" disabled={disabled || sent || invalidPrice}
                   onClick={() => finalMessage(Boolean(changedPrice))}>
             <Icon name="arrow" /> {changedPrice ? "Recalculer avec Bank" : "Aide-moi à décider"}
           </button>
