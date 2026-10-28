@@ -1326,6 +1326,7 @@ export type ScenarioBlock = {
   daily_savings_cap_cents: number;
   expense_cap_cents: number;
 };
+export type DecisionBoardBlock = Omit<ScenarioBlock, "type"> & { type: "decision_board" };
 export type InteractiveBlock = {
   type: "interactive";
   kind: "poll" | "checklist" | "form";
@@ -1341,6 +1342,7 @@ export type ChatBlock =
   | { type: "diagram"; kind: "flow" | "steps"; title: string; nodes: { id: string; label: string; note?: string }[]; edges: { from: string; to: string; label?: string }[] }
   | InteractiveBlock
   | ScenarioBlock
+  | DecisionBoardBlock
   | { type: "sources"; query: string; items: { n: number; title: string; url: string; host: string; snippet: string; date: string }[] }
   | { type: "note"; tone: "info" | "warning"; text: string };
 export type AssistantOpening = {
