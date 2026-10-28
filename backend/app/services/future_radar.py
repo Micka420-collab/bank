@@ -65,7 +65,7 @@ def build_signals(y: yd.YearAhead, *, today: date, buffer_cents: int = 0) -> lis
                 "confidence": "declared" if spike.source in ("planned", "custom") else "estimated",
             }
         )
-    out.sort(key=lambda row: (row["level"] != "risk", row["on"], -row["amount_cents"]))
+    out.sort(key=lambda row: (row["level"] != "risk", row["on"], -int(row["amount_cents"])))
     return out[:MAX_SIGNALS]
 
 
@@ -122,7 +122,7 @@ def crypto_stress(db: Session, today: date) -> dict[str, Any]:
         recent = bool(quote and 0 <= (today - quote.fetched_at.date()).days <= 2)
         if not recent:
             stale_count += 1
-        if value <= 0 or not recent:
+        if value <= 0 or not recent or quote is None:
             continue
         assets.append({"asset": asset[:16], "value_cents": value, "as_of": quote.fetched_at.date().isoformat()})
         total_fresh_cents += value
