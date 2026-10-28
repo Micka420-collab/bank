@@ -320,6 +320,7 @@ def test_without_consent_nothing_is_learned_and_the_conversation_vanishes(app, w
         "show_chart",
         "draw_diagram",
         "ask_interactive",
+        "show_budget_simulator",
     ]  # ni mémoire ni recherche dans le passé sans ton accord
     assert "Tu es Bank" in first["messages"][0]["content"] and "Mémoire :" not in first["messages"][0]["content"]
     assert [m["role"] for m in first["messages"]] == ["system", "system", "system", "user"]
@@ -357,6 +358,7 @@ def test_live_memory_writes_are_visible_and_the_snapshot_stays_frozen(app, world
         "show_chart",
         "draw_diagram",
         "ask_interactive",
+        "show_budget_simulator",
     ]
     tool_msg = FakeLlm.calls[1]["messages"][-1]
     assert tool_msg["role"] == "tool" and json.loads(tool_msg["content"])["success"] is True
@@ -432,7 +434,7 @@ def test_a_model_without_tools_is_retried_and_remembered(app, world: TestClient)
     assert out["answer"] == "Sans outils, mais je réponds."
     assert (
         FakeLlm.calls[0]["tools"]
-        == ["can_i_buy", "plan_b", "retirement", "propose_actions", "show_chart", "draw_diagram", "ask_interactive"]
+        == ["can_i_buy", "plan_b", "retirement", "propose_actions", "show_chart", "draw_diagram", "ask_interactive", "show_budget_simulator"]
         and FakeLlm.calls[1]["tools"] == []
     )
     world.post("/api/assistant/ask", json={"question": "Encore"})
@@ -560,6 +562,7 @@ def test_aggregates_privacy_turns_memory_off(world: TestClient) -> None:
         "show_chart",
         "draw_diagram",
         "ask_interactive",
+        "show_budget_simulator",
     ]
     assert not any("vélo" in m["content"] for m in FakeLlm.calls[-1]["messages"])
     assert world.get("/api/assistant").json()["memory"] == {"consent": True, "asked": True, "available": False}
@@ -594,6 +597,7 @@ def test_revoking_consent_stops_memory_mid_conversation(world: TestClient) -> No
         "show_chart",
         "draw_diagram",
         "ask_interactive",
+        "show_budget_simulator",
     ]
     assert not any("vélo" in m["content"] for m in FakeLlm.calls[-1]["messages"] if m["role"] == "system")
 
