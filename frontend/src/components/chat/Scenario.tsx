@@ -54,7 +54,7 @@ export function previewScenario(block: ScenarioBlock, input: ScenarioInput): Sce
 }
 
 /** Deux chemins SVG superposés : prévision officielle / hypothèse en pointillé. */
-function ScenarioChart({ original, hypothetical }: {
+export function ScenarioChart({ original, hypothetical }: {
   original: ScenarioBlock["points"];
   hypothetical: ScenarioPreview["points"];
 }) {
