@@ -154,7 +154,7 @@ export function ChatPurchaseCoach({ block, onAsk, disabled = false }: {
             Je pourrais attendre 48 heures avant de décider
           </label>
         </fieldset>
-        <p className="chat-purchase-reflection" aria-live="polite"><Icon name="info" />{purchaseReflection(why, urgency, canWait)}</p>
+        <p className="chat-purchase-reflection" aria-live="polite"><Icon name="spark" />{purchaseReflection(why, urgency, canWait)}</p>
       </div>
       <div className="chat-purchase-footer">
         <label htmlFor={`${uid}-price`}>Et si tu trouvais moins cher ? <span>(nouveau prix en euros)</span></label>
