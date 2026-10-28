@@ -3,6 +3,7 @@
 Only completed calendar months, always compare the *same three months* a year apart.
 A spending increase is not a personal price index: consumption quantities can change.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -31,9 +32,7 @@ def real_change_pct(nominal_pct: float, inflation_pct: float) -> float:
     return round(((1 + nominal_pct / 100) / (1 + inflation_pct / 100) - 1) * 100, 2)
 
 
-def real_yield_pct(
-    gross_pct: float, fees_pct: float, tax_pct: float, inflation_pct: float
-) -> dict[str, float]:
+def real_yield_pct(gross_pct: float, fees_pct: float, tax_pct: float, inflation_pct: float) -> dict[str, float]:
     """Illustrative annual rates; taxation of *positive* gains only, no tax-wrapper claims."""
     if not (-100 < gross_pct <= 200 and 0 <= fees_pct <= 30 and 0 <= tax_pct <= 100 and -30 < inflation_pct <= 100):
         raise ValueError("Hypothèses de placement hors des limites")
@@ -99,8 +98,14 @@ def compare(
             cur_avg = round(sum(months[m] for m in recent) / MONTH_COUNT)
             difference = cur_avg - old_avg
             if abs(difference) >= 1_000:
-                drivers.append({"category": slug, "old_avg_cents": old_avg,
-                                "current_avg_cents": cur_avg, "delta_cents": difference})
+                drivers.append(
+                    {
+                        "category": slug,
+                        "old_avg_cents": old_avg,
+                        "current_avg_cents": cur_avg,
+                        "delta_cents": difference,
+                    }
+                )
         drivers.sort(key=lambda r: -abs(int(r["delta_cents"])))
 
     return {
