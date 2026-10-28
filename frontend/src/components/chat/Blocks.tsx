@@ -13,6 +13,7 @@ import { Icon } from "../Icon";
 import { ChatInteractive } from "./Interactive";
 import { ChatScenario } from "./Scenario";
 import { ChatDecisionBoard } from "./DecisionBoard";
+import { ChatPurchaseCoach } from "./PurchaseCoach";
 import { useToast } from "../ui";
 
 export type BlockHandlers = {
@@ -40,6 +41,7 @@ export function ChatBlocks({ blocks, handlers, disabled = false }: { blocks: Cha
         if (b.type === "interactive") return <ChatInteractive key={i} block={b} onAsk={handlers.onAsk} disabled={disabled} />;
         if (b.type === "scenario") return <ChatScenario key={i} block={b} onAsk={handlers.onAsk} disabled={disabled} />;
         if (b.type === "decision_board") return <ChatDecisionBoard key={i} block={b} onAsk={handlers.onAsk} disabled={disabled} />;
+        if (b.type === "purchase_coach") return <ChatPurchaseCoach key={i} block={b} onAsk={handlers.onAsk} disabled={disabled} />;
         if (b.type === "sources") return <Sources key={i} block={b} />;
         return <p key={i} className={`chat-note faint${b.tone === "warning" ? " is-warning" : ""}`}>{b.text}</p>;
       })}
