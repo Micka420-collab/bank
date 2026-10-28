@@ -56,6 +56,15 @@ BUILTIN_SOURCES: tuple[dict[str, Any], ...] = (
         "interval_hours": 12,
     },
     {
+        # Banque centrale européenne : dates et sources officielles, pas une prédiction de marché.
+        "slug": "ecb-press",
+        "kind": "rss",
+        "name": "Banque centrale européenne — communiqués",
+        "url": "https://www.ecb.europa.eu/rss/press.html",
+        "trust": "officiel",
+        "interval_hours": 12,
+    },
+    {
         "slug": ENGINE_SLUG,
         "kind": "rss",
         "name": "OpenFisca-France — versions du moteur de calcul des droits",
