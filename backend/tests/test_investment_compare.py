@@ -45,7 +45,7 @@ def test_real_value_compounds_fees_once_yearly_and_tax_only_positive_gain() -> N
     ],
 )
 def test_invalid_scenarios_are_rejected(override: dict[str, float | int]) -> None:
-    args = dict(capital_cents=100_000, horizon_months=12, gross_pct=3, fees_pct=0, tax_pct=0, inflation_pct=2)
+    args = {"capital_cents": 100_000, "horizon_months": 12, "gross_pct": 3, "fees_pct": 0, "tax_pct": 0, "inflation_pct": 2}
     args.update(override)
     with pytest.raises(ValueError):
         dom.project(**args)
