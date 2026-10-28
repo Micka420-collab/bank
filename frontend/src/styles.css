@@ -10734,3 +10734,15 @@ label {
   .crs-selectors { grid-template-columns: 1fr; }
   .future-radar-signal { padding: 0.75rem; gap: 0.65rem; }
 }
+
+.future-radar-crypto { margin-top: 1rem; border: 1px solid var(--line); background: var(--surface);
+  border-radius: var(--r-card); padding: 1rem; min-width: 0; }
+.future-radar-crypto h3 { display: flex; gap: 0.4rem; align-items: center; font-size: var(--t-md); }
+.future-radar-crypto p { font-size: var(--t-sm); margin: 0.6rem 0 0; }
+.future-radar-stress { display: grid; grid-template-columns: repeat(2, minmax(0,1fr));
+  margin-top: 0.8rem; gap: 0.6rem; }
+.future-radar-stress > div { display: grid; gap: 0.35rem; padding: 0.7rem; background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: var(--r-control); }
+.future-radar-stress span { color: var(--ink-2); font-size: var(--t-xs); }
+.future-radar-stress strong { font-variant-numeric: tabular-nums; }
+@media (max-width: 420px) { .future-radar-stress { grid-template-columns: 1fr; } }
