@@ -23,6 +23,16 @@ const complete: SalaryPowerView = {
     salary_to_keep_up_cents: 206_200, monthly_real_gap_cents: -1_200,
     current_spending_avg_cents: 112_000, previous_spending_avg_cents: 100_000,
     spending_change_pct: 12, spending_share_change_points: 4.63,
+    correlations: [
+      { key: "salary_vs_inflation", level: "watch",
+        title: "Ton salaire augmente, mais ton pouvoir d'achat estimé recule",
+        evidence: "Salaire nominal : +2.50 % ; évolution réelle : -0.58 %.",
+        action: "Comparer les salaires et l'IPC." },
+      { key: "spending_share_rises", level: "watch",
+        title: "Tes dépenses occupent une place plus grande dans ton salaire",
+        evidence: "Dépenses observées : +12.00 % ; part du salaire : +4.63 points.",
+        action: "Examiner les catégories." },
+    ],
     spending_drivers: [{ category: "courses", current_avg_cents: 112_000,
       old_avg_cents: 100_000, delta_cents: 12_000 }],
     note: "Comparaison sur trois mois complets.",
@@ -70,6 +80,10 @@ describe("salaire, inflation et vrai rendement des placements", () => {
     expect(host.textContent).toContain("−0,58 %");
     expect(host.textContent).toContain("12 %");
     expect(host.textContent).toContain("courses");
+    expect(host.querySelectorAll(".purchasing-power-correlations li")).toHaveLength(2);
+    expect(host.textContent).toContain("Les signaux qui se recoupent");
+    expect(host.textContent).toContain("pas une preuve de causalité");
+
     expect(host.querySelector('a[href="https://www.insee.fr/fr/statistiques/9080209"]')).not.toBeNull();
     expect(requests).toHaveLength(1);
   });
