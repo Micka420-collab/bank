@@ -10973,3 +10973,23 @@ label {
   .chat-purchase-choices { grid-template-columns: 1fr; }
   .chat-purchase-head, .chat-purchase-reflect, .chat-purchase-footer { padding-inline: 0.75rem; }
 }
+
+/* Objectifs de prix : chaque bouton utilise un verdict recalculé dans Bank. */
+.chat-purchase-comparison { border: 0; padding: 0 0.85rem 0.85rem; margin: 0; min-width: 0; }
+.chat-purchase-comparison legend { font-size: var(--t-sm); font-weight: 700; padding: 0.25rem 0; }
+.chat-purchase-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; }
+.chat-purchase-options button { display: grid; gap: 0.35rem; justify-items: start; text-align: start;
+  padding: 0.65rem; border: 1px solid var(--line-strong); border-radius: var(--r-control);
+  background: var(--surface-2); color: var(--ink); cursor: pointer; min-height: 3.5rem; }
+.chat-purchase-options button span { color: var(--ink-2); font-size: var(--t-xs); }
+.chat-purchase-options button strong { font-variant-numeric: tabular-nums; font-size: var(--t-sm); }
+.chat-purchase-options button.is-active { background: var(--accent-soft); border-color: var(--accent); }
+.chat-purchase-options button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chat-purchase-options button:disabled { opacity: 0.65; cursor: not-allowed; }
+.chat-purchase-comparison p { color: var(--ink-2); font-size: var(--t-xs); margin: 0.45rem 0 0; }
+@media (max-width: 440px) {
+  .chat-purchase-comparison { padding-inline: 0.75rem; }
+  .chat-purchase-options { grid-template-columns: 1fr; }
+  .chat-purchase-options button { display: flex; align-items: center; justify-content: space-between;
+    min-height: 2.7rem; }
+}
