@@ -281,14 +281,22 @@ def interactive_block(raw: Mapping[str, Any]) -> dict[str, Any]:
         if kind in ("poll", "checklist") and fields:
             break
         entry: dict[str, Any] = {
-            "id": fid, "label": label, "kind": fkind, "required": f.get("required") is True,
+            "id": fid,
+            "label": label,
+            "kind": fkind,
+            "required": f.get("required") is True,
         }
         if options:
             entry["options"] = options
         if fkind == "scale":
             lo, hi = f.get("min"), f.get("max")
-            if (isinstance(lo, int) and not isinstance(lo, bool) and
-                isinstance(hi, int) and not isinstance(hi, bool) and 0 <= lo < hi <= 100):
+            if (
+                isinstance(lo, int)
+                and not isinstance(lo, bool)
+                and isinstance(hi, int)
+                and not isinstance(hi, bool)
+                and 0 <= lo < hi <= 100
+            ):
                 entry["min"], entry["max"] = lo, hi
             else:
                 entry["min"], entry["max"] = 0, 10
