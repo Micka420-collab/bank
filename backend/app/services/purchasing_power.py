@@ -31,7 +31,7 @@ def view(db: Session, today: date) -> dict[str, Any]:
         }
     first = today.replace(day=1)
     history = analytics.load_txns(db, [a.id for a in accounts], add_months(first, -15))
-    comparison = domain.compare(history, category_infos(db), today, inflation_pct=float(benchmark["annual_pct"]))
+    comparison = domain.compare(history, category_infos(db), today, inflation_pct=float(str(benchmark["annual_pct"])))
     return {
         "available": True,
         "benchmark": benchmark,
