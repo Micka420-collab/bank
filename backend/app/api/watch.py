@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import AuthDep, DbDep, TodayDep, client_ip
 from app.db import utcnow
-from app.services import future_radar, watch
+from app.services import future_radar, purchasing_power, watch
 
 router = APIRouter(prefix="/api/watch", tags=["watch"])
 
@@ -46,6 +46,32 @@ def listing(_: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
 def radar(_: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
     """Prévisions personnelles et contexte macro vérifiable, sans entraînement externe ni scraping de compte."""
     return future_radar.view(db, today)
+
+
+@router.get("/purchasing-power")
+def salary_power(_: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
+    """Salaires observés et inflation INSEE documentée, jamais une estimation de bulletin absent."""
+    return purchasing_power.view(db, today)
+
+
+class YieldScenario(BaseModel):
+    gross_pct: float = Field(ge=-99, le=200)
+    fees_pct: float = Field(ge=0, le=30)
+    tax_pct: float = Field(ge=0, le=100)
+    inflation_pct: float = Field(ge=-29, le=100)
+
+
+@router.post("/purchasing-power/yield")
+def estimate_real_yield(body: YieldScenario, _: AuthDep) -> dict[str, Any]:
+    """Hypothèse mathématique nette de frais et de fiscalité simplifiée, non une offre."""
+    from app.domain.purchasing_power import real_yield_pct
+
+    return {
+        **real_yield_pct(body.gross_pct, body.fees_pct, body.tax_pct, body.inflation_pct),
+        "assumptions": body.model_dump(),
+        "note": "Simulation annuelle théorique. La fiscalité réelle dépend de l'enveloppe, de la durée "
+        "et de la situation personnelle. Rendement et capital des placements risqués non garantis.",
+    }
 
 
 @router.post("/refresh")
