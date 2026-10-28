@@ -53,6 +53,18 @@ L'écran Veille inclut désormais l'observatoire **Salaire, pouvoir d'achat et p
 
 Références pédagogiques : [AMF — objectifs et horizon](https://www.amf-france.org/fr/espace-epargnants/savoir-bien-investir/cadrer-son-projet/definir-son-objectif), [AMF — rendement, risque et inflation](https://www.amf-france.org/fr/espace-epargnants/savoir-bien-investir/cadrer-son-projet/risques-et-rendements-des-placements).
 
+### Comparaison personnalisée des placements (scénarios)
+
+La page Veille contient un deuxième outil, **Comparer les placements dans ta situation**. Après saisie explicite du capital (100 € à 1 M€), de la durée (1 à 360 mois) et de l'inflation de comparaison, l'API authentifiée `POST /api/watch/investments/compare` calcule des scénarios **sur le même capital et le même horizon** :
+
+- Livrets réglementés Livret A, LDDS et LEP : taux **datés** fournis par `rates.current()`, provenance affichée, place disponible estimée depuis les soldes du produit. Le taux est **maintenu artificiellement constant** dans la projection : il peut être modifié par les autorités ; la méthode des quinzaines est simplifiée. L'éligibilité LEP est **inconnue tant que non vérifiée** ; un plafond insuffisant bloque l'affichage « À étudier ».
+- Placement de marché : facultatif, **aucune rentabilité préremplie par des cours ou des prévisions**. L'utilisateur doit activer le scénario et renseigner lui-même rendement supposé, frais annuels, fiscalité supposée sur les gains à la sortie, blocage contractuel éventuel et choc de perte à tester. Le choc n'est pas un maximum de perte.
+- Moteur pur `domain/investment_compare.py` : capital composé après frais ; imposition uniquement si la valeur finale excède le capital ; déflation en euros d'aujourd'hui via `(1 + IPC)^années` ; valeur nominale, réelle et gain réel distincts. La fiscalité et les frais varient fortement selon produit, enveloppe et durée : le calcul n'est **pas** une offre ou une projection statistique.
+- Le service recoupe la **réserve d'urgence et les charges essentielles observées**, l'éventuel découvert prévu, le profil de risque de l'onboarding, les lignes rouges déclarées et l'horizon choisi. Pour une option risquée : manque de réserve, découvert, horizon inférieur à cinq ans, sortie bloquée après l'échéance, données de sécurité absentes ou exposition interdite **bloquent** l'adéquation, même quand le rendement hypothétique est élevé.
+- Les scénarios ne sont ni classés ni exécutés automatiquement. Les données de portefeuille réelles et documents réglementaires précis restent à intégrer pour comparer des produits nommés.
+
+Tests : `backend/tests/test_investment_compare.py` (calculs, limites, adéquation et authentification), `frontend/src/components/InvestmentComparator.test.tsx` (saisie volontaire et présentation des risques).
+
 ### Prochain niveau
 
 Pour un modèle de pouvoir d'achat personnel plus précis, connecter l'IPC **par catégorie** avec version/source horodatée et pondérer les postes selon le panier réellement consommé, sans confondre dépenses et prix. Étendre ensuite la comparaison d'investissements à des **fiches de produits vérifiées** (DIC, frais, liquidité, fiscalité, risque, suivi des taux, simulations de pertes), sans promesse de rendement ni achat automatique.
