@@ -342,7 +342,7 @@ def test_official_news_is_picked_up_dated_and_matched_to_you(app, world: TestCli
     data = _refresh(world)
     assert data["report"]["checked"] == 7 and data["report"]["new"] == 4 and data["report"]["errors"] == 0
     assert all(
-        url in (ECO, PYPI, SERVICE_PUBLIC, ECB, FED) for url, _, _ in fetcher.calls
+        url in (ECO, PYPI, SERVICE_PUBLIC, ECB, FED, EU_COUNCIL, EU_FINANCE) for url, _, _ in fetcher.calls
     )  # seules des adresses publiques connues
     items = data["items"]
     livret = items[0]
