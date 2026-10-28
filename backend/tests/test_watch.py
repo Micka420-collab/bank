@@ -90,9 +90,8 @@ def fetcher(app, world: TestClient) -> FakeFetcher:  # type: ignore[no-untyped-d
     fake.serve(ECO, rss(LIVRET, FRENCH_TECH), etag='"v1"')
     fake.serve(PYPI, ENGINE)
     fake.serve(SERVICE_PUBLIC, rss())  # flux vide ici ; son vrai contenu a son propre test
-    fake.serve(ECB, rss())  # institution officielle ; le flux réel est testé via le parseur RSS
+    fake.serve(ECB, rss())  # flux officiel vide par défaut ; tests dédiés injectent des nouvelles
     fake.serve(FED, rss())
-    fake.serve(ECB, rss())  # relai financier officiel, vide par défaut pour les autres scénarios
     fake.serve(EU_COUNCIL, rss())
     fake.serve(EU_FINANCE, rss())
     app.state.watch_fetcher = fake
