@@ -10792,3 +10792,27 @@ label {
 @media (prefers-reduced-motion: reduce) {
   .chat-answer-choice { transition: none; }
 }
+
+/* Les schémas sont de vrais espaces cliquables, y compris au clavier. */
+.chat-flow .chat-node { cursor: pointer; }
+.chat-flow .chat-node rect {
+  transition: stroke-width 150ms ease, fill 150ms ease;
+}
+.chat-flow .chat-node:hover rect,
+.chat-flow .chat-node.is-selected rect,
+.chat-flow .chat-node:focus-visible rect {
+  stroke: var(--accent);
+  stroke-width: 3px;
+}
+.chat-flow .chat-node:focus-visible { outline: none; }
+.chat-steps li.is-selected { background: var(--accent-soft); border-radius: var(--r-control); }
+.chat-step-trigger {
+  display: block; width: 100%; text-align: left; border: 0; padding: 0.5rem;
+  background: transparent; color: inherit; cursor: pointer; font: inherit;
+}
+.chat-step-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-control); }
+.chat-step-hint { display: inline; font-size: var(--t-xs); margin-left: 0.4rem; color: var(--accent-ink); }
+.chat-diagram-hint { margin-top: 0.3rem; font-size: var(--t-xs); }
+@media (prefers-reduced-motion: reduce) {
+  .chat-flow .chat-node rect { transition: none; }
+}
