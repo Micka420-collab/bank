@@ -964,9 +964,7 @@ def _tool_decision_board(ctx: _ToolContext) -> str:
     result = _tool_scenario(ctx)
     if ctx.scenario is None:
         return result
-    ctx.decision_board = blocks.decision_board_block(
-        {**ctx.scenario, "title": "Mon plan budgétaire interactif"}
-    )
+    ctx.decision_board = blocks.decision_board_block({**ctx.scenario, "title": "Mon plan budgétaire interactif"})
     ctx.scenario = None
     return json.dumps(
         {
