@@ -45,7 +45,6 @@ def real_yield_pct(gross_pct: float, fees_pct: float, tax_pct: float, inflation_
     }
 
 
-
 def detect_pressures(
     *,
     nominal_salary_pct: float | None,
