@@ -24,6 +24,7 @@ from app.services import (
     autonomy,
     correlations,
     future_radar,
+    purchasing_power,
     obligations,
     opportunities,
     price_alerts,
@@ -102,6 +103,12 @@ def collect(
     out += [
         Notice(key, text, urgent)
         for key, text, urgent in future_radar.alerts(db, today=today, privacy=privacy, public_url=public_url)
+    ]
+    # Pouvoir d'achat : salaire réel en recul sur mois documentés, une fois par période.
+    # Même livraison opt-in, clé stable et confidentialité du canal.
+    out += [
+        Notice(key, text, urgent)
+        for key, text, urgent in purchasing_power.alerts(db, today=today, privacy=privacy, public_url=public_url)
     ]
     # Corrélations : seulement les constats sérieux (doublon d'assurance, loyer au-dessus de l'IRL), une fois.
     out += [
