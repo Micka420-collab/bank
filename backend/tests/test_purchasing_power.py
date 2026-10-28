@@ -1,4 +1,5 @@
 """Real purchasing-power calculations: no missing salary months, no false causal inflation claim."""
+
 from __future__ import annotations
 
 import json
@@ -100,32 +101,59 @@ def test_authenticated_purchasing_power_and_real_yield_routes(world: TestClient)
     assert r.status_code == 200, r.text
     assert r.json()["benchmark"]["as_of"] == "2026-09"
     assert isinstance(r.json()["benchmark"]["stale"], bool)
-    good = world.post("/api/watch/purchasing-power/yield", json={
-        "gross_pct": 6, "fees_pct": 1, "tax_pct": 30, "inflation_pct": 3.1,
-    })
+    good = world.post(
+        "/api/watch/purchasing-power/yield",
+        json={
+            "gross_pct": 6,
+            "fees_pct": 1,
+            "tax_pct": 30,
+            "inflation_pct": 3.1,
+        },
+    )
     assert good.status_code == 200, good.text
     assert good.json()["real_annual_pct"] == 0.35
-    assert world.post("/api/watch/purchasing-power/yield", json={
-        "gross_pct": 300, "fees_pct": 0, "tax_pct": 30, "inflation_pct": 3.1,
-    }).status_code == 422
+    assert (
+        world.post(
+            "/api/watch/purchasing-power/yield",
+            json={
+                "gross_pct": 300,
+                "fees_pct": 0,
+                "tax_pct": 30,
+                "inflation_pct": 3.1,
+            },
+        ).status_code
+        == 422
+    )
 
 
 
 def test_assistant_can_ground_salary_and_yield_in_bank_not_guesswork(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(svc, "view", lambda db, today: {
-        "available": True, "benchmark": p.INSEE_2026_09,
-        "comparison": {"ready": False, "real_salary_change_pct": None, "salary_months_found": 1},
-    })
+    monkeypatch.setattr(
+        svc,
+        "view",
+        lambda db, today: {
+            "available": True,
+            "benchmark": p.INSEE_2026_09,
+            "comparison": {"ready": False, "real_salary_change_pct": None, "salary_months_found": 1},
+        },
+    )
     ctx = assistant._ToolContext(cast(Session, None), "test", TODAY, 1, False)
     salary = json.loads(assistant._execute_tool(ctx, "analyze_purchasing_power", '{"mode":"salary"}'))
     assert salary["comparison"]["real_salary_change_pct"] is None
     assert salary["comparison"]["salary_months_found"] == 1
-    result = json.loads(assistant._execute_tool(
-        ctx, "analyze_purchasing_power",
-        '{"mode":"yield","gross_pct":6,"fees_pct":1,"tax_pct":30,"inflation_pct":3.1}',
-    ))
+    result = json.loads(
+        assistant._execute_tool(
+            ctx,
+            "analyze_purchasing_power",
+            '{"mode":"yield","gross_pct":6,"fees_pct":1,"tax_pct":30,"inflation_pct":3.1}',
+        )
+    )
     assert result["nominal_after_fees_and_tax_pct"] == 3.46
     assert result["real_annual_pct"] == 0.35
-    for invalid in ('{"mode":"yield","gross_pct":1000}', '{"mode":"yield","gross_pct":"nan","fees_pct":0,"tax_pct":0,"inflation_pct":3}', '{"mode":"missing"}'):
+    for invalid in (
+        '{"mode":"yield","gross_pct":1000}',
+        '{"mode":"yield","gross_pct":"nan","fees_pct":0,"tax_pct":0,"inflation_pct":3}',
+        '{"mode":"missing"}',
+    ):
         assert "error" in json.loads(assistant._execute_tool(ctx, "analyze_purchasing_power", invalid))
     assert assistant.TOOL_PURCHASING_POWER["function"]["parameters"]["additionalProperties"] is False
