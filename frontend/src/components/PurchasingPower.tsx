@@ -45,7 +45,10 @@ type YieldResult = {
   assumptions: { gross_pct: number; fees_pct: number; tax_pct: number; inflation_pct: number };
   note: string;
 };
-const signed = (n: number) => `${n > 0 ? "+" : ""}${n.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %`;
+const signed = (n: number) => {
+  const number = n.toLocaleString("fr-FR", { maximumFractionDigits: 2 });
+  return `${n < 0 ? "−" + number.slice(1) : n > 0 ? "+" + number : number} %`;
+};
 
 export function PurchasingPower() {
   const view = useApi<SalaryPowerView>("/api/watch/purchasing-power");
@@ -144,7 +147,7 @@ export function PurchasingPower() {
       {comparison && <p className="faint">{comparison.note}</p>}
       <div className="purchasing-power-yield">
         <h3><Icon name="coin" /> Ton simulateur de rendement réel</h3>
-        <p className="muted">Compare une hypothèse de placement : son rendement **supposé** doit rester supérieur à l'inflation et à ses coûts pour préserver le pouvoir d'achat. Saisis les caractéristiques d'un produit réel, issues de son document d'information.</p>
+        <p className="muted">Compare une hypothèse de placement : son rendement supposé doit rester supérieur à l'inflation et à ses coûts pour préserver le pouvoir d'achat. Saisis les caractéristiques d'un produit réel, issues de son document d'information.</p>
         <form onSubmit={calculate}>
           <label>Rendement annuel brut supposé (%)
             <input type="number" value={gross} onChange={(e) => { setGross(e.target.value); setCalculated(null); }} placeholder="Ex. : 4" step="0.1" min="-99" max="200" required />
