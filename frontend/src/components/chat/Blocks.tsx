@@ -2,7 +2,7 @@
 // dessiné avec les chiffres de Bank, schéma (boîtes et flèches, ou étapes), sources d'une recherche web. Tout
 // arrive validé du serveur ; ici on dessine, on ne décide rien.
 
-import { useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { api, type ChatActionItem, type ChatBlock } from "../../api";
 import { money } from "../../format";
 import { Bars } from "../charts/Bars";
@@ -191,17 +191,24 @@ function wrap(text: string, max: number): string[] {
 }
 
 function Diagram({ block, handlers }: { block: Extract<ChatBlock, { type: "diagram" }>; handlers: BlockHandlers }) {
+  const [selected, setSelected] = useState<string | null>(null);
   if (block.kind === "steps") {
     return (
       <figure className="chat-diagram">
         {block.title && <figcaption><b>{block.title}</b></figcaption>}
         <ol className="chat-steps">
           {block.nodes.map((n) => (
-            <li key={n.id}><b>{n.label}</b>{n.note && <span className="faint"> — {n.note}</span>}</li>
+            <li key={n.id} className={selected === n.id ? "is-selected" : undefined}>
+              <button type="button" className="chat-step-trigger" aria-pressed={selected === n.id}
+                      onClick={() => setSelected(n.id)}>
+                <b>{n.label}</b> {n.note && <span className="faint"> — {n.note}</span>}
+                <span className="chat-step-hint">Annoter</span>
+              </button>
+            </li>
           ))}
         </ol>
         <p className="faint chat-chart-source">Schéma proposé par le modèle, à lire avec tes chiffres</p>
-        <AnnotateDiagram block={block} onAsk={handlers.onAsk} />
+        <AnnotateDiagram block={block} onAsk={handlers.onAsk} selectedNode={selected} />
       </figure>
     );
   }
@@ -215,6 +222,8 @@ const CHAR_W = 6.2;
 
 function FlowDiagram({ block, onAsk }: { block: Extract<ChatBlock, { type: "diagram" }>; onAsk: (prompt: string) => void }) {
   const { nodes, edges } = block;
+  const [selected, setSelected] = useState<string | null>(null);
+  const marker = useId().replaceAll(":", "");
   const layout = useMemo(() => {
     const rows = layers(nodes, edges);
     const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -235,9 +244,9 @@ function FlowDiagram({ block, onAsk }: { block: Extract<ChatBlock, { type: "diag
   return (
     <figure className="chat-diagram">
       {block.title && <figcaption><b>{block.title}</b></figcaption>}
-      <svg viewBox={`0 0 ${W} ${layout.height}`} className="chat-flow" role="img" aria-label={label}>
+      <svg viewBox={`0 0 ${W} ${layout.height}`} className="chat-flow" role="group" aria-label={label}>
         <defs>
-          <marker id="chat-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <marker id={marker} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
           </marker>
         </defs>
@@ -254,7 +263,7 @@ function FlowDiagram({ block, onAsk }: { block: Extract<ChatBlock, { type: "diag
           const d = forward ? `M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}` : `M${x1},${a.y} C${x1 - 40},${a.y - 30} ${x2 - 40},${b.y + BOX_H + 30} ${x2},${b.y + BOX_H}`;
           return (
             <g key={i} className="chat-edge">
-              <path d={d} fill="none" markerEnd="url(#chat-arrow)" />
+              <path d={d} fill="none" markerEnd={`url(#${marker})`} />
               {e.label && <text x={(x1 + x2) / 2} y={mid - 4} textAnchor="middle">{e.label}</text>}
             </g>
           );
@@ -263,7 +272,15 @@ function FlowDiagram({ block, onAsk }: { block: Extract<ChatBlock, { type: "diag
           const p = layout.pos.get(n.id);
           if (!p) return null;
           return (
-            <g key={n.id} className="chat-node">
+            <g key={n.id} className={`chat-node${selected === n.id ? " is-selected" : ""}`} role="button" tabIndex={0}
+               aria-label={`Annoter l'étape ${n.label}`} aria-pressed={selected === n.id}
+               onClick={() => setSelected(n.id)}
+               onKeyDown={(e) => {
+                 if (e.key === "Enter" || e.key === " ") {
+                   e.preventDefault();
+                   setSelected(n.id);
+                 }
+               }}>
               <rect x={p.x} y={p.y} width={p.w} height={BOX_H} rx="8" />
               {p.lines.map((line, i) => (
                 <text key={i} x={p.x + p.w / 2} y={p.y + BOX_H / 2 + (i - (p.lines.length - 1) / 2) * 12 + 4} textAnchor="middle">{line}</text>
@@ -279,19 +296,32 @@ function FlowDiagram({ block, onAsk }: { block: Extract<ChatBlock, { type: "diag
         </ul>
       )}
       <p className="faint chat-chart-source">Schéma proposé par le modèle, à lire avec tes chiffres</p>
-      <AnnotateDiagram block={block} onAsk={onAsk} />
+      <p className="chat-diagram-hint faint">Touche une boîte pour l'annoter, ou utilise le menu ci-dessous.</p>
+      <AnnotateDiagram block={block} onAsk={onAsk} selectedNode={selected} />
     </figure>
   );
 }
 
 /** Les annotations font partie de la conversation. Ni modification de la base ni dessin arbitraire exécuté. */
-function AnnotateDiagram({ block, onAsk }: { block: Extract<ChatBlock, { type: "diagram" }>; onAsk: (text: string) => void }) {
+function AnnotateDiagram({
+  block, onAsk, selectedNode,
+}: {
+  block: Extract<ChatBlock, { type: "diagram" }>;
+  onAsk: (text: string) => void;
+  selectedNode: string | null;
+}) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
   const [node, setNode] = useState(block.nodes[0]?.id ?? "");
+  useEffect(() => {
+    if (!selectedNode || !block.nodes.some((n) => n.id === selectedNode)) return;
+    setNode(selectedNode);
+    if (detailsRef.current) detailsRef.current.open = true;
+  }, [selectedNode, block.nodes]);
   const [note, setNote] = useState("");
   const [sent, setSent] = useState(false);
   const selected = block.nodes.find((n) => n.id === node);
   return (
-    <details className="chat-annotate">
+    <details className="chat-annotate" ref={detailsRef}>
       <summary><Icon name="edit" /> Annoter ce schéma</summary>
       <form onSubmit={(e) => {
         e.preventDefault();
