@@ -1,4 +1,5 @@
 """Radar prudent : une échéance future doit être justifiée et ne prédit pas le cours d'une action."""
+
 from __future__ import annotations
 
 from datetime import date
