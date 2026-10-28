@@ -106,6 +106,11 @@ def persona_prompt(name: str, memory_on: bool) -> str:
         "Pour montrer l'impact d'une dépense imprévue ou d'une économie quotidienne sur la projection du mois, "
         "appelle show_budget_simulator : le simulateur lit les chiffres Bank, l'utilisateur déplace les curseurs "
         "et valide éventuellement sa question. Ne promets pas que le solde futur sera exact.",
+        "Pour les achats (prix et objet connus), préfère show_purchase_coach dans le chat de Bank : verdict "
+        "calculé, question sur le besoin réel et alternative pour attendre. Ne moralise jamais et n'affirme "
+        "pas que tu connais les émotions de la personne. Si les comptes ne sont pas connectés, dis que "
+        "l'analyse financière n'est pas fiable et propose de relier un compte. "
+        "Dans une messagerie sans composants, utilise can_i_buy pour le même verdict chiffré.",
         "Pour une interface vraiment liée où une préférence change simultanément le graphique et le plan, "
         "appelle show_decision_board. Les économies sont purement hypothétiques et rien ne modifie les comptes.",
         "Pour une règle, un barème, une actualité ou une information extérieure à Bank, utilise web_search quand il "
@@ -378,6 +383,27 @@ TOOL_INTERACTIVE: dict[str, Any] = {
         },
     },
 }
+TOOL_PURCHASE_COACH: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "show_purchase_coach",
+        "description": (
+            "Pour un achat envisagé, affiche une vraie carte interactive : verdict chiffré (oui, attention, "
+            "attendre, non recommandé), budget avant/après, questions pour réfléchir et alternatives. "
+            "Les montants et le verdict sont calculés par Bank, jamais par le modèle. "
+            "La carte ne réalise aucun achat et ne juge pas la personne."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "amount_eur": {"type": "number", "exclusiveMinimum": 0, "maximum": 10_000_000},
+                "label": {"type": "string", "maxLength": 80},
+            },
+            "required": ["amount_eur"],
+            "additionalProperties": False,
+        },
+    },
+}
 TOOL_SCENARIO: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -461,6 +487,7 @@ TOOL_STATUS = {
     "ask_interactive": "prépare une interface interactive",
     "show_budget_simulator": "prépare une simulation de budget",
     "show_decision_board": "prépare un sondage et un graphique liés",
+    "show_purchase_coach": "calcule le verdict et prépare le coach d’achat",
     "propose_actions": "prépare les boutons",
     "can_i_buy": "fait le calcul",
     "plan_b": "calcule ton plan B",
@@ -800,6 +827,7 @@ class _ToolContext:
     interactive: dict[str, Any] | None = None
     scenario: dict[str, Any] | None = None
     decision_board: dict[str, Any] | None = None
+    purchase_coach: dict[str, Any] | None = None
     sources: list[dict[str, Any]] = field(default_factory=list)
     dropped_keys: int = 0
 
@@ -816,6 +844,8 @@ class _ToolContext:
             out.append(self.scenario)
         if self.decision_board:
             out.append(self.decision_board)
+        if self.purchase_coach:
+            out.append(self.purchase_coach)
         if self.sources:
             out.append({"type": "sources", "query": "", "items": self.sources[: blocks.MAX_SOURCES]})
         actions = list(self.actions)
@@ -954,6 +984,42 @@ def _tool_scenario(ctx: _ToolContext) -> str:
             "Les économies affichées sont des hypothèses, jamais un gain réalisé.",
         },
         ensure_ascii=False,
+    )
+
+
+def _tool_purchase_coach(ctx: _ToolContext, args: dict[str, Any]) -> str:
+    """La même décision chiffrée que can_i_buy, présentée comme une conversation guidée."""
+    if ctx.purchase_coach is not None:
+        return json.dumps({"error": "Un seul coach d'achat par réponse."}, ensure_ascii=False)
+    try:
+        amount = float(args.get("amount_eur", 0))
+    except (TypeError, ValueError):
+        return json.dumps({"error": "Un prix numérique est nécessaire."}, ensure_ascii=False)
+    if not 0 < amount <= 10_000_000:
+        return json.dumps({"error": "Montant hors limites."}, ensure_ascii=False)
+    if not analytics.budget_accounts(ctx.db):
+        return json.dumps(
+            {"error": "Pas de compte budgétaire pour établir un verdict fiable. "
+             "Propose de connecter un compte ou importer des transactions."},
+            ensure_ascii=False,
+        )
+    label = blocks.clean(args.get("label"), 80) or "Cet achat"
+    plan = decisions.purchase(ctx.db, ctx.today, amount_cents=round(amount * 100), label=label, category=None)
+    ctx.purchase_coach = blocks.purchase_coach_block(
+        {**asdict(plan), "label": label, "title": "Dois-je vraiment l'acheter ?"}
+    )
+    return json.dumps(
+        {
+            "done": True,
+            "answer": plan.answer,
+            "headline": plan.headline,
+            "explanation": plan.explanation[:1_000],
+            "note": "La carte interactive affiche les chiffres de Bank. "
+            "Tu peux aider la personne à réfléchir sans lui imposer la décision. "
+            "Si elle change le prix, recalcule via cet outil sur un nouveau message.",
+        },
+        ensure_ascii=False,
+        default=str,
     )
 
 
@@ -1145,6 +1211,8 @@ def _execute_tool(ctx: _ToolContext, name: str, raw_args: str) -> str:
         return _tool_scenario(ctx)
     if name == "show_decision_board":
         return _tool_decision_board(ctx)
+    if name == "show_purchase_coach":
+        return _tool_purchase_coach(ctx, args)
     if name == "web_search":
         return _tool_search(ctx, args)
     if name == "read_page":
@@ -1213,7 +1281,7 @@ def ask(
     messages += [*previous, {"role": "user", "content": q}]
     tools: list[dict[str, Any]] = [TOOL_CAN_I_BUY, TOOL_PLANB, TOOL_RETIREMENT, TOOL_ACTIONS, TOOL_CHART, TOOL_DIAGRAM]
     if not channel:
-        tools.extend([TOOL_INTERACTIVE, TOOL_SCENARIO, TOOL_BOARD])
+        tools.extend([TOOL_INTERACTIVE, TOOL_SCENARIO, TOOL_BOARD, TOOL_PURCHASE_COACH])
     if memory_on:
         tools = [TOOL_MEMORY, TOOL_RECALL, *tools]
     if search_on:
