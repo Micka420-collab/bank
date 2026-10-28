@@ -23,6 +23,7 @@ from app.services import (
     analytics,
     autonomy,
     correlations,
+    future_radar,
     obligations,
     opportunities,
     price_alerts,
@@ -95,6 +96,12 @@ def collect(
     out += [
         Notice(key, text, urgent)
         for key, text, urgent in yearahead.alerts(db, today=today, privacy=privacy, public_url=public_url)
+    ]
+    # Radar : dépenses ajoutées personnellement, non couvertes par les alertes récurrentes de yearahead.
+    # La livraison respecte déjà l'opt-in du canal, les heures calmes et la déduplication ChannelNotice.
+    out += [
+        Notice(key, text, urgent)
+        for key, text, urgent in future_radar.alerts(db, today=today, privacy=privacy, public_url=public_url)
     ]
     # Corrélations : seulement les constats sérieux (doublon d'assurance, loyer au-dessus de l'IRL), une fois.
     out += [
