@@ -90,10 +90,7 @@ def account_row(
 def view(db: Session, today: date) -> dict[str, Any]:
     """Lecture seule de la base locale : aucun appel vers un courtier, une blockchain ou un fournisseur de prix."""
     rate_rows = load_regulated_products()
-    rates = {
-        r.kind: {"rate_pct": float(r.rate_percent), "as_of": r.as_of, "source": r.source}
-        for r in rate_rows
-    }
+    rates = {r.kind: {"rate_pct": float(r.rate_percent), "as_of": r.as_of, "source": r.source} for r in rate_rows}
     positions: list[dict[str, Any]] = []
     seen_kinds: set[str] = set()
     for account in db.scalars(select(Account).where(Account.archived.is_(False)).order_by(Account.id)):
@@ -199,8 +196,7 @@ def view(db: Session, today: date) -> dict[str, Any]:
         "counts": {
             "total": len(positions),
             "unpriced_or_unverified": sum(
-                p["valuation_status"] != "solde_date" and p["valuation_status"] != "cours_date"
-                for p in positions
+                p["valuation_status"] != "solde_date" and p["valuation_status"] != "cours_date" for p in positions
             ),
             "potential_overlaps": sum(bool(p["potential_overlap"]) for p in positions),
         },
