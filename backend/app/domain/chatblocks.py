@@ -396,7 +396,13 @@ def purchase_coach_block(raw: Mapping[str, Any]) -> dict[str, Any]:
             low_date = date.fromisoformat(str(source.get("lowest_date")))
         except ValueError as exc:
             raise BlockError("Date de prévision invalide") from exc
-        return {**numbers, "lowest_date": low_date.isoformat()}
+        overdraft = source.get("overdraft_date")
+        if overdraft is not None:
+            try:
+                overdraft = date.fromisoformat(str(overdraft)).isoformat()
+            except ValueError as exc:
+                raise BlockError("Date de découvert invalide") from exc
+        return {**numbers, "lowest_date": low_date.isoformat(), "overdraft_date": overdraft}
 
     best_date = check.get("best_date")
     if best_date is not None:
