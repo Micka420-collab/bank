@@ -61,6 +61,9 @@ def account_row(
         if days > 30 or days < -1
         else "solde_date"
     )
+    # Une saisie manuelle reste une déclaration, même avec une date récente.
+    if currency == "EUR" and provider == Provider.MANUAL:
+        valuation_status = "valeur_declaree_non_verifiee"
     ref = rates.get(kind)
     return {
         "key": f"account:{item_id}",
