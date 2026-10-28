@@ -22,6 +22,7 @@ export type SalaryPowerComparison = {
   spending_change_pct: number | null;
   spending_share_change_points: number | null;
   spending_drivers: { category: string; old_avg_cents: number; current_avg_cents: number; delta_cents: number }[];
+  correlations?: { key: string; level: "watch"; title: string; evidence: string; action: string }[];
   note: string;
 };
 export type SalaryPowerView = {
@@ -121,6 +122,21 @@ export function PurchasingPower() {
                 ? <>Il te manque environ <strong>{money(-comparison.monthly_real_gap_cents)}</strong> de salaire mensuel pour retrouver le pouvoir d'achat de référence, à inflation égale.</>
                 : <>Ton salaire moyen dépasse de <strong>{money(comparison.monthly_real_gap_cents)}</strong> le montant nécessaire pour compenser cette inflation indicative.</>}
             </p>
+          )}
+          {(comparison.correlations?.length ?? 0) > 0 && (
+            <div className="purchasing-power-correlations" aria-labelledby="power-correlations-title">
+              <h3 id="power-correlations-title"><Icon name="link" /> Les signaux qui se recoupent</h3>
+              <ul>
+                {comparison.correlations?.map((finding) => (
+                  <li key={finding.key}>
+                    <strong>{finding.title}</strong>
+                    <p>{finding.evidence}</p>
+                    <p className="faint">{finding.action}</p>
+                  </li>
+                ))}
+              </ul>
+              <p className="faint">Rapprochements statistiques, pas une preuve de causalité.</p>
+            </div>
           )}
           {comparison.spending_change_pct !== null && (
             <div className="purchasing-power-spending">
