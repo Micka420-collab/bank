@@ -65,6 +65,35 @@ La page Veille contient un deuxième outil, **Comparer les placements dans ta si
 
 Tests : `backend/tests/test_investment_compare.py` (calculs, limites, adéquation et authentification), `frontend/src/components/InvestmentComparator.test.tsx` (saisie volontaire et présentation des risques).
 
+### Inventaire réel des placements (sans double comptage)
+
+La section **Tes placements suivis**, ajoutée dans Veille au-dessus du comparateur, exploite uniquement les
+données déjà présentes dans Bank. L'API authentifiée `GET /api/watch/investments/holdings` ne provoque
+**aucun appel réseau**, aucun ordre de marché et aucune copie de secret.
+
+- **Comptes actifs de type épargne ou investissement** : compte/enveloppe, solde, devise, source et date du dernier
+  solde. Un compte `PEA` ou `assurance_vie` ne donne **pas** la composition des titres ou leurs DIC. Les soldes saisis
+  manuellement restent explicitement *non vérifiés* ; un solde périmé ou une date inconnue est signalé.
+- **Actifs hors comptes déclarés par l'utilisateur** : valeur déclarée mais non vérifiée. Une ligne de même type
+  qu'un compte suivi reçoit un avertissement de doublon possible : le service **n'additionne pas** les lignes.
+- **Cryptos déjà suivies** : quantités connues, cotation locale uniquement si positive, finie et datant de moins de
+  24 heures. Cours absent, périmé, invalide ou futur = **valorisation en euros inconnue**, jamais zéro inventé.
+  Les adresses des portefeuilles, clés et informations de plateforme privées ne figurent pas dans cette réponse.
+- **Pièces à vérifier** : chaque ligne distingue taux réglementé daté, valeur de portefeuille, frais et conditions
+  exactes qui nécessitent une fiche de produit, un DIC, une tarification ou une preuve de détention. Aucun
+  document déjà dans le coffre n'est associé automatiquement à un titre **sans identifiant fiable**.
+- **Passage au comparateur** : un clic explicite reprend le montant des seuls comptes datés non manuels ou cours
+  crypto récents pour préremplir une simulation. Aucune simulation n'est lancée automatiquement, aucune transaction.
+  Les valeurs déclarées, à prix ancien ou dans une devise sans conversion vérifiée sont exclues du raccourci.
+
+Tests : `backend/tests/test_investment_holdings.py` et
+`frontend/src/components/InvestmentHoldings.test.tsx`.
+
+**Limite volontaire** : ce n'est pas encore une intégration titre par titre (ISIN, parts de fonds, DIC officiel par
+produit, cours et frais du courtier). Pour la phase suivante, il faudra une identification confirmée du produit
+et un rapprochement revu par l'utilisateur entre fiche, portefeuille et justificatif, sans déduire ces données
+du seul libellé d'un compte bancaire.
+
 ### Prochain niveau
 
 Pour un modèle de pouvoir d'achat personnel plus précis, connecter l'IPC **par catégorie** avec version/source horodatée et pondérer les postes selon le panier réellement consommé, sans confondre dépenses et prix. Étendre ensuite la comparaison d'investissements à des **fiches de produits vérifiées** (DIC, frais, liquidité, fiscalité, risque, suivi des taux, simulations de pertes), sans promesse de rendement ni achat automatique.
