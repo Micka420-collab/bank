@@ -104,3 +104,14 @@ Une courte réflexion change selon les réponses mais **jamais le verdict financ
 Cette carte ne lance aucune commande ni paiement. En l'absence de compte courant relié ou importé, Bank ne prononce pas de verdict fiable et propose de renseigner les données. Son approche est à la fois pragmatique et respectueuse : un achat plaisir n'est pas interdit, et un achat nécessaire ne doit pas être minimisé.
 
 **Exemple :** « Je veux acheter des écouteurs à 240 € ; dis-moi si je peux les prendre ou raisonne-moi si c'est une mauvaise idée. »
+
+
+### Comparer avant d'acheter — trois verdicts réels
+
+Pour chaque achat chiffré, Bank calcule maintenant le diagnostic initial **et deux objectifs de prix hypothétiques** (-20 % et -40 %, quand le prix reste positif). Les trois passent **indépendamment par `decisions.purchase`**, et chacun possède son verdict, sa trésorerie projetée après achat et, le cas échéant, une date plus favorable. Aucun résultat ne provient d'une formule simplifiée dans le navigateur.
+
+L'interface affiche trois choix touch-friendly. Passer d'un objectif de prix à un autre modifie immédiatement le feu de prudence, le montant considéré, la marge de trésorerie, le budget journalier et l'alerte de découvert. La préférence ne se transmet pas au chat avant un clic sur « Aide-moi à décider » ou « Raisonne-moi ».
+
+**Important : -20 % et -40 % sont des prix cibles fictifs, pas de véritables promotions ou recommandations de vendeurs.** Pour un prix libre, l'ancien verdict reste affiché avec un avertissement « Recalculer avec Bank » ; aucun faux calcul n'est créé. Les valeurs des deux objectifs sont validées côté serveur (pourcentage dans une liste fermée, centimes cohérents avec le prix d'origine, verdict connu, montants et dates bornés), puis revalidées lors de la réouverture d'une conversation.
+
+Ce parcours peut conseiller de ne pas acheter même si un achat à bas prix est proposé, sans considérer le plaisir comme une faute. Tester avec « Je veux acheter un téléphone à 900 € : compare trois prix et raisonne-moi. »
