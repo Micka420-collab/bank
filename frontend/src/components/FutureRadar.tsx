@@ -35,7 +35,7 @@ export type RadarCryptoStress = {
   note: string;
 };
 export type RadarView = {
-  crypto_stress: RadarCryptoStress;
+  crypto_stress?: RadarCryptoStress;
   horizon_days: number;
   available: boolean;
   news_consent: boolean;
@@ -82,7 +82,7 @@ export function FutureRadar() {
           ))}
         </ul>
       )}
-      <section className="future-radar-crypto" aria-labelledby="radar-crypto-title">
+      {data.crypto_stress && <section className="future-radar-crypto" aria-labelledby="radar-crypto-title">
         <h3 id="radar-crypto-title"><Icon name="crypto" /> Tes investissements crypto · test de résistance</h3>
         {data.crypto_stress.tracked_count === 0 ? (
           <p className="muted">Aucun avoir crypto renseigné. <a href="#/crypto">Ajouter mes avoirs</a> pour explorer un scénario.</p>
@@ -101,7 +101,7 @@ export function FutureRadar() {
           </>
         )}
         <p className="faint">{data.crypto_stress.note}</p>
-      </section>
+      </section>}
       <div className="future-radar-context">
         <h3><Icon name="news" /> Actualités financières et internationales vérifiables</h3>
         {!data.news_consent ? <p className="muted">La veille réseau est désactivée. <a href="#/reglages">Donner ton accord dans Confidentialité</a> pour lire des sources publiques.</p> : data.macro_context.length === 0 ? <p className="muted">Aucun titre officiel récent indexé sur ces thèmes. L'absence de titre ne signifie pas que les marchés sont sans risque.</p> : (
