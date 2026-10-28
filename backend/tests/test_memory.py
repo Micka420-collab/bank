@@ -434,7 +434,16 @@ def test_a_model_without_tools_is_retried_and_remembered(app, world: TestClient)
     assert out["answer"] == "Sans outils, mais je réponds."
     assert (
         FakeLlm.calls[0]["tools"]
-        == ["can_i_buy", "plan_b", "retirement", "propose_actions", "show_chart", "draw_diagram", "ask_interactive", "show_budget_simulator"]
+        == [
+            "can_i_buy",
+            "plan_b",
+            "retirement",
+            "propose_actions",
+            "show_chart",
+            "draw_diagram",
+            "ask_interactive",
+            "show_budget_simulator",
+        ]
         and FakeLlm.calls[1]["tools"] == []
     )
     world.post("/api/assistant/ask", json={"question": "Encore"})
