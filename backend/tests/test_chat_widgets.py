@@ -307,9 +307,7 @@ def test_purchase_coach_tool_is_sourced_from_bank_not_model_data(monkeypatch: py
 
     def purchase_stub(db: object, today: date, *, amount_cents: int, label: str, category: str | None) -> PurchasePlan:
         called.append((amount_cents, label))
-        return replace(
-            purchase, amount_cents=amount_cents, this_month=replace(verdict, amount_cents=amount_cents)
-        )
+        return replace(purchase, amount_cents=amount_cents, this_month=replace(verdict, amount_cents=amount_cents))
 
     monkeypatch.setattr(assistant.decisions, "purchase", purchase_stub)
     ctx = assistant._ToolContext(None, "user", date(2026, 10, 28), 7, False)  # type: ignore[arg-type]
@@ -319,10 +317,10 @@ def test_purchase_coach_tool_is_sourced_from_bank_not_model_data(monkeypatch: py
     assert ctx.purchase_coach is not None
     assert ctx.purchase_coach["amount_cents"] == 35_000
     assert ctx.purchase_coach["answer"] == "oui_mais"
-    assert [
-        (p["discount_percent"], p["amount_cents"], p["answer"])
-        for p in ctx.purchase_coach["alternatives"]
-    ] == [(20, 28_000, "oui_mais"), (40, 21_000, "oui_mais")]
+    assert [(p["discount_percent"], p["amount_cents"], p["answer"]) for p in ctx.purchase_coach["alternatives"]] == [
+        (20, 28_000, "oui_mais"),
+        (40, 21_000, "oui_mais"),
+    ]
     assert ctx.blocks() == [ctx.purchase_coach]
     assert "error" in json.loads(assistant._execute_tool(ctx, "show_purchase_coach", '{"amount_eur":200}'))
     assert "error" in json.loads(
