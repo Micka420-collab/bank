@@ -184,7 +184,7 @@ def test_backups_are_visible_in_bank_scheduled_and_alert_on_failure(world: TestC
         and bad["level"] == "failed"
     )
     with app.state.sessionmaker() as db:
-        notices = svc.alerts(db, now=datetime(2026, 11, 1, 4, 0, tzinfo=UTC), public_url="https://bank.lan")
+        notices = svc.alerts(db, now=datetime(2026, 11, 9, 4, 0, tzinfo=UTC), public_url="https://bank.lan")
         assert len(notices) == 1 and notices[0][2] is True and "ne se relit pas" in notices[0][1]
         # Plus de 48 h sans sauvegarde réussie : alerte aussi.
         stale = svc.alerts(db, now=datetime(2026, 11, 4, 4, 0, tzinfo=UTC), public_url="https://bank.lan")
