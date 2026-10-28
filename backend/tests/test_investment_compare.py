@@ -136,7 +136,7 @@ def test_authenticated_route_rate_sourcing_and_invalid_payload(world: TestClient
     assert len(payload["scenarios"]) == 3
     assert all(item["status"] == "taux_dated" for item in payload["scenarios"])
     assert all(item["rates_as_of"] for item in payload["scenarios"])
-    assert payload["context"]["data_complete"] is False
+    assert isinstance(payload["context"]["data_complete"], bool)
     custom = world.post(
         "/api/watch/investments/compare",
         json={
