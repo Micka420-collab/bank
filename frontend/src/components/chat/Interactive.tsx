@@ -36,7 +36,7 @@ export function serializeWidgetAnswers(block: InteractiveBlock, values: Record<s
   return [`Mes réponses à « ${block.title} » :`, ...lines].join("\n").slice(0, 1950);
 }
 
-export function ChatInteractive({ block, onAsk }: { block: InteractiveBlock; onAsk: (prompt: string) => void }) {
+export function ChatInteractive({ block, onAsk, disabled = false }: { block: InteractiveBlock; onAsk: (prompt: string) => void; disabled?: boolean }) {
   const uid = useId();
   const [values, setValues] = useState<Record<string, Value>>(() =>
     Object.fromEntries(block.fields.map((f) => [f.id, initial(f)])),
@@ -51,7 +51,7 @@ export function ChatInteractive({ block, onAsk }: { block: InteractiveBlock; onA
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (sent) return;
+    if (sent || disabled) return;
     if (missing.length > 0) { setShowErrors(true); return; }
     const content = serializeWidgetAnswers(block, values);
     setSent(true);
@@ -74,7 +74,7 @@ export function ChatInteractive({ block, onAsk }: { block: InteractiveBlock; onA
           const value = values[field.id] ?? initial(field);
           const options = field.options ?? [];
           return (
-            <fieldset key={field.id} className="chat-interactive-field" disabled={sent}>
+            <fieldset key={field.id} className="chat-interactive-field" disabled={sent || disabled}>
               <legend>{field.label}{field.required && <span className="chat-required"> · obligatoire</span>}</legend>
               {field.kind === "single" && options.map((option, index) => (
                 <label className="chat-answer-choice" key={index} htmlFor={`${id}-${index}`}>
@@ -135,7 +135,7 @@ export function ChatInteractive({ block, onAsk }: { block: InteractiveBlock; onA
         ) : (
           <div className="chat-interactive-bottom">
             <p className="faint">Rien ne part tant que tu ne valides pas. Ce questionnaire n'agit pas sur tes comptes.</p>
-            <button className="btn sm" type="submit">{block.submit_label} <Icon name="arrow" /></button>
+            <button className="btn sm" type="submit" disabled={disabled}>{block.submit_label} <Icon name="arrow" /></button>
           </div>
         )}
       </form>
