@@ -15,7 +15,7 @@ from app.services.categories import category_infos
 
 def view(db: Session, today: date) -> dict[str, Any]:
     benchmark = {**domain.INSEE_2026_09}
-    published = date.fromisoformat(benchmark["published_on"])
+    published = date.fromisoformat(str(benchmark["published_on"]))
     benchmark["stale"] = (today - published).days > 60
     benchmark["note"] = (
         "Dernier IPC définitif documenté dans cette version de Bank. "
@@ -31,7 +31,7 @@ def view(db: Session, today: date) -> dict[str, Any]:
         }
     first = today.replace(day=1)
     history = analytics.load_txns(db, [a.id for a in accounts], add_months(first, -15))
-    comparison = domain.compare(history, category_infos(db), today, inflation_pct=benchmark["annual_pct"])
+    comparison = domain.compare(history, category_infos(db), today, inflation_pct=float(benchmark["annual_pct"]))
     return {
         "available": True,
         "benchmark": benchmark,
