@@ -993,11 +993,14 @@ def _execute_tool(ctx: _ToolContext, name: str, raw_args: str) -> str:
                 estimate = power_domain.real_yield_pct(*numbers)
             except (ValueError, TypeError, KeyError, OverflowError):
                 return json.dumps({"error": "Hypothèses chiffrées valides requises, rendement non garanti."})
-            return json.dumps({
-                **estimate,
-                "note": "Hypothèse annuelle, non une cotation ou une offre. Ne recommande pas "
-                "d'investissement sans vérifier la liquidité, le risque et l'épargne de précaution.",
-            }, ensure_ascii=False)
+            return json.dumps(
+                {
+                    **estimate,
+                    "note": "Hypothèse annuelle, non une cotation ou une offre. Ne recommande pas "
+                    "d'investissement sans vérifier la liquidité, le risque et l'épargne de précaution.",
+                },
+                ensure_ascii=False,
+            )
         return json.dumps({"error": "mode attendu : salary ou yield."}, ensure_ascii=False)
     if name == "plan_b":
         raw_pct = args.get("drop_percent", planb_domain.DEFAULT_DROP)
