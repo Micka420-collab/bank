@@ -530,6 +530,8 @@ def test_monetary_policy_watch_is_sourced_and_radar_separates_macro_from_forecas
     assert radar.status_code == 200
     view = radar.json()
     assert view["horizon_days"] == 45
-    assert any(item["title"] == news[0] and item["source"].startswith("Banque centrale") for item in view["macro_context"])
+    assert any(
+        item["title"] == news[0] and item["source"].startswith("Banque centrale") for item in view["macro_context"]
+    )
     assert "cause à effet" in view["disclaimer"]
     assert "signals" in view and isinstance(view["signals"], list)
