@@ -10805,3 +10805,27 @@ label {
   background: var(--surface); border-left: 3px solid var(--warning); }
 .purchasing-power-correlations strong { font-size: var(--t-sm); }
 .purchasing-power-correlations p { font-size: var(--t-sm); margin: 0.4rem 0 0; }
+
+/* Les rendements ne sont jamais une hiérarchie : chaque scénario montre ses propres conditions. */
+.investment-comparator-form, .investment-comparator-market { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: 0.75rem; align-items: end; }
+.investment-comparator-form { padding: 1rem; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface-2); }
+.investment-comparator-form label, .investment-comparator-market label { display: grid; gap: 0.4rem; font-size: var(--t-sm); }
+.investment-comparator-form input:not([type="checkbox"]) { width: 100%; }
+.investment-comparator-market { grid-column: 1 / -1; background: var(--surface); border-radius: var(--r-control); padding: 0.85rem; }
+.investment-comparator-switch { grid-column: 1 / -1; display: flex !important; align-items: center; gap: 0.65rem; }
+.investment-comparator-results { display: grid; gap: 0.85rem; margin-top: 1rem; }
+.investment-comparator-context { background: var(--surface-2); border: 1px solid var(--line); padding: 1rem; border-radius: var(--r-control); }
+.investment-comparator-context p { margin: 0.5rem 0 0; }
+.investment-comparator-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: 0.85rem; }
+.investment-comparator-card { display: grid; align-content: start; gap: 0.75rem; padding: 1rem; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface); box-shadow: var(--shadow-1); }
+.investment-comparator-card h3 { margin: 0; font-size: var(--t-md); }
+.investment-comparator-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap; }
+.investment-comparator-card p { margin: 0; font-size: var(--t-sm); }
+.investment-comparator-numbers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.investment-comparator-numbers div { display: grid; gap: 0.25rem; padding: 0.65rem; border-radius: var(--r-control); background: var(--surface-2); min-width: 0; }
+.investment-comparator-numbers span { font-size: var(--t-xs); color: var(--ink-2); }
+.investment-comparator-numbers strong { font-size: var(--t-md); overflow-wrap: anywhere; }
+.investment-comparator-blockers, .investment-comparator-cautions { margin: 0; padding: 0 0 0 1.1rem; font-size: var(--t-sm); }
+.investment-comparator-blockers { color: var(--negative); }
+.investment-comparator-cautions { color: var(--warning); }
+.investment-comparator-stress { color: var(--warning); font-weight: 600; }
