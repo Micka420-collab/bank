@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -65,7 +65,7 @@ def build_signals(y: yd.YearAhead, *, today: date, buffer_cents: int = 0) -> lis
                 "confidence": "declared" if spike.source in ("planned", "custom") else "estimated",
             }
         )
-    out.sort(key=lambda row: (row["level"] != "risk", row["on"], -int(row["amount_cents"])))
+    out.sort(key=lambda row: (row["level"] != "risk", row["on"], -cast(int, row["amount_cents"])))
     return out[:MAX_SIGNALS]
 
 
