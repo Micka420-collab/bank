@@ -87,6 +87,46 @@ describe("coach d'achat dans le chat", () => {
     expect(buttons[1]!.disabled).toBe(true);
   });
 
+  it("compares three Bank-calculated price targets without inventing offers or sending early", async () => {
+    const withOptions: PurchaseCoachBlock = {
+      ...card,
+      alternatives: [
+        {
+          discount_percent: 20, amount_cents: 28_000, answer: "oui_mais",
+          headline: "Encore une petite marge", after: {
+            ...card.after, lowest_cents: 13_000, per_day_cents: 2_100, overdraft_date: null,
+          }, best_date: null,
+        },
+        {
+          discount_percent: 40, amount_cents: 21_000, answer: "oui",
+          headline: "Compatible avec le budget", after: {
+            ...card.after, lowest_cents: 21_000, per_day_cents: 2_800, overdraft_date: null,
+          }, best_date: null,
+        },
+      ],
+    };
+    await render(withOptions);
+    const options = [...host.querySelectorAll<HTMLButtonElement>(".chat-purchase-options button")];
+    expect(options).toHaveLength(3);
+    expect(host.querySelector(".chat-purchase-comparison")?.textContent).toContain("pas des offres disponibles");
+    expect(options[0]!.getAttribute("aria-pressed")).toBe("true");
+    expect(ask).not.toHaveBeenCalled();
+    await click(options[2]!);
+    expect(options[2]!.getAttribute("aria-pressed")).toBe("true");
+    expect(host.querySelector(".chat-purchase-verdict")?.textContent).toContain("Budget compatible");
+    expect(host.querySelector(".chat-purchase-metrics")?.textContent).toContain(money(21_000));
+    expect(host.querySelector(".chat-purchase-path")?.textContent).toContain(money(14_000));
+    expect(ask).not.toHaveBeenCalled();
+    await click(host.querySelectorAll<HTMLButtonElement>(".chat-purchase-buttons button")[1]!);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(ask.mock.calls[0]![0]).toContain("objectif de prix hypothétique à -40 %");
+    expect(ask.mock.calls[0]![0]).toContain("Prix évalué par Bank : " + money(21_000));
+    await click(options[0]!);
+    expect(host.querySelector(".chat-purchase-verdict")?.textContent).toContain("Possible, mais attention");
+    expect(host.querySelector(".chat-purchase-metrics")?.textContent).toContain(money(8_000));
+    expect(host.querySelector<HTMLButtonElement>(".chat-purchase-buttons button")?.disabled).toBe(false);
+  });
+
   it("changing the price shows that the old verdict is stale and requests a fresh Bank calculation", async () => {
     await render();
     const input = host.querySelector<HTMLInputElement>('input[type="number"]')!;
