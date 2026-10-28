@@ -28,6 +28,8 @@ ECO = "https://www.economie.gouv.fr/rss/toutesactualites"
 PYPI = "https://pypi.org/rss/project/openfisca-france/releases.xml"
 SERVICE_PUBLIC = "https://www.service-public.gouv.fr/abonnements/rss/actu-actualites-particuliers.rss"
 ECB = "https://www.ecb.europa.eu/rss/press.html"
+EU_COUNCIL = "https://www.consilium.europa.eu/en/rss/pressreleases.ashx"
+EU_FINANCE = "https://finance.ec.europa.eu/node/2/rss_en"
 SP_FEED = (Path(__file__).parent / "fixtures" / "calendrier" / "service_public_actualites.rss").read_bytes()
 
 
@@ -88,6 +90,8 @@ def fetcher(app, world: TestClient) -> FakeFetcher:  # type: ignore[no-untyped-d
     fake.serve(PYPI, ENGINE)
     fake.serve(SERVICE_PUBLIC, rss())  # flux vide ici ; son vrai contenu a son propre test
     fake.serve(ECB, rss())  # relai financier officiel, vide par défaut pour les autres scénarios
+    fake.serve(EU_COUNCIL, rss())
+    fake.serve(EU_FINANCE, rss())
     app.state.watch_fetcher = fake
     app.state.watch_resolver = lambda host: ["93.184.216.34"]
     return fake
