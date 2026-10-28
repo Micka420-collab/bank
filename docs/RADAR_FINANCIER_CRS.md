@@ -40,6 +40,23 @@ Il ne faut pas étiqueter une banque « non-CRS » à partir de son IBAN ou de s
 - [impots.gouv.fr : déclaration des comptes étrangers, formulaire 3916](https://www.impots.gouv.fr/formulaire/3916/declaration-par-un-resident-dun-compte-letranger-ou-dun-contrat-de-capitalisation-o)
 - [Meta : politique de messagerie WhatsApp Business](https://whatsappbusiness.com/policy/)
 
+## Pouvoir d'achat du salaire et rentabilité réelle des placements
+
+L'écran Veille inclut désormais l'observatoire **Salaire, pouvoir d'achat et placements** :
+
+- Source d'inflation : dernier IPC **définitif** documenté à la création du module, **septembre 2026 : +3,1 % sur douze mois**, publié le 15 octobre 2026 par l'Insee ([source](https://www.insee.fr/fr/statistiques/9080209)). Cette version **n'extrait pas automatiquement** les prochaines valeurs : date et lien sont visibles, et le résultat est signalé comme ancien après 60 jours. Ce taux est un repère national, pas l'inflation personnelle exacte.
+- Le moteur prend les relevés des **comptes courants budgétaires** déjà connectés, ignore les virements internes et les dépenses d'épargne, et compare les **trois derniers mois civils terminés** aux **mêmes trois mois un an plus tôt**. Il exige six mois de salaires classés « salaire » : sinon il n'invente ni baisse ni hausse de revenus. Il affiche revenus observés, hausse nominale, variation de salaire réel (formule multiplicative), salaire nécessaire pour suivre le repère IPC et écart mensuel indicatif.
+- Le **poids des dépenses** par rapport au salaire, les dépenses par mois et les catégories qui ont réellement augmenté sont affichés séparément : une hausse des courses n'est **pas automatiquement** une hausse des prix, car quantité, composition du panier et achats exceptionnels peuvent changer.
+- Une alerte proactive (canaux déjà approuvés, heures calmes, clés anti-doublons) est éligible seulement lorsque les données des salaires sont complètes, que le repère n'est pas vieux et que le recul réel annuel dépasse 2 % **et** environ 50 €/mois. L'alerte n'inclut aucun salaire en euros en modes confidentialité restreints.
+- Le calculateur **rendement réel** permet de saisir un rendement annuel *supposé*, des frais *supposés*, une fiscalité simplifiée sur gains et une inflation de comparaison. Le serveur calcule un rendement nominal net puis un rendement réel composé. Aucune hypothèse n'est envoyée automatiquement : le calcul ne part qu'après clic. Une fiscalité réelle varie avec les produits et enveloppes.
+- Pour **choisir** une solution de placement, le plan existant `GET /api/decisions/investment-plan` reste prioritaire : coussin de sécurité, dette chère, projet daté, horizon et profil de risque. La simulation ne recommande ni ticker ni produit vendu et n'exécute aucune transaction.
+
+Références pédagogiques : [AMF — objectifs et horizon](https://www.amf-france.org/fr/espace-epargnants/savoir-bien-investir/cadrer-son-projet/definir-son-objectif), [AMF — rendement, risque et inflation](https://www.amf-france.org/fr/espace-epargnants/savoir-bien-investir/cadrer-son-projet/risques-et-rendements-des-placements).
+
+### Prochain niveau
+
+Pour un modèle de pouvoir d'achat personnel plus précis, connecter l'IPC **par catégorie** avec version/source horodatée et pondérer les postes selon le panier réellement consommé, sans confondre dépenses et prix. Étendre ensuite la comparaison d'investissements à des **fiches de produits vérifiées** (DIC, frais, liquidité, fiscalité, risque, suivi des taux, simulations de pertes), sans promesse de rendement ni achat automatique.
+
 ## Points à développer après validation de cette première version
 
 1. Relier **les positions d'investissement réellement identifiées** (types d'actifs, devise, exposition, horizon) à des facteurs de risque documentés. Ne pas traiter une actualité « intéressante » comme une preuve de corrélation sur le portefeuille.
