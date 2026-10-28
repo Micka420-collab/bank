@@ -86,3 +86,21 @@ La sortie structurée est allowlistée (`decision_board`, points consécutifs d'
 ### Scénario de démonstration
 
 Demander au chat : « Compare trois façons d'améliorer mon budget avec un sondage qui met à jour ton graphique et mon plan. » L'IA doit appeler `show_decision_board`. Cliquer sur « Progressif · 25 % » actualise immédiatement la courbe et la checklist ; cocher une tâche actualise son compteur ; sélectionner « Intensif · 50 % » met à jour les deux vues et réinitialise les cases ; enfin seulement, cliquer sur « En discuter avec Bank » transmet le récapitulatif.
+
+
+## Coach d'achat — oui, attente ou raisonner sans culpabiliser
+
+Quand la personne demande « Est-ce que je peux acheter ce vélo à 350 € ? », l'assistant web dispose de `show_purchase_coach`, basé sur **le même moteur `decisions.purchase` que `can_i_buy`**. Il reçoit `amount_eur` et un libellé, mais aucun verdict libre ni chiffre proposé par le modèle.
+
+Le bloc `purchase_coach` récapitule le verdict de Bank (`oui`, `oui_mais`, `attendre`, `plus_tard`, `hors_de_portee`), le point bas de trésorerie *avant et après l'achat*, le budget quotidien restant, une date plus favorable si elle a été calculée et jusqu'à deux chemins d'épargne. Les données sont strictement validées côté serveur et revalidées au chargement.
+
+Pour aider à décider plutôt que moraliser, un questionnaire **local** demande :
+- « C'est nécessaire / utile / pour me faire plaisir / sur un coup de tête ? »
+- « Je le veux maintenant / je peux prendre mon temps / je ne sais pas » et « Je pourrais attendre 48 heures ».
+- Éventuellement, un nouveau prix (pour regarder une alternative moins chère).
+
+Une courte réflexion change selon les réponses mais **jamais le verdict financier**. Si le prix change, le verdict précédent reste identifié comme celui de l'ancien montant : il faut cliquer sur « Recalculer avec Bank », puis l'assistant exécute de nouveau `show_purchase_coach`. Aucun calcul basé sur un nouveau prix n'est fabriqué dans le navigateur.
+
+Cette carte ne lance aucune commande ni paiement. En l'absence de compte courant relié ou importé, Bank ne prononce pas de verdict fiable et propose de renseigner les données. Son approche est à la fois pragmatique et respectueuse : un achat plaisir n'est pas interdit, et un achat nécessaire ne doit pas être minimisé.
+
+**Exemple :** « Je veux acheter des écouteurs à 240 € ; dis-moi si je peux les prendre ou raisonne-moi si c'est une mauvaise idée. »
