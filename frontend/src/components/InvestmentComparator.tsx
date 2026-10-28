@@ -1,5 +1,5 @@
 // Comparateur : capital et horizon identiques, performances fictives non présentées comme des cours.
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api, useApi } from "../api";
 import { money } from "../format";
 import { Icon } from "./Icon";
@@ -29,7 +29,7 @@ type Comparison = {
   scenarios: Scenario[]; note: string;
 };
 
-export function InvestmentComparator() {
+export function InvestmentComparator({ suggestedCapitalCents }: { suggestedCapitalCents?: number | null }) {
   const index = useApi<SalaryPowerView>("/api/watch/purchasing-power");
   const [capital, setCapital] = useState("1000");
   const [months, setMonths] = useState("60");
@@ -42,6 +42,14 @@ export function InvestmentComparator() {
   const [lock, setLock] = useState("0");
   const [result, setResult] = useState<Comparison | null>(null);
   const [busy, error, run] = useAsyncAction();
+  useEffect(() => {
+    if (suggestedCapitalCents !== null && suggestedCapitalCents !== undefined
+      && suggestedCapitalCents >= 10_000 && suggestedCapitalCents <= 100_000_000) {
+      setCapital(String(suggestedCapitalCents / 100));
+      setResult(null);
+    }
+  }, [suggestedCapitalCents]);
+
   const reference = index.data?.benchmark;
   const currentInflation = inflation === "" ? String(reference?.annual_pct ?? 0) : inflation;
   const valid = [capital, months, currentInflation, ...(includeMarket ? [gross, fees, tax, loss, lock] : [])]
