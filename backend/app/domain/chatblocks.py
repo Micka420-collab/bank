@@ -410,6 +410,50 @@ def purchase_coach_block(raw: Mapping[str, Any]) -> dict[str, Any]:
             best_date = date.fromisoformat(str(best_date)).isoformat()
         except ValueError as exc:
             raise BlockError("Date d'achat invalide") from exc
+    alternatives_raw = raw.get("alternatives", [])
+    if not isinstance(alternatives_raw, list):
+        raise BlockError("Comparaisons de prix invalides")
+    alternatives = []
+    seen_discounts: set[int] = set()
+    for candidate in alternatives_raw[:2]:
+        if not isinstance(candidate, Mapping):
+            raise BlockError("Comparaison de prix invalide")
+        discount = candidate.get("discount_percent")
+        if not isinstance(discount, int) or isinstance(discount, bool) or discount not in (20, 40):
+            raise BlockError("Réduction hypothétique invalide")
+        price = candidate.get("amount_cents")
+        expected = amount * (100 - discount) // 100
+        if (
+            discount in seen_discounts
+            or expected < 1
+            or not isinstance(price, int)
+            or isinstance(price, bool)
+            or price != expected
+        ):
+            raise BlockError("Prix hypothétique incohérent")
+        verdict = candidate.get("answer")
+        if not isinstance(verdict, str) or verdict not in PURCHASE_ANSWERS:
+            raise BlockError("Verdict de comparaison invalide")
+        alt_check = candidate.get("this_month", candidate)
+        if not isinstance(alt_check, Mapping) or not isinstance(alt_check.get("after"), Mapping):
+            raise BlockError("Prévision alternative absente")
+        alt_date = alt_check.get("best_date")
+        if alt_date is not None:
+            try:
+                alt_date = date.fromisoformat(str(alt_date)).isoformat()
+            except ValueError as exc:
+                raise BlockError("Date alternative invalide") from exc
+        alternatives.append(
+            {
+                "discount_percent": discount,
+                "amount_cents": price,
+                "answer": verdict,
+                "headline": clean(candidate.get("headline"), 180),
+                "after": snapshot(alt_check["after"]),
+                "best_date": alt_date,
+            }
+        )
+        seen_discounts.add(discount)
     paths = raw.get("paths", [])
     if not isinstance(paths, list):
         raise BlockError("Chemins d'épargne invalides")
@@ -438,6 +482,7 @@ def purchase_coach_block(raw: Mapping[str, Any]) -> dict[str, Any]:
         "after": snapshot(after),
         "best_date": best_date,
         "paths": options,
+        "alternatives": alternatives,
         "explanation": clean(raw.get("explanation"), 360),
         "source": "Bank · prévision et plan d'épargne",
     }
