@@ -1318,6 +1318,14 @@ export type InteractiveField = {
   min?: number;
   max?: number;
 };
+export type ScenarioBlock = {
+  type: "scenario";
+  title: string;
+  source: string;
+  points: { date: string; balance_cents: number }[];
+  daily_savings_cap_cents: number;
+  expense_cap_cents: number;
+};
 export type InteractiveBlock = {
   type: "interactive";
   kind: "poll" | "checklist" | "form";
@@ -1332,6 +1340,7 @@ export type ChatBlock =
   | { type: "chart"; kind: "donut" | "bars" | "pairs" | "line"; title: string; unit: "eur" | "pct" | "kwh" | "count"; items: ChartItem[]; source: string; dataset: string }
   | { type: "diagram"; kind: "flow" | "steps"; title: string; nodes: { id: string; label: string; note?: string }[]; edges: { from: string; to: string; label?: string }[] }
   | InteractiveBlock
+  | ScenarioBlock
   | { type: "sources"; query: string; items: { n: number; title: string; url: string; host: string; snippet: string; date: string }[] }
   | { type: "note"; tone: "info" | "warning"; text: string };
 export type AssistantOpening = {
