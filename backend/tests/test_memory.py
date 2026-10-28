@@ -314,6 +314,7 @@ def test_without_consent_nothing_is_learned_and_the_conversation_vanishes(app, w
     first = FakeLlm.calls[-1]
     assert first["tools"] == [
         "can_i_buy",
+        "analyze_purchasing_power",
         "plan_b",
         "retirement",
         "propose_actions",
@@ -350,6 +351,7 @@ def test_live_memory_writes_are_visible_and_the_snapshot_stays_frozen(app, world
         "memory",
         "recall",
         "can_i_buy",
+        "analyze_purchasing_power",
         "plan_b",
         "retirement",
         "propose_actions",
@@ -400,7 +402,8 @@ def test_refused_writes_are_explained_then_bounded(app, world: TestClient) -> No
 
 def test_tool_rounds_are_bounded_and_caps_checked_between_them(world: TestClient) -> None:
     configure(world, daily_calls_cap=50)
-    loop = tool_call("can_i_buy", json.dumps({"amount_eur": 10, "label": "Livre"}))
+    loop = tool_call("can_i_buy",
+        "analyze_purchasing_power", json.dumps({"amount_eur": 10, "label": "Livre"}))
     FakeLlm.script = [loop] * 6
     out = world.post("/api/assistant/ask", json={"question": "Je peux ?"}).json()
     assert len(FakeLlm.calls) == 5 and out["tools"] == ["can_i_buy"] * 4  # 4 tours d'outils puis une réponse
@@ -414,7 +417,8 @@ def test_tool_rounds_are_bounded_and_caps_checked_between_them(world: TestClient
     assert r.status_code == 429 and len(FakeLlm.calls) == 2
     assert world.get("/api/assistant/conversations").json()[0]["title"] == "Je peux ?"
     for bad in ('{"amount_eur": "beaucoup"}', '{"amount_eur": -5}'):
-        FakeLlm.script, FakeLlm.calls = [tool_call("can_i_buy", bad), answer("ok")], []
+        FakeLlm.script, FakeLlm.calls = [tool_call("can_i_buy",
+        "analyze_purchasing_power", bad), answer("ok")], []
         world.patch("/api/assistant", json={"daily_calls_cap": 500})
         world.post("/api/assistant/ask", json={"question": "Et ça ?"})
         assert "error" in json.loads(FakeLlm.calls[1]["messages"][-1]["content"])
@@ -430,7 +434,8 @@ def test_a_model_without_tools_is_retried_and_remembered(app, world: TestClient)
     assert out["answer"] == "Sans outils, mais je réponds."
     assert (
         FakeLlm.calls[0]["tools"]
-        == ["can_i_buy", "plan_b", "retirement", "propose_actions", "show_chart", "draw_diagram"]
+        == ["can_i_buy",
+        "analyze_purchasing_power", "plan_b", "retirement", "propose_actions", "show_chart", "draw_diagram"]
         and FakeLlm.calls[1]["tools"] == []
     )
     world.post("/api/assistant/ask", json={"question": "Encore"})
@@ -552,6 +557,7 @@ def test_aggregates_privacy_turns_memory_off(world: TestClient) -> None:
     out = world.post("/api/assistant/ask", json={"question": "Bonjour"}).json()
     assert out["memory_on"] is False and FakeLlm.calls[-1]["tools"] == [
         "can_i_buy",
+        "analyze_purchasing_power",
         "plan_b",
         "retirement",
         "propose_actions",
@@ -585,6 +591,7 @@ def test_revoking_consent_stops_memory_mid_conversation(world: TestClient) -> No
     out2 = world.post("/api/assistant/ask", json={"question": "Et ?", "conversation_id": out["conversation_id"]})
     assert out2.json()["memory_on"] is False and FakeLlm.calls[-1]["tools"] == [
         "can_i_buy",
+        "analyze_purchasing_power",
         "plan_b",
         "retirement",
         "propose_actions",
