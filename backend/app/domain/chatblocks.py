@@ -335,8 +335,7 @@ def scenario_block(raw: Mapping[str, Any]) -> dict[str, Any]:
         except ValueError as exc:
             raise BlockError("Date invalide") from exc
         value = point.get("balance_cents")
-        if (not isinstance(value, int) or isinstance(value, bool) or
-                abs(value) > MAX_SCENARIO_BALANCE_CENTS):
+        if not isinstance(value, int) or isinstance(value, bool) or abs(value) > MAX_SCENARIO_BALANCE_CENTS:
             raise BlockError("Solde invalide")
         if previous is not None and (day <= previous or (day - previous).days != 1):
             raise BlockError("Dates de la prévision non consécutives")
