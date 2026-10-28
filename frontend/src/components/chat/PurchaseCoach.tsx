@@ -69,7 +69,7 @@ export function ChatPurchaseCoach({ block, onAsk, disabled = false }: {
     && targetPrice > 0 && targetPrice <= 10_000_000;
   const changedPrice = validPrice && Math.round(targetPrice * 100) !== block.amount_cents;
   const invalidPrice = alternatePrice.trim().length > 0 && !validPrice;
-  const finalMessage = (recalculate: boolean) => {
+  const finalMessage = (recalculate: boolean, challenge = false) => {
     if (disabled || sent || invalidPrice) return;
     const answers = [
       `Je réfléchis à l'achat « ${block.label} ».`,
@@ -79,9 +79,14 @@ export function ChatPurchaseCoach({ block, onAsk, disabled = false }: {
       `Nature de l'achat : ${({ essential: "indispensable", useful: "utile", pleasure: "plaisir", impulse: "impulsif" } as const)[why]}.`,
       `Urgence : ${({ today: "j'en ai envie aujourd'hui", later: "ça peut attendre", unsure: "je ne sais pas" } as const)[urgency]}.`,
       `Je peux patienter : ${canWait ? "oui" : "non"}.`,
-      "Aide-moi à décider raisonnablement, sans culpabiliser, avec les vrais chiffres de Bank. " +
-      "Si le prix change, recalcule la prévision via show_purchase_coach avant de donner un nouveau verdict. " +
-      "Ne considère pas l'achat comme effectué.",
+      challenge
+        ? "Je veux que tu me raisonnes si cet achat est peu judicieux : donne-moi des arguments concrets "
+          + "fondés sur mon budget, le coût d'opportunité et la possibilité d'attendre. "
+          + "Propose une alternative réaliste, sans jugement ni culpabilisation. "
+          + "Si mes finances le permettent réellement, dis-le aussi franchement."
+        : "Aide-moi à décider raisonnablement, sans culpabiliser, avec les vrais chiffres de Bank.",
+      "Si le prix change, recalcule la prévision via show_purchase_coach avant de donner un nouveau verdict. "
+      + "Ne considère pas l'achat comme effectué.",
     ];
     onAsk(answers.join("\n"));
     setSent(true);
@@ -99,6 +104,11 @@ export function ChatPurchaseCoach({ block, onAsk, disabled = false }: {
         <div><strong>{verdict.title}</strong><p>{block.headline}</p></div>
       </div>
       <p className="chat-purchase-advice">{verdict.advice}</p>
+      {block.after.overdraft_date && (
+        <p className="chat-scenario-warning" role="status">
+          <Icon name="alert" /> Cet achat pourrait entraîner un découvert dès le {shortDate(block.after.overdraft_date)}.
+        </p>
+      )
       <div className="chat-purchase-metrics">
         <div><span>Point bas sans cet achat</span><strong>{money(block.before.lowest_cents)}</strong></div>
         <div><span>Point bas après cet achat</span><strong>{money(block.after.lowest_cents)}</strong></div>
@@ -170,6 +180,12 @@ export function ChatPurchaseCoach({ block, onAsk, disabled = false }: {
                   onClick={() => finalMessage(Boolean(changedPrice))}>
             <Icon name="arrow" /> {changedPrice ? "Recalculer avec Bank" : "Aide-moi à décider"}
           </button>
+          {!changedPrice && (
+            <button type="button" className="btn sm secondary" disabled={disabled || sent || invalidPrice}
+                    onClick={() => finalMessage(false, true)}>
+              <Icon name="shield" /> Raisonne-moi
+            </button>
+          )}
         </div>
         <p className="faint">Aucune commande, aucun paiement. Les réponses sont envoyées uniquement si tu cliques.</p>
       </div>
