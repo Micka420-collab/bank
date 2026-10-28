@@ -346,19 +346,20 @@ TOOL_INTERACTIVE: dict[str, Any] = {
                 "description": {"type": "string", "maxLength": 240},
                 "submit_label": {"type": "string", "maxLength": 32},
                 "fields": {
-                    "type": "array", "minItems": 1, "maxItems": 6,
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 6,
                     "items": {
                         "type": "object",
                         "properties": {
                             "id": {"type": "string", "maxLength": 24},
                             "label": {"type": "string", "maxLength": 60},
-                            "kind": {"type": "string", "enum": [
-                                "single", "multiple", "text", "number", "boolean", "scale"
-                            ]},
+                            "kind": {
+                                "type": "string",
+                                "enum": ["single", "multiple", "text", "number", "boolean", "scale"],
+                            },
                             "required": {"type": "boolean"},
-                            "options": {"type": "array", "maxItems": 8, "items": {
-                                "type": "string", "maxLength": 60
-                            }},
+                            "options": {"type": "array", "maxItems": 8, "items": {"type": "string", "maxLength": 60}},
                             "min": {"type": "integer", "minimum": 0, "maximum": 100},
                             "max": {"type": "integer", "minimum": 1, "maximum": 100},
                         },
@@ -872,10 +873,15 @@ def _tool_interactive(ctx: _ToolContext, args: dict[str, Any]) -> str:
     except blocks.BlockError as exc:
         return json.dumps({"error": str(exc)}, ensure_ascii=False)
     ctx.interactive = result
-    return json.dumps({
-        "done": True, "kind": result["kind"], "questions": len(result["fields"]),
-        "note": "Le widget est affiché. Ne devine pas les réponses ; l'utilisateur doit le remplir et valider.",
-    }, ensure_ascii=False)
+    return json.dumps(
+        {
+            "done": True,
+            "kind": result["kind"],
+            "questions": len(result["fields"]),
+            "note": "Le widget est affiché. Ne devine pas les réponses ; l'utilisateur doit le remplir et valider.",
+        },
+        ensure_ascii=False,
+    )
 
 
 def _tool_search(ctx: _ToolContext, args: dict[str, Any]) -> str:
