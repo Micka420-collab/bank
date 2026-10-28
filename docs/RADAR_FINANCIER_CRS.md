@@ -8,9 +8,15 @@ L'objectif est de croiser les échéances déjà connues, la trésorerie prévis
 
 - **Radar des 45 prochains jours** (`GET /api/watch/radar`, authentifié) : rapproche les dépenses prévues et les récurrences détectées avec le solde estimé **du mois correspondant**, dont le calcul est effectué par `yearahead.compute`. Un mois se terminant sous le matelas de sécurité déclenche une mention « Marge à surveiller », sinon « Dépense à prévoir ».
 - **Données vérifiables** : date, montant, base du rapprochement, nature « saisi » ou « estimé », solde mensuel prévu. Exclut les impôts estimés sans date certaine, les événements trop éloignés et les petits montants. Sans compte courant budgétaire, pas de fausse prévision.
-- **Informations du monde** : flux RSS officiels de la BCE, du Conseil de l'UE, de la Commission européenne, du ministère français de l'Économie et de Service Public. Les flux passent par le fetcher SSRF-protected déjà présent, avec horodatage, détection de versions et consentement de veille. Le radar n'affiche que les articles officiels pertinents pour les thèmes marchés, géopolitique ou transparence, publiés dans les 14 derniers jours.
+- **Informations du monde** : flux RSS officiels de la BCE, de la Réserve fédérale américaine (décisions monétaires), du Conseil de l'UE, de la Commission européenne, du ministère français de l'Économie et de Service Public. Les flux passent par le fetcher SSRF-protected déjà présent, avec horodatage, détection de versions et consentement de veille. Le radar n'affiche que les articles officiels pertinents pour les thèmes marchés, géopolitique ou transparence, publiés dans les 14 derniers jours.
 - **Information et non influence** : un titre ne devient ni une prévision de cours, ni une promesse de rendement. Pas d'inférence « cet article va faire baisser ton ETF » sans positions identifiées, exposition mesurée et données de prix validées.
 - **Messageries existantes** : les dépenses **saisies explicitement** et susceptibles de faire passer le mois sous la marge de sécurité peuvent alimenter les alertes du service `channel_alerts`. Le mécanisme existant exige un canal configuré, l'autorisation de recevoir ses alertes, respecte les heures calmes et évite les envois multiples avec une clé stable. Les pics déjà envoyés par `yearahead.alerts` ne sont pas répétés par le nouveau radar.
+
+### Investissements : première sensibilité documentée
+
+Bank peut maintenant récupérer **les avoirs crypto déjà connus** et les **dernières cotations en euros** dans son propre stockage. Le radar calcule l'impact arithmétique de **chocs hypothétiques de -10 % et -25 %** sur les actifs avec un cours âgé de 48 heures au plus. Les actifs sans prix fiable ou trop ancien sont écartés du montant utilisé et signalés explicitement. Ces deux chocs ne sont ni des prévisions, ni des probabilités, ni une recommandation de vente.
+
+Cette version ne sait pas encore relier chaque ETF, action, obligation ou placement aux entreprises, devises et pays sous-jacents. Le tableau des titres publics reste volontairement séparé des projections de perte afin d'éviter une causalité fabriquée. Le suivi des actifs reste en lecture seule.
 
 ### WhatsApp : limite de livraison importante
 
