@@ -319,7 +319,7 @@ def interactive_block(raw: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-# ------------------------------------------------------------------ simulateur : montants calculés par Bank, pas par le modèle
+# ------------------------------------------------------------------ simulateur : montants de Bank
 def scenario_block(raw: Mapping[str, Any]) -> dict[str, Any]:
     """L'IA peut demander un simulateur mais ne fournit jamais la courbe ni les calculs."""
     points = raw.get("points")
