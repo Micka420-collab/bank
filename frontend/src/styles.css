@@ -10795,3 +10795,13 @@ label {
   .purchasing-power-yield form { grid-template-columns: 1fr; }
   .purchasing-power-yield-result { grid-template-columns: 1fr; }
 }
+
+/* Rapprochements explicables : deux constats mesurés sans lien causal fabriqué. */
+.purchasing-power-correlations { margin: 0.85rem 0; padding: 0.95rem; border-radius: var(--r-card);
+  border: 1px solid var(--line); background: var(--surface-2); }
+.purchasing-power-correlations h3 { display: flex; align-items: center; gap: 0.45rem; font-size: var(--t-md); }
+.purchasing-power-correlations ul { display: grid; gap: 0.65rem; list-style: none; padding: 0; margin: 0.75rem 0 0; }
+.purchasing-power-correlations li { border-radius: var(--r-control); padding: 0.75rem;
+  background: var(--surface); border-left: 3px solid var(--warning); }
+.purchasing-power-correlations strong { font-size: var(--t-sm); }
+.purchasing-power-correlations p { font-size: var(--t-sm); margin: 0.4rem 0 0; }
