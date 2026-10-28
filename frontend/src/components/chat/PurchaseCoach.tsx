@@ -62,20 +62,33 @@ export function ChatPurchaseCoach({ block, onAsk, disabled = false }: {
   const [urgency, setUrgency] = useState<Urgency>("unsure");
   const [canWait, setCanWait] = useState(true);
   const [alternatePrice, setAlternatePrice] = useState("");
+  const [selectedDiscount, setSelectedDiscount] = useState<0 | 20 | 40>(0);
   const [sent, setSent] = useState(false);
-  const verdict = VERDICTS[block.answer];
+  const selectedAlternative = block.alternatives?.find((item) => item.discount_percent === selectedDiscount);
+  const selected = selectedAlternative ?? block;
+  const verdict = VERDICTS[selected.answer];
   const targetPrice = alternatePrice.trim() ? Number(alternatePrice.replace(",", ".")) : null;
   const validPrice = targetPrice !== null && Number.isFinite(targetPrice)
     && targetPrice > 0 && targetPrice <= 10_000_000;
-  const changedPrice = validPrice && Math.round(targetPrice * 100) !== block.amount_cents;
+  const changedPrice = validPrice && Math.round(targetPrice * 100) !== selected.amount_cents;
   const invalidPrice = alternatePrice.trim().length > 0 && !validPrice;
+  const chooseDiscount = (discount: 0 | 20 | 40) => {
+    setSelectedDiscount(discount);
+    setAlternatePrice("");
+    setSent(false);
+  };
   const finalMessage = (recalculate: boolean, challenge = false) => {
     if (disabled || sent || invalidPrice) return;
     const answers = [
       `Je réfléchis à l'achat « ${block.label} ».`,
       recalculate && changedPrice
-        ? `Recalcule avec le prix de ${targetPrice!.toFixed(2)} € (à la place de ${money(block.amount_cents)}).`
-        : `Prix évalué par Bank : ${money(block.amount_cents)}.`,
+        ? `Recalcule avec le prix de ${targetPrice!.toFixed(2)} € (à la place de ${money(selected.amount_cents)}).`
+        : `Prix évalué par Bank : ${money(selected.amount_cents)}.`,
+      selectedAlternative
+        ? `J'explore un objectif de prix hypothétique à -${selectedDiscount} %, pas une promotion réellement trouvée. `
+          + `Pour ${money(selected.amount_cents)}, Bank estime actuellement : ${selected.headline}. `
+          + "Confirme sur des données à jour avant toute décision."
+        : "Je compare le prix initial.",
       `Nature de l'achat : ${({ essential: "indispensable", useful: "utile", pleasure: "plaisir", impulse: "impulsif" } as const)[why]}.`,
       `Urgence : ${({ today: "j'en ai envie aujourd'hui", later: "ça peut attendre", unsure: "je ne sais pas" } as const)[urgency]}.`,
       `Je peux patienter : ${canWait ? "oui" : "non"}.`,
@@ -97,28 +110,51 @@ export function ChatPurchaseCoach({ block, onAsk, disabled = false }: {
       <header className="chat-purchase-head">
         <span className="chat-interactive-type">Coach d'achat · Analyse de Bank</span>
         <h3>{block.title}</h3>
-        <p>{block.label} <strong>{money(block.amount_cents)}</strong></p>
+        <p>{block.label} <strong>{money(selected.amount_cents)}</strong></p>
       </header>
+      {(block.alternatives?.length ?? 0) > 0 && (
+        <fieldset className="chat-purchase-comparison" disabled={disabled}>
+          <legend>Compare plusieurs budgets pour le même achat</legend>
+          <div className="chat-purchase-options">
+            <button type="button" className={selectedDiscount === 0 ? "is-active" : ""}
+                    aria-pressed={selectedDiscount === 0} onClick={() => chooseDiscount(0)}>
+              <span>Prix initial</span><strong>{money(block.amount_cents)}</strong>
+            </button>
+            {block.alternatives?.map((option) => (
+              <button type="button" key={option.discount_percent}
+                      className={selectedDiscount === option.discount_percent ? "is-active" : ""}
+                      aria-pressed={selectedDiscount === option.discount_percent}
+                      onClick={() => chooseDiscount(option.discount_percent)}>
+                <span>Objectif −{option.discount_percent} %</span><strong>{money(option.amount_cents)}</strong>
+              </button>
+            ))}
+          </div>
+          <p className="faint">Les prix réduits sont des hypothèses pour réfléchir, pas des offres disponibles.</p>
+        </fieldset>
+      )}
       <div className="chat-purchase-verdict" role="status">
         <Icon name={verdict.tone === "positive" ? "check" : verdict.tone === "danger" ? "alert" : "clock"} />
-        <div><strong>{verdict.title}</strong><p>{block.headline}</p></div>
+        <div><strong>{verdict.title}</strong><p>{selected.headline}</p></div>
       </div>
       <p className="chat-purchase-advice">{verdict.advice}</p>
-      {block.after.overdraft_date && (
+      {selected.after.overdraft_date && (
         <p className="chat-scenario-warning" role="status">
-          <Icon name="alert" /> Cet achat pourrait entraîner un découvert dès le {shortDate(block.after.overdraft_date)}.
+          <Icon name="alert" /> Cet achat pourrait entraîner un découvert dès le {shortDate(selected.after.overdraft_date)}.
         </p>
       )}
       <div className="chat-purchase-metrics">
         <div><span>Point bas sans cet achat</span><strong>{money(block.before.lowest_cents)}</strong></div>
-        <div><span>Point bas après cet achat</span><strong>{money(block.after.lowest_cents)}</strong></div>
-        <div><span>Budget par jour après</span><strong>{money(block.after.per_day_cents)}</strong></div>
+        <div><span>Point bas après cet achat</span><strong>{money(selected.after.lowest_cents)}</strong></div>
+        <div><span>Budget par jour après</span><strong>{money(selected.after.per_day_cents)}</strong></div>
       </div>
       <p className="chat-purchase-source">{block.source}. <span>Calcul prévisionnel, pas une garantie.</span></p>
-      {block.best_date && (
-        <p className="chat-purchase-path"><Icon name="calendar" /> Date plus favorable estimée : <b>{shortDate(block.best_date)}</b></p>
+      {selectedAlternative && (
+        <p className="chat-purchase-path">Objectif de prix : {money(block.amount_cents - selected.amount_cents)} de moins que le prix initial.</p>
       )}
-      {block.paths.length > 0 && (
+      {selected.best_date && (
+        <p className="chat-purchase-path"><Icon name="calendar" /> Date plus favorable estimée : <b>{shortDate(selected.best_date)}</b></p>
+      )}
+      {!selectedAlternative && block.paths.length > 0 && (
         <div className="chat-purchase-paths">
           <strong>Autres chemins possibles</strong>
           {block.paths.map((path, i) => (
@@ -170,10 +206,10 @@ export function ChatPurchaseCoach({ block, onAsk, disabled = false }: {
       <div className="chat-purchase-footer">
         <label htmlFor={`${uid}-price`}>Et si tu trouvais moins cher ? <span>(nouveau prix en euros)</span></label>
         <input id={`${uid}-price`} type="number" inputMode="decimal" min="0.01" max="10000000" step="0.01"
-               placeholder={(block.amount_cents / 100).toFixed(2)}
+               placeholder={(selected.amount_cents / 100).toFixed(2)}
                value={alternatePrice} disabled={disabled}
                onChange={(e) => { setAlternatePrice(e.target.value); setSent(false); }} />
-        {changedPrice && <p className="chat-purchase-caution">Le verdict affiché concerne toujours {money(block.amount_cents)}. Recalcul nécessaire pour {money(Math.round(targetPrice! * 100))}.</p>}
+        {changedPrice && <p className="chat-purchase-caution">Le verdict affiché concerne toujours {money(selected.amount_cents)}. Recalcul nécessaire pour {money(Math.round(targetPrice! * 100))}.</p>}
         {invalidPrice && <p className="chat-purchase-caution" role="alert">Indique un prix valide et positif avant de continuer.</p>}
         <div className="chat-purchase-buttons">
           <button type="button" className="btn sm" disabled={disabled || sent || invalidPrice}
