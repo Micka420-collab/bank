@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import AuthDep, DbDep, TodayDep, client_ip
 from app.db import utcnow
-from app.services import future_radar, purchasing_power, watch
+from app.services import future_radar, investment_compare, purchasing_power, watch
 
 router = APIRouter(prefix="/api/watch", tags=["watch"])
 
@@ -72,6 +72,26 @@ def estimate_real_yield(body: YieldScenario, _: AuthDep) -> dict[str, Any]:
         "note": "Simulation annuelle théorique. La fiscalité réelle dépend de l'enveloppe, de la durée "
         "et de la situation personnelle. Rendement et capital des placements risqués non garantis.",
     }
+
+
+class InvestmentCompareIn(BaseModel):
+    capital_cents: int = Field(ge=10_000, le=100_000_000)
+    horizon_months: int = Field(ge=1, le=360)
+    inflation_pct: float = Field(ge=-29, le=100)
+    custom_gross_pct: float | None = Field(default=None, gt=-99, le=200)
+    custom_fees_pct: float = Field(default=0, ge=0, le=30)
+    custom_tax_pct: float = Field(default=0, ge=0, le=100)
+    custom_loss_pct: float = Field(default=25, ge=0, le=100)
+    custom_locked_months: int = Field(default=0, ge=0, le=360)
+
+
+@router.post("/investments/compare")
+def compare_investments(body: InvestmentCompareIn, _: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
+    """Même capital/horizon ; vérification du matelas et des lignes rouges avant la comparaison."""
+    try:
+        return investment_compare.view(db, today, **body.model_dump())
+    except (ValueError, OverflowError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
 
 
 @router.post("/refresh")
