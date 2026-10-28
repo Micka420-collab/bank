@@ -16,20 +16,14 @@ from app.services import investment_compare as svc
 
 
 def test_real_value_compounds_fees_once_yearly_and_tax_only_positive_gain() -> None:
-    result = dom.project(
-        100_000, 12, gross_pct=6, fees_pct=1, tax_pct=30, inflation_pct=3.1, loss_pct=25
-    )
+    result = dom.project(100_000, 12, gross_pct=6, fees_pct=1, tax_pct=30, inflation_pct=3.1, loss_pct=25)
     assert result["future_nominal_cents"] == 103_458
     assert result["future_real_cents"] == 100_347
     assert result["hypothetical_shock_loss_cents"] == 25_000
-    losing = dom.project(
-        100_000, 12, gross_pct=-20, fees_pct=1, tax_pct=30, inflation_pct=3
-    )
+    losing = dom.project(100_000, 12, gross_pct=-20, fees_pct=1, tax_pct=30, inflation_pct=3)
     assert losing["future_nominal_cents"] == 79_200
     assert losing["net_gain_cents"] == -20_800
-    assert dom.project(
-        100_000, 60, gross_pct=0, fees_pct=0, tax_pct=0, inflation_pct=3
-    )["future_real_cents"] < 100_000
+    assert dom.project(100_000, 60, gross_pct=0, fees_pct=0, tax_pct=0, inflation_pct=3)["future_real_cents"] < 100_000
 
 
 @pytest.mark.parametrize(
@@ -45,7 +39,14 @@ def test_real_value_compounds_fees_once_yearly_and_tax_only_positive_gain() -> N
     ],
 )
 def test_invalid_scenarios_are_rejected(override: dict[str, float | int]) -> None:
-    args = {"capital_cents": 100_000, "horizon_months": 12, "gross_pct": 3, "fees_pct": 0, "tax_pct": 0, "inflation_pct": 2}
+    args = {
+        "capital_cents": 100_000,
+        "horizon_months": 12,
+        "gross_pct": 3,
+        "fees_pct": 0,
+        "tax_pct": 0,
+        "inflation_pct": 2,
+    }
     args.update(override)
     with pytest.raises(ValueError):
         dom.project(**args)
@@ -53,22 +54,40 @@ def test_invalid_scenarios_are_rejected(override: dict[str, float | int]) -> Non
 
 def test_suitability_is_separate_from_paper_profit_and_checks_restrictions() -> None:
     wrong = dom.assess(
-        reserve_gap_cents=200_000, overdraft_risk=True, risk_label="dynamique",
-        horizon_months=12, locked_months=18, loss_pct=25,
-        investment_kind="market", eligible=True, full_room=True,
+        reserve_gap_cents=200_000,
+        overdraft_risk=True,
+        risk_label="dynamique",
+        horizon_months=12,
+        locked_months=18,
+        loss_pct=25,
+        investment_kind="market",
+        eligible=True,
+        full_room=True,
     )
     assert not wrong["eligible_to_consider"]
     assert len(wrong["blockers"]) >= 4
     savings = dom.assess(
-        reserve_gap_cents=200_000, overdraft_risk=False, risk_label="prudent",
-        horizon_months=12, locked_months=0, loss_pct=0,
-        investment_kind="livret_a", eligible=True, full_room=True,
+        reserve_gap_cents=200_000,
+        overdraft_risk=False,
+        risk_label="prudent",
+        horizon_months=12,
+        locked_months=0,
+        loss_pct=0,
+        investment_kind="livret_a",
+        eligible=True,
+        full_room=True,
     )
     assert savings["eligible_to_consider"]
     lep = dom.assess(
-        reserve_gap_cents=None, overdraft_risk=None, risk_label="inconnu",
-        horizon_months=24, locked_months=0, loss_pct=0,
-        investment_kind="lep", eligible=None, full_room=False,
+        reserve_gap_cents=None,
+        overdraft_risk=None,
+        risk_label="inconnu",
+        horizon_months=24,
+        locked_months=0,
+        loss_pct=0,
+        investment_kind="lep",
+        eligible=None,
+        full_room=False,
     )
     assert not lep["eligible_to_consider"]
     assert any("éligibilité" in item.lower() for item in lep["blockers"])
@@ -78,18 +97,24 @@ def test_personal_reserve_red_lines_and_cap_block_unsupported_investments(monkey
     from app.services import advisor, analytics
 
     monkeypatch.setattr(
-        advisor, "plain_answers",
+        advisor,
+        "plain_answers",
         lambda db: {"emergency_target_months": 3, "red_lines": [{"rule": "Pas d'actions ni d'ETF"}]},
     )
     monkeypatch.setattr(
-        analytics, "account_balances",
+        analytics,
+        "account_balances",
         lambda db, today: [SimpleNamespace(kind="livret_a", balance_cents=10_000)],
     )
     monkeypatch.setattr(analytics, "monthly_essentials", lambda db, today: 100_000)
     monkeypatch.setattr(analytics, "budget_accounts", lambda db: [])
     result = svc.view(
-        cast(Session, None), date(2026, 10, 28), capital_cents=100_000,
-        horizon_months=120, inflation_pct=3.1, custom_gross_pct=12,
+        cast(Session, None),
+        date(2026, 10, 28),
+        capital_cents=100_000,
+        horizon_months=120,
+        inflation_pct=3.1,
+        custom_gross_pct=12,
     )
     assert result["context"]["reserve_gap_cents"] == 290_000
     market = next(row for row in result["scenarios"] if row["kind"] == "market")
@@ -115,9 +140,14 @@ def test_authenticated_route_rate_sourcing_and_invalid_payload(world: TestClient
     custom = world.post(
         "/api/watch/investments/compare",
         json={
-            "capital_cents": 100_000, "horizon_months": 12, "inflation_pct": 3.1,
-            "custom_gross_pct": 20, "custom_fees_pct": 0.5,
-            "custom_tax_pct": 30, "custom_loss_pct": 50, "custom_locked_months": 24,
+            "capital_cents": 100_000,
+            "horizon_months": 12,
+            "inflation_pct": 3.1,
+            "custom_gross_pct": 20,
+            "custom_fees_pct": 0.5,
+            "custom_tax_pct": 30,
+            "custom_loss_pct": 50,
+            "custom_locked_months": 24,
         },
     )
     assert custom.status_code == 200, custom.text
