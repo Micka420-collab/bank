@@ -59,14 +59,33 @@ def test_salary_up_but_real_purchasing_power_down() -> None:
     assert result["spending_share_change_points"] > 0
     assert result["spending_drivers"][0]["category"] == "courses"
     assert result["spending_drivers"][0]["delta_cents"] == 12_000
+    assert [x["key"] for x in result["correlations"]] == ["salary_vs_inflation", "spending_share_rises"]
+    assert "2.50" in result["correlations"][0]["evidence"]
+    assert result["correlations"][1]["action"].startswith("Examiner")
+
 
 
 def test_absent_salary_is_unknown_not_a_salary_collapse() -> None:
     result = p.compare(sample(missing="2025-09"), CATS, TODAY, inflation_pct=3.1)
     assert not result["ready"]
     assert result["salary_months_found"] == 5
+    assert not any(x["key"] == "salary_vs_inflation" for x in result["correlations"])
+
     for key in ("real_salary_change_pct", "current_salary_avg_cents", "monthly_real_gap_cents"):
         assert result[key] is None
+
+
+def test_correlations_need_evidence_for_each_claim() -> None:
+    assert p.detect_pressures(
+        nominal_salary_pct=None, real_salary_pct=None, spending_pct=None, spending_share_points=None
+    ) == []
+    assert p.detect_pressures(
+        nominal_salary_pct=3, real_salary_pct=0.5, spending_pct=5, spending_share_points=1
+    ) == []
+    warnings = p.detect_pressures(
+        nominal_salary_pct=1, real_salary_pct=-2.1, spending_pct=15, spending_share_points=4
+    )
+    assert {x["key"] for x in warnings} == {"salary_vs_inflation", "spending_share_rises"}
 
 
 def test_price_adjustment_and_investment_real_net_return_arent_simple_subtractions() -> None:
