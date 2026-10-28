@@ -1203,8 +1203,11 @@ def interactive_prompt(srcs: list[coverage_domain.Source], catalogue: blocks.Cat
     """Ce que Bank sait ou pas, les boutons proposables, les graphiques disponibles : des données pour le modèle."""
     lines = ["<couverture>", *coverage_domain.prompt_lines(srcs), "</couverture>", "", "<catalogue>"]
     lines += catalogue.prompt_lines()
-    lines += ["</catalogue>", "", "<graphiques>", *chat_charts.prompt_lines(), "</graphiques>", "",
-              "Dans le chat web uniquement, utilise ask_interactive pour un sondage, une checklist ou un formulaire quand il faut un choix utilisateur."]
+    lines += ["</catalogue>", "", "<graphiques>", *chat_charts.prompt_lines(), "</graphiques>", ""]
+    lines.append(
+        "Dans le chat web uniquement, utilise ask_interactive pour un sondage, une checklist ou un formulaire "
+        "quand il faut un choix utilisateur."
+    )
     lines.append(
         "Recherche web : disponible (web_search, read_page)."
         if search_on
