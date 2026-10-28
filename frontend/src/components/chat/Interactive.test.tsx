@@ -53,7 +53,7 @@ describe("widgets de conversation Bank", () => {
     expect(ask).toHaveBeenCalledTimes(1);
     expect(ask).toHaveBeenCalledWith("Mes réponses à « Tes priorités » :\n- Ton choix : Réduire les frais");
     expect(el.querySelector(".chat-interactive-sent")?.textContent).toContain("Réponses envoyées");
-    expect(el.querySelector<HTMLInputElement>('input[type="radio"]')?.disabled).toBe(true);
+    expect(el.querySelector<HTMLInputElement>('input[type="radio"]')?.closest("fieldset")?.disabled).toBe(true);
   });
 
   it("allows multiple checked choices, shows progress and keeps the exact answer", async () => {
