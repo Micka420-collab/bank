@@ -367,6 +367,76 @@ def decision_board_block(raw: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+PURCHASE_ANSWERS = frozenset({"oui", "oui_mais", "attendre", "plus_tard", "hors_de_portee"})
+
+
+def purchase_coach_block(raw: Mapping[str, Any]) -> dict[str, Any]:
+    """Verdict déjà calculé par Bank. L'interface ne peut pas le recalculer librement."""
+    answer = raw.get("answer")
+    if answer not in PURCHASE_ANSWERS:
+        raise BlockError("Verdict d'achat invalide")
+    amount = raw.get("amount_cents")
+    if not isinstance(amount, int) or isinstance(amount, bool) or not 0 < amount <= 1_000_000_000:
+        raise BlockError("Montant d'achat invalide")
+    check = raw.get("this_month")
+    if not isinstance(check, Mapping):
+        raise BlockError("Prévision d'achat absente")
+    before, after = check.get("before"), check.get("after")
+    if not isinstance(before, Mapping) or not isinstance(after, Mapping):
+        raise BlockError("Données de prévision insuffisantes")
+
+    def snapshot(source: Mapping[str, Any]) -> dict[str, Any]:
+        numbers: dict[str, int] = {}
+        for key in ("per_day_cents", "lowest_cents", "end_balance_cents"):
+            value = source.get(key)
+            if not isinstance(value, int) or isinstance(value, bool) or abs(value) > MAX_SCENARIO_BALANCE_CENTS:
+                raise BlockError("Valeur de trésorerie invalide")
+            numbers[key] = value
+        try:
+            low_date = date.fromisoformat(str(source.get("lowest_date")))
+        except ValueError as exc:
+            raise BlockError("Date de prévision invalide") from exc
+        return {**numbers, "lowest_date": low_date.isoformat()}
+
+    best_date = check.get("best_date")
+    if best_date is not None:
+        try:
+            best_date = date.fromisoformat(str(best_date)).isoformat()
+        except ValueError as exc:
+            raise BlockError("Date d'achat invalide") from exc
+    paths = raw.get("paths", [])
+    if not isinstance(paths, list):
+        raise BlockError("Chemins d'épargne invalides")
+    options = []
+    for item in paths[:2]:
+        if not isinstance(item, Mapping):
+            continue
+        months = item.get("months")
+        if months is not None and (
+            not isinstance(months, int) or isinstance(months, bool) or not 0 <= months <= 120
+        ):
+            continue
+        options.append({
+            "label": clean(item.get("label"), MAX_LABEL),
+            "months": months,
+            "note": clean(item.get("note"), 150),
+        })
+    return {
+        "type": "purchase_coach",
+        "title": clean(raw.get("title"), MAX_TITLE) or "Est-ce que je peux me l'offrir ?",
+        "label": clean(raw.get("label"), 80) or "Cet achat",
+        "answer": answer,
+        "headline": clean(raw.get("headline"), 180),
+        "amount_cents": amount,
+        "before": snapshot(before),
+        "after": snapshot(after),
+        "best_date": best_date,
+        "paths": options,
+        "explanation": clean(raw.get("explanation"), 360),
+        "source": "Bank · prévision et plan d'épargne",
+    }
+
+
 # ------------------------------------------------------------------ sources (recherche faite par Bank)
 def sources_block(results: Sequence[Mapping[str, Any]], query: str = "") -> dict[str, Any] | None:
     items = []
@@ -432,6 +502,8 @@ def validate_blocks(raw: Any) -> list[dict[str, Any]]:
                 out.append(scenario_block(b))
             elif kind == "decision_board":
                 out.append(decision_board_block(b))
+            elif kind == "purchase_coach":
+                out.append(purchase_coach_block(b))
             elif kind == "sources":
                 rows = [it for it in (b.get("items") or []) if isinstance(it, Mapping)]
                 block = sources_block(rows, str(b.get("query") or ""))
@@ -465,4 +537,6 @@ def text_fallback(blocks: Sequence[Mapping[str, Any]]) -> list[str]:
             lines.append("(simulateur de budget interactif à utiliser dans Bank)")
         elif b.get("type") == "decision_board":
             lines.append("(tableau de décision lié, à explorer dans Bank)")
+        elif b.get("type") == "purchase_coach":
+            lines.append("(coach d'achat interactif : voir le verdict et les choix dans Bank)")
     return lines
