@@ -108,7 +108,7 @@ export function ChatPurchaseCoach({ block, onAsk, disabled = false }: {
         <p className="chat-scenario-warning" role="status">
           <Icon name="alert" /> Cet achat pourrait entraîner un découvert dès le {shortDate(block.after.overdraft_date)}.
         </p>
-      )
+      )}
       <div className="chat-purchase-metrics">
         <div><span>Point bas sans cet achat</span><strong>{money(block.before.lowest_cents)}</strong></div>
         <div><span>Point bas après cet achat</span><strong>{money(block.after.lowest_cents)}</strong></div>
