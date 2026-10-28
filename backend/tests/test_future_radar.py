@@ -12,7 +12,7 @@ from starlette.testclient import TestClient
 
 from app.domain import watch as dw
 from app.domain.yearahead import MonthPoint, Spike, YearAhead
-from app.services import crypto_value, future_radar, yearahead
+from app.services import crypto_value, future_radar, settings_store, yearahead
 from app.services.future_radar import build_signals
 
 
@@ -69,7 +69,7 @@ def test_radar_does_not_invent_problems_when_month_stays_above_buffer() -> None:
 def test_radar_delivers_only_planned_alerts_without_duplicate_detected_pics(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(yearahead.analytics, "budget_accounts", lambda db: [object()])
     monkeypatch.setattr(yearahead, "compute", lambda db, today: sample())
-    monkeypatch.setattr(future_radar, "get_setting", lambda db, key: 10_000)
+    monkeypatch.setattr(settings_store, "get_setting", lambda db, key: 10_000)
     events = future_radar.alerts(
         cast(Session, None), today=date(2026, 10, 28), privacy="aggregates", public_url="https://bank.example"
     )
