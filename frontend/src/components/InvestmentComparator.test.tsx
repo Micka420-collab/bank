@@ -1,4 +1,4 @@
-"""The investment comparator never pulls a made-up market return and exposes safety constraints."""
+// The investment comparator never pulls a made-up market return and exposes safety constraints.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
