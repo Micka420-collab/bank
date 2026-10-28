@@ -82,6 +82,14 @@ BUILTIN_SOURCES: tuple[dict[str, Any], ...] = (
         "interval_hours": 24,
     },
     {
+        "slug": "fed-policy",
+        "kind": "rss",
+        "name": "Réserve fédérale américaine — politique monétaire",
+        "url": "https://www.federalreserve.gov/feeds/press_monetary.xml",
+        "trust": "officiel",
+        "interval_hours": 12,
+    },
+    {
         "slug": ENGINE_SLUG,
         "kind": "rss",
         "name": "OpenFisca-France — versions du moteur de calcul des droits",
