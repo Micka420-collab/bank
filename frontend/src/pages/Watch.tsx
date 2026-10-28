@@ -8,6 +8,7 @@ import { api, useApi, type ReferenceCheck, type WatchItemView, type WatchListing
 import { CrsTransparency } from "../components/CrsTransparency";
 import { FutureRadar } from "../components/FutureRadar";
 import { PurchasingPower } from "../components/PurchasingPower";
+import { InvestmentComparator } from "../components/InvestmentComparator";
 import { Icon } from "../components/Icon";
 import { ErrorNote, Field, Loading, useAsyncAction, useToast } from "../components/ui";
 import { plural, safeHref, shortDate } from "../format";
@@ -75,6 +76,7 @@ export function Watch() {
 
       <FutureRadar />
       <PurchasingPower />
+      <InvestmentComparator />
       <CrsTransparency />
 
       <section className="section" aria-labelledby="news-title">
