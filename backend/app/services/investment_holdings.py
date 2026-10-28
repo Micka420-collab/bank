@@ -8,6 +8,7 @@ Une crypto sans prix ou avec cotation périmée ne vaut jamais artificiellement 
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from sqlalchemy import select
@@ -57,7 +58,7 @@ def account_row(
         else "date_inconnue"
         if days is None
         else "solde_ancien"
-        if days > 30
+        if days > 30 or days < -1
         else "solde_date"
     )
     ref = rates.get(kind)
@@ -148,7 +149,19 @@ def view(db: Session, today: date) -> dict[str, Any]:
         values = holdings_value(db)
         for symbol, payload in sorted(values.items()):
             price = prices.get(symbol)
-            fresh = price is not None and -STALE_PRICE <= now - price.fetched_at <= STALE_PRICE
+            # Un prix non numérique, négatif ou dans le futur n'est jamais une cotation exploitable.
+            try:
+                eur = Decimal(price.eur) if price else None
+            except InvalidOperation:
+                eur = None
+            fresh = (
+                price is not None
+                and eur is not None
+                and eur.is_finite()
+                and eur > 0
+                and now >= price.fetched_at
+                and now - price.fetched_at <= STALE_PRICE
+            )
             positions.append(
                 {
                     "key": f"crypto:{symbol}",
