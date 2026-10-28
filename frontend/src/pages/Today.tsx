@@ -13,6 +13,8 @@ import { Decide } from "../components/Decide";
 import { Icon } from "../components/Icon";
 import { Initiatives } from "../components/Initiatives";
 import { MonthChart } from "../components/MonthChart";
+import { ScenarioLab } from "../components/ScenarioLab";
+import { EMPTY_SCENARIO, simulateMonth, type ScenarioInput } from "../components/scenario-engine";
 import { Segmented } from "../components/Segmented";
 import { StartChecklist } from "../components/StartChecklist";
 import { Amount, ErrorNote, Loading, useToast } from "../components/ui";
@@ -54,6 +56,7 @@ export function Today({ name }: { name?: string } = {}) {
   const cats = useApi<Category[]>("/api/categories");
   const agent = useApi<{ pending_proposals: number }>("/api/agents/summary");
   const [range, setRange] = useState<HistoryRange>("30d");
+  const [scenario, setScenario] = useState<ScenarioInput>(EMPTY_SCENARIO);
   const [details, setDetails] = useState<boolean>(() => readDetails());
   const history = useApi<History>(details ? `/api/history?range=${range}` : null);
   const toast = useToast();
@@ -62,6 +65,7 @@ export function Today({ name }: { name?: string } = {}) {
   if (budget.error) return <ErrorNote message={budget.error} onRetry={budget.reload} />;
   if (!budget.data) return <Loading />;
   const { forecast: f, suggested_budgets: suggested, settings } = budget.data;
+  const scenarioResult = simulateMonth(f, scenario);
   const isEmpty = f.current_balance_cents === 0 && f.history.every((p) => p.balance_cents === 0) && f.upcoming.length === 0;
   // Rien encore : la liste « Bien démarrer » (et son « Reprendre le parcours ») passe avant les trois chemins.
   if (isEmpty) return <><StartChecklist /><Welcome onStarted={budget.reload} /></>;
@@ -124,7 +128,9 @@ export function Today({ name }: { name?: string } = {}) {
           <span className="faint">Projection jusqu'à la fin du mois</span>
         </div>
         <MonthChart history={f.history} projection={f.projection} events={f.upcoming} lowestCents={f.lowest_balance_cents}
-                    lowestDate={f.lowest_balance_date} daysInMonth={f.days_in_month} bare />
+                    lowestDate={f.lowest_balance_date} daysInMonth={f.days_in_month}
+                    scenarioProjection={scenarioResult.active ? scenarioResult.projection : undefined} bare />
+        <ScenarioLab forecast={f} value={scenario} result={scenarioResult} onChange={setScenario} />
       </section>
 
       <YearAhead />
