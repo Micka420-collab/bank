@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.domain import chatblocks as b
+from app.domain.decisions import PurchasePlan, PurchaseVerdict, SavingPath, Snapshot
 from app.services import assistant
 
 
@@ -233,3 +234,79 @@ def test_decision_board_and_scenario_are_exclusive(monkeypatch: pytest.MonkeyPat
     empty = assistant._ToolContext(None, "user", date(2026, 10, 28), 7, False)  # type: ignore[arg-type]
     assert "error" in json.loads(assistant._execute_tool(empty, "show_decision_board", "{}"))
     assert empty.decision_board is None
+
+
+def test_purchase_coach_validates_bank_verdict_and_is_idempotent() -> None:
+    snapshot = {
+        "per_day_cents": 3_000,
+        "lowest_cents": 20_000,
+        "lowest_date": "2026-10-28",
+        "end_balance_cents": 45_000,
+        "overdraft_date": None,
+        "unsafe_html": "<script>",
+    }
+    data = {
+        "answer": "oui_mais",
+        "label": "Un vélo",
+        "headline": "Oui mais attention",
+        "amount_cents": 35_000,
+        "this_month": {
+            "before": snapshot,
+            "after": {**snapshot, "lowest_cents": 8_000},
+            "best_date": "2026-10-30",
+        },
+        "paths": [{"label": "Attendre", "months": 1, "note": "Une option"}],
+        "explanation": "Reste une petite marge.",
+        "extra": "<iframe>",
+    }
+    block = b.purchase_coach_block(data)
+    assert block["answer"] == "oui_mais"
+    assert block["amount_cents"] == 35_000
+    assert block["before"]["lowest_cents"] == 20_000
+    assert block["after"]["lowest_cents"] == 8_000
+    assert block["best_date"] == "2026-10-30"
+    assert "unsafe_html" not in block["before"]
+    assert "extra" not in block
+    assert b.validate_blocks([block]) == [block]
+    assert "coach d'achat" in b.text_fallback([block])[0]
+    assert b.validate_blocks([{**data, "answer": "inventé"}]) == []
+    assert b.validate_blocks([{**data, "amount_cents": True}]) == []
+    assert b.validate_blocks([{**data, "this_month": {"before": snapshot, "after": {}}}]) == []
+
+
+def test_purchase_coach_tool_is_sourced_from_bank_not_model_data(monkeypatch: pytest.MonkeyPatch) -> None:
+    before = Snapshot(3_000, 20_000, date(2026, 10, 28), None, 45_000)
+    after = Snapshot(1_500, 8_000, date(2026, 10, 29), None, 10_000)
+    verdict = PurchaseVerdict("serre", 35_000, date(2026, 10, 28), before, after, None, None, 2.0, "Marge réduite")
+    purchase = PurchasePlan(
+        "oui_mais", "Oui, mais la marge est serrée", 35_000, verdict,
+        0, [SavingPath("Épargne", 2, date(2026, 12, 1), 17_500, "Attendre")], "Marge réduite",
+    )
+    monkeypatch.setattr(assistant.analytics, "budget_accounts", lambda db: [object()])
+    called: list[tuple[int, str]] = []
+    def purchase_stub(db: object, today: date, *, amount_cents: int, label: str, category: str | None) -> PurchasePlan:
+        called.append((amount_cents, label))
+        return purchase
+    monkeypatch.setattr(assistant.decisions, "purchase", purchase_stub)
+    ctx = assistant._ToolContext(None, "user", date(2026, 10, 28), 7, False)  # type: ignore[arg-type]
+    result = json.loads(
+        assistant._execute_tool(ctx, "show_purchase_coach", '{"amount_eur":350,"label":"Vélo"}')
+    )
+    assert result["done"] is True
+    assert called == [(35_000, "Vélo")]
+    assert ctx.purchase_coach is not None
+    assert ctx.purchase_coach["amount_cents"] == 35_000
+    assert ctx.purchase_coach["answer"] == "oui_mais"
+    assert ctx.blocks() == [ctx.purchase_coach]
+    assert "error" in json.loads(assistant._execute_tool(ctx, "show_purchase_coach", '{"amount_eur":200}'))
+    assert "error" in json.loads(
+        assistant._execute_tool(
+            assistant._ToolContext(None, "user", date(2026, 10, 28), 7, False),  # type: ignore[arg-type]
+            "show_purchase_coach", '{"amount_eur":-20}',
+        )
+    )
+    monkeypatch.setattr(assistant.analytics, "budget_accounts", lambda db: [])
+    empty = assistant._ToolContext(None, "user", date(2026, 10, 28), 7, False)  # type: ignore[arg-type]
+    assert "error" in json.loads(assistant._execute_tool(empty, "show_purchase_coach", '{"amount_eur":350}'))
+    assert empty.purchase_coach is None
+    assert assistant.TOOL_PURCHASE_COACH["function"]["parameters"]["additionalProperties"] is False
