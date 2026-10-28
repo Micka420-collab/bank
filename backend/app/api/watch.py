@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import AuthDep, DbDep, TodayDep, client_ip
 from app.db import utcnow
-from app.services import watch
+from app.services import future_radar, watch
 
 router = APIRouter(prefix="/api/watch", tags=["watch"])
 
@@ -40,6 +40,12 @@ def _http(exc: watch.WatchError) -> HTTPException:
 @router.get("")
 def listing(_: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
     return watch.listing(db, today)
+
+
+@router.get("/radar")
+def radar(_: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
+    """Prévisions personnelles et contexte macro vérifiable, sans entraînement externe ni scraping de compte."""
+    return future_radar.view(db, today)
 
 
 @router.post("/refresh")
