@@ -159,7 +159,7 @@ def test_backups_are_visible_in_bank_scheduled_and_alert_on_failure(world: TestC
     with app.state.sessionmaker() as db:
         tz_now = datetime(2026, 10, 24, 2, 30, tzinfo=UTC)  # 4 h 30 à Paris, samedi
         assert svc.due(db, settings, local_now=tz_now.astimezone(svc.ZoneInfo("Europe/Paris"))) == (False, False)
-        tomorrow = datetime(2026, 11, 1, 2, 30, tzinfo=UTC)  # dimanche 3 h 30, semaine suivante : les deux sont dus
+        tomorrow = datetime(2026, 11, 8, 2, 30, tzinfo=UTC)  # dimanche 3 h 30, semaine ISO suivante : les deux sont dus
         local = tomorrow.astimezone(svc.ZoneInfo("Europe/Paris"))
         assert svc.due(db, settings, local_now=local) == (True, True)
         report = svc.tick(db, settings, now=tomorrow)
