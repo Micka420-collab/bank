@@ -125,7 +125,7 @@ export function PurchasingPower() {
           )}
           {(comparison.correlations?.length ?? 0) > 0 && (
             <div className="purchasing-power-correlations" aria-labelledby="power-correlations-title">
-              <h3 id="power-correlations-title"><Icon name="link" /> Les signaux qui se recoupent</h3>
+              <h3 id="power-correlations-title"><Icon name="route" /> Les signaux qui se recoupent</h3>
               <ul>
                 {comparison.correlations?.map((finding) => (
                   <li key={finding.key}>
