@@ -1327,6 +1327,20 @@ export type ScenarioBlock = {
   expense_cap_cents: number;
 };
 export type DecisionBoardBlock = Omit<ScenarioBlock, "type"> & { type: "decision_board" };
+export type PurchaseCoachBlock = {
+  type: "purchase_coach";
+  title: string;
+  label: string;
+  answer: PurchasePlan["answer"];
+  headline: string;
+  amount_cents: number;
+  before: PurchaseSnapshot;
+  after: PurchaseSnapshot;
+  best_date: string | null;
+  paths: { label: string; months: number | null; note: string }[];
+  explanation: string;
+  source: string;
+};
 export type InteractiveBlock = {
   type: "interactive";
   kind: "poll" | "checklist" | "form";
@@ -1343,6 +1357,7 @@ export type ChatBlock =
   | InteractiveBlock
   | ScenarioBlock
   | DecisionBoardBlock
+  | PurchaseCoachBlock
   | { type: "sources"; query: string; items: { n: number; title: string; url: string; host: string; snippet: string; date: string }[] }
   | { type: "note"; tone: "info" | "warning"; text: string };
 export type AssistantOpening = {
