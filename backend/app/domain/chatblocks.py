@@ -418,15 +418,15 @@ def purchase_coach_block(raw: Mapping[str, Any]) -> dict[str, Any]:
         if not isinstance(item, Mapping):
             continue
         months = item.get("months")
-        if months is not None and (
-            not isinstance(months, int) or isinstance(months, bool) or not 0 <= months <= 120
-        ):
+        if months is not None and (not isinstance(months, int) or isinstance(months, bool) or not 0 <= months <= 120):
             continue
-        options.append({
-            "label": clean(item.get("label"), MAX_LABEL),
-            "months": months,
-            "note": clean(item.get("note"), 150),
-        })
+        options.append(
+            {
+                "label": clean(item.get("label"), MAX_LABEL),
+                "months": months,
+                "note": clean(item.get("note"), 150),
+            }
+        )
     return {
         "type": "purchase_coach",
         "title": clean(raw.get("title"), MAX_TITLE) or "Est-ce que je peux me l'offrir ?",
