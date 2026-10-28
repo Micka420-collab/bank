@@ -65,6 +65,23 @@ BUILTIN_SOURCES: tuple[dict[str, Any], ...] = (
         "interval_hours": 12,
     },
     {
+        # Affaires économiques et sanctions : annonces officielles de l'Union européenne.
+        "slug": "eu-council-press",
+        "kind": "rss",
+        "name": "Conseil de l'UE — décisions et relations internationales",
+        "url": "https://www.consilium.europa.eu/en/rss/pressreleases.ashx",
+        "trust": "officiel",
+        "interval_hours": 12,
+    },
+    {
+        "slug": "eu-finance-press",
+        "kind": "rss",
+        "name": "Commission européenne — stabilité financière",
+        "url": "https://finance.ec.europa.eu/node/2/rss_en",
+        "trust": "officiel",
+        "interval_hours": 24,
+    },
+    {
         "slug": ENGINE_SLUG,
         "kind": "rss",
         "name": "OpenFisca-France — versions du moteur de calcul des droits",
