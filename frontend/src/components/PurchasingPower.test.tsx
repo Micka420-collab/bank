@@ -66,7 +66,7 @@ describe("salaire, inflation et vrai rendement des placements", () => {
     await act(async () => root.render(<PurchasingPower />));
     await flush();
     expect(host.textContent).toContain("Salaire moyen");
-    expect(host.textContent).toContain("2 050");
+    expect(host.textContent?.replace(/\\s/g, " ")).toContain("2 050");
     expect(host.textContent).toContain("−0,58 %");
     expect(host.textContent).toContain("12 %");
     expect(host.textContent).toContain("courses");
