@@ -10695,3 +10695,42 @@ label {
   flex: 1 1 14rem;
   min-width: 0;
 }
+
+/* Radar prospectif : les échéances calculées sont visuellement distinctes des dépêches publiques. */
+.future-radar-list, .future-radar-articles { list-style: none; margin: 0; padding: 0; }
+.future-radar-list { display: grid; gap: 0.65rem; }
+.future-radar-signal { display: flex; gap: 0.85rem; align-items: flex-start; padding: 1rem;
+  border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-card); }
+.future-radar-signal.is-risk { border-left: 3px solid var(--danger); }
+.future-radar-timing { display: grid; gap: 0.15rem; min-width: 4.6rem; flex: 0 0 auto; }
+.future-radar-timing strong { font-size: var(--t-lg); font-variant-numeric: tabular-nums; }
+.future-radar-timing span { font-size: var(--t-xs); color: var(--ink-2); }
+.future-radar-detail { flex: 1; min-width: 0; }
+.future-radar-detail p { font-size: var(--t-sm); margin: 0.45rem 0 0; }
+.future-radar-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; }
+.future-radar-heading strong { overflow-wrap: anywhere; }
+.future-radar-context { margin-top: 1.15rem; padding: 1rem; border-radius: var(--r-card);
+  background: var(--surface-2); }
+.future-radar-context h3 { display: flex; align-items: center; gap: 0.45rem; font-size: var(--t-md); }
+.future-radar-articles { display: grid; gap: 0.7rem; }
+.future-radar-articles li { padding: 0.6rem 0; border-bottom: 1px solid var(--line); }
+.future-radar-articles li:last-child { border-bottom: none; }
+.future-radar-articles p { margin: 0.25rem 0 0; }
+.crs-selectors { display: grid; gap: 0.8rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.crs-selectors > div { display: grid; gap: 0.45rem; }
+.crs-selectors label { font-weight: 650; font-size: var(--t-sm); }
+.crs-selectors select { width: 100%; max-width: 100%; min-width: 0; }
+.crs-result { margin: 1rem 0; padding: 1rem; background: var(--surface-2); border-radius: var(--r-card);
+  border: 1px solid var(--line); }
+.crs-result p { margin: 0.55rem 0; }
+.crs-result a { font-size: var(--t-sm); }
+.crs-guide { display: grid; gap: 0.75rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.crs-guide > div { padding: 0.9rem; border: 1px solid var(--line); border-radius: var(--r-control);
+  background: var(--surface); min-width: 0; }
+.crs-guide h3 { font-size: var(--t-md); margin-bottom: 0.4rem; }
+.crs-guide p { color: var(--ink-2); font-size: var(--t-sm); }
+.crs-guide a { font-size: var(--t-sm); }
+@media (max-width: 650px) { .crs-guide { grid-template-columns: 1fr; }
+  .crs-selectors { grid-template-columns: 1fr; }
+  .future-radar-signal { padding: 0.75rem; gap: 0.65rem; }
+}
