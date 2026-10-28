@@ -67,3 +67,22 @@ Le bouton « En discuter avec Bank » envoie **seulement après un clic** les pa
 - Cliquer une boîte de schéma l'ouvre en annotation, et la sélection est utilisable au clavier.
 - Tester une dépense imprévue avant/après une autre échéance, le passage sous zéro, les montants négatifs ou illisibles.
 - Vérifier l'absence de compte courant : le simulateur demande d'abord de relier un compte au lieu d'inventer une projection.
+
+
+## V3 — composants liés dans une seule réponse
+
+Le modèle dispose maintenant de l'outil `show_decision_board` : aucun argument chiffré. Il permet de produire un bloc `decision_board` strictement validé à partir de la prévision existante de Bank. Ce bloc n'est pas une interface Web libre : c'est un composant React connu, avec une seule source de vérité.
+
+En une réponse de l'assistant, il présente trois modules synchronisés :
+
+1. **Sondage** — « Observer », « Progressif · 25 % », « Intensif · 50 % » : trois hypothèses transparentes de baisse des dépenses variables quotidiennes, jamais une promesse de résultat.
+2. **Graphique** — reprend les soldes quotidiens issus de Bank et superpose la trajectoire recalculée localement pour le profil sélectionné. Le solde de départ ne bouge jamais ; l'écart de fin de mois et la réduction quotidienne se mettent à jour sans requête IA.
+3. **Checklist adaptative** — trois actions générales, contextualisées au rythme sélectionné, avec état des cases et progression. Changer de profil remet ses cases à zéro pour ne pas confondre les démarches.
+
+L'utilisateur peut ajouter une remarque (200 caractères maximum). **Rien n'est transmis tant qu'il ne clique pas** sur « En discuter avec Bank » ; l'envoi est ensuite un simple message explicatif dans le chat, pas un ordre d'action. Les choix restent locaux et ne sont pas enregistrés dans les transactions, documents, comptes ou réglages. Les contrôles sont inactifs pendant que l'IA répond.
+
+La sortie structurée est allowlistée (`decision_board`, points consécutifs d'un seul mois, soldes entiers bornés, plafond fondé sur les dépenses variables de Bank) et revalidée avant affichage. L'IA ne fournit jamais les valeurs du graphique, les actions exécutables ou un programme JavaScript.
+
+### Scénario de démonstration
+
+Demander au chat : « Compare trois façons d'améliorer mon budget avec un sondage qui met à jour ton graphique et mon plan. » L'IA doit appeler `show_decision_board`. Cliquer sur « Progressif · 25 % » actualise immédiatement la courbe et la checklist ; cocher une tâche actualise son compteur ; sélectionner « Intensif · 50 % » met à jour les deux vues et réinitialise les cases ; enfin seulement, cliquer sur « En discuter avec Bank » transmet le récapitulatif.
