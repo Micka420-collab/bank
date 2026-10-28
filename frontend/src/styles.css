@@ -10829,3 +10829,16 @@ label {
 .investment-comparator-blockers { color: var(--negative); }
 .investment-comparator-cautions { color: var(--warning); }
 .investment-comparator-stress { color: var(--warning); font-weight: 600; }
+
+/* Inventaire des placements : aucune somme globale tant que les enveloppes ne sont pas rapprochées. */
+.investment-holdings-empty { padding: 1rem; border-radius: var(--r-card); background: var(--surface-2); }
+.investment-holdings-meta { font-size: var(--t-sm); color: var(--ink-2); }
+.investment-holdings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 0.85rem; }
+.investment-holdings-card { display: grid; gap: 0.65rem; align-content: start; padding: 1rem; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface); }
+.investment-holdings-card p { margin: 0; font-size: var(--t-sm); }
+.investment-holdings-card strong { font-size: var(--t-xl); }
+.investment-holdings-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.investment-holdings-title h3 { font-size: var(--t-md); margin: 0; overflow-wrap: anywhere; }
+.investment-holdings-card details { padding: 0.7rem; border: 1px solid var(--line); border-radius: var(--r-control); }
+.investment-holdings-card details ul { font-size: var(--t-sm); padding-left: 1rem; margin: 0.75rem 0; }
+.investment-holdings-card .notice { align-items: center; gap: 0.5rem; }
