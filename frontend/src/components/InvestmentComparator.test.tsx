@@ -83,6 +83,14 @@ describe("comparateur de placements personnels", () => {
     expect(host.querySelectorAll(".investment-comparator-card")).toHaveLength(0);
   });
 
+  it("prepares but does not silently submit a fresh observed holding amount", async () => {
+    await act(async () => root.render(<InvestmentComparator suggestedCapitalCents={200_000} />));
+    await flush();
+    const capital = host.querySelector<HTMLInputElement>(".investment-comparator-form input")!;
+    expect(capital.value).toBe("2000");
+    expect(requests.filter(x => x.url.includes("/investments/compare"))).toHaveLength(0);
+  });
+
   it("sends explicit scenarios and displays both gain and safety blockers", async () => {
     await act(async () => root.render(<InvestmentComparator />));
     await flush();
