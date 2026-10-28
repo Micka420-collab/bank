@@ -91,7 +91,7 @@ def compare(
     if current_salary and previous_salary:
         pressure = round((recent_spent / current_salary - old_spent / previous_salary) * 100, 2)
 
-    drivers = []
+    drivers: list[dict[str, str | int]] = []
     if spending_change is not None:
         for slug, months in spent_by_kind.items():
             old_avg = round(sum(months[m] for m in old) / MONTH_COUNT)
