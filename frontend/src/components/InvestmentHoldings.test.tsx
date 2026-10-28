@@ -58,6 +58,17 @@ describe("inventaire des placements réellement suivis", () => {
     host.remove();
     vi.unstubAllGlobals();
   });
+  it("only lets a recent observed value seed a comparison, not an unverified duplicate or stale crypto", async () => {
+    const choose = vi.fn();
+    await act(async () => root.render(<InvestmentHoldings onCompare={choose} />));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    const buttons = host.querySelectorAll<HTMLButtonElement>(".investment-holdings-card button");
+    expect(buttons).toHaveLength(1);
+    await act(async () => buttons[0]!.click());
+    expect(choose).toHaveBeenCalledWith(200_000);
+    expect(choose).toHaveBeenCalledTimes(1);
+  });
+
   it("shows provenance, unknown crypto price and possible overlap instead of fake totals", async () => {
     await act(async () => root.render(<InvestmentHoldings />));
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
