@@ -10,6 +10,7 @@ import { Donut } from "../charts/Donut";
 import { sliceColors } from "../charts/tones";
 import { TrendChart } from "../charts/TrendChart";
 import { Icon } from "../Icon";
+import { ChatInteractive } from "./Interactive";
 import { useToast } from "../ui";
 
 export type BlockHandlers = {
@@ -33,7 +34,8 @@ export function ChatBlocks({ blocks, handlers }: { blocks: ChatBlock[]; handlers
       {blocks.map((b, i) => {
         if (b.type === "actions") return <Actions key={i} items={b.items} handlers={handlers} />;
         if (b.type === "chart") return <ChatChart key={i} block={b} />;
-        if (b.type === "diagram") return <Diagram key={i} block={b} />;
+        if (b.type === "diagram") return <Diagram key={i} block={b} handlers={handlers} />;
+        if (b.type === "interactive") return <ChatInteractive key={i} block={b} onAsk={handlers.onAsk} />;
         if (b.type === "sources") return <Sources key={i} block={b} />;
         return <p key={i} className={`chat-note faint${b.tone === "warning" ? " is-warning" : ""}`}>{b.text}</p>;
       })}
@@ -188,7 +190,7 @@ function wrap(text: string, max: number): string[] {
   return lines.slice(0, 3);
 }
 
-function Diagram({ block }: { block: Extract<ChatBlock, { type: "diagram" }> }) {
+function Diagram({ block, handlers }: { block: Extract<ChatBlock, { type: "diagram" }>; handlers: BlockHandlers }) {
   if (block.kind === "steps") {
     return (
       <figure className="chat-diagram">
@@ -199,10 +201,11 @@ function Diagram({ block }: { block: Extract<ChatBlock, { type: "diagram" }> }) 
           ))}
         </ol>
         <p className="faint chat-chart-source">Schéma proposé par le modèle, à lire avec tes chiffres</p>
+        <AnnotateDiagram block={block} onAsk={handlers.onAsk} />
       </figure>
     );
   }
-  return <FlowDiagram block={block} />;
+  return <FlowDiagram block={block} onAsk={handlers.onAsk} />;
 }
 
 const W = 360;
@@ -210,7 +213,7 @@ const BOX_H = 44;
 const GAP_Y = 46;
 const CHAR_W = 6.2;
 
-function FlowDiagram({ block }: { block: Extract<ChatBlock, { type: "diagram" }> }) {
+function FlowDiagram({ block, onAsk }: { block: Extract<ChatBlock, { type: "diagram" }>; onAsk: (prompt: string) => void }) {
   const { nodes, edges } = block;
   const layout = useMemo(() => {
     const rows = layers(nodes, edges);
@@ -276,7 +279,43 @@ function FlowDiagram({ block }: { block: Extract<ChatBlock, { type: "diagram" }>
         </ul>
       )}
       <p className="faint chat-chart-source">Schéma proposé par le modèle, à lire avec tes chiffres</p>
+      <AnnotateDiagram block={block} onAsk={onAsk} />
     </figure>
+  );
+}
+
+/** Les annotations font partie de la conversation. Ni modification de la base ni dessin arbitraire exécuté. */
+function AnnotateDiagram({ block, onAsk }: { block: Extract<ChatBlock, { type: "diagram" }>; onAsk: (text: string) => void }) {
+  const [node, setNode] = useState(block.nodes[0]?.id ?? "");
+  const [note, setNote] = useState("");
+  const [sent, setSent] = useState(false);
+  const selected = block.nodes.find((n) => n.id === node);
+  return (
+    <details className="chat-annotate">
+      <summary><Icon name="edit" /> Annoter ce schéma</summary>
+      <form onSubmit={(e) => {
+        e.preventDefault();
+        const remark = note.trim();
+        if (!remark || !selected) return;
+        onAsk(`Concernant le schéma « ${block.title || "Schéma"} », j'annote l'étape « ${selected.label} » : ${remark}`);
+        setSent(true);
+        setNote("");
+      }}>
+        <label>
+          Élément à annoter
+          <select value={node} onChange={(e) => { setNode(e.target.value); setSent(false); }}>
+            {block.nodes.map((n) => <option key={n.id} value={n.id}>{n.label}</option>)}
+          </select>
+        </label>
+        <label>
+          Ta remarque ou ta correction
+          <textarea value={note} onChange={(e) => { setNote(e.target.value); setSent(false); }}
+                    maxLength={220} rows={2} placeholder="Ce que tu veux modifier ou préciser…" />
+        </label>
+        <button type="submit" className="btn sm" disabled={!note.trim()}>Envoyer l'annotation <Icon name="arrow" /></button>
+        {sent && <p role="status" className="faint">Annotation envoyée au chat. Tu peux en ajouter une autre.</p>}
+      </form>
+    </details>
   );
 }
 
