@@ -27,6 +27,7 @@ from app.services import watch as ws
 ECO = "https://www.economie.gouv.fr/rss/toutesactualites"
 PYPI = "https://pypi.org/rss/project/openfisca-france/releases.xml"
 SERVICE_PUBLIC = "https://www.service-public.gouv.fr/abonnements/rss/actu-actualites-particuliers.rss"
+ECB = "https://www.ecb.europa.eu/rss/press.html"
 SP_FEED = (Path(__file__).parent / "fixtures" / "calendrier" / "service_public_actualites.rss").read_bytes()
 
 
@@ -86,6 +87,7 @@ def fetcher(app, world: TestClient) -> FakeFetcher:  # type: ignore[no-untyped-d
     fake.serve(ECO, rss(LIVRET, FRENCH_TECH), etag='"v1"')
     fake.serve(PYPI, ENGINE)
     fake.serve(SERVICE_PUBLIC, rss())  # flux vide ici ; son vrai contenu a son propre test
+    fake.serve(ECB, rss())  # relai financier officiel, vide par défaut pour les autres scénarios
     app.state.watch_fetcher = fake
     app.state.watch_resolver = lambda host: ["93.184.216.34"]
     return fake
@@ -502,3 +504,26 @@ def test_news_about_aids_after_your_simulation_asks_to_run_it_again(
         k.startswith("aid:resimulate:")
         for k in [o["key"] for o in world.get("/api/opportunities").json()["opportunities"]]
     )
+
+
+def test_monetary_policy_watch_is_sourced_and_radar_separates_macro_from_forecast(
+    world: TestClient, fetcher: FakeFetcher
+) -> None:
+    news = (
+        "ECB monetary policy: interest rates and inflation",
+        "https://www.ecb.europa.eu/press/press_conference/2026/html/ecb.is-not-an-offer.html",
+        "A central bank monetary policy update, not a prediction of future returns.",
+        "2026-10-27 10:00:00",
+    )
+    fetcher.serve(ECB, rss(news))
+    data = _refresh(world)
+    assert any(s["url"] == ECB and s["trust"] == "officiel" for s in data["sources"])
+    article = next(item for item in data["items"] if item["title"] == news[0])
+    assert "marches" in article["topics"]
+    radar = world.get("/api/watch/radar")
+    assert radar.status_code == 200
+    view = radar.json()
+    assert view["horizon_days"] == 45
+    assert any(item["title"] == news[0] and item["source"].startswith("Banque centrale") for item in view["macro_context"])
+    assert "cause à effet" in view["disclaimer"]
+    assert "signals" in view and isinstance(view["signals"], list)
