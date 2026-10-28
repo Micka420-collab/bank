@@ -1338,6 +1338,14 @@ export type PurchaseCoachBlock = {
   after: PurchaseSnapshot;
   best_date: string | null;
   paths: { label: string; months: number | null; note: string }[];
+  alternatives?: {
+    discount_percent: 20 | 40;
+    amount_cents: number;
+    answer: PurchasePlan["answer"];
+    headline: string;
+    after: PurchaseSnapshot;
+    best_date: string | null;
+  }[];
   explanation: string;
   source: string;
 };
