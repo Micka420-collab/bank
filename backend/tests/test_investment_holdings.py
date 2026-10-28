@@ -55,6 +55,7 @@ def test_holding_inventory_uses_real_accounts_and_marks_stale_crypto_and_duplica
     tracked = next(p for p in items if p["label"] == "PEA banque test")
     assert tracked["value_cents"] == 250_000
     assert tracked["origin"] == "compte"
+    assert tracked["valuation_status"] == "valeur_declaree_non_verifiee"
     assert tracked["document_verified"] is False
     assert tracked["rate_pct"] is None
     declared = next(p for p in items if p["label"] == "PEA indiqué par ailleurs")
