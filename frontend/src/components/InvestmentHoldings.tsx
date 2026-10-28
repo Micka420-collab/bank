@@ -45,6 +45,9 @@ export function InvestmentHoldings({ onCompare }: { onCompare?: (capitalCents: n
   if (inventory.error) return <ErrorNote message={inventory.error} onRetry={inventory.reload} />;
   if (!inventory.data) return <Loading what="Lecture des placements suivis" />;
   const data = inventory.data;
+  if (!Array.isArray(data.positions) || !data.counts) {
+    return <ErrorNote message="La réponse de l'inventaire des placements est incomplète." onRetry={inventory.reload} />;
+  }
   return (
     <section className="section investment-holdings" aria-labelledby="investments-held-title">
       <div className="section-head">
