@@ -429,7 +429,9 @@ def test_watch_respects_consent_and_schedule(app, world: TestClient, fetcher: Fa
         first = ws.housekeeping(db, now=now, fetcher=fetcher)
         assert first["watch_checked"] == 7
         assert ws.housekeeping(db, now=now + timedelta(hours=1), fetcher=fetcher)["watch_checked"] == 0
-        assert ws.housekeeping(db, now=now + timedelta(hours=13), fetcher=fetcher)["watch_checked"] == 5  # cinq flux à 12 h
+        assert (
+            ws.housekeeping(db, now=now + timedelta(hours=13), fetcher=fetcher)["watch_checked"] == 5
+        )  # cinq flux à 12 h
         old = db.scalars(select(WatchItem)).first()
         assert old is not None
         old.first_seen_at = now - timedelta(days=400)
