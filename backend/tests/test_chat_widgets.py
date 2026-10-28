@@ -279,19 +279,24 @@ def test_purchase_coach_tool_is_sourced_from_bank_not_model_data(monkeypatch: py
     after = Snapshot(1_500, 8_000, date(2026, 10, 29), None, 10_000)
     verdict = PurchaseVerdict("serre", 35_000, date(2026, 10, 28), before, after, None, None, 2.0, "Marge réduite")
     purchase = PurchasePlan(
-        "oui_mais", "Oui, mais la marge est serrée", 35_000, verdict,
-        0, [SavingPath("Épargne", 2, date(2026, 12, 1), 17_500, "Attendre")], "Marge réduite",
+        "oui_mais",
+        "Oui, mais la marge est serrée",
+        35_000,
+        verdict,
+        0,
+        [SavingPath("Épargne", 2, date(2026, 12, 1), 17_500, "Attendre")],
+        "Marge réduite",
     )
     monkeypatch.setattr(assistant.analytics, "budget_accounts", lambda db: [object()])
     called: list[tuple[int, str]] = []
+
     def purchase_stub(db: object, today: date, *, amount_cents: int, label: str, category: str | None) -> PurchasePlan:
         called.append((amount_cents, label))
         return purchase
+
     monkeypatch.setattr(assistant.decisions, "purchase", purchase_stub)
     ctx = assistant._ToolContext(None, "user", date(2026, 10, 28), 7, False)  # type: ignore[arg-type]
-    result = json.loads(
-        assistant._execute_tool(ctx, "show_purchase_coach", '{"amount_eur":350,"label":"Vélo"}')
-    )
+    result = json.loads(assistant._execute_tool(ctx, "show_purchase_coach", '{"amount_eur":350,"label":"Vélo"}'))
     assert result["done"] is True
     assert called == [(35_000, "Vélo")]
     assert ctx.purchase_coach is not None
@@ -302,7 +307,8 @@ def test_purchase_coach_tool_is_sourced_from_bank_not_model_data(monkeypatch: py
     assert "error" in json.loads(
         assistant._execute_tool(
             assistant._ToolContext(None, "user", date(2026, 10, 28), 7, False),  # type: ignore[arg-type]
-            "show_purchase_coach", '{"amount_eur":-20}',
+            "show_purchase_coach",
+            '{"amount_eur":-20}',
         )
     )
     monkeypatch.setattr(assistant.analytics, "budget_accounts", lambda db: [])
