@@ -126,6 +126,23 @@ def test_personal_reserve_red_lines_and_cap_block_unsupported_investments(monkey
     assert len(result["scenarios"]) == 4
 
 
+def test_inventory_preserves_provenance_and_avoids_double_counting() -> None:
+    accounts = [SimpleNamespace(kind="pea", name="PEA connecté", balance_cents=150_000)]
+    values = {
+        "outside_assets": [
+            {"kind": "pea", "label": "Mon PEA", "value_cents": 150_000},
+            {"kind": "immobilier", "label": "Appartement", "value_cents": 5_000_000},
+        ]
+    }
+    found = svc.inventory(accounts, values)
+    assert found["holdings_count"] == 2
+    assert found["total_cents"] is None
+    assert {h["source"] for h in found["holdings"]} == {"compte_enregistre", "declare_par_utilisateur"}
+    assert all(h["document_status"] == "non_verifie" for h in found["holdings"])
+    assert all("frais_produit" in h["missing"] for h in found["holdings"])
+    assert svc.inventory([], {})["holdings_count"] == 0
+
+
 def test_authenticated_route_rate_sourcing_and_invalid_payload(world: TestClient) -> None:
     response = world.post(
         "/api/watch/investments/compare",
