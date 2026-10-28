@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 
@@ -160,21 +161,36 @@ def test_scenario_block_only_accepts_consecutive_bank_balances() -> None:
     assert b.validate_blocks([{**raw, "daily_savings_cap_cents": 100_000_000}])[0]["daily_savings_cap_cents"] == 100_000
 
 
-def test_budget_simulator_tool_uses_bank_data_not_the_models_arguments(app) -> None:  # type: ignore[no-untyped-def]
-    with app.state.sessionmaker() as db:
-        ctx = assistant._ToolContext(db, "user", date(2026, 10, 21), 7, False)
-        answer = json.loads(
-            assistant._execute_tool(
-                ctx,
-                "show_budget_simulator",
-                json.dumps({"points": [{"date": "2026-10-21", "balance_cents": 900_000_000}]}),
-            )
+def test_budget_simulator_tool_uses_bank_data_not_the_models_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+    # La projection est simulée mais la seule source permise est le résultat du moteur Bank.
+    points = [
+        SimpleNamespace(date=date(2026, 10, 21), balance_cents=50_000),
+        SimpleNamespace(date=date(2026, 10, 22), balance_cents=48_000),
+        SimpleNamespace(date=date(2026, 10, 23), balance_cents=46_000),
+    ]
+    forecast = SimpleNamespace(
+        projection=points, daily_variable_rate_cents=900, projected_end_balance_cents=46_000
+    )
+    monkeypatch.setattr(assistant.analytics, "budget_accounts", lambda db: [object()])
+    monkeypatch.setattr(
+        assistant.analytics, "forecast_inputs", lambda db, today: SimpleNamespace(run=lambda: forecast)
+    )
+    ctx = assistant._ToolContext(None, "user", date(2026, 10, 21), 7, False)  # type: ignore[arg-type]
+    result = json.loads(
+        assistant._execute_tool(
+            ctx,
+            "show_budget_simulator",
+            json.dumps({"points": [{"date": "2026-10-21", "balance_cents": 900_000_000}]}),
         )
-        if ctx.scenario:
-            assert answer["done"] is True
-            assert ctx.scenario["points"][0]["date"] == "2026-10-21"
-            assert ctx.scenario["points"][0]["balance_cents"] != 900_000_000
-            assert ctx.blocks()[0]["type"] == "scenario"
-            assert "error" in json.loads(assistant._execute_tool(ctx, "show_budget_simulator", "{}"))
-        else:
-            assert "error" in answer  # Aucun compte budgétaire dans le scénario de test.
+    )
+    assert result["done"] is True and ctx.scenario is not None
+    assert ctx.scenario["points"] == [
+        {"date": p.date.isoformat(), "balance_cents": p.balance_cents} for p in points
+    ]
+    assert ctx.scenario["daily_savings_cap_cents"] == 900
+    assert ctx.blocks()[0]["type"] == "scenario"
+    assert "error" in json.loads(assistant._execute_tool(ctx, "show_budget_simulator", "{}"))
+    monkeypatch.setattr(assistant.analytics, "budget_accounts", lambda db: [])
+    other = assistant._ToolContext(None, "user", date(2026, 10, 21), 7, False)  # type: ignore[arg-type]
+    no_account = json.loads(assistant._execute_tool(other, "show_budget_simulator", "{}"))
+    assert "error" in no_account and other.scenario is None
