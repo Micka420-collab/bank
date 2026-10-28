@@ -194,7 +194,7 @@ def test_backups_are_visible_in_bank_scheduled_and_alert_on_failure(world: TestC
         row = svc.backup_and_record(db, broken, actor="test", trigger="auto")
         assert row.status == "failed" and "introuvable" in row.details
         db.commit()
-        later = datetime(2026, 11, 2, 2, 30, tzinfo=UTC).astimezone(svc.ZoneInfo("Europe/Paris"))
+        later = datetime(2026, 11, 9, 2, 30, tzinfo=UTC).astimezone(svc.ZoneInfo("Europe/Paris"))
         assert svc.due(db, settings, local_now=later)[0] is True
         assert db.query(BackupRun).count() == 6
     st = world.get("/api/system/backups").json()
