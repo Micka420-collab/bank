@@ -142,7 +142,12 @@ def world(app, client: TestClient) -> TestClient:  # type: ignore[no-untyped-def
     return client
 
 
-def test_backups_are_visible_in_bank_scheduled_and_alert_on_failure(world: TestClient, app, settings: Settings) -> None:  # type: ignore[no-untyped-def]
+def test_backups_are_visible_in_bank_scheduled_and_alert_on_failure(  # type: ignore[no-untyped-def]
+    world: TestClient, app, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Les gestes passés par l'API sont horodatés « maintenant » : figé au samedi 24 octobre 2026 (semaine 43), sinon le
+    # test change de résultat le jour où la vraie date rattrape les dates fixes de la cadence ci-dessous.
+    monkeypatch.setattr(svc, "utcnow", lambda: datetime(2026, 10, 24, 3, 0, tzinfo=UTC))
     st = world.get("/api/system/backups").json()
     assert st["level"] == "none" and st["last_backup"] is None and st["files"] == [] and st["hour"] == 3
     assert "clé maîtresse" in st["restore_hint"]
