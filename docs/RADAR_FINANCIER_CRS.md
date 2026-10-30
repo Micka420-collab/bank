@@ -1,0 +1,108 @@
+# Bank — Radar prospectif, actualités et transparence CRS
+
+## Pourquoi ce développement
+
+L'objectif est de croiser les échéances déjà connues, la trésorerie prévisionnelle et des sources institutionnelles à jour **sans confondre une corrélation avec une prédiction certaine**. Aucun titre financier, politique ou géopolitique ne suffit à déduire qu'un portefeuille perdra une somme dans un mois.
+
+## Ce qui fonctionne dans cette première version
+
+- **Radar des 45 prochains jours** (`GET /api/watch/radar`, authentifié) : rapproche les dépenses prévues et les récurrences détectées avec le solde estimé **du mois correspondant**. Les mois suivants viennent de `yearahead.compute` (référence : la fin du mois) ; **les jours qui restent au mois en cours** viennent de la prévision du mois (`analytics.forecast_inputs`, grosses sorties prévues et dépenses saisies ; référence : le point bas du mois), car « L'année qui vient » commence au 1er du mois suivant. Trois niveaux, les mêmes que « L'année qui vient » : « Compte sous zéro » (`risk`), « Marge à surveiller » (`tight`, sous le matelas de sécurité), « Dépense à prévoir » (`watch`).
+- **Données vérifiables** : date, montant, base du rapprochement, nature « saisi » ou « estimé », solde mensuel prévu. Exclut les impôts estimés sans date certaine, les événements trop éloignés et les petits montants. Sans compte courant budgétaire, pas de fausse prévision.
+- **Informations du monde** : flux RSS officiels de la BCE, de la Réserve fédérale américaine (décisions monétaires), du Conseil de l'UE, de la Commission européenne (documents d'orientation sur les sanctions, DG FISMA), du ministère français de l'Économie et de Service Public. Les flux passent par le fetcher SSRF-protected déjà présent, avec horodatage, détection de versions et consentement de veille — le texte de l'accord « veille » nomme ces quatre nouvelles sources (version 3) : un accord donné à l'ancien texte ne vaut pas pour elles, Bank redemande avant de les interroger. Ces flux macro, en anglais pour la plupart, nourrissent le radar et la liste de la Veille, **jamais une notification de messagerie** (un communiqué du Conseil où passe « tax » n'est pas une actualité de tes aides). Le radar n'affiche que les articles officiels pertinents pour les thèmes marchés, géopolitique ou transparence, publiés dans les 14 derniers jours.
+- **Information et non influence** : un titre ne devient ni une prévision de cours, ni une promesse de rendement. Pas d'inférence « cet article va faire baisser ton ETF » sans positions identifiées, exposition mesurée et données de prix validées.
+- **Messageries existantes** : les dépenses **saisies explicitement** qui font passer le mois sous zéro (urgent) ou sous le matelas de sécurité alimentent les alertes du service `channel_alerts` ; « L'année qui vient » n'est calculée qu'une fois par passage et partagée avec le radar. Le mécanisme existant exige un canal configuré, l'autorisation de recevoir ses alertes, respecte les heures calmes et évite les envois multiples avec une clé stable. Les pics déjà envoyés par `yearahead.alerts` ne sont pas répétés par le nouveau radar.
+
+### Investissements : première sensibilité documentée
+
+Bank peut maintenant récupérer **les avoirs crypto déjà connus** et les **dernières cotations en euros** dans son propre stockage. Le radar calcule l'impact arithmétique de **chocs hypothétiques de -10 % et -25 %** sur les actifs avec un cours récent (24 heures au plus, `STALE_PRICE`, la même fraîcheur que la page Crypto et l'inventaire des placements). Les actifs sans prix fiable ou trop ancien sont écartés du montant utilisé et signalés explicitement. Ces deux chocs ne sont ni des prévisions, ni des probabilités, ni une recommandation de vente.
+
+Cette version ne sait pas encore relier chaque ETF, action, obligation ou placement aux entreprises, devises et pays sous-jacents. Le tableau des titres publics reste volontairement séparé des projections de perte afin d'éviter une causalité fabriquée. Le suivi des actifs reste en lecture seule.
+
+### Livraison par messagerie
+
+Les alertes passent par la mécanique existante des messageries (opt-in, heures calmes, clé stable). Pour WhatsApp, l'API Meta n'autorise une réponse libre que dans les 24 heures suivant le dernier message entrant ; au-delà, il faut des modèles approuvés — voir `docs/CANAUX.md`.
+
+## Banques : CRS, non-CRS, FATCA, DAC2, DAC8
+
+La section **CRS / non-CRS des banques** de l'écran « Veille » propose une sélection de **résidence fiscale** et de **juridiction de l'établissement financier**. Le résultat est une explication guidée et un lien vers la source OCDE officielle des relations bilatérales activées.
+
+Il ne faut pas étiqueter une banque « non-CRS » à partir de son IBAN ou de son nom, car :
+- le statut dépend des règles nationales, de l'entité bancaire, du type de compte, de la résidence fiscale et de la **relation bilatérale** et de son sens ;
+- les États-Unis disposent notamment du dispositif **FATCA**, distinct du CRS ;
+- l'absence d'une relation CRS ne supprime pas les obligations locales. En France, les formulaires **3916 / 3916 bis** peuvent être exigés pour des comptes ou actifs numériques détenus à l'étranger ;
+- **DAC8** s'applique depuis le 1er janvier 2026 à la collecte d'informations sur les cryptoactifs relevant de son champ et prévoit les premiers échanges d'informations en 2027.
+
+### Sources officielles
+
+- [OCDE : relations CRS et accords d'échange](https://www.oecd.org/en/topics/sub-issues/international-standards-on-tax-transparency/automatic-exchange-of-information-exchange-relationships.html)
+- [Commission européenne : DAC2](https://taxation-customs.ec.europa.eu/taxation/tax-transparency-cooperation/administrative-co-operation-and-mutual-assistance/directive-administrative-cooperation-dac/dac2_en)
+- [Commission européenne : DAC8](https://taxation-customs.ec.europa.eu/taxation/tax-transparency-cooperation/administrative-co-operation-and-mutual-assistance/directive-administrative-cooperation-dac/dac8_en)
+- [impots.gouv.fr : déclaration des comptes étrangers, formulaire 3916](https://www.impots.gouv.fr/formulaire/3916/declaration-par-un-resident-dun-compte-letranger-ou-dun-contrat-de-capitalisation-o)
+- [Meta : politique de messagerie WhatsApp Business](https://whatsappbusiness.com/policy/)
+
+## Pouvoir d'achat du salaire et rentabilité réelle des placements
+
+L'écran Veille inclut désormais l'observatoire **Salaire, pouvoir d'achat et placements** :
+
+- Source d'inflation : l'inflation sur un an **relevée à l'INSEE** par la mise à jour mensuelle des barèmes (série `insee.ipc_glissement`, accord « barèmes », `RateObservation`) dès qu'un mois plus récent est publié ; à défaut, le dernier IPC **définitif** embarqué dans cette version, **septembre 2026 : +3,1 % sur douze mois**, publié le 15 octobre 2026 ([source](https://www.insee.fr/fr/statistiques/9080209)). Mois, date, statut (`releve` / `definitif`) et lien sont visibles, et le repère est signalé comme ancien après 60 jours. Ce taux est un repère national, pas l'inflation personnelle exacte.
+- Le moteur prend les relevés des **comptes courants budgétaires** déjà connectés, ignore les virements internes et les dépenses d'épargne, et compare les **trois derniers mois civils terminés** aux **mêmes trois mois un an plus tôt**. Il exige six mois de salaires classés « salaire » : sinon il n'invente ni baisse ni hausse de revenus. Il affiche revenus observés, hausse nominale, variation de salaire réel (formule multiplicative), salaire nécessaire pour suivre le repère IPC et écart mensuel indicatif.
+- Le **poids des dépenses** par rapport au salaire, les dépenses par mois et les catégories qui ont réellement augmenté sont affichés séparément : une hausse des courses n'est **pas automatiquement** une hausse des prix, car quantité, composition du panier et achats exceptionnels peuvent changer.
+- Une alerte proactive (canaux déjà approuvés, heures calmes, clés anti-doublons) est éligible seulement lorsque les données des salaires sont complètes, que le repère n'est pas vieux et que le recul réel annuel dépasse 2 % **et** environ 50 €/mois. L'alerte n'inclut aucun salaire en euros en modes confidentialité restreints.
+- Le calculateur **rendement réel** permet de saisir un rendement annuel *supposé*, des frais *supposés*, une fiscalité simplifiée sur gains et une inflation de comparaison. Le serveur calcule un rendement nominal net puis un rendement réel composé. Aucune hypothèse n'est envoyée automatiquement : le calcul ne part qu'après clic. Une fiscalité réelle varie avec les produits et enveloppes.
+- Pour **choisir** une solution de placement, le plan existant `GET /api/decisions/investment-plan` reste prioritaire : coussin de sécurité, dette chère, projet daté, horizon et profil de risque. La simulation ne recommande ni ticker ni produit vendu et n'exécute aucune transaction.
+
+Références pédagogiques : [AMF — objectifs et horizon](https://www.amf-france.org/fr/espace-epargnants/savoir-bien-investir/cadrer-son-projet/definir-son-objectif), [AMF — rendement, risque et inflation](https://www.amf-france.org/fr/espace-epargnants/savoir-bien-investir/cadrer-son-projet/risques-et-rendements-des-placements).
+
+### Comparaison personnalisée des placements (scénarios)
+
+La page Veille contient un deuxième outil, **Comparer les placements dans ta situation**. Après saisie explicite du capital (100 € à 1 M€), de la durée (1 à 360 mois) et de l'inflation de comparaison, l'API authentifiée `POST /api/watch/investments/compare` calcule des scénarios **sur le même capital et le même horizon** :
+
+- Livrets réglementés Livret A, LDDS et LEP : taux **datés** fournis par `rates.current()`, provenance affichée, place disponible estimée depuis les soldes du produit. Le taux est **maintenu artificiellement constant** dans la projection : il peut être modifié par les autorités ; la méthode des quinzaines est simplifiée. L'éligibilité LEP est **inconnue tant que non vérifiée** ; un plafond insuffisant bloque l'affichage « À étudier ».
+- Placement de marché : facultatif, **aucune rentabilité préremplie par des cours ou des prévisions**. L'utilisateur doit activer le scénario et renseigner lui-même rendement supposé, frais annuels, fiscalité supposée sur les gains à la sortie, blocage contractuel éventuel et choc de perte à tester. Le choc n'est pas un maximum de perte.
+- Moteur pur `domain/investment_compare.py` : capital composé après frais ; imposition uniquement si la valeur finale excède le capital ; déflation en euros d'aujourd'hui via `(1 + IPC)^années` ; valeur nominale, réelle et gain réel distincts. La fiscalité et les frais varient fortement selon produit, enveloppe et durée : le calcul n'est **pas** une offre ou une projection statistique.
+- Le service recoupe la **réserve d'urgence et les charges essentielles observées**, l'éventuel découvert prévu, le profil de risque de l'onboarding, les lignes rouges déclarées et l'horizon choisi. Pour une option risquée : manque de réserve, découvert, horizon inférieur à cinq ans, sortie bloquée après l'échéance, données de sécurité absentes ou exposition interdite **bloquent** l'adéquation, même quand le rendement hypothétique est élevé.
+- Les scénarios ne sont ni classés ni exécutés automatiquement. Les données de portefeuille réelles et documents réglementaires précis restent à intégrer pour comparer des produits nommés.
+
+Tests : `backend/tests/test_investment_compare.py` (calculs, limites, adéquation et authentification), `frontend/src/components/InvestmentComparator.test.tsx` (saisie volontaire et présentation des risques).
+
+### Inventaire réel des placements (sans double comptage)
+
+La section **Tes placements suivis**, ajoutée dans Veille au-dessus du comparateur, exploite uniquement les
+données déjà présentes dans Bank. L'API authentifiée `GET /api/watch/investments/holdings` ne provoque
+**aucun appel réseau**, aucun ordre de marché et aucune copie de secret.
+
+- **Comptes actifs de type épargne ou investissement** : compte/enveloppe, solde, devise, source et date du dernier
+  solde. Un compte `PEA` ou `assurance_vie` ne donne **pas** la composition des titres ou leurs DIC. Les soldes saisis
+  manuellement restent explicitement *non vérifiés* ; un solde périmé ou une date inconnue est signalé.
+- **Actifs hors comptes déclarés par l'utilisateur** : valeur déclarée mais non vérifiée. Une ligne de même type
+  qu'un compte suivi reçoit un avertissement de doublon possible : le service **n'additionne pas** les lignes.
+- **Cryptos déjà suivies** : quantités connues, cotation locale uniquement si positive, finie et datant de moins de
+  24 heures. Cours absent, périmé, invalide ou futur = **valorisation en euros inconnue**, jamais zéro inventé.
+  Les adresses des portefeuilles, clés et informations de plateforme privées ne figurent pas dans cette réponse.
+- **Pièces à vérifier** : chaque ligne distingue taux réglementé daté, valeur de portefeuille, frais et conditions
+  exactes qui nécessitent une fiche de produit, un DIC, une tarification ou une preuve de détention. Aucun
+  document déjà dans le coffre n'est associé automatiquement à un titre **sans identifiant fiable**.
+- **Passage au comparateur** : un clic explicite reprend le montant des seuls comptes datés non manuels ou cours
+  crypto récents pour préremplir une simulation. Aucune simulation n'est lancée automatiquement, aucune transaction.
+  Les valeurs déclarées, à prix ancien ou dans une devise sans conversion vérifiée sont exclues du raccourci.
+
+Tests : `backend/tests/test_investment_holdings.py` et
+`frontend/src/components/InvestmentHoldings.test.tsx`.
+
+**Limite volontaire** : ce n'est pas encore une intégration titre par titre (ISIN, parts de fonds, DIC officiel par
+produit, cours et frais du courtier). Pour la phase suivante, il faudra une identification confirmée du produit
+et un rapprochement revu par l'utilisateur entre fiche, portefeuille et justificatif, sans déduire ces données
+du seul libellé d'un compte bancaire.
+
+### Prochain niveau
+
+Pour un modèle de pouvoir d'achat personnel plus précis, connecter l'IPC **par catégorie** avec version/source horodatée et pondérer les postes selon le panier réellement consommé, sans confondre dépenses et prix. Étendre ensuite la comparaison d'investissements à des **fiches de produits vérifiées** (DIC, frais, liquidité, fiscalité, risque, suivi des taux, simulations de pertes), sans promesse de rendement ni achat automatique.
+
+## Points à développer après validation de cette première version
+
+1. Relier **les positions d'investissement réellement identifiées** (types d'actifs, devise, exposition, horizon) à des facteurs de risque documentés. Ne pas traiter une actualité « intéressante » comme une preuve de corrélation sur le portefeuille.
+2. Lire les cours depuis un fournisseur de marché autorisé et daté, afficher leur fraîcheur, identifier les périodes sans données, effectuer des analyses rétrospectives et des scénarios bornés. Pas de conseil personnalisé d'arbitrage sans cadre adéquat.
+3. Intégrer l'envoi de **templates WhatsApp approuvés** hors de la fenêtre de 24 heures, avec consentement granulaire, révocation, audit des livraisons et résumé sans informations sensibles.
+4. Proposer une vérification CRS assistée par banque et pays **seulement lorsqu'une source officielle par juridiction et un statut daté sont établis**. Jamais de fausse liste de banques « invisibles ».
+
+Les décisions financières restent à l'utilisateur ; aucune transaction, déclaration ou message n'est émis sans les contrôles et autorisations du produit.

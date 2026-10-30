@@ -37,6 +37,10 @@ MAX_ITEMS_PER_SOURCE = 300
 ITEM_RETENTION_DAYS = 365
 ENGINE_SLUG = "openfisca-france"
 
+# Flux macro (en anglais pour la plupart) : ils nourrissent le radar et la veille, jamais une notification de
+# messagerie — un communiqué de la BCE où passe « tax » n'est pas une actualité de tes aides.
+MACRO_SLUGS = frozenset({"ecb-press", "eu-council-press", "eu-finance-press", "fed-policy"})
+
 BUILTIN_SOURCES: tuple[dict[str, Any], ...] = (
     {
         "slug": "economie-gouv",
@@ -52,6 +56,41 @@ BUILTIN_SOURCES: tuple[dict[str, Any], ...] = (
         "kind": "rss",
         "name": "Service-Public — actualités pour les particuliers",
         "url": "https://www.service-public.gouv.fr/abonnements/rss/actu-actualites-particuliers.rss",
+        "trust": "officiel",
+        "interval_hours": 12,
+    },
+    {
+        # Banque centrale européenne : dates et sources officielles, pas une prédiction de marché.
+        "slug": "ecb-press",
+        "kind": "rss",
+        "name": "Banque centrale européenne — communiqués",
+        "url": "https://www.ecb.europa.eu/rss/press.html",
+        "trust": "officiel",
+        "interval_hours": 12,
+    },
+    {
+        # Affaires économiques et sanctions : annonces officielles de l'Union européenne.
+        "slug": "eu-council-press",
+        "kind": "rss",
+        "name": "Conseil de l'UE — décisions et relations internationales",
+        "url": "https://www.consilium.europa.eu/en/rss/pressreleases.ashx",
+        "trust": "officiel",
+        "interval_hours": 12,
+    },
+    {
+        # Le flux publie des documents d'orientation sur les sanctions financières (DG FISMA), pas de l'actualité.
+        "slug": "eu-finance-press",
+        "kind": "rss",
+        "name": "Commission européenne — documents d'orientation sur les sanctions",
+        "url": "https://finance.ec.europa.eu/node/1296/rss_en",
+        "trust": "officiel",
+        "interval_hours": 24,
+    },
+    {
+        "slug": "fed-policy",
+        "kind": "rss",
+        "name": "Réserve fédérale américaine — politique monétaire",
+        "url": "https://www.federalreserve.gov/feeds/press_monetary.xml",
         "trust": "officiel",
         "interval_hours": 12,
     },

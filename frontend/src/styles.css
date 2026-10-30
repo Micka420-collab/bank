@@ -10696,6 +10696,158 @@ label {
   min-width: 0;
 }
 
+/* Radar prospectif : les échéances calculées sont visuellement distinctes des dépêches publiques. */
+.future-radar-list, .future-radar-articles { list-style: none; margin: 0; padding: 0; }
+.future-radar-list { display: grid; gap: 0.65rem; }
+.future-radar-signal { display: flex; gap: 0.85rem; align-items: flex-start; padding: 1rem;
+  border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-card); }
+.future-radar-signal.is-risk { border-left: 3px solid var(--negative); }
+.future-radar-signal.is-tight { border-left: 3px solid var(--warning); }
+.future-radar-timing { display: grid; gap: 0.15rem; min-width: 4.6rem; flex: 0 0 auto; }
+.future-radar-timing strong { font-size: var(--t-lg); font-variant-numeric: tabular-nums; }
+.future-radar-timing span { font-size: var(--t-xs); color: var(--ink-2); }
+.future-radar-detail { flex: 1; min-width: 0; }
+.future-radar-detail p { font-size: var(--t-sm); margin: 0.45rem 0 0; }
+.future-radar-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; }
+.future-radar-heading strong { overflow-wrap: anywhere; }
+.future-radar-context { margin-top: 1.15rem; padding: 1rem; border-radius: var(--r-card);
+  background: var(--surface-2); }
+.future-radar-context h3 { display: flex; align-items: center; gap: 0.45rem; font-size: var(--t-md); }
+.future-radar-articles { display: grid; gap: 0.7rem; }
+.future-radar-articles li { padding: 0.6rem 0; border-bottom: 1px solid var(--line); }
+.future-radar-articles li:last-child { border-bottom: none; }
+.future-radar-articles p { margin: 0.25rem 0 0; }
+.crs-selectors { display: grid; gap: 0.8rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.crs-selectors > div { display: grid; gap: 0.45rem; }
+.crs-selectors label { font-weight: 650; font-size: var(--t-sm); }
+.crs-selectors select { width: 100%; max-width: 100%; min-width: 0; }
+.crs-result { margin: 1rem 0; padding: 1rem; background: var(--surface-2); border-radius: var(--r-card);
+  border: 1px solid var(--line); }
+.crs-result p { margin: 0.55rem 0; }
+.crs-result a { font-size: var(--t-sm); }
+.crs-guide { display: grid; gap: 0.75rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.crs-guide > div { padding: 0.9rem; border: 1px solid var(--line); border-radius: var(--r-control);
+  background: var(--surface); min-width: 0; }
+.crs-guide h3 { font-size: var(--t-md); margin-bottom: 0.4rem; }
+.crs-guide p { color: var(--ink-2); font-size: var(--t-sm); }
+.crs-guide a { font-size: var(--t-sm); }
+@media (max-width: 650px) { .crs-guide { grid-template-columns: 1fr; }
+  .crs-selectors { grid-template-columns: 1fr; }
+  .future-radar-signal { padding: 0.75rem; gap: 0.65rem; }
+}
+
+.future-radar-crypto { margin-top: 1rem; border: 1px solid var(--line); background: var(--surface);
+  border-radius: var(--r-card); padding: 1rem; min-width: 0; }
+.future-radar-crypto h3 { display: flex; gap: 0.4rem; align-items: center; font-size: var(--t-md); }
+.future-radar-crypto p { font-size: var(--t-sm); margin: 0.6rem 0 0; }
+.future-radar-stress { display: grid; grid-template-columns: repeat(2, minmax(0,1fr));
+  margin-top: 0.8rem; gap: 0.6rem; }
+.future-radar-stress > div { display: grid; gap: 0.35rem; padding: 0.7rem; background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: var(--r-control); }
+.future-radar-stress span { color: var(--ink-2); font-size: var(--t-xs); }
+.future-radar-stress strong { font-variant-numeric: tabular-nums; }
+@media (max-width: 420px) { .future-radar-stress { grid-template-columns: 1fr; } }
+
+/* Pouvoir d'achat : salaire réel, coût de vie et scénario net après inflation. */
+.purchasing-power-benchmark { border: 1px solid var(--line); padding: 0.9rem 1rem; border-radius: var(--r-card);
+  display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; background: var(--surface-2); flex-wrap: wrap; }
+.purchasing-power-benchmark > div { display: grid; gap: 0.25rem; }
+.purchasing-power-benchmark span { color: var(--ink-2); font-size: var(--t-xs); }
+.purchasing-power-benchmark strong { font-variant-numeric: tabular-nums; font-size: 1.4rem; }
+.purchasing-power-benchmark p { font-size: var(--t-xs); flex-basis: 100%; margin: 0; }
+.purchasing-power-benchmark a { display: inline-flex; align-items: center; gap: 0.3rem; }
+.purchasing-power-benchmark .tag { margin-left: 0.5rem; }
+.purchasing-power-figures { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 0.65rem; margin: 0.8rem 0; }
+.purchasing-power-figures > div { padding: 0.95rem; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-control); display: grid; gap: 0.4rem; min-width: 0; }
+.purchasing-power-figures span, .purchasing-power-yield-result span { color: var(--ink-2); font-size: var(--t-xs); }
+.purchasing-power-figures strong { font-size: 1.2rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.purchasing-power .is-negative { color: var(--negative); }
+.purchasing-power .is-positive { color: var(--positive); }
+.purchasing-power-insight { display: flex; gap: 0.65rem; align-items: center;
+  padding: 0.85rem 1rem; margin: 0.8rem 0; border-radius: var(--r-control);
+  background: var(--surface-2); font-size: var(--t-sm); }
+.purchasing-power-insight .icon { flex: 0 0 auto; }
+.purchasing-power-insight.is-risk { border-left: 3px solid var(--negative); }
+.purchasing-power-spending { padding: 0.95rem 1rem; border: 1px solid var(--line); border-radius: var(--r-card); }
+.purchasing-power-spending h3 { font-size: var(--t-md); }
+.purchasing-power-spending p { margin: 0.6rem 0; font-size: var(--t-sm); }
+.purchasing-power-spending ul { list-style: none; padding: 0; margin: 0.65rem 0 0; }
+.purchasing-power-spending li { display: flex; justify-content: space-between; gap: 0.55rem; padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line); font-size: var(--t-sm); }
+.purchasing-power-spending li:last-child { border-bottom: none; }
+.purchasing-power-spending li span { text-transform: capitalize; }
+.purchasing-power-spending li strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.purchasing-power-yield { padding: 1rem; background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: var(--r-card); margin: 1.1rem 0 0; }
+.purchasing-power-yield h3 { display: flex; align-items: center; gap: 0.45rem; font-size: var(--t-md); }
+.purchasing-power-yield p { font-size: var(--t-sm); }
+.purchasing-power-yield form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0.8rem; }
+.purchasing-power-yield form label { display: grid; gap: 0.35rem; font-size: var(--t-sm); font-weight: 600; }
+.purchasing-power-yield input { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.purchasing-power-yield form button { justify-self: start; grid-column: 1/-1; }
+.purchasing-power-yield-result { border-top: 1px solid var(--line); margin-top: 0.85rem;
+  padding-top: 0.9rem; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0.6rem; }
+.purchasing-power-yield-result > div { display: grid; gap: 0.35rem; }
+.purchasing-power-yield-result strong { font-variant-numeric: tabular-nums; font-size: 1.2rem; }
+.purchasing-power-yield-result p { grid-column: 1/-1; margin: 0; }
+@media(max-width: 590px) {
+  .purchasing-power-figures { grid-template-columns: 1fr; }
+  .purchasing-power-yield form { grid-template-columns: 1fr; }
+  .purchasing-power-yield-result { grid-template-columns: 1fr; }
+}
+
+/* Rapprochements explicables : deux constats mesurés sans lien causal fabriqué. */
+.purchasing-power-correlations { margin: 0.85rem 0; padding: 0.95rem; border-radius: var(--r-card);
+  border: 1px solid var(--line); background: var(--surface-2); }
+.purchasing-power-correlations h3 { display: flex; align-items: center; gap: 0.45rem; font-size: var(--t-md); }
+.purchasing-power-correlations ul { display: grid; gap: 0.65rem; list-style: none; padding: 0; margin: 0.75rem 0 0; }
+.purchasing-power-correlations li { border-radius: var(--r-control); padding: 0.75rem;
+  background: var(--surface); border-left: 3px solid var(--warning); }
+.purchasing-power-correlations strong { font-size: var(--t-sm); }
+.purchasing-power-correlations p { font-size: var(--t-sm); margin: 0.4rem 0 0; }
+
+/* Les rendements ne sont jamais une hiérarchie : chaque scénario montre ses propres conditions. */
+.investment-comparator-form, .investment-comparator-market { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: 0.75rem; align-items: end; }
+.investment-comparator-form { padding: 1rem; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface-2); }
+.investment-comparator-form label, .investment-comparator-market label { display: grid; gap: 0.4rem; font-size: var(--t-sm); }
+.investment-comparator-form input:not([type="checkbox"]) { width: 100%; }
+.investment-comparator-market { grid-column: 1 / -1; background: var(--surface); border-radius: var(--r-control); padding: 0.85rem; }
+.investment-comparator-switch { grid-column: 1 / -1; display: flex !important; align-items: center; gap: 0.65rem; }
+.investment-comparator-results { display: grid; gap: 0.85rem; margin-top: 1rem; }
+.investment-comparator-context { background: var(--surface-2); border: 1px solid var(--line); padding: 1rem; border-radius: var(--r-control); }
+.investment-comparator-context p { margin: 0.5rem 0 0; }
+.investment-comparator-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: 0.85rem; }
+.investment-comparator-card { display: grid; align-content: start; gap: 0.75rem; padding: 1rem; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface); box-shadow: var(--shadow-1); }
+.investment-comparator-card h3 { margin: 0; font-size: var(--t-md); }
+.investment-comparator-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap; }
+.investment-comparator-card p { margin: 0; font-size: var(--t-sm); }
+.investment-comparator-numbers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.investment-comparator-numbers div { display: grid; gap: 0.25rem; padding: 0.65rem; border-radius: var(--r-control); background: var(--surface-2); min-width: 0; }
+.investment-comparator-numbers span { font-size: var(--t-xs); color: var(--ink-2); }
+.investment-comparator-numbers strong { font-size: var(--t-md); overflow-wrap: anywhere; }
+.investment-comparator-blockers, .investment-comparator-cautions { margin: 0; padding: 0 0 0 1.1rem; font-size: var(--t-sm); }
+.investment-comparator-blockers { color: var(--negative); }
+.investment-comparator-cautions { color: var(--warning); }
+.investment-comparator-stress { color: var(--warning); font-weight: 600; }
+/* Seul le gain réel écrit porte une couleur de signe ; la valeur réelle reste neutre pour ne pas opposer
+   visuellement livrets (rouge) et hypothèse de marché (vert). Un gain nul reste à l'encre normale. */
+.investment-comparator-numbers strong.is-negative { color: var(--negative); }
+.investment-comparator-numbers strong.is-positive { color: var(--positive); }
+.investment-comparator-numbers strong.is-neutral { color: inherit; }
+
+/* Inventaire des placements : aucune somme globale tant que les enveloppes ne sont pas rapprochées. */
+.investment-holdings-empty { padding: 1rem; border-radius: var(--r-card); background: var(--surface-2); }
+.investment-holdings-meta { font-size: var(--t-sm); color: var(--ink-2); }
+.investment-holdings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 0.85rem; }
+.investment-holdings-card { display: grid; gap: 0.65rem; align-content: start; padding: 1rem; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface); }
+.investment-holdings-card p { margin: 0; font-size: var(--t-sm); }
+.investment-holdings-card strong { font-size: var(--t-xl); }
+.investment-holdings-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.investment-holdings-title h3 { font-size: var(--t-md); margin: 0; overflow-wrap: anywhere; }
+.investment-holdings-card details { padding: 0.7rem; border: 1px solid var(--line); border-radius: var(--r-control); }
+.investment-holdings-card details ul { font-size: var(--t-sm); padding-left: 1rem; margin: 0.75rem 0; }
+.investment-holdings-card .notice { align-items: center; gap: 0.5rem; }
 
 /* Laboratoire « Et si… ? » — découverte progressive, comparaison compréhensible sur mobile. */
 .scenario-line {

@@ -641,7 +641,11 @@ garde sa source, sa date de publication, sa dernière vérification et ses versi
 situation passent en premier (le rapprochement se fait sur ton serveur, rien ne part). Si une règle des aides
 change après ta simulation, une piste te propose de la relancer. Les taux, barèmes et sources que Bank utilise
 affichent leur date de prochaine vérification et passent « à revérifier » quand elle est dépassée. La veille se
-coupe dans Réglages › Confidentialité.
+coupe dans Réglages › Confidentialité. Plus bas sur la page : le **radar des 45 prochains jours** (échéances connues
+face à la prévision, mois en cours compris, trois niveaux comme « L'année qui vient »), le **pouvoir d'achat** de ton
+salaire face à l'inflation INSEE relevée, l'**inventaire en lecture seule** de tes placements, un **comparateur** de
+placements à même capital (taux réglementés datés, hypothèse de marché saisie par toi, jamais une recommandation) et
+une page de **transparence CRS / DAC8**. Voir [docs/RADAR_FINANCIER_CRS.md](docs/RADAR_FINANCIER_CRS.md).
 
 Avec l'accord « Barèmes tenus à jour » (désactivé par défaut), Bank relit aussi une fois par mois les tarifs
 réglementés de l'électricité (CRE), les taux du Livret A, du LDDS et du LEP (Caisse des Dépôts), l'IPC base 2025 et

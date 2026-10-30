@@ -10,7 +10,8 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import AuthDep, DbDep, TodayDep, client_ip
 from app.db import utcnow
-from app.services import watch
+from app.domain.purchasing_power import real_yield_pct
+from app.services import future_radar, investment_compare, investment_holdings, purchasing_power, watch
 
 router = APIRouter(prefix="/api/watch", tags=["watch"])
 
@@ -40,6 +41,62 @@ def _http(exc: watch.WatchError) -> HTTPException:
 @router.get("")
 def listing(_: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
     return watch.listing(db, today)
+
+
+@router.get("/radar")
+def radar(_: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
+    """Prévisions personnelles et contexte macro vérifiable, sans entraînement externe ni scraping de compte."""
+    return future_radar.view(db, today)
+
+
+@router.get("/purchasing-power")
+def salary_power(_: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
+    """Salaires observés et inflation INSEE documentée, jamais une estimation de bulletin absent."""
+    return purchasing_power.view(db, today)
+
+
+class YieldScenario(BaseModel):
+    gross_pct: float = Field(ge=-99, le=200)
+    fees_pct: float = Field(ge=0, le=30)
+    tax_pct: float = Field(ge=0, le=100)
+    inflation_pct: float = Field(ge=-29, le=100)
+
+
+@router.post("/purchasing-power/yield")
+def estimate_real_yield(body: YieldScenario, _: AuthDep) -> dict[str, Any]:
+    """Hypothèse mathématique nette de frais et de fiscalité simplifiée, non une offre."""
+    return {
+        **real_yield_pct(body.gross_pct, body.fees_pct, body.tax_pct, body.inflation_pct),
+        "assumptions": body.model_dump(),
+        "note": "Simulation annuelle théorique. La fiscalité réelle dépend de l'enveloppe, de la durée "
+        "et de la situation personnelle. Rendement et capital des placements risqués non garantis.",
+    }
+
+
+@router.get("/investments/holdings")
+def tracked_investments(_: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
+    """Avoirs locaux, provenance et pièces à vérifier. Aucune donnée envoyée à un fournisseur externe."""
+    return investment_holdings.view(db, today)
+
+
+class InvestmentCompareIn(BaseModel):
+    capital_cents: int = Field(ge=10_000, le=100_000_000)
+    horizon_months: int = Field(ge=1, le=360)
+    inflation_pct: float = Field(ge=-29, le=100)
+    custom_gross_pct: float | None = Field(default=None, gt=-99, le=200)
+    custom_fees_pct: float = Field(default=0, ge=0, le=30)
+    custom_tax_pct: float = Field(default=0, ge=0, le=100)
+    custom_loss_pct: float = Field(default=25, ge=0, le=100)
+    custom_locked_months: int = Field(default=0, ge=0, le=360)
+
+
+@router.post("/investments/compare")
+def compare_investments(body: InvestmentCompareIn, _: AuthDep, db: DbDep, today: TodayDep) -> dict[str, Any]:
+    """Même capital/horizon ; vérification du matelas et des lignes rouges avant la comparaison."""
+    try:
+        return investment_compare.view(db, today, **body.model_dump())
+    except (ValueError, OverflowError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
 
 
 @router.post("/refresh")

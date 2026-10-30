@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -101,12 +101,35 @@ def tax_estimate(db: Session, today: date) -> TaxEstimate:
     return _tax(db, today, values, analytics.load_profile(db) or {})
 
 
-def investment_plan(db: Session, today: date) -> InvestmentPlan:
+@dataclass(frozen=True)
+class PlanContext:
+    """Ce que Bank sait de la situation avant de parler placement : la même lecture pour le plan et le comparateur,
+    jamais deux seuils différents pour la même personne."""
+
+    values: dict[str, Any]
+    balances: list[Any]
+    liquid_savings_cents: int
+    emergency_target_cents: int
+    monthly_essentials_cents: int
+    months_covered: float
+    debts: list[DebtLine]
+    expensive_debt: bool
+    risk: Any
+    lep_eligible: bool | None
+    red_lines: list[str]
+    overdraft: bool | None  # None : pas de compte courant, donc rien à dire sur un découvert
+
+    @property
+    def reserve_gap_cents(self) -> int | None:
+        if self.monthly_essentials_cents <= 0:
+            return None
+        return max(0, self.emergency_target_cents - self.liquid_savings_cents)
+
+
+def plan_context(db: Session, today: date) -> PlanContext:
     values = advisor.plain_answers(db)
-    household = analytics.load_profile(db) or {}
     liquid, target, essentials, months_covered = _emergency(db, today, values)
     balances = analytics.account_balances(db, today)
-    products = load_regulated_products()
     debts = [
         DebtLine(
             str(d.get("label", "Crédit")),
@@ -116,6 +139,34 @@ def investment_plan(db: Session, today: date) -> InvestmentPlan:
         )
         for d in values.get("debts") or []
     ]
+    sim_row = db.scalar(select(FiscalSimulation).order_by(FiscalSimulation.id.desc()).limit(1))
+    sim = json.loads(sim_row.result) if sim_row else None
+    expensive = any(d.rate_percent >= EXPENSIVE_RATE and d.remaining_cents > 0 for d in debts)
+    forecast = analytics.forecast_inputs(db, today).run() if analytics.budget_accounts(db) else None
+    return PlanContext(
+        values=values,
+        balances=balances,
+        liquid_savings_cents=liquid,
+        emergency_target_cents=target,
+        monthly_essentials_cents=essentials,
+        months_covered=months_covered,
+        debts=debts,
+        expensive_debt=expensive,
+        risk=risk_profile(values, months_covered, expensive),
+        lep_eligible=bool(sim.get("lep_eligible")) if sim else None,
+        red_lines=[str(r.get("rule", "")) for r in values.get("red_lines") or []],
+        overdraft=(forecast.overdraft_date is not None) if forecast is not None else None,
+    )
+
+
+def investment_plan(db: Session, today: date) -> InvestmentPlan:
+    ctx = plan_context(db, today)
+    values = ctx.values
+    household = analytics.load_profile(db) or {}
+    liquid, target, essentials = ctx.liquid_savings_cents, ctx.emergency_target_cents, ctx.monthly_essentials_cents
+    balances = ctx.balances
+    products = load_regulated_products()
+    debts = ctx.debts
     tracked = analytics.savings_goals_status(db, today, products)
     projects = [
         ProjectLine(
@@ -139,11 +190,7 @@ def investment_plan(db: Session, today: date) -> InvestmentPlan:
                 int(g.get("priority") or 2),
             )
         )
-    sim_row = db.scalar(select(FiscalSimulation).order_by(FiscalSimulation.id.desc()).limit(1))
-    sim = json.loads(sim_row.result) if sim_row else None
-    expensive = any(d.rate_percent >= EXPENSIVE_RATE and d.remaining_cents > 0 for d in debts)
-    risk = risk_profile(values, months_covered, expensive)
-    forecast = analytics.forecast_inputs(db, today).run()
+    risk = ctx.risk
     outside: dict[str, int] = {}
     for a in values.get("outside_assets") or []:
         outside[str(a.get("kind", "autre"))] = outside.get(str(a.get("kind", "autre")), 0) + int(
@@ -158,13 +205,13 @@ def investment_plan(db: Session, today: date) -> InvestmentPlan:
         debts=debts,
         projects=projects,
         regulated=regulated_status(balances, products),
-        lep_eligible=bool(sim.get("lep_eligible")) if sim else None,
+        lep_eligible=ctx.lep_eligible,
         risk_label=risk.label,
         risk_horizon=values.get("risk_horizon"),
-        red_lines=[str(r.get("rule", "")) for r in values.get("red_lines") or []],
+        red_lines=ctx.red_lines,
         tax=_tax(db, today, values, household),
         age=advisor.age_from(household.get("birth_date"), today) if household else None,
-        overdraft=forecast.overdraft_date is not None,
+        overdraft=bool(ctx.overdraft),
         outside_assets=outside,
     )
     return build_plan(inputs, load_references())

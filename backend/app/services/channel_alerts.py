@@ -23,10 +23,12 @@ from app.services import (
     analytics,
     autonomy,
     correlations,
+    future_radar,
     obligations,
     opportunities,
     price_alerts,
     procedures,
+    purchasing_power,
     tempo,
     yearahead,
 )
@@ -77,6 +79,9 @@ def _proc_title(p: Procedure, privacy: str) -> str:
     return p.title if privacy == "full" or template is None else template.title
 
 
+PURCHASING_POWER_HOUR = 9  # heure locale à laquelle le pouvoir d'achat est relu
+
+
 def collect(
     db: Session, *, today: date, local: datetime, privacy: str, public_url: str, now: datetime | None = None
 ) -> list[Notice]:
@@ -91,11 +96,26 @@ def collect(
         Notice(key, text, urgent)
         for key, text, urgent in obligations.alerts(db, today=today, privacy=privacy, public_url=public_url)
     ]
-    # L'année qui vient : un pic dans les deux mois, un passage sous zéro prévu.
+    # L'année qui vient : un pic dans les deux mois, un passage sous zéro prévu. Calculée une fois, partagée avec le
+    # radar (même passage, mêmes chiffres).
+    ahead = yearahead.compute(db, today)
     out += [
         Notice(key, text, urgent)
-        for key, text, urgent in yearahead.alerts(db, today=today, privacy=privacy, public_url=public_url)
+        for key, text, urgent in yearahead.alerts(db, today=today, privacy=privacy, public_url=public_url, y=ahead)
     ]
+    # Radar : dépenses ajoutées personnellement (mois en cours compris), non couvertes par yearahead.
+    # La livraison respecte déjà l'opt-in du canal, les heures calmes et la déduplication ChannelNotice.
+    out += [
+        Notice(key, text, urgent)
+        for key, text, urgent in future_radar.alerts(db, today=today, privacy=privacy, public_url=public_url, y=ahead)
+    ]
+    # Pouvoir d'achat : salaire réel en recul sur des mois documentés, une fois par mois (clé mensuelle) ; relu dans
+    # la matinée seulement (9 h locales), pas à chaque passage, car il recharge quinze mois d'opérations.
+    if local.hour == PURCHASING_POWER_HOUR:
+        out += [
+            Notice(key, text, urgent)
+            for key, text, urgent in purchasing_power.alerts(db, today=today, privacy=privacy, public_url=public_url)
+        ]
     # Corrélations : seulement les constats sérieux (doublon d'assurance, loyer au-dessus de l'IRL), une fois.
     out += [
         Notice(key, text, urgent)
@@ -157,11 +177,15 @@ def _watch_notices(db: Session, today: date, public_url: str) -> list[Notice]:
     if not watch_service.summary(db, today)["new_relevant"]:
         return []
     mine = watch_service.interests(db, today)
-    engine = db.scalar(select(WatchSource).where(WatchSource.slug == watch_service.ENGINE_SLUG))
+    silent = set(
+        db.scalars(
+            select(WatchSource.id).where(WatchSource.slug.in_([watch_service.ENGINE_SLUG, *watch_service.MACRO_SLUGS]))
+        )
+    )
     items = db.scalars(select(WatchItem).where(WatchItem.status == "new").order_by(WatchItem.first_seen_at.desc()))
     out = []
     for item in items:
-        if engine is not None and item.source_id == engine.id:
+        if item.source_id in silent:
             continue
         if not dw.relevant(json.loads(item.topics), mine):
             continue

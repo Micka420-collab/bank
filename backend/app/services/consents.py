@@ -106,11 +106,12 @@ PURPOSES: dict[str, dict[str, Any]] = {
         "title": "Veille sur les sources officielles",
         "text": (
             "Bank interroge régulièrement des sources publiques (ministère de l'Économie, actualités de "
-            "Service-Public, moteur OpenFisca, sources que tu ajoutes) pour repérer ce qui change. Aucune donnée te "
-            "concernant n'est envoyée : la comparaison avec ta situation se fait ici."
+            "Service-Public, moteur OpenFisca, Banque centrale européenne, Conseil de l'Union européenne, Commission "
+            "européenne, Réserve fédérale américaine, sources que tu ajoutes) pour repérer ce qui change. Aucune "
+            "donnée te concernant n'est envoyée : la comparaison avec ta situation se fait ici."
         ),
         "default": True,
-        "version": 2,  # 2 : actualités de Service-Public ajoutées (#32)
+        "version": 3,  # 2 : actualités de Service-Public (#32) ; 3 : BCE, Conseil de l'UE, Commission, Fed (#50)
     },
     "baremes": {
         "title": "Barèmes tenus à jour",
