@@ -1,6 +1,6 @@
 # Bank — Expérience V2 : comprendre, anticiper, agir
 
-> **État au 28 octobre 2026 :** le laboratoire « Et si… ? » est implémenté dans cette branche. Les autres chantiers ci-dessous sont **proposés, non livrés**. Ce document complète [DESIGN.md](DESIGN.md) et [ROADMAP.md](ROADMAP.md) : aucune refonte brutale de l'existant.
+> **État au 30 octobre 2026 :** le laboratoire « Et si… ? » est livré. Les chantiers du tableau « Prochains investissements » sont des **pistes à compléter**, pas une seconde feuille de route : plusieurs existent déjà en partie dans Bank (le copilote à propositions à approuver — [COPILOTE.md](COPILOTE.md) et `/api/agents` ; le parcours de démarrage et la connexion DSP2 — `Onboarding`, `BankConnect`, `Journey` ; les échéances — « D'ici la fin du mois » et `YearAhead` ; la fraîcheur des soldes — `balance_at`). La feuille de route qui fait foi reste [ROADMAP.md](ROADMAP.md). Ce document complète [DESIGN.md](DESIGN.md) : aucune refonte brutale de l'existant.
 
 ## La promesse produit
 
@@ -24,6 +24,9 @@ Bank est un cockpit personnel, pas un fil d'actualité financière, une banque, 
 - **Comparaison immédiatement visible** dans la courbe d'origine : projection actuelle et hypothèse de scénario. Calcul du nouveau solde de fin de mois, du point bas et de la première date sous zéro.
 - **Local seulement** : aucun POST, aucune modification bancaire, aucun événement enregistré, aucune autorisation de paiement. L'utilisateur peut tester un scénario sans le sauvegarder.
 - **Limites affichées** : projection conditionnelle, pas une promesse. Le moteur réutilise les événements et la dépense habituelle du backend ; il n'en prédit pas de nouveaux. Une réduction de 5 €/jour ne prétend pas correspondre à 5 € d'économies effectivement réalisables.
+- **Réserve de sécurité** : le résultat dit si le scénario reste au-dessus de la réserve réglée dans Bank (`settings.buffer_cents`), passe dessous (le « serré » de « Je peux m'acheter… ? ») ou sous zéro. Il n'applique pas les enveloppes par catégorie : pour un achat précis, le verdict de Bank est celui de « Je peux m'acheter… ? » (`decisions.evaluate_purchase`), le laboratoire le dit.
+- **Date hors du mois** (saisie clavier, prévision rechargée après minuit) : signalée (`aria-invalid`, message), la dépense n'est pas simulée tant qu'elle n'est pas corrigée — jamais un chiffre pour une autre date que celle affichée. L'hypothèse repart de zéro quand la prévision change de jour.
+- **Saisie** : montants à la française (`parseEuros` : « 12,50 », « 1 250 »), champ vidable, erreur explicite ; région vivante permanente dont le texte ne change qu'avec le verdict.
 
 Calcul pour chaque date `d` de la projection officielle :
 ```
@@ -34,7 +37,7 @@ solde_scenario(d) =
 ```
 Le point bas et le premier découvert sont recalculés en balayant toute la série, **pas seulement le solde final**. Les dates civiles sont traitées en UTC pour éviter les décalages DST du navigateur.
 
-## Prochains investissements — par effet utilisateur
+## Pistes à compléter — par effet utilisateur (voir ROADMAP.md avant d'ouvrir un chantier)
 
 | Priorité | Module | Ce que l'utilisateur voit | Garde-fou et critère de livraison |
 |---|---|---|---|
@@ -61,7 +64,7 @@ Le point bas et le premier découvert sont recalculés en balayant toute la sér
 2. Chaque lecture/écriture d'un compte, document ou connecteur passe par les politiques d'autorisation serveur existantes.
 3. Pour toute action extérieure : prévisualisation, consentement spécifique, idempotence, suivi d'état, mécanisme de reprise.
 4. Les estimations doivent citer la version/date de leurs barèmes et distinguer `source_updated_at` de `computed_at`.
-5. Toute amélioration UI doit préserver les parcours et tests existants ; mesure en mobile 360 px et bureau 1280 px, clavier et mouvement réduit.
+5. Toute amélioration UI doit préserver les parcours et tests existants ; mesure en mobile 390 px (standard du projet, voir DESIGN.md) et bureau 1280 px, clavier et mouvement réduit.
 
 **Indicateurs à instrumenter sans données financières :** réussite du premier ajout bancaire, temps jusqu'au premier écran utile, pourcentage de scénarios compris sans aide, abandon des formulaires, taux d'erreurs récupérables, accessibilité et performance perçue. Pas de suivi individuel du montant des dépenses.
 
@@ -75,5 +78,5 @@ Le point bas et le premier découvert sont recalculés en balayant toute la sér
 
 ### Références utiles
 
-- [OCDE, *Artificial intelligence and personal finance* (21 juillet 2026)](https://www.oecd.org/en/publications/artificial-intelligence-and-personal-finance_2858fdf4-en.html) — enjeux de fiabilité, transparence, confidentialité et protection du consommateur.
+- [OCDE, *Artificial intelligence and personal finance* (2026)](https://www.oecd.org/en/publications/artificial-intelligence-and-personal-finance_2858fdf4-en.html) — enjeux de fiabilité, transparence, confidentialité et protection du consommateur.
 - [CNIL, recommandations relatives à l'évaluation de la solvabilité (7 mai 2026)](https://www.cnil.fr/fr/recommandation-octroi-de-credit) — utile si Bank évolue un jour vers des décisions de crédit ; le simulateur actuel **n'évalue pas la solvabilité**.

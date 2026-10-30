@@ -10734,7 +10734,7 @@ label {
   height: 2.6rem;
   display: grid;
   place-items: center;
-  border-radius: 0.9rem;
+  border-radius: var(--r-control);
   background: var(--accent-soft);
   color: var(--accent-ink);
 }
@@ -10776,7 +10776,12 @@ label {
 .scenario-results > div { min-width: 0; background: var(--surface-2); border-radius: var(--r-control); padding: 0.85rem; }
 .scenario-results dt { color: var(--ink-2); font-size: var(--t-sm); }
 .scenario-results dd { margin: 0.45rem 0 0.25rem; font-size: clamp(1rem, 2.5vw, 1.35rem); font-weight: 750; font-variant-numeric: tabular-nums; }
-.scenario-results small { font-size: var(--t-xs); color: var(--ink-2); line-height: 1.5; }
+.scenario-results dd small { display: block; font-size: var(--t-xs); color: var(--ink-2); line-height: 1.5; font-weight: 500; }
+.scenario-fields .euro-field { display: flex; align-items: center; gap: 0.4rem; }
+.scenario-fields .field-error { color: var(--negative); font-weight: 500; }
+.scenario-fields .field .faint { font-weight: 500; }
+.scenario-status { min-height: 0; margin: 0; }
+.scenario-status:empty, .scenario-status span:empty { display: none; }
 .scenario-outcome .notice { display: flex; align-items: flex-start; gap: 0.6rem; margin: 0; }
 .scenario-outcome > .faint { margin: 0; }
 .scenario-start { margin: 0; padding: 0.7rem 0; }

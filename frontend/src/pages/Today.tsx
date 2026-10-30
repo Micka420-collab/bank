@@ -1,7 +1,7 @@
 // Tableau de bord : le chiffre du jour, ce que Bank te demande, la tendance, le mois, où part l'argent, les
 // dernières opérations. L'essentiel d'abord, le détail en dessous.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, useApi, type AidsResponse, type BudgetResponse, type Category, type History, type HistoryRange, type MonthForecast } from "../api";
 import { Bars } from "../components/charts/Bars";
 import { Donut } from "../components/charts/Donut";
@@ -57,6 +57,8 @@ export function Today({ name }: { name?: string } = {}) {
   const agent = useApi<{ pending_proposals: number }>("/api/agents/summary");
   const [range, setRange] = useState<HistoryRange>("30d");
   const [scenario, setScenario] = useState<ScenarioInput>(EMPTY_SCENARIO);
+  const month = budget.data?.forecast.month, today = budget.data?.forecast.today;
+  useEffect(() => setScenario(EMPTY_SCENARIO), [month, today]); // la prévision a changé de jour : l'hypothèse repart de zéro
   const [details, setDetails] = useState<boolean>(() => readDetails());
   const history = useApi<History>(details ? `/api/history?range=${range}` : null);
   const toast = useToast();
@@ -65,7 +67,7 @@ export function Today({ name }: { name?: string } = {}) {
   if (budget.error) return <ErrorNote message={budget.error} onRetry={budget.reload} />;
   if (!budget.data) return <Loading />;
   const { forecast: f, suggested_budgets: suggested, settings } = budget.data;
-  const scenarioResult = simulateMonth(f, scenario);
+  const scenarioResult = simulateMonth(f, scenario, settings.buffer_cents);
   const isEmpty = f.current_balance_cents === 0 && f.history.every((p) => p.balance_cents === 0) && f.upcoming.length === 0;
   // Rien encore : la liste « Bien démarrer » (et son « Reprendre le parcours ») passe avant les trois chemins.
   if (isEmpty) return <><StartChecklist /><Welcome onStarted={budget.reload} /></>;
@@ -130,7 +132,7 @@ export function Today({ name }: { name?: string } = {}) {
         <MonthChart history={f.history} projection={f.projection} events={f.upcoming} lowestCents={f.lowest_balance_cents}
                     lowestDate={f.lowest_balance_date} daysInMonth={f.days_in_month}
                     scenarioProjection={scenarioResult.active ? scenarioResult.projection : undefined} bare />
-        <ScenarioLab forecast={f} value={scenario} result={scenarioResult} onChange={setScenario} />
+        <ScenarioLab forecast={f} bufferCents={settings.buffer_cents} value={scenario} result={scenarioResult} onChange={setScenario} />
       </section>
 
       <YearAhead />

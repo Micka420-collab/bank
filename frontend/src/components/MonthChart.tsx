@@ -53,6 +53,9 @@ export function MonthChart({ history, projection, events, lowestDate, lowestCent
 
   if (projection.length === 0) return null;
   const today = projection[0]!;
+  const scenarioLow = scenarioProjection?.length
+    ? scenarioProjection.reduce((acc, p) => (p.balance_cents < acc.balance_cents ? p : acc))
+    : null;
   const pastPath = geo.path([...history, today]);
   const futurePath = geo.path(projection);
   const all = [...history, ...projection];
@@ -74,6 +77,7 @@ export function MonthChart({ history, projection, events, lowestDate, lowestCent
         <desc id="chart-desc">
           Solde le plus bas prévu : {money(lowestCents)} le {shortDate(lowestDate)}. Solde aujourd'hui :{" "}
           {money(today.balance_cents)}.
+          {scenarioLow && ` Scénario testé (courbe en pointillés) : point bas ${money(scenarioLow.balance_cents)} le ${shortDate(scenarioLow.date)}.`}
         </desc>
         <defs>
           <clipPath id="below-zero">
