@@ -77,7 +77,7 @@ describe("simulation financière dans le chat", () => {
     expect(modifiedInitial).toBe(original);
     expect(ask).not.toHaveBeenCalled();
 
-    const input = container.querySelector<HTMLInputElement>("#chat-scenario-expense")!;
+    const input = container.querySelector<HTMLInputElement>('input[type="number"]')!;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "50");
       input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -91,7 +91,9 @@ describe("simulation financière dans le chat", () => {
       button.click();
     });
     expect(ask).toHaveBeenCalledTimes(1);
-    expect(ask.mock.calls[0]![0]).toContain("Dépense imprévue : 50,00");
+    const sent = ask.mock.calls[0]![0].replace(/[\u202f\u00a0]/g, " ");
+    expect(sent).toContain("dépense imprévue de 50,00 €");
+    expect(sent).toContain("calculé localement, pas par la prévision de Bank");
     expect(ask.mock.calls[0]![0]).toContain("certitude");
   });
 });

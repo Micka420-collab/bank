@@ -1,6 +1,6 @@
 // Simulateur local du chat. Seules des projections Bank alimentent ce composant.
 // Un curseur ne sauvegarde aucune donnée et n'agit pas sur les comptes.
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ScenarioBlock } from "../../api";
 import { money, shortDate } from "../../format";
 import { Icon } from "../Icon";
@@ -92,6 +92,7 @@ export function ChatScenario({ block, onAsk, disabled = false }: {
   onAsk: (prompt: string) => void;
   disabled?: boolean;
 }) {
+  const uid = useId();
   const [savings, setSavings] = useState(0);
   const [expense, setExpense] = useState(0);
   const [expenseDate, setExpenseDate] = useState(block.points[1]?.date ?? "");
@@ -104,12 +105,15 @@ export function ChatScenario({ block, onAsk, disabled = false }: {
   const end = block.points.at(-1)?.balance_cents ?? 0;
   const talk = () => {
     if (disabled || sent) return;
+    // Les hypothèses sont celles de la personne ; le solde et le point bas qui en découlent sont calculés dans le
+    // navigateur, et dits comme tels : le modèle ne doit pas les reprendre pour des chiffres de la prévision de Bank.
     onAsk(
-      `J'ai testé le simulateur « ${block.title} » de Bank. Dépense imprévue : ${money(expense)} ` +
-      `le ${expenseDate}. Réduction hypothétique des dépenses quotidiennes : ${money(savings)} par jour. ` +
-      `Solde prévu sans changement : ${money(end)} ; avec ce scénario : ${money(result.finalBalanceCents)} ; ` +
-      `point bas : ${money(result.lowestBalanceCents)} le ${result.lowestDate}. ` +
-      `Explique-moi ce scénario sans le prendre pour une certitude, et conseille-moi une prochaine étape.`,
+      `J'ai joué une hypothèse dans le simulateur « ${block.title} ». Mes hypothèses : dépense imprévue de ` +
+      `${money(expense)}${expense > 0 && expenseDate ? ` le ${shortDate(expenseDate)}` : ""}, et ${money(savings)} ` +
+      `de dépenses en moins par jour. Prévision de Bank sans changement : ${money(end)} en fin de mois. ` +
+      `Résultat hypothétique (calculé localement, pas par la prévision de Bank) : ${money(result.finalBalanceCents)} ` +
+      `en fin de mois, point bas ${money(result.lowestBalanceCents)} le ${shortDate(result.lowestDate)}. ` +
+      `Explique-moi ce scénario sans le prendre pour une certitude, et propose-moi une prochaine étape.`,
     );
     setSent(true);
   };
@@ -127,19 +131,19 @@ export function ChatScenario({ block, onAsk, disabled = false }: {
       <ScenarioChart original={block.points} hypothetical={result.points} />
       <div className="chat-scenario-fields">
         <div>
-          <label htmlFor="chat-scenario-saving">Dépenser moins chaque jour : <b>{money(savings)}</b></label>
-          <input id="chat-scenario-saving" type="range" min={0} max={Math.max(0, cap)} step={Math.max(1, Math.round(cap / 100))}
+          <label htmlFor={`${uid}-saving`}>Dépenser moins chaque jour : <b>{money(savings)}</b></label>
+          <input id={`${uid}-saving`} type="range" min={0} max={Math.max(0, cap)} step={Math.max(1, Math.round(cap / 100))}
                  value={savings} disabled={disabled || cap === 0}
                  onChange={(e) => { setSavings(Number(e.target.value)); setSent(false); }} />
           <p className="faint">Plafonné au rythme de dépenses variables prévu par Bank : {money(cap)} par jour.</p>
         </div>
         <div className="chat-scenario-expense">
-          <label htmlFor="chat-scenario-expense">Une dépense imprévue (€)</label>
-          <input id="chat-scenario-expense" type="number" min={0} max={maxExpenseEur} step={1} inputMode="decimal"
+          <label htmlFor={`${uid}-expense`}>Une dépense imprévue (€)</label>
+          <input id={`${uid}-expense`} type="number" min={0} max={maxExpenseEur} step={1} inputMode="decimal"
                  value={expense / 100} disabled={disabled}
                  onChange={(e) => { setExpense(numeric(Number(e.target.value) * 100, block.expense_cap_cents)); setSent(false); }} />
-          <label htmlFor="chat-scenario-date">À quelle date ?</label>
-          <input id="chat-scenario-date" type="date" min={block.points[1]?.date} max={block.points.at(-1)?.date}
+          <label htmlFor={`${uid}-date`}>À quelle date ?</label>
+          <input id={`${uid}-date`} type="date" min={block.points[1]?.date} max={block.points.at(-1)?.date}
                  value={expenseDate} disabled={disabled || expense === 0}
                  onChange={(e) => { setExpenseDate(e.target.value); setSent(false); }} />
         </div>

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
-MAX_BLOCKS = 6
+MAX_BLOCKS = 8  # graphique, schéma, interface, simulateur ou tableau, coach d'achat, sources, boutons : jamais tronqué
 MAX_ACTIONS = 7  # jusqu'à 4 boutons et 3 questions suivantes
 MAX_CATALOGUE = 60  # le modèle lit le catalogue à chaque question : il reste court
 MAX_LABEL = 60
@@ -454,6 +454,9 @@ def purchase_coach_block(raw: Mapping[str, Any]) -> dict[str, Any]:
             }
         )
         seen_discounts.add(discount)
+    from_savings = raw.get("from_savings_cents", 0)
+    if not isinstance(from_savings, int) or isinstance(from_savings, bool) or not 0 <= from_savings <= amount:
+        raise BlockError("Part prise sur l'épargne invalide")
     paths = raw.get("paths", [])
     if not isinstance(paths, list):
         raise BlockError("Chemins d'épargne invalides")
@@ -481,6 +484,7 @@ def purchase_coach_block(raw: Mapping[str, Any]) -> dict[str, Any]:
         "before": snapshot(before),
         "after": snapshot(after),
         "best_date": best_date,
+        "from_savings_cents": from_savings,
         "paths": options,
         "alternatives": alternatives,
         "explanation": clean(raw.get("explanation"), 360),

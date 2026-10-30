@@ -51,7 +51,7 @@ describe("widgets de conversation Bank", () => {
     await click(el.querySelectorAll<HTMLInputElement>('input[type="radio"]')[1]!);
     await submit();
     expect(ask).toHaveBeenCalledTimes(1);
-    expect(ask).toHaveBeenCalledWith("Mes réponses à « Tes priorités » :\n- Ton choix : Réduire les frais");
+    expect(ask).toHaveBeenCalledWith("[questionnaire] Mes réponses à « Tes priorités » :\n- « Ton choix » : « Réduire les frais »");
     expect(el.querySelector(".chat-interactive-sent")?.textContent).toContain("Réponses envoyées");
     expect(el.querySelector<HTMLInputElement>('input[type="radio"]')?.closest("fieldset")?.disabled).toBe(true);
   });
@@ -65,7 +65,7 @@ describe("widgets de conversation Bank", () => {
     expect(el.querySelector(".chat-check-progress")?.textContent).toBe("2 sur 3 cases cochées");
     await submit();
     expect(ask).toHaveBeenCalledWith(
-      "Mes réponses à « Mon dossier » :\n- Documents prêts : Bulletin de paie, Pièce d'identité",
+      "[questionnaire] Mes réponses à « Mon dossier » :\n- « Documents prêts » : « Bulletin de paie, Pièce d'identité »",
     );
   });
 
@@ -79,7 +79,7 @@ describe("widgets de conversation Bank", () => {
         { id: "confidence", label: "Confiance", required: false, kind: "scale", min: 1, max: 5 },
       ],
     };
-    expect(serializeWidgetAnswers(form, { name: "Voyage", amount: "400", consent: true, confidence: 4 })).toContain("- Confiance : 4");
+    expect(serializeWidgetAnswers(form, { name: "Voyage", amount: "400", consent: true, confidence: 4 })).toContain("- « Confiance » : « 4 »");
     await render([form]);
     const inputs = el.querySelectorAll(".chat-interactive-field");
     expect(inputs).toHaveLength(4);
@@ -98,9 +98,9 @@ describe("widgets de conversation Bank", () => {
     });
     await submit();
     expect(ask).toHaveBeenCalledTimes(1);
-    expect(ask.mock.calls[0]![0]).toContain("- Nom du projet : Voyage");
-    expect(ask.mock.calls[0]![0]).toContain("- Objectif en euros : 400");
-    expect(ask.mock.calls[0]![0]).toContain("- Vérifié : Oui");
+    expect(ask.mock.calls[0]![0]).toContain("- « Nom du projet » : « Voyage »");
+    expect(ask.mock.calls[0]![0]).toContain("- « Objectif en euros » : « 400 »");
+    expect(ask.mock.calls[0]![0]).toContain("- « Vérifié » : « Oui »");
   });
 
   it("selects a flowchart box by tap or keyboard, focuses its contextual annotation, and keeps unique markers", async () => {

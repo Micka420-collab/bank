@@ -1337,6 +1337,7 @@ export type PurchaseCoachBlock = {
   before: PurchaseSnapshot;
   after: PurchaseSnapshot;
   best_date: string | null;
+  from_savings_cents: number; // part prise sur l'épargne au-delà du matelas (0 : payé sur le compte courant)
   paths: { label: string; months: number | null; note: string }[];
   alternatives?: {
     discount_percent: 20 | 40;

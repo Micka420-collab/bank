@@ -66,8 +66,9 @@ export function ChatDecisionBoard({ block, onAsk, disabled = false }: {
     const summary = [
       `J'ai exploré le tableau interactif « ${block.title} ».`,
       `Préférence : ${current.label}. Réduction hypothétique : ${money(dailySaving)} par jour.`,
-      `Prévision Bank de fin de mois : ${money(originalEnd)} ; hypothèse : ${money(preview.finalBalanceCents)}.`,
-      `Point bas estimé de l'hypothèse : ${money(preview.lowestBalanceCents)} le ${shortDate(preview.lowestDate)}.`,
+      `Prévision de Bank en fin de mois : ${money(originalEnd)}.`,
+      `Résultat hypothétique (calculé localement, pas par la prévision de Bank) : ${money(preview.finalBalanceCents)} ` +
+      `en fin de mois, point bas ${money(preview.lowestBalanceCents)} le ${shortDate(preview.lowestDate)}.`,
       `Étapes cochées : ${checked.length} sur ${current.steps.length}.`,
       `Étapes restantes : ${remaining.join(" ; ") || "aucune"}.`,
       note.trim() ? `Ma remarque : ${note.trim().slice(0, 200)}.` : "",

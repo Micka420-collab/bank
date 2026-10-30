@@ -23,6 +23,7 @@ const card: PurchaseCoachBlock = {
     overdraft_date: null, end_balance_cents: 10_000,
   },
   best_date: "2026-10-30",
+  from_savings_cents: 0,
   paths: [{ label: "En épargnant", months: 2, note: "Sans toucher à la réserve." }],
   explanation: "L'achat réduit ta marge.",
   source: "Bank · prévision et plan d'épargne",
@@ -50,7 +51,7 @@ describe("coach d'achat dans le chat", () => {
 
   it("displays Bank's actual verdict and true before/after impact", async () => {
     await render();
-    expect(host.querySelector(".chat-purchase-verdict")?.textContent).toContain("Possible, mais attention");
+    expect(host.querySelector(".chat-purchase-verdict")?.textContent).toContain("Oui, mais");
     expect(host.querySelector(".chat-purchase-head")?.textContent).toContain(money(35_000));
     expect(host.querySelector(".chat-purchase-metrics")?.textContent).toContain(money(20_000));
     expect(host.querySelector(".chat-purchase-metrics")?.textContent).toContain(money(8_000));
@@ -113,7 +114,7 @@ describe("coach d'achat dans le chat", () => {
     expect(ask).not.toHaveBeenCalled();
     await click(options[2]!);
     expect(options[2]!.getAttribute("aria-pressed")).toBe("true");
-    expect(host.querySelector(".chat-purchase-verdict")?.textContent).toContain("Budget compatible");
+    expect(host.querySelector(".chat-purchase-verdict")?.textContent).toContain("Oui");
     expect(host.querySelector(".chat-purchase-metrics")?.textContent).toContain(money(21_000));
     expect(host.querySelector(".chat-purchase-path")?.textContent).toContain(money(14_000));
     expect(ask).not.toHaveBeenCalled();
@@ -122,25 +123,26 @@ describe("coach d'achat dans le chat", () => {
     expect(ask.mock.calls[0]![0]).toContain("objectif de prix hypothétique à -40 %");
     expect(ask.mock.calls[0]![0]).toContain("Prix évalué par Bank : " + money(21_000));
     await click(options[0]!);
-    expect(host.querySelector(".chat-purchase-verdict")?.textContent).toContain("Possible, mais attention");
+    expect(host.querySelector(".chat-purchase-verdict")?.textContent).toContain("Oui, mais");
     expect(host.querySelector(".chat-purchase-metrics")?.textContent).toContain(money(8_000));
     expect(host.querySelector<HTMLButtonElement>(".chat-purchase-buttons button")?.disabled).toBe(false);
   });
 
   it("changing the price shows that the old verdict is stale and requests a fresh Bank calculation", async () => {
     await render();
-    const input = host.querySelector<HTMLInputElement>('input[type="number"]')!;
+    const input = host.querySelector<HTMLInputElement>('input[inputmode="decimal"]')!;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "250");
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
     expect(host.querySelector(".chat-purchase-caution")?.textContent).toContain("Recalcul nécessaire");
-    expect(host.querySelector(".chat-purchase-verdict")?.textContent).toContain("Possible, mais attention");
+    expect(host.querySelector(".chat-purchase-verdict")?.textContent).toContain("Oui, mais");
     expect(host.querySelector(".chat-purchase-buttons button")?.textContent).toContain("Recalculer avec Bank");
     expect(ask).not.toHaveBeenCalled();
     await click(host.querySelector<HTMLButtonElement>(".chat-purchase-buttons button")!);
     expect(ask).toHaveBeenCalledTimes(1);
-    expect(ask.mock.calls[0]![0]).toContain("Recalcule avec le prix de 250.00 €");
+    expect(ask.mock.calls[0]![0].replace(/[\u202f\u00a0]/g, " ")).toContain("Refais le calcul avec Bank pour un prix de 250,00 €");
+    expect(ask.mock.calls[0]![0]).not.toContain("show_purchase_coach");
   });
 
   it("disables selections and button while assistant is responding", async () => {
@@ -150,9 +152,53 @@ describe("coach d'achat dans le chat", () => {
     expect(host.querySelector<HTMLButtonElement>(".chat-purchase-buttons button")?.disabled).toBe(true);
   });
 
+  it("shows a purchase paid from spare savings as such, without a contradictory overdraft warning", async () => {
+    await render({
+      ...card,
+      answer: "oui_mais",
+      headline: "Oui, en prenant 350,00 € sur ton épargne disponible : ton matelas de sécurité reste intact.",
+      from_savings_cents: 35_000,
+      explanation: "Ce mois-ci ton compte passerait dans le rouge. Ton épargne au-delà du matelas couvre l'achat.",
+      after: { ...card.after, lowest_cents: -12_000, overdraft_date: "2026-10-25" },
+    });
+    expect(host.querySelector(".chat-purchase-verdict")?.textContent).toContain("Oui, mais");
+    expect(host.querySelector(".chat-purchase-metrics")?.textContent).toContain("Pris sur l'épargne disponible");
+    expect(host.querySelector(".chat-purchase-metrics")?.textContent).toContain(money(35_000));
+    expect(host.querySelector(".chat-purchase-metrics")?.textContent).not.toContain(money(-12_000));
+    expect(host.querySelector(".chat-scenario-warning")).toBeNull();
+    expect(host.querySelector(".chat-purchase-advice")?.textContent).toContain("Payé depuis l'épargne");
+    expect(host.querySelector(".chat-purchase-explanation")?.textContent).toContain("couvre l'achat");
+  });
+
+  it("words savings paths like the purchase page and names an out-of-reach path", async () => {
+    await render({
+      ...card,
+      answer: "plus_tard",
+      paths: [
+        { label: "En épargnant 200 € par mois", months: 25, note: "" },
+        { label: "Avec ta capacité actuelle", months: null, note: "Aucune capacité d'épargne libre aujourd'hui." },
+      ],
+    });
+    const paths = host.querySelector(".chat-purchase-paths")?.textContent ?? "";
+    expect(paths).toContain("2 ans et 1 mois");
+    expect(paths).toContain("hors de portée à ce rythme");
+    expect(paths).not.toContain("Délai inconnu");
+  });
+
+  it("accepts a French price with a comma and spaces", async () => {
+    await render();
+    const input = host.querySelector<HTMLInputElement>('input[inputmode="decimal"]')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "1 249,5");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(host.querySelector(".chat-purchase-caution")?.textContent).toContain("Recalcul nécessaire");
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+
   it("distinguishes financially unaffordable purchases from needs or preferences", async () => {
     await render({ ...card, answer: "hors_de_portee", headline: "Pas raisonnable aujourd'hui" });
-    expect(host.querySelector(".chat-purchase-verdict")?.textContent).toContain("Déconseillé aujourd'hui");
+    expect(host.querySelector(".chat-purchase-verdict")?.textContent).toContain("Pas raisonnable");
     expect(host.querySelector(".chat-purchase-reflection")?.textContent).toContain("achat plaisir");
     expect(ask).not.toHaveBeenCalled();
   });

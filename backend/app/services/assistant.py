@@ -64,9 +64,28 @@ MAX_CALLS_PER_ROUND = 6
 MAX_MEMORY_FAILURES = 3  # échecs d'écriture en mémoire par question avant de laisser tomber (comme Hermes)
 
 
-def persona_prompt(name: str, memory_on: bool) -> str:
+INTERACTIVE_RULES = (
+    "Quand un choix est nécessaire, appelle ask_interactive : sondage pour une préférence, checklist pour "
+    "une liste d’étapes, formulaire pour quelques informations à préciser. Laisse la personne répondre "
+    "et valider avant de poursuivre. Le widget ne réalise aucune démarche ni aucun paiement.",
+    "Pour montrer l'impact d'une dépense imprévue ou d'une économie quotidienne sur la projection du mois, "
+    "appelle show_budget_simulator : le simulateur lit les chiffres Bank, l'utilisateur déplace les curseurs "
+    "et valide éventuellement sa question. Ne promets pas que le solde futur sera exact.",
+)
+INTERACTIVE_RULES_PURCHASE = (
+    "Pour les achats (prix et objet connus), préfère show_purchase_coach : verdict calculé, question sur le "
+    "besoin réel et alternative pour attendre. Ne moralise jamais et n'affirme pas que tu connais les émotions "
+    "de la personne. Si les comptes ne sont pas connectés, dis que l'analyse financière n'est pas fiable et "
+    "propose de relier un compte.",
+    "Pour une interface vraiment liée où une préférence change simultanément le graphique et le plan, "
+    "appelle show_decision_board. Les économies sont purement hypothétiques et rien ne modifie les comptes.",
+)
+
+
+def persona_prompt(name: str, memory_on: bool, *, web: bool = True) -> str:
     """Consignes de l'assistant : un pote compétent, honnête, qui se souvient — et qui ne prend rien pour argent
-    comptant dans les données qu'on lui montre."""
+    comptant dans les données qu'on lui montre. ``web`` : les composants interactifs n'existent que dans le chat de
+    Bank ; depuis une messagerie, leurs consignes sont tues avec leurs outils."""
     lines = [
         f"Tu es {name}, l'assistant de Bank, l'application de finances personnelles que la personne héberge chez elle.",
         "Tu es un peu son pote : tu la tutoies, tu es chaleureux, direct et encourageant, avec une pointe d'humour "
@@ -100,24 +119,17 @@ def persona_prompt(name: str, memory_on: bool) -> str:
         "Pour montrer des chiffres, appelle show_chart (c'est Bank qui dessine, avec ses données) et commente le "
         "graphique en deux phrases ; n'écris pas de tableau à la place. Pour expliquer un mécanisme (comment une "
         "aide se calcule, les étapes d'une démarche, d'où vient le reste à dépenser), appelle draw_diagram.",
-        "Quand un choix est nécessaire, appelle ask_interactive : sondage pour une préférence, checklist pour "
-        "une liste d’étapes, formulaire pour quelques informations à préciser. Laisse la personne répondre "
-        "et valider avant de poursuivre. Le widget ne réalise aucune démarche ni aucun paiement.",
-        "Pour montrer l'impact d'une dépense imprévue ou d'une économie quotidienne sur la projection du mois, "
-        "appelle show_budget_simulator : le simulateur lit les chiffres Bank, l'utilisateur déplace les curseurs "
-        "et valide éventuellement sa question. Ne promets pas que le solde futur sera exact.",
+        *(INTERACTIVE_RULES if web else ()),
         "Si le verdict d'un achat est attendre, plus_tard ou hors_de_portee, explique clairement pourquoi "
         "ce n'est pas raisonnable aujourd'hui et propose une alternative : attendre, revoir le prix, "
         "mettre de côté. Si le verdict est oui, ne culpabilise pas la personne pour un plaisir financièrement "
         "compatible. Si l'achat est indispensable, recherche d'abord une option adaptée et évite le jugement. "
         "Tu peux raisonner la personne avec bienveillance, mais jamais décider à sa place.",
-        "Pour les achats (prix et objet connus), préfère show_purchase_coach dans le chat de Bank : verdict "
-        "calculé, question sur le besoin réel et alternative pour attendre. Ne moralise jamais et n'affirme "
-        "pas que tu connais les émotions de la personne. Si les comptes ne sont pas connectés, dis que "
-        "l'analyse financière n'est pas fiable et propose de relier un compte. "
-        "Dans une messagerie sans composants, utilise can_i_buy pour le même verdict chiffré.",
-        "Pour une interface vraiment liée où une préférence change simultanément le graphique et le plan, "
-        "appelle show_decision_board. Les économies sont purement hypothétiques et rien ne modifie les comptes.",
+        *(
+            INTERACTIVE_RULES_PURCHASE
+            if web
+            else ("Pour un achat (prix et objet connus), can_i_buy donne le verdict chiffré.",)
+        ),
         "Pour une règle, un barème, une actualité ou une information extérieure à Bank, utilise web_search quand il "
         "est disponible, lis la page utile avec read_page si l'extrait ne suffit pas, et cite tes sources dans le "
         "texte sous la forme [1], [2]. Sans source, dis que tu n'es pas sûr : jamais d'affirmation inventée.",
@@ -393,8 +405,8 @@ TOOL_PURCHASE_COACH: dict[str, Any] = {
     "function": {
         "name": "show_purchase_coach",
         "description": (
-            "Pour un achat envisagé, affiche une vraie carte interactive : verdict chiffré (oui, attention, "
-            "attendre, non recommandé), budget avant/après, questions pour réfléchir et alternatives. "
+            "Pour un achat envisagé, affiche une vraie carte interactive : verdict chiffré (oui, oui_mais, "
+            "attendre, plus_tard, hors_de_portee), budget avant/après, questions pour réfléchir et alternatives. "
             "Les montants et le verdict sont calculés par Bank, jamais par le modèle. "
             "La carte ne réalise aucun achat et ne juge pas la personne."
         ),
@@ -837,7 +849,8 @@ class _ToolContext:
     dropped_keys: int = 0
 
     def blocks(self) -> list[dict[str, Any]]:
-        """Les blocs de la réponse, dans un ordre stable : graphique, schéma, sources, puis boutons."""
+        """Les blocs de la réponse, dans un ordre stable : graphique, schéma, interface, simulateur ou tableau lié,
+        coach d'achat, sources, puis boutons (MAX_BLOCKS les accueille tous)."""
         out: list[dict[str, Any]] = []
         if self.chart:
             out.append(self.chart)
@@ -1022,9 +1035,12 @@ def _tool_purchase_coach(ctx: _ToolContext, args: dict[str, Any]) -> str:
             continue
         option = decisions.purchase(ctx.db, ctx.today, amount_cents=price, label=label, category=None)
         alternatives.append({**asdict(option), "discount_percent": discount})
-    ctx.purchase_coach = blocks.purchase_coach_block(
-        {**asdict(plan), "label": label, "title": "Dois-je vraiment l'acheter ?", "alternatives": alternatives}
-    )
+    try:
+        ctx.purchase_coach = blocks.purchase_coach_block(
+            {**asdict(plan), "label": label, "title": "Dois-je vraiment l'acheter ?", "alternatives": alternatives}
+        )
+    except blocks.BlockError as exc:
+        return json.dumps({"error": str(exc)}, ensure_ascii=False)
     return json.dumps(
         {
             "done": True,
@@ -1289,9 +1305,9 @@ def ask(
     catalogue = chat_actions.build(db, today, sources=srcs)
     search_on = websearch.provider(db) is not None and consents.granted(db, "web_search")
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": persona_prompt(name, memory_on)},
+        {"role": "system", "content": persona_prompt(name, memory_on, web=not channel)},
         {"role": "system", "content": f"<dossier>\n{_dossier(db, today, effective)}\n</dossier>"},
-        {"role": "system", "content": interactive_prompt(srcs, catalogue, search_on)},
+        {"role": "system", "content": interactive_prompt(srcs, catalogue, search_on, web=not channel)},
     ]
     if channel:
         messages.append({"role": "system", "content": channel_prompt(channel)})
@@ -1389,15 +1405,15 @@ def ask(
     }
 
 
-def interactive_prompt(srcs: list[coverage_domain.Source], catalogue: blocks.Catalogue, search_on: bool) -> str:
+def interactive_prompt(
+    srcs: list[coverage_domain.Source], catalogue: blocks.Catalogue, search_on: bool, *, web: bool = True
+) -> str:
     """Ce que Bank sait ou pas, les boutons proposables, les graphiques disponibles : des données pour le modèle."""
     lines = ["<couverture>", *coverage_domain.prompt_lines(srcs), "</couverture>", "", "<catalogue>"]
     lines += catalogue.prompt_lines()
     lines += ["</catalogue>", "", "<graphiques>", *chat_charts.prompt_lines(), "</graphiques>", ""]
-    lines.append(
-        "Dans le chat web uniquement, utilise ask_interactive pour un sondage, une checklist ou un formulaire "
-        "quand il faut un choix utilisateur."
-    )
+    if web:
+        lines.append("Utilise ask_interactive pour un sondage, une checklist ou un formulaire quand il faut un choix.")
     lines.append(
         "Recherche web : disponible (web_search, read_page)."
         if search_on

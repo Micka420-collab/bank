@@ -278,7 +278,7 @@ function FlowDiagram({ block, onAsk, disabled = false }: { block: Extract<ChatBl
           const p = layout.pos.get(n.id);
           if (!p) return null;
           return (
-            <g key={n.id} className={`chat-node${selected === n.id ? " is-selected" : ""}`} role="button" tabIndex={0}
+            <g key={n.id} className={`chat-node${selected === n.id ? " is-selected" : ""}`} role="button" tabIndex={disabled ? -1 : 0}
                aria-label={`Annoter l'étape ${n.label}`} aria-pressed={selected === n.id} aria-disabled={disabled}
                onClick={() => { if (!disabled) setSelected(n.id); }}
                onKeyDown={(e) => {

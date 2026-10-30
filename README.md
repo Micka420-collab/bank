@@ -53,7 +53,10 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
 - **Connecteurs** : banques en un clic (DSP2), compteur **Linky** (consommation réelle, facture annuelle estimée,
   rattrapage probable, pics), documents de l'**État** (avis d'impôt, attestations CAF et France Travail lus pour
   leurs chiffres — identifiants jetés), et les agents IA.
-- **Chat interactif** : l'assistant dessine des schémas, propose des sondages et des formulaires à cocher ou remplir dans la conversation. Tu peux annoter une étape d'un schéma et lui demander de la modifier ; aucune réponse n'est envoyée sans ton clic. Voir [Chat interactif](docs/CHAT_INTERACTIF.md).
+- **Chat interactif** : l'assistant dessine des schémas, propose des sondages et des formulaires à cocher ou remplir dans
+  la conversation, un simulateur de budget, et un coach d'achat dont le verdict vient du moteur de Bank (trois prix
+  comparés). Tu peux annoter une étape d'un schéma et lui demander de la modifier ; aucune réponse n'est envoyée sans
+  ton clic. Voir [Chat interactif](docs/CHAT_INTERACTIF.md).
 - **Bank prend des initiatives** : une fiche à la fois sur la page du jour — « ton loyer, c'est bien 650 € ? »,
   « NETFLIX, 13,49 € chaque mois, c'est voulu ? », « septembre : il t'est resté 540 €, on en met 260 de côté
   chaque mois ? », « ton salaire est arrivé : c'est le moment du virement », « ton accès n'a pas de double

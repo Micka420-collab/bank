@@ -39,7 +39,7 @@ Le navigateur utilise des composants React et des contrôles natifs accessibles 
 ## Vérifications
 
 - Backend : `pytest tests/test_chat_widgets.py tests/test_chat_domain.py` et lint du dépôt.
-- Frontend : `npm run typecheck && npm test && npm run build`.
+- Frontend : `npm run typecheck && npx vitest run && npm run build`.
 - Revue UX : smartphone étroit, clavier, lecteur d'écran, thème sombre, `prefers-reduced-motion`.
 - Contrôler que les réponses ne partent pas avant validation et que les requêtes sensibles continuent à être refusées par `secret_kind`.
 
@@ -92,14 +92,16 @@ Demander au chat : « Compare trois façons d'améliorer mon budget avec un sond
 
 Quand la personne demande « Est-ce que je peux acheter ce vélo à 350 € ? », l'assistant web dispose de `show_purchase_coach`, basé sur **le même moteur `decisions.purchase` que `can_i_buy`**. Il reçoit `amount_eur` et un libellé, mais aucun verdict libre ni chiffre proposé par le modèle.
 
-Le bloc `purchase_coach` récapitule le verdict de Bank (`oui`, `oui_mais`, `attendre`, `plus_tard`, `hors_de_portee`), le point bas de trésorerie *avant et après l'achat*, le budget quotidien restant, une date plus favorable si elle a été calculée et jusqu'à deux chemins d'épargne. Les données sont strictement validées côté serveur et revalidées au chargement.
+Le bloc `purchase_coach` récapitule le verdict de Bank (`oui`, `oui_mais`, `attendre`, `plus_tard`, `hors_de_portee`), le point bas de trésorerie *avant et après l'achat*, le budget quotidien restant, une date plus favorable si elle a été calculée et jusqu'à deux chemins d'épargne. Quand le moteur répond « oui, en prenant sur ton épargne disponible » (`from_savings_cents` > 0 : l'épargne au-delà du matelas couvre l'achat), la carte montre la part prise sur l'épargne à la place de la simulation « payé sur le compte courant » — pas d'alerte de découvert contradictoire — et affiche l'explication du moteur. Les mots des verdicts sont ceux de la page « Je peux m'acheter… ? » (`ANSWER_LABEL`). Les données sont strictement validées côté serveur et revalidées au chargement.
 
 Pour aider à décider plutôt que moraliser, un questionnaire **local** demande :
 - « C'est nécessaire / utile / pour me faire plaisir / sur un coup de tête ? »
 - « Je le veux maintenant / je peux prendre mon temps / je ne sais pas » et « Je pourrais attendre 48 heures ».
 - Éventuellement, un nouveau prix (pour regarder une alternative moins chère).
 
-Une courte réflexion change selon les réponses mais **jamais le verdict financier**. Si le prix change, le verdict précédent reste identifié comme celui de l'ancien montant : il faut cliquer sur « Recalculer avec Bank », puis l'assistant exécute de nouveau `show_purchase_coach`. Aucun calcul basé sur un nouveau prix n'est fabriqué dans le navigateur.
+Une courte réflexion change selon les réponses mais **jamais le verdict financier**. Si le prix change, le verdict précédent reste identifié comme celui de l'ancien montant : il faut cliquer sur « Recalculer avec Bank », puis l'assistant exécute de nouveau `show_purchase_coach`. Aucun calcul basé sur un nouveau prix n'est fabriqué dans le navigateur. Le prix se saisit à la française (virgule, espaces : `parseEuros`).
+
+Ce que les cartes renvoient au modèle quand la personne clique est dit pour ce que c'est : les réponses d'un questionnaire sont entre guillemets et préfixées `[questionnaire]`, et les soldes d'un simulateur ou d'un tableau lié sont annoncés « calculés localement, pas par la prévision de Bank » — le modèle ne doit pas les reprendre comme des chiffres de Bank. Depuis une messagerie (sans composants), ni ces outils ni leurs consignes ne sont envoyés au modèle ; `can_i_buy` reste le verdict chiffré.
 
 Cette carte ne lance aucune commande ni paiement. En l'absence de compte courant relié ou importé, Bank ne prononce pas de verdict fiable et propose de renseigner les données. Son approche est à la fois pragmatique et respectueuse : un achat plaisir n'est pas interdit, et un achat nécessaire ne doit pas être minimisé.
 

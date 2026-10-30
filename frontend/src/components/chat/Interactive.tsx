@@ -31,9 +31,9 @@ function responseValue(field: InteractiveField, value: Value): string {
 export function serializeWidgetAnswers(block: InteractiveBlock, values: Record<string, Value>): string {
   const lines = block.fields.map((field) => {
     const response = responseValue(field, values[field.id] ?? initial(field));
-    return `- ${field.label} : ${response || "Non renseigné"}`;
+    return `- « ${field.label} » : ${response ? `« ${response} »` : "non renseigné"}`;
   });
-  return [`Mes réponses à « ${block.title} » :`, ...lines].join("\n").slice(0, 1950);
+  return [`[questionnaire] Mes réponses à « ${block.title} » :`, ...lines].join("\n").slice(0, 1950);
 }
 
 export function ChatInteractive({ block, onAsk, disabled = false }: { block: InteractiveBlock; onAsk: (prompt: string) => void; disabled?: boolean }) {

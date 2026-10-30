@@ -335,3 +335,34 @@ def test_purchase_coach_tool_is_sourced_from_bank_not_model_data(monkeypatch: py
     assert "error" in json.loads(assistant._execute_tool(empty, "show_purchase_coach", '{"amount_eur":350}'))
     assert empty.purchase_coach is None
     assert assistant.TOOL_PURCHASE_COACH["function"]["parameters"]["additionalProperties"] is False
+
+
+def test_purchase_coach_block_from_the_real_engine_including_savings_case() -> None:
+    """Le vrai moteur (prévision de tests/test_decisions.py) produit un bloc valide pour chaque verdict, dates et
+    None compris ; le cas « pris sur l'épargne » garde la part prise, bornée par le prix."""
+    from dataclasses import asdict
+
+    from app.domain.decisions import plan_purchase
+    from tests.test_decisions import TODAY, runner
+
+    run = runner()
+    base = {"today": TODAY, "label": "Vélo", "buffer_cents": 10_000, "monthly_capacity_cents": 20_000}
+    seen = set()
+    for amount in (10_000, 30_000, 50_000, 500_000):
+        plan = plan_purchase(run, amount_cents=amount, **base)
+        block = b.purchase_coach_block({**asdict(plan), "label": "Vélo"})
+        assert b.validate_blocks([block]) == [block]
+        assert block["amount_cents"] == amount and block["from_savings_cents"] == 0
+        seen.add(block["answer"])
+    assert seen == {"oui", "oui_mais", "attendre", "plus_tard"}
+    plan = plan_purchase(run, amount_cents=500_000, **base, liquid_savings_cents=600_000, emergency_target_cents=50_000)
+    block = b.purchase_coach_block({**asdict(plan), "label": "Vélo"})
+    assert block["answer"] == "oui_mais" and block["from_savings_cents"] == 500_000
+    assert "épargne" in block["explanation"] and block["after"]["lowest_cents"] < 0
+    with pytest.raises(b.BlockError):
+        b.purchase_coach_block({**asdict(plan), "from_savings_cents": 500_001})
+    with pytest.raises(b.BlockError):
+        b.purchase_coach_block({**asdict(plan), "from_savings_cents": -1})
+    hopeless = plan_purchase(run, amount_cents=500_000, **{**base, "monthly_capacity_cents": 0})
+    block = b.purchase_coach_block({**asdict(hopeless), "label": "Vélo"})
+    assert block["answer"] == "hors_de_portee" and all(p["months"] is None for p in block["paths"])
