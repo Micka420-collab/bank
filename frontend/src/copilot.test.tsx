@@ -350,6 +350,38 @@ describe("veille", () => {
     await settle();
     expect(body(sent("/api/watch/sources", "POST")[0]!)).toEqual({ url: "https://blog.example.org/feed", name: null });
   });
+
+  it("keeps « Ce qui change » first, the new sections after, and loads the CPI benchmark once for the comparator", async () => {
+    mockApi({
+      "/api/watch/investments/holdings": () => ({
+        as_of: "2026-10-28", positions: [],
+        counts: { total: 0, unpriced_or_unverified: 0, potential_overlaps: 0 }, note: "",
+      }),
+      "/api/watch/purchasing-power": () => ({
+        available: false, comparison: null, note: "",
+        benchmark: { as_of: "2026-09", published_on: "2026-10-15", annual_pct: 3.1, source: "Insee",
+          url: "https://www.insee.fr/fr/statistiques/9080209", status: "definitif", stale: false, note: "" },
+      }),
+      "/api/watch/radar": () => ({
+        horizon_days: 45, available: false, news_consent: true, signals: [], macro_context: [],
+        disclaimer: "Scénarios construits à partir des opérations connues.",
+      }),
+      "/api/watch": () => watchListing(),
+    });
+    await render(<Watch />);
+    await settle();
+    const order = [...host.querySelectorAll("section")].map((s) => s.getAttribute("aria-labelledby") ?? s.className);
+    const at = (id: string) => { const i = order.indexOf(id); if (i < 0) throw new Error(`section absente : ${id} dans ${order.join(", ")}`); return i; };
+    expect(at("news-title")).toBeLessThan(at("radar-title"));
+    expect(at("sources-title")).toBeLessThan(at("radar-title"));
+    expect(at("radar-title")).toBeLessThan(at("purchasing-power-title"));
+    expect(at("purchasing-power-title")).toBeLessThan(at("investments-held-title"));
+    expect(at("investments-held-title")).toBeLessThan(at("investment-comparator-title"));
+    expect(at("investment-comparator-title")).toBeLessThan(at("crs-title"));
+    expect(calls.filter((c) => c.url === "/api/watch/purchasing-power")).toHaveLength(1);
+    expect(host.querySelector(".investment-comparator-form")).not.toBeNull();
+    expect(host.querySelector(".investment-comparator")?.textContent).toContain("Repère Insee 2026-09");
+  });
 });
 
 // ============================================================================ carte « Pour ton argent »

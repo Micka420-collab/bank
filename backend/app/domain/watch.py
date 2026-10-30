@@ -250,6 +250,10 @@ _TOPICS: dict[str, tuple[str, ...]] = {
         r"\bstock market\b",
         r"\binterest rates?\b",
         r"\bmonetary policy\b",
+        r"\bfomc\b",
+        r"\bfederal reserve\b",
+        r"\bgoverning council\b",
+        r"\bconseil des gouverneurs\b",
     ),
     "geopolitique": (
         r"\bsanctions? economiques?\b",

@@ -743,6 +743,7 @@ class _ToolContext:
     notices: list[dict[str, Any]] = field(default_factory=list)
     catalogue: blocks.Catalogue = field(default_factory=blocks.Catalogue)
     search_on: bool = False
+    privacy: str = "full"  # « aggregates » : une messagerie qui ne doit pas voir les montants au centime
     search_http: httpx.Client | None = None
     search_resolver: netfetch.Resolver | None = None
     fiscal: FiscalClient | None = None
@@ -984,7 +985,15 @@ def _execute_tool(ctx: _ToolContext, name: str, raw_args: str) -> str:
     if name == "analyze_purchasing_power":
         mode = args.get("mode")
         if mode == "salary":
-            return json.dumps(power_service.view(ctx.db, ctx.today), ensure_ascii=False, default=str)
+            data = power_service.view(ctx.db, ctx.today)
+            if ctx.privacy == "aggregates" and isinstance(data.get("comparison"), dict):
+                # Une messagerie en « agrégats » : les pourcentages, pas les salaires ni les dépenses au centime.
+                comp = data["comparison"]
+                data["comparison"] = {k: v for k, v in comp.items() if not k.endswith("_cents")}
+                data["comparison"]["spending_drivers"] = [
+                    {"category": d["category"]} for d in comp.get("spending_drivers", [])
+                ]
+            return json.dumps(data, ensure_ascii=False, default=str)
         if mode == "yield":
             try:
                 numbers = [float(args[k]) for k in ("gross_pct", "fees_pct", "tax_pct", "inflation_pct")]
@@ -1121,6 +1130,7 @@ def ask(
         memory_on,
         catalogue=catalogue,
         search_on=search_on,
+        privacy=effective,
         search_http=search_http,
         search_resolver=search_resolver,
         fiscal=fiscal,

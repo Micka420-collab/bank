@@ -1,8 +1,19 @@
 // Radar : prévisions chiffrées et contexte macro sont distincts, sans relation causale inventée.
 import { useApi } from "../api";
-import { money, shortDate } from "../format";
+import { money, plural, safeHref, shortDate } from "../format";
 import { Icon } from "./Icon";
 import { ErrorNote, Loading } from "./ui";
+
+/** « Aujourd'hui », « Dans 1 jour », « Dans 12 jours ». */
+export function inDays(days: number): string {
+  return days <= 0 ? "Aujourd'hui" : `Dans ${plural(days, "jour", "jours")}`;
+}
+
+/** Un titre n'est cliquable que vers une adresse https ; sinon, texte seul. */
+export function secureHref(url: string | null): string | null {
+  const href = safeHref(url);
+  return href && href.toLowerCase().startsWith("https://") ? href : null;
+}
 
 export type RadarSignal = {
   key: string;
@@ -11,7 +22,7 @@ export type RadarSignal = {
   days: number;
   amount_cents: number;
   projected_month_end_cents: number;
-  level: "risk" | "watch";
+  level: "risk" | "tight" | "watch"; // sous zéro, sous le matelas de sécurité, au-dessus (comme « L'année qui vient »)
   basis: string;
   source: string;
   confidence: "declared" | "estimated";
@@ -44,6 +55,12 @@ export type RadarView = {
   disclaimer: string;
 };
 
+const LEVEL_LABEL = {
+  risk: "Compte sous zéro",
+  tight: "Marge à surveiller",
+  watch: "Dépense à prévoir",
+} as const;
+
 export function FutureRadar() {
   const result = useApi<RadarView>("/api/watch/radar");
   if (result.error) return <ErrorNote message={result.error} onRetry={result.reload} />;
@@ -65,17 +82,17 @@ export function FutureRadar() {
           {data.signals.map((signal) => (
             <li key={signal.key} className={`future-radar-signal is-${signal.level}`}>
               <div className="future-radar-timing">
-                <strong>{signal.days === 0 ? "Aujourd'hui" : `J−${signal.days}`}</strong>
+                <strong>{inDays(signal.days)}</strong>
                 <span>{shortDate(signal.on)}</span>
               </div>
               <div className="future-radar-detail">
                 <div className="future-radar-heading">
                   <strong>{signal.label}</strong>
-                  <span className={`tag ${signal.level === "risk" ? "warn" : ""}`}>
-                    {signal.level === "risk" ? "Marge à surveiller" : "Dépense à prévoir"}
+                  <span className={`tag ${signal.level === "risk" ? "danger" : signal.level === "tight" ? "warn" : ""}`}>
+                    {LEVEL_LABEL[signal.level]}
                   </span>
                 </div>
-                <p>{money(signal.amount_cents)} prévus · fin du mois estimée : <b>{money(signal.projected_month_end_cents)}</b>.</p>
+                <p>{money(signal.amount_cents)} prévus · {signal.key.startsWith("radar:month:") ? "point bas du mois estimé" : "fin du mois estimée"} : <b>{money(signal.projected_month_end_cents)}</b>.</p>
                 <p className="faint">{signal.basis} · {signal.confidence === "declared" ? "Saisi par toi" : "Estimation à confirmer"}.</p>
               </div>
             </li>
@@ -105,12 +122,13 @@ export function FutureRadar() {
       <div className="future-radar-context">
         <h3><Icon name="news" /> Actualités financières et internationales vérifiables</h3>
         {!data.news_consent ? <p className="muted">La veille réseau est désactivée. <a href="#/reglages">Donner ton accord dans Confidentialité</a> pour lire des sources publiques.</p> : data.macro_context.length === 0 ? <p className="muted">Aucun titre officiel récent indexé sur ces thèmes. L'absence de titre ne signifie pas que les marchés sont sans risque.</p> : (
-          <ul className="future-radar-articles">{data.macro_context.map((article) => (
-            <li key={article.id}>
-              <b>{article.url ? <a href={article.url} target="_blank" rel="noopener noreferrer">{article.title} <Icon name="external" size={14} /></a> : article.title}</b>
+          <ul className="future-radar-articles">{data.macro_context.map((article) => {
+            const href = secureHref(article.url);
+            return <li key={article.id}>
+              <b>{href ? <a href={href} target="_blank" rel="noopener noreferrer">{article.title} <Icon name="external" size={14} /></a> : article.title}</b>
               <p className="faint">{article.source} · {shortDate(article.published_at)} · {article.topics.join(", ")}</p>
-            </li>
-          ))}</ul>
+            </li>;
+          })}</ul>
         )}
         <p className="faint">Ces titres contextualisent les risques. Bank ne connaît pas automatiquement l'exposition de tous tes investissements et ne prédit pas leur performance à partir des seuls titres.</p>
       </div>

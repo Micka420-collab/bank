@@ -67,7 +67,7 @@ export function CrsTransparency() {
       <div className="crs-guide">
         <div><h3>CRS / DAC2</h3><p>Échanges automatiques de comptes financiers dans le cadre de l'OCDE et de la coopération fiscale européenne.</p><a href={CRS_SOURCES.dac2} target="_blank" rel="noopener noreferrer">Source : Commission européenne</a></div>
         <div><h3>Crypto / DAC8</h3><p>Depuis le 1er janvier 2026, le cadre DAC8 étend la collecte de données sur les cryptoactifs dans l'UE. Premier échange prévu au plus tard le 30 septembre 2027.</p><a href={CRS_SOURCES.dac8} target="_blank" rel="noopener noreferrer">Source : Commission européenne</a></div>
-        <div><h3>Déclaration en France</h3><p>Si tu es résident fiscal français, certains comptes bancaires et d'actifs numériques à l'étranger peuvent nécessiter le formulaire 3916–3916 bis, indépendamment du seul statut CRS.</p><a href={CRS_SOURCES.declaration} target="_blank" rel="noopener noreferrer">Source : impots.gouv.fr</a></div>
+        <div><h3>Déclaration en France</h3><p>Si tu es résident fiscal français, certains comptes bancaires et d'actifs numériques à l'étranger peuvent nécessiter les formulaires 3916 / 3916 bis, indépendamment du seul statut CRS.</p><a href={CRS_SOURCES.declaration} target="_blank" rel="noopener noreferrer">Source : impots.gouv.fr</a></div>
       </div>
       <p className="faint">Cette vérification est pédagogique : elle ne garantit ni l'application d'une convention à un établissement précis ni une dispense déclarative. Les deux juridictions sélectionnées ne sont pas transmises à un service tiers par Bank.</p>
     </section>

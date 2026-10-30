@@ -34,7 +34,8 @@ def real_change_pct(nominal_pct: float, inflation_pct: float) -> float:
 
 def real_yield_pct(gross_pct: float, fees_pct: float, tax_pct: float, inflation_pct: float) -> dict[str, float]:
     """Illustrative annual rates; taxation of *positive* gains only, no tax-wrapper claims."""
-    if not (-100 < gross_pct <= 200 and 0 <= fees_pct <= 30 and 0 <= tax_pct <= 100 and -30 < inflation_pct <= 100):
+    # Mêmes bornes que le schéma de l'API (YieldScenario) : -99 ≤ brut ≤ 200, -29 ≤ inflation ≤ 100.
+    if not (-99 <= gross_pct <= 200 and 0 <= fees_pct <= 30 and 0 <= tax_pct <= 100 and -29 <= inflation_pct <= 100):
         raise ValueError("Hypothèses de placement hors des limites")
     after_fees = (1 + gross_pct / 100) * (1 - fees_pct / 100) - 1
     after_tax = after_fees * (1 - tax_pct / 100) if after_fees > 0 else after_fees

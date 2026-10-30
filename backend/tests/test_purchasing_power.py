@@ -111,11 +111,37 @@ def test_salary_alert_only_on_supported_real_loss_and_privacy(monkeypatch: pytes
     assert svc.alerts(cast(Session, None), today=TODAY, privacy="full", public_url="https://bank.example") == []
 
 
-def test_authenticated_purchasing_power_and_real_yield_routes(world: TestClient) -> None:
+def test_authenticated_purchasing_power_and_real_yield_routes(app, world: TestClient) -> None:  # type: ignore[no-untyped-def]
     r = world.get("/api/watch/purchasing-power")
     assert r.status_code == 200, r.text
-    assert r.json()["benchmark"]["as_of"] == "2026-09"
+    assert r.json()["benchmark"]["as_of"] == "2026-09" and r.json()["benchmark"]["status"] == "definitif"
     assert isinstance(r.json()["benchmark"]["stale"], bool)
+    # La relève mensuelle des barèmes a un mois plus récent : c'est lui le repère, avec sa source ; un mois plus
+    # ancien ne remplace pas la valeur embarquée.
+    from datetime import UTC, datetime
+
+    from app.models import RateObservation
+
+    with app.state.sessionmaker() as db:
+        db.add_all(
+            [
+                RateObservation(
+                    series="insee.ipc_glissement", period="2026-08", value="2.9", source_url="https://www.insee.fr/x"
+                ),
+                RateObservation(
+                    series="insee.ipc_glissement",
+                    period="2026-10",
+                    value="3.3",
+                    source_url="https://www.insee.fr/fr/statistiques/serie/011814133",
+                    fetched_at=datetime(2026, 11, 14, 9, 0, tzinfo=UTC),
+                ),
+            ]
+        )
+        db.commit()
+    bench = world.get("/api/watch/purchasing-power").json()["benchmark"]
+    assert bench["as_of"] == "2026-10" and bench["annual_pct"] == 3.3 and bench["status"] == "releve"
+    assert bench["published_on"] == "2026-11-14" and bench["url"].startswith("https://www.insee.fr/")
+    assert "relevée à l'INSEE" in bench["note"]
     good = world.post(
         "/api/watch/purchasing-power/yield",
         json={
@@ -155,6 +181,29 @@ def test_assistant_can_ground_salary_and_yield_in_bank_not_guesswork(monkeypatch
     salary = json.loads(assistant._execute_tool(ctx, "analyze_purchasing_power", '{"mode":"salary"}'))
     assert salary["comparison"]["real_salary_change_pct"] is None
     assert salary["comparison"]["salary_months_found"] == 1
+    # Depuis une messagerie en « agrégats » : les pourcentages passent, les salaires et dépenses au centime non.
+    monkeypatch.setattr(
+        svc,
+        "view",
+        lambda db, today: {
+            "available": True,
+            "benchmark": p.INSEE_2026_09,
+            "comparison": {
+                "ready": True,
+                "real_salary_change_pct": -1.2,
+                "current_salary_avg_cents": 215_000,
+                "monthly_real_gap_cents": -2_600,
+                "spending_drivers": [{"category": "courses", "delta_cents": 4_000}],
+            },
+        },
+    )
+    aggregates = assistant._ToolContext(cast(Session, None), "test", TODAY, 1, False, privacy="aggregates")
+    masked = json.loads(assistant._execute_tool(aggregates, "analyze_purchasing_power", '{"mode":"salary"}'))
+    assert masked["comparison"]["real_salary_change_pct"] == -1.2
+    assert "current_salary_avg_cents" not in masked["comparison"] and "215000" not in json.dumps(masked)
+    assert masked["comparison"]["spending_drivers"] == [{"category": "courses"}]
+    full = json.loads(assistant._execute_tool(ctx, "analyze_purchasing_power", '{"mode":"salary"}'))
+    assert full["comparison"]["current_salary_avg_cents"] == 215_000
     result = json.loads(
         assistant._execute_tool(
             ctx,

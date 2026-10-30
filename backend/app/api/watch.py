@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import AuthDep, DbDep, TodayDep, client_ip
 from app.db import utcnow
+from app.domain.purchasing_power import real_yield_pct
 from app.services import future_radar, investment_compare, investment_holdings, purchasing_power, watch
 
 router = APIRouter(prefix="/api/watch", tags=["watch"])
@@ -64,8 +65,6 @@ class YieldScenario(BaseModel):
 @router.post("/purchasing-power/yield")
 def estimate_real_yield(body: YieldScenario, _: AuthDep) -> dict[str, Any]:
     """Hypothèse mathématique nette de frais et de fiscalité simplifiée, non une offre."""
-    from app.domain.purchasing_power import real_yield_pct
-
     return {
         **real_yield_pct(body.gross_pct, body.fees_pct, body.tax_pct, body.inflation_pct),
         "assumptions": body.model_dump(),

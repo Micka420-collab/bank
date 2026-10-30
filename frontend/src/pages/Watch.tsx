@@ -2,12 +2,14 @@
 // que tu ajoutes) et te signale ce qui change pour toi. Chaque élément dit d'où il vient, quand il a été publié,
 // quand Bank l'a vu et revérifié, et s'il a été modifié depuis. Les données de référence de Bank (taux, barèmes,
 // sources des démarches) portent une date de revérification : passée, c'est signalé ici.
+// Ordre de la page : le cœur de la veille d'abord (moteur, ce qui change, références, sources), puis les
+// compléments : radar, pouvoir d'achat, placements suivis, comparateur, transparence CRS.
 
 import { useState, type FormEvent } from "react";
 import { api, useApi, type ReferenceCheck, type WatchItemView, type WatchListing, type WatchSourceView } from "../api";
 import { CrsTransparency } from "../components/CrsTransparency";
 import { FutureRadar } from "../components/FutureRadar";
-import { PurchasingPower } from "../components/PurchasingPower";
+import { PurchasingPower, type SalaryPowerView } from "../components/PurchasingPower";
 import { InvestmentComparator } from "../components/InvestmentComparator";
 import { InvestmentHoldings } from "../components/InvestmentHoldings";
 import { Icon } from "../components/Icon";
@@ -31,6 +33,8 @@ export function Watch() {
   const [data, setData] = useState<WatchListing | null>(null);
   const [onlyMine, setOnlyMine] = useState(true);
   const [investmentCapital, setInvestmentCapital] = useState<number | null>(null);
+  // Repère IPC chargé une seule fois par PurchasingPower, partagé avec le comparateur.
+  const [benchmark, setBenchmark] = useState<SalaryPowerView["benchmark"] | null>(null);
   const [busy, error, run] = useAsyncAction();
   const toast = useToast();
   const view = data ?? listing.data;
@@ -76,12 +80,6 @@ export function Watch() {
         </section>
       )}
 
-      <FutureRadar />
-      <PurchasingPower />
-      <InvestmentHoldings onCompare={setInvestmentCapital} />
-      <InvestmentComparator suggestedCapitalCents={investmentCapital} />
-      <CrsTransparency />
-
       <section className="section" aria-labelledby="news-title">
         <div className="section-head">
           <h2 id="news-title"><Icon name="news" /> Ce qui change</h2>
@@ -117,6 +115,12 @@ export function Watch() {
       </section>
 
       <Sources sources={view.sources} onChange={reload} />
+
+      <FutureRadar />
+      <PurchasingPower onBenchmark={setBenchmark} />
+      <InvestmentHoldings onCompare={setInvestmentCapital} />
+      <InvestmentComparator suggestedCapitalCents={investmentCapital} benchmark={benchmark} />
+      <CrsTransparency />
     </>
   );
 }

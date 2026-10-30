@@ -37,6 +37,10 @@ MAX_ITEMS_PER_SOURCE = 300
 ITEM_RETENTION_DAYS = 365
 ENGINE_SLUG = "openfisca-france"
 
+# Flux macro (en anglais pour la plupart) : ils nourrissent le radar et la veille, jamais une notification de
+# messagerie — un communiqué de la BCE où passe « tax » n'est pas une actualité de tes aides.
+MACRO_SLUGS = frozenset({"ecb-press", "eu-council-press", "eu-finance-press", "fed-policy"})
+
 BUILTIN_SOURCES: tuple[dict[str, Any], ...] = (
     {
         "slug": "economie-gouv",
@@ -74,9 +78,10 @@ BUILTIN_SOURCES: tuple[dict[str, Any], ...] = (
         "interval_hours": 12,
     },
     {
+        # Le flux publie des documents d'orientation sur les sanctions financières (DG FISMA), pas de l'actualité.
         "slug": "eu-finance-press",
         "kind": "rss",
-        "name": "Commission européenne — sanctions et conformité",
+        "name": "Commission européenne — documents d'orientation sur les sanctions",
         "url": "https://finance.ec.europa.eu/node/1296/rss_en",
         "trust": "officiel",
         "interval_hours": 24,

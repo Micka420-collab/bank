@@ -1,6 +1,6 @@
 // Un seul tableau : salaires observés, pression des dépenses, inflation datée
 // et rendement hypothétique net après frais/fiscalité/inflation.
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api, useApi } from "../api";
 import { money } from "../format";
 import { Icon } from "./Icon";
@@ -46,12 +46,14 @@ type YieldResult = {
   assumptions: { gross_pct: number; fees_pct: number; tax_pct: number; inflation_pct: number };
   note: string;
 };
-const signed = (n: number) => {
-  const number = n.toLocaleString("fr-FR", { maximumFractionDigits: 2 });
-  return `${n < 0 ? "−" + number.slice(1) : n > 0 ? "+" + number : number} %`;
+/** « −0,58 % », « +2,5 % », « 0 % » : le signe vient du nombre, jamais de la chaîne formatée. */
+export const signed = (n: number) => {
+  const magnitude = Math.abs(n).toLocaleString("fr-FR", { maximumFractionDigits: 2 });
+  return `${n < 0 ? "−" : n > 0 ? "+" : ""}${magnitude} %`;
 };
 
-export function PurchasingPower() {
+/** Seul appel à /api/watch/purchasing-power de la page : le repère IPC est remonté au parent (comparateur). */
+export function PurchasingPower({ onBenchmark }: { onBenchmark?: (benchmark: SalaryPowerView["benchmark"]) => void } = {}) {
   const view = useApi<SalaryPowerView>("/api/watch/purchasing-power");
   const [gross, setGross] = useState("");
   const [fees, setFees] = useState("0");
@@ -59,6 +61,10 @@ export function PurchasingPower() {
   const [inflation, setInflation] = useState("");
   const [calculated, setCalculated] = useState<YieldResult | null>(null);
   const [busy, error, run] = useAsyncAction();
+  const benchmark = view.data?.benchmark;
+  useEffect(() => {
+    if (benchmark && onBenchmark) onBenchmark(benchmark);
+  }, [benchmark, onBenchmark]);
 
   if (view.error) return <ErrorNote message={view.error} onRetry={view.reload} />;
   if (!view.data?.benchmark) return <Loading what="Analyse du pouvoir d'achat" />;

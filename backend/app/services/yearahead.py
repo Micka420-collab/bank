@@ -169,9 +169,12 @@ def set_ignored(db: Session, key: str, ignored: bool, *, actor: str) -> None:
 
 
 # ------------------------------------------------------------------ alertes, cartes, agent
-def alerts(db: Session, *, today: date, privacy: str, public_url: str) -> list[tuple[str, str, bool]]:
+def alerts(
+    db: Session, *, today: date, privacy: str, public_url: str, y: dom.YearAhead | None = None
+) -> list[tuple[str, str, bool]]:
+    """``y`` : l'année déjà calculée par l'appelant (un seul calcul par passage des alertes)."""
     out: list[tuple[str, str, bool]] = []
-    y = compute(db, today)
+    y = y or compute(db, today)
     for s in y.spikes:
         days = (s.day - today).days
         if s.amount_cents < ALERT_MIN_CENTS or not 0 <= days <= ALERT_DAYS or s.source == "planned":

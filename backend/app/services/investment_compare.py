@@ -1,4 +1,6 @@
-"""Contextual investment scenarios grounded in Bank balances and dated regulated rates."""
+"""Comparateur de placements : même capital de départ sur chaque produit, taux réglementés datés, hypothèse de
+marché saisie par la personne. La situation (réserve, dettes chères, profil, lignes rouges, découvert, éligibilité
+LEP) est celle que lit le plan de placement de Bank (`decisions.plan_context`) : une seule lecture."""
 
 from __future__ import annotations
 
@@ -9,50 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.domain import invest
 from app.domain import investment_compare as domain
-from app.domain.onboarding import risk_profile
-from app.domain.wealth import emergency_fund, load_regulated_products, regulated_status
-from app.services import advisor, analytics
-
-
-
-_INVESTMENT_ACCOUNT_KINDS = frozenset({"livret_a", "ldds", "lep", "pel", "cel", "pea", "assurance_vie", "per", "crypto", "savings"})
-_INVESTMENT_DECLARED_KINDS = frozenset({"pea", "assurance_vie", "per", "epargne_salariale", "crypto", "autre"})
-
-
-def inventory(accounts: list[Any], values: dict[str, Any]) -> dict[str, Any]:
-    """Inventaire sans dédoublonnage trompeur entre avoirs déclarés et comptes connectés."""
-    rows: list[dict[str, Any]] = []
-    for account in accounts:
-        if account.kind in _INVESTMENT_ACCOUNT_KINDS and account.balance_cents >= 0:
-            rows.append({
-                "kind": account.kind,
-                "label": account.name,
-                "value_cents": account.balance_cents,
-                "source": "compte_enregistre",
-                "valuation": "solde_compte",
-                "document_status": "non_verifie",
-                "missing": ["frais_produit", "conditions_de_sortie", "risques_documentes", "fiscalite_personnelle"],
-            })
-    for asset in values.get("outside_assets") or []:
-        if asset.get("kind") in _INVESTMENT_DECLARED_KINDS:
-            rows.append({
-                "kind": asset["kind"],
-                "label": asset["label"],
-                "value_cents": int(asset["value_cents"]),
-                "source": "declare_par_utilisateur",
-                "valuation": "montant_declare_non_cote",
-                "document_status": "non_verifie",
-                "missing": ["date_valorisation", "frais_produit", "conditions_de_sortie",
-                            "risques_documentes", "fiscalite_personnelle"],
-            })
-    return {
-        "holdings": rows,
-        "holdings_count": len(rows),
-        "total_cents": None,
-        "total_note": "Total non additionné : un avoir déclaré peut recouvrir un compte connecté.",
-        "source_note": "Ce sont des soldes ou déclarations, pas des positions titre par titre ni des cotations en direct.",
-        "documents_note": "Aucun DIC, prospectus ou document contractuel n'a été associé et validé par cet inventaire.",
-    }
+from app.domain.wealth import load_regulated_products, regulated_status
+from app.services import decisions
 
 
 def view(
@@ -71,22 +31,13 @@ def view(
     """Identical starting capital across products; an inaccessible cap cannot silently be ignored."""
     if not 0 <= custom_locked_months <= domain.MAX_MONTHS:
         raise ValueError("Durée de blocage hors limites")
-    values = advisor.plain_answers(db)
-    accounts = analytics.account_balances(db, today)
-    essentials = analytics.monthly_essentials(db, today) if accounts else 0
-    ef = emergency_fund(accounts, essentials)
-    target_months = int(values.get("emergency_target_months") or 3)
-    reserve_gap = max(0, target_months * essentials - ef.available_cents) if essentials > 0 else None
-    debts = values.get("debts") or []
-    expensive = any(float(item.get("rate_percent") or 0) >= 5 for item in debts)
-    risk = risk_profile(values, ef.months_covered, expensive)
+    ctx = decisions.plan_context(db, today)
+    values, accounts, essentials = ctx.values, ctx.balances, ctx.monthly_essentials_cents
+    reserve_gap = ctx.reserve_gap_cents
+    risk = ctx.risk
     horizon = values.get("risk_horizon")
-    overdraft_risk: bool | None = None
-    if analytics.budget_accounts(db):
-        forecast = analytics.forecast_inputs(db, today).run()
-        overdraft_risk = forecast.overdraft_date is not None
-    red_lines = [str(x.get("rule") or "") for x in values.get("red_lines") or []]
-    excluded = invest.excluded_by_red_lines(red_lines)
+    overdraft_risk = ctx.overdraft
+    excluded = invest.excluded_by_red_lines(ctx.red_lines)
     products = load_regulated_products()
     room_by_kind = {x.kind: x.room_cents for x in regulated_status(accounts, products)}
     records: list[dict[str, Any]] = []
@@ -108,7 +59,7 @@ def view(
             locked_months=0,
             loss_pct=0,
             investment_kind=p.kind,
-            eligible=None if p.kind == "lep" else True,
+            eligible=ctx.lep_eligible if p.kind == "lep" else True,
             full_room=fitting,
         )
         records.append(
@@ -188,7 +139,6 @@ def view(
             "overdraft_risk": overdraft_risk,
             "data_complete": bool(accounts) and essentials > 0,
         },
-        "inventory": inventory(accounts, values),
         "scenarios": records,
         "note": "Comparaison informative, pas une recommandation d'achat ni un classement par gain. "
         "Aucun capital n'est déplacé. Les produits de marché sont exclus de la comparaison "

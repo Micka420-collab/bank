@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from datetime import date
 from types import SimpleNamespace
-from typing import cast
+from typing import Any
 
 import pytest
 from sqlalchemy.orm import Session
@@ -93,7 +93,15 @@ def test_suitability_is_separate_from_paper_profit_and_checks_restrictions() -> 
     assert any("éligibilité" in item.lower() for item in lep["blockers"])
 
 
-def test_personal_reserve_red_lines_and_cap_block_unsupported_investments(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_personal_reserve_red_lines_and_cap_block_unsupported_investments(
+    db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """La situation lue est celle du plan de placement (decisions.plan_context) : réserve cible, lignes rouges,
+    et l'éligibilité au LEP que Bank connaît par la dernière simulation fiscale — jamais « non vérifiée » par défaut
+    quand elle l'est."""
+    import json
+
+    from app.models import FiscalSimulation
     from app.services import advisor, analytics
 
     monkeypatch.setattr(
@@ -104,43 +112,37 @@ def test_personal_reserve_red_lines_and_cap_block_unsupported_investments(monkey
     monkeypatch.setattr(
         analytics,
         "account_balances",
-        lambda db, today: [SimpleNamespace(kind="livret_a", balance_cents=10_000)],
+        lambda db, today: [SimpleNamespace(kind="livret_a", name="Livret A", balance_cents=10_000)],
     )
     monkeypatch.setattr(analytics, "monthly_essentials", lambda db, today: 100_000)
     monkeypatch.setattr(analytics, "budget_accounts", lambda db: [])
-    result = svc.view(
-        cast(Session, None),
-        date(2026, 10, 28),
-        capital_cents=100_000,
-        horizon_months=120,
-        inflation_pct=3.1,
-        custom_gross_pct=12,
-    )
+    kwargs: dict[str, Any] = {
+        "capital_cents": 100_000,
+        "horizon_months": 120,
+        "inflation_pct": 3.1,
+        "custom_gross_pct": 12,
+    }
+    result = svc.view(db, date(2026, 10, 28), **kwargs)
     assert result["context"]["reserve_gap_cents"] == 290_000
+    assert result["context"]["overdraft_risk"] is None, "sans compte courant, pas de risque de découvert inventé"
+    assert "inventory" not in result, "l'inventaire est celui de /api/watch/investments/holdings, pas un second"
     market = next(row for row in result["scenarios"] if row["kind"] == "market")
     assert not market["suitability"]["eligible_to_consider"]
     assert any("Ligne rouge" in msg for msg in market["suitability"]["blockers"])
     lep = next(row for row in result["scenarios"] if row["kind"] == "lep")
     assert lep["rates_as_of"]
     assert lep["source"] != "Saisie manuelle"
+    assert not lep["suitability"]["eligible_to_consider"], "éligibilité inconnue : à vérifier"
     assert len(result["scenarios"]) == 4
-
-
-def test_inventory_preserves_provenance_and_avoids_double_counting() -> None:
-    accounts = [SimpleNamespace(kind="pea", name="PEA connecté", balance_cents=150_000)]
-    values = {
-        "outside_assets": [
-            {"kind": "pea", "label": "Mon PEA", "value_cents": 150_000},
-            {"kind": "immobilier", "label": "Appartement", "value_cents": 5_000_000},
-        ]
-    }
-    found = svc.inventory(accounts, values)
-    assert found["holdings_count"] == 2
-    assert found["total_cents"] is None
-    assert {h["source"] for h in found["holdings"]} == {"compte_enregistre", "declare_par_utilisateur"}
-    assert all(h["document_status"] == "non_verifie" for h in found["holdings"])
-    assert all("frais_produit" in h["missing"] for h in found["holdings"])
-    assert svc.inventory([], {})["holdings_count"] == 0
+    # Une simulation fiscale dit que le LEP est ouvert : le comparateur le sait, comme le plan de placement.
+    db.add(FiscalSimulation(period="2026-10", result=json.dumps({"lep_eligible": True})))
+    db.commit()
+    lep = next(row for row in svc.view(db, date(2026, 10, 28), **kwargs)["scenarios"] if row["kind"] == "lep")
+    assert lep["suitability"]["eligible_to_consider"]
+    db.add(FiscalSimulation(period="2026-11", result=json.dumps({"lep_eligible": False})))
+    db.commit()
+    lep = next(row for row in svc.view(db, date(2026, 10, 28), **kwargs)["scenarios"] if row["kind"] == "lep")
+    assert not lep["suitability"]["eligible_to_consider"]
 
 
 def test_authenticated_route_rate_sourcing_and_invalid_payload(world: TestClient) -> None:

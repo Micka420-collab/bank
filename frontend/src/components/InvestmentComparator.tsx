@@ -1,9 +1,10 @@
 // Comparateur : capital et horizon identiques, performances fictives non présentées comme des cours.
+// Le repère d'inflation (IPC Insee) vient de la section Pouvoir d'achat : un seul appel pour la page.
 import { useEffect, useState, type FormEvent } from "react";
-import { api, useApi } from "../api";
+import { api } from "../api";
 import { money } from "../format";
 import { Icon } from "./Icon";
-import { ErrorNote, useAsyncAction } from "./ui";
+import { useAsyncAction } from "./ui";
 import type { SalaryPowerView } from "./PurchasingPower";
 
 type Projection = {
@@ -26,16 +27,19 @@ type Comparison = {
     declared_horizon: string | null; reserve_gap_cents: number | null;
     overdraft_risk: boolean | null; data_complete: boolean;
   };
-  inventory?: {
-    holdings: { kind: string; label: string; value_cents: number; source: string;
-      valuation: string; document_status: string; missing: string[] }[];
-    holdings_count: number; total_cents: null; total_note: string; source_note: string; documents_note: string;
-  };
   scenarios: Scenario[]; note: string;
 };
+export type InflationBenchmark = SalaryPowerView["benchmark"];
 
-export function InvestmentComparator({ suggestedCapitalCents }: { suggestedCapitalCents?: number | null }) {
-  const index = useApi<SalaryPowerView>("/api/watch/purchasing-power");
+/** Rouge/vert réservés au signe du gain réel écrit en toutes lettres ; un gain nul reste neutre. */
+export function gainClass(cents: number): string {
+  return cents < 0 ? "is-negative" : cents > 0 ? "is-positive" : "is-neutral";
+}
+
+export function InvestmentComparator({ suggestedCapitalCents, benchmark }: {
+  suggestedCapitalCents?: number | null;
+  benchmark?: InflationBenchmark | null;
+}) {
   const [capital, setCapital] = useState("1000");
   const [months, setMonths] = useState("60");
   const [inflation, setInflation] = useState("");
@@ -55,7 +59,7 @@ export function InvestmentComparator({ suggestedCapitalCents }: { suggestedCapit
     }
   }, [suggestedCapitalCents]);
 
-  const reference = index.data?.benchmark;
+  const reference = benchmark ?? null;
   const currentInflation = inflation === "" ? String(reference?.annual_pct ?? 0) : inflation;
   const valid = [capital, months, currentInflation, ...(includeMarket ? [gross, fees, tax, loss, lock] : [])]
     .every((x) => x.trim() !== "" && Number.isFinite(Number(x)))
@@ -98,7 +102,7 @@ export function InvestmentComparator({ suggestedCapitalCents }: { suggestedCapit
         Même capital, même durée et même inflation pour tous. Bank confronte les résultats à ton épargne de
         précaution et à ton horizon avant de parler de rendement. Rien n'est acheté automatiquement.
       </p>
-      {index.error && <ErrorNote message={index.error} onRetry={index.reload} />}
+      {!reference && <p className="muted">Le repère d'inflation de la section « Salaire, pouvoir d'achat et placements » est nécessaire pour comparer : il s'affiche dès qu'il est chargé.</p>}
       {reference && <form onSubmit={submit} className="investment-comparator-form">
         <label>Somme à comparer (€)
           <input type="number" value={capital} onChange={e => change(setCapital, e.target.value)} min="100" max="1000000" step="100" required />
@@ -149,23 +153,12 @@ export function InvestmentComparator({ suggestedCapitalCents }: { suggestedCapit
           </p>
           {result.context.overdraft_risk && <p className="error">Découvert prévisible : priorité à la trésorerie.</p>}
         </div>
-        {result.inventory && <div className="investment-comparator-inventory">
-          <h3><Icon name="wealth" /> Placements déjà renseignés dans Bank</h3>
-          {result.inventory.holdings.length === 0
-            ? <p className="faint">Aucun placement identifié : renseigne les comptes ou les avoirs externes dans ton profil.</p>
-            : <ul>{result.inventory.holdings.map((item, i) => <li key={`${item.source}-${item.kind}-${i}`}>
-              <div><strong>{item.label}</strong><span className="faint">{item.source === "compte_enregistre" ? "Compte enregistré" : "Avoir déclaré manuellement"}</span></div>
-              <strong>{money(item.value_cents)}</strong>
-              <small>Documents non vérifiés · frais, liquidité et risques à compléter</small>
-            </li>)}</ul>}
-          <p className="faint">{result.inventory.total_note} {result.inventory.source_note}</p>
-        </div>}
         <div className="investment-comparator-grid">
           {result.scenarios.map(row => <article key={row.kind} className="investment-comparator-card">
             <div className="investment-comparator-head">
               <h3>{row.label}</h3>
               <span className={row.suitability.eligible_to_consider ? "tag ok" : "tag warn"}>
-                {row.suitability.eligible_to_consider ? "À étudier" : "Inadapté / à vérifier"}
+                {row.suitability.eligible_to_consider ? "À étudier" : "Conditions non remplies"}
               </span>
             </div>
             <p className="faint">{row.status === "hypothese"
@@ -175,12 +168,12 @@ export function InvestmentComparator({ suggestedCapitalCents }: { suggestedCapit
               <div><span>Taux brut supposé</span><strong>{row.gross_pct.toLocaleString("fr-FR")} %</strong></div>
               <div><span>Capital nominal simulé</span><strong>{money(row.projection.future_nominal_cents)}</strong></div>
               <div><span>Valeur en euros d'aujourd'hui</span>
-                <strong className={row.projection.real_gain_cents < 0 ? "is-negative" : "is-positive"}>
-                  {money(row.projection.future_real_cents)}
-                </strong>
+                <strong>{money(row.projection.future_real_cents)}</strong>
               </div>
               <div><span>Gain réel hypothétique</span>
-                <strong>{row.projection.real_gain_cents > 0 ? "+" : ""}{money(row.projection.real_gain_cents)}</strong>
+                <strong className={gainClass(row.projection.real_gain_cents)}>
+                  {money(row.projection.real_gain_cents, { signed: true })}
+                </strong>
               </div>
             </div>
             {row.status === "hypothese" &&

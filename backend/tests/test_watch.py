@@ -423,6 +423,19 @@ def test_watch_respects_consent_and_schedule(app, world: TestClient, fetcher: Fa
     assert world.put("/api/consents/watch", json={"granted": False}).status_code == 200
     data = _refresh(world)
     assert data["report"]["skipped"] == 1 and fetcher.calls == [] and data["enabled"] is False
+    # Un oui donné au texte d'avant (version 2, sans la BCE, le Conseil de l'UE, la Commission ni la Fed) ne vaut pas
+    # pour ces hôtes : rien n'est interrogé tant que le texte actuel n'est pas accepté.
+    with app.state.sessionmaker() as db:
+        from app.models import Consent
+
+        row = db.get(Consent, "watch")
+        assert row is not None
+        row.granted, row.wording_version = True, 2
+        db.commit()
+    data = _refresh(world)
+    assert data["report"]["skipped"] == 1 and fetcher.calls == [] and data["enabled"] is False
+    watch = next(c for c in world.get("/api/consents").json() if c["purpose"] == "watch")
+    assert watch["decided"] is False and watch["granted"] is False, "le nouveau texte est à nouveau posé"
     world.put("/api/consents/watch", json={"granted": True})
     with app.state.sessionmaker() as db:
         now = utcnow()
@@ -537,3 +550,38 @@ def test_monetary_policy_watch_is_sourced_and_radar_separates_macro_from_forecas
     )
     assert "cause à effet" in view["disclaimer"]
     assert "signals" in view and isinstance(view["signals"], list)
+
+
+def test_macro_feeds_feed_the_radar_but_never_a_messaging_notice(app, world: TestClient, fetcher: FakeFetcher) -> None:  # type: ignore[no-untyped-def]
+    """Un communiqué de la Fed ou du Conseil de l'UE où passe « tax » n'est pas une actualité de tes aides : il
+    nourrit le radar (sujets macro), jamais une notification de messagerie ; les titres de la Fed sont classés."""
+    from app.domain import watch as dw
+    from app.services import channel_alerts
+
+    fed = (
+        "Federal Reserve issues FOMC statement",
+        "https://www.federalreserve.gov/newsevents/pressreleases/monetary20261029a.htm",
+        "The Committee decided to maintain the target range.",
+        "2026-10-20 18:00:00",
+    )
+    council = (
+        "Council agrees on fiscal rules and tax cooperation",
+        "https://www.consilium.europa.eu/en/press/press-releases/2026/10/29/fiscal/",
+        "Economic governance.",
+        "2026-10-20 12:00:00",
+    )
+    fetcher.serve(FED, rss(fed))
+    fetcher.serve(EU_COUNCIL, rss(council))
+    data = _refresh(world)
+    titles = {i["title"]: i for i in data["items"]}
+    assert "marches" in titles[fed[0]]["topics"], "FOMC / Federal Reserve classés « marchés »"
+    assert "impots" in titles[council[0]]["topics"], "les regex existantes matchent l'anglais : d'où le filtre"
+    assert "marches" in dw.topics_of("Governing Council decisions") and "marches" in dw.topics_of(
+        "Conseil des gouverneurs"
+    )
+    radar = world.get("/api/watch/radar").json()
+    assert {i["title"] for i in radar["macro_context"]} >= {fed[0]}
+    with app.state.sessionmaker() as db:
+        notices = channel_alerts._watch_notices(db, date(2026, 10, 21), "https://bank.lan")
+        assert all(fed[0] not in n.text and council[0] not in n.text for n in notices)
+        assert any("Livret A et LEP" in n.text for n in notices), "l'actualité française pertinente part toujours"
