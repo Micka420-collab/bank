@@ -39,7 +39,7 @@ from app.fiscal.client import FiscalClient
 from app.models import Category, Conversation, LlmProvider, LlmUsage, MerchantHint, Transaction
 from app.providers.openrouter import ChatResult, OpenRouterClient, OpenRouterError, looks_like_key, valid_model_id
 from app.security import audit, netfetch
-from app.services import advisor, chat_actions, chat_charts, consents, coverage, decisions, websearch
+from app.services import advisor, analytics, chat_actions, chat_charts, consents, coverage, decisions, websearch
 from app.services import memory as memory_service
 from app.services import planb as planb_service
 from app.services import purchasing_power as power_service
@@ -67,9 +67,28 @@ MAX_CALLS_PER_ROUND = 6
 MAX_MEMORY_FAILURES = 3  # échecs d'écriture en mémoire par question avant de laisser tomber (comme Hermes)
 
 
-def persona_prompt(name: str, memory_on: bool) -> str:
+INTERACTIVE_RULES = (
+    "Quand un choix est nécessaire, appelle ask_interactive : sondage pour une préférence, checklist pour "
+    "une liste d’étapes, formulaire pour quelques informations à préciser. Laisse la personne répondre "
+    "et valider avant de poursuivre. Le widget ne réalise aucune démarche ni aucun paiement.",
+    "Pour montrer l'impact d'une dépense imprévue ou d'une économie quotidienne sur la projection du mois, "
+    "appelle show_budget_simulator : le simulateur lit les chiffres Bank, l'utilisateur déplace les curseurs "
+    "et valide éventuellement sa question. Ne promets pas que le solde futur sera exact.",
+)
+INTERACTIVE_RULES_PURCHASE = (
+    "Pour les achats (prix et objet connus), préfère show_purchase_coach : verdict calculé, question sur le "
+    "besoin réel et alternative pour attendre. Ne moralise jamais et n'affirme pas que tu connais les émotions "
+    "de la personne. Si les comptes ne sont pas connectés, dis que l'analyse financière n'est pas fiable et "
+    "propose de relier un compte.",
+    "Pour une interface vraiment liée où une préférence change simultanément le graphique et le plan, "
+    "appelle show_decision_board. Les économies sont purement hypothétiques et rien ne modifie les comptes.",
+)
+
+
+def persona_prompt(name: str, memory_on: bool, *, web: bool = True) -> str:
     """Consignes de l'assistant : un pote compétent, honnête, qui se souvient — et qui ne prend rien pour argent
-    comptant dans les données qu'on lui montre."""
+    comptant dans les données qu'on lui montre. ``web`` : les composants interactifs n'existent que dans le chat de
+    Bank ; depuis une messagerie, leurs consignes sont tues avec leurs outils."""
     lines = [
         f"Tu es {name}, l'assistant de Bank, l'application de finances personnelles que la personne héberge chez elle.",
         "Tu es un peu son pote : tu la tutoies, tu es chaleureux, direct et encourageant, avec une pointe d'humour "
@@ -109,6 +128,17 @@ def persona_prompt(name: str, memory_on: bool) -> str:
         "Pour montrer des chiffres, appelle show_chart (c'est Bank qui dessine, avec ses données) et commente le "
         "graphique en deux phrases ; n'écris pas de tableau à la place. Pour expliquer un mécanisme (comment une "
         "aide se calcule, les étapes d'une démarche, d'où vient le reste à dépenser), appelle draw_diagram.",
+        *(INTERACTIVE_RULES if web else ()),
+        "Si le verdict d'un achat est attendre, plus_tard ou hors_de_portee, explique clairement pourquoi "
+        "ce n'est pas raisonnable aujourd'hui et propose une alternative : attendre, revoir le prix, "
+        "mettre de côté. Si le verdict est oui, ne culpabilise pas la personne pour un plaisir financièrement "
+        "compatible. Si l'achat est indispensable, recherche d'abord une option adaptée et évite le jugement. "
+        "Tu peux raisonner la personne avec bienveillance, mais jamais décider à sa place.",
+        *(
+            INTERACTIVE_RULES_PURCHASE
+            if web
+            else ("Pour un achat (prix et objet connus), can_i_buy donne le verdict chiffré.",)
+        ),
         "Pour une règle, un barème, une actualité ou une information extérieure à Bank, utilise web_search quand il "
         "est disponible, lis la page utile avec read_page si l'extrait ne suffit pas, et cite tes sources dans le "
         "texte sous la forme [1], [2]. Sans source, dis que tu n'es pas sûr : jamais d'affirmation inventée.",
@@ -360,6 +390,97 @@ TOOL_DIAGRAM: dict[str, Any] = {
         },
     },
 }
+TOOL_INTERACTIVE: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "ask_interactive",
+        "description": (
+            "Afficher une interaction dans le chat Bank. poll : sondage à choix simple ou multiple ; "
+            "checklist : cases à cocher ; form : texte court, montant, cases, choix ou curseur. "
+            "Un seul bloc par réponse. Le clic Envoyer déclenche un nouveau message de l'utilisateur, "
+            "jamais une écriture bancaire. Ne demande aucun secret, mot de passe, carte ni IBAN."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "enum": ["poll", "checklist", "form"]},
+                "title": {"type": "string", "maxLength": 80},
+                "description": {"type": "string", "maxLength": 240},
+                "submit_label": {"type": "string", "maxLength": 32},
+                "fields": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 6,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string", "maxLength": 24},
+                            "label": {"type": "string", "maxLength": 60},
+                            "kind": {
+                                "type": "string",
+                                "enum": ["single", "multiple", "text", "number", "boolean", "scale"],
+                            },
+                            "required": {"type": "boolean"},
+                            "options": {"type": "array", "maxItems": 8, "items": {"type": "string", "maxLength": 60}},
+                            "min": {"type": "integer", "minimum": 0, "maximum": 100},
+                            "max": {"type": "integer", "minimum": 1, "maximum": 100},
+                        },
+                        "required": ["id", "label", "kind"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["kind", "title", "fields"],
+            "additionalProperties": False,
+        },
+    },
+}
+TOOL_PURCHASE_COACH: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "show_purchase_coach",
+        "description": (
+            "Pour un achat envisagé, affiche une vraie carte interactive : verdict chiffré (oui, oui_mais, "
+            "attendre, plus_tard, hors_de_portee), budget avant/après, questions pour réfléchir et alternatives. "
+            "Les montants et le verdict sont calculés par Bank, jamais par le modèle. "
+            "La carte ne réalise aucun achat et ne juge pas la personne."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "amount_eur": {"type": "number", "exclusiveMinimum": 0, "maximum": 10_000_000},
+                "label": {"type": "string", "maxLength": 80},
+            },
+            "required": ["amount_eur"],
+            "additionalProperties": False,
+        },
+    },
+}
+TOOL_SCENARIO: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "show_budget_simulator",
+        "description": (
+            "Afficher dans le chat un simulateur financier interactif fondé sur la vraie projection du mois de Bank. "
+            "L'utilisateur ajuste une dépense imprévue et la réduction de dépenses quotidiennes : le graphique et "
+            "le solde prévisionnel réagissent immédiatement. Aucune modification de solde ni de paiement. "
+            "N'invente jamais un solde, une économie ou une date : aucun argument n'est nécessaire."
+        ),
+        "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+}
+TOOL_BOARD: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "show_decision_board",
+        "description": (
+            "Créer dans le chat un tableau lié (sondage de préférence, graphique et checklist) "
+            "qui réagit immédiatement aux choix. Les chiffres proviennent de la vraie prévision de Bank. "
+            "Lecture seule, sans virement ni envoi automatique."
+        ),
+        "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+}
 TOOL_SEARCH: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -415,6 +536,10 @@ TOOL_STATUS = {
     "read_page": "lit une page",
     "show_chart": "dessine le graphique",
     "draw_diagram": "dessine un schéma",
+    "ask_interactive": "prépare une interface interactive",
+    "show_budget_simulator": "prépare une simulation de budget",
+    "show_decision_board": "prépare un sondage et un graphique liés",
+    "show_purchase_coach": "calcule le verdict et prépare le coach d’achat",
     "propose_actions": "prépare les boutons",
     "can_i_buy": "fait le calcul",
     "analyze_purchasing_power": "compare tes salaires, tes dépenses et l’inflation",
@@ -753,16 +878,29 @@ class _ToolContext:
     followups: list[str] = field(default_factory=list)
     chart: dict[str, Any] | None = None
     diagram: dict[str, Any] | None = None
+    interactive: dict[str, Any] | None = None
+    scenario: dict[str, Any] | None = None
+    decision_board: dict[str, Any] | None = None
+    purchase_coach: dict[str, Any] | None = None
     sources: list[dict[str, Any]] = field(default_factory=list)
     dropped_keys: int = 0
 
     def blocks(self) -> list[dict[str, Any]]:
-        """Les blocs de la réponse, dans un ordre stable : graphique, schéma, sources, puis boutons."""
+        """Les blocs de la réponse, dans un ordre stable : graphique, schéma, interface, simulateur ou tableau lié,
+        coach d'achat, sources, puis boutons (MAX_BLOCKS les accueille tous)."""
         out: list[dict[str, Any]] = []
         if self.chart:
             out.append(self.chart)
         if self.diagram:
             out.append(self.diagram)
+        if self.interactive:
+            out.append(self.interactive)
+        if self.scenario:
+            out.append(self.scenario)
+        if self.decision_board:
+            out.append(self.decision_board)
+        if self.purchase_coach:
+            out.append(self.purchase_coach)
         if self.sources:
             out.append({"type": "sources", "query": "", "items": self.sources[: blocks.MAX_SOURCES]})
         actions = list(self.actions)
@@ -848,6 +986,133 @@ def _tool_diagram(ctx: _ToolContext, args: dict[str, Any]) -> str:
          "note": "Le schéma est affiché : une phrase pour le présenter suffit."},
         ensure_ascii=False,
     )  # fmt: skip
+
+
+def _tool_interactive(ctx: _ToolContext, args: dict[str, Any]) -> str:
+    if ctx.interactive is not None:
+        return json.dumps({"error": "Une seule interface interactive par réponse."}, ensure_ascii=False)
+    try:
+        result = blocks.interactive_block(args)
+    except blocks.BlockError as exc:
+        return json.dumps({"error": str(exc)}, ensure_ascii=False)
+    ctx.interactive = result
+    return json.dumps(
+        {
+            "done": True,
+            "kind": result["kind"],
+            "questions": len(result["fields"]),
+            "note": "Le widget est affiché. Ne devine pas les réponses ; l'utilisateur doit le remplir et valider.",
+        },
+        ensure_ascii=False,
+    )
+
+
+def _tool_scenario(ctx: _ToolContext) -> str:
+    if ctx.scenario is not None or ctx.decision_board is not None:
+        return json.dumps({"error": "Un simulateur par réponse."}, ensure_ascii=False)
+    if not analytics.budget_accounts(ctx.db):
+        return json.dumps(
+            {"error": "Pas de compte courant de budget : propose de connecter une banque ou importer un relevé."},
+            ensure_ascii=False,
+        )
+    f = analytics.forecast_inputs(ctx.db, ctx.today).run()
+    if len(f.projection) < 2:
+        return json.dumps({"error": "Pas assez de jours restants dans ce mois."}, ensure_ascii=False)
+    try:
+        result = blocks.scenario_block(
+            {
+                "title": "Et si… ? Explore ton mois",
+                "source": "Bank · projection du mois (hypothèses, non garantie)",
+                "points": [{"date": p.date.isoformat(), "balance_cents": p.balance_cents} for p in f.projection],
+                "daily_savings_cap_cents": max(0, f.daily_variable_rate_cents),
+            }
+        )
+    except blocks.BlockError as exc:
+        return json.dumps({"error": str(exc)}, ensure_ascii=False)
+    ctx.scenario = result
+    return json.dumps(
+        {
+            "done": True,
+            "source": "Prévision Bank ; les chiffres ne sont pas calculés par le modèle.",
+            "current_end_balance_cents": f.projected_end_balance_cents,
+            "note": "L'utilisateur peut explorer la simulation dans le chat. "
+            "Les économies affichées sont des hypothèses, jamais un gain réalisé.",
+        },
+        ensure_ascii=False,
+    )
+
+
+def _tool_purchase_coach(ctx: _ToolContext, args: dict[str, Any]) -> str:
+    """La même décision chiffrée que can_i_buy, présentée comme une conversation guidée."""
+    if ctx.purchase_coach is not None:
+        return json.dumps({"error": "Un seul coach d'achat par réponse."}, ensure_ascii=False)
+    try:
+        amount = float(args.get("amount_eur", 0))
+    except (TypeError, ValueError):
+        return json.dumps({"error": "Un prix numérique est nécessaire."}, ensure_ascii=False)
+    if not 0.01 <= amount <= 10_000_000 or round(amount * 100) <= 0:
+        return json.dumps({"error": "Montant hors limites."}, ensure_ascii=False)
+    if not analytics.budget_accounts(ctx.db):
+        return json.dumps(
+            {
+                "error": "Pas de compte budgétaire pour établir un verdict fiable. "
+                "Propose de connecter un compte ou importer des transactions."
+            },
+            ensure_ascii=False,
+        )
+    label = blocks.clean(args.get("label"), 80) or "Cet achat"
+    amount_cents = round(amount * 100)
+    plan = decisions.purchase(ctx.db, ctx.today, amount_cents=amount_cents, label=label, category=None)
+    # Ce sont des OBJECTIFS DE PRIX, pas des offres disponibles sur un site marchand.
+    # Chaque point de comparaison est lui aussi calculé par le moteur de décision de Bank.
+    alternatives = []
+    for discount in (20, 40):
+        price = amount_cents * (100 - discount) // 100
+        if price < 1 or price >= amount_cents:
+            continue
+        option = decisions.purchase(ctx.db, ctx.today, amount_cents=price, label=label, category=None)
+        alternatives.append({**asdict(option), "discount_percent": discount})
+    try:
+        ctx.purchase_coach = blocks.purchase_coach_block(
+            {**asdict(plan), "label": label, "title": "Dois-je vraiment l'acheter ?", "alternatives": alternatives}
+        )
+    except blocks.BlockError as exc:
+        return json.dumps({"error": str(exc)}, ensure_ascii=False)
+    return json.dumps(
+        {
+            "done": True,
+            "answer": plan.answer,
+            "headline": plan.headline,
+            "explanation": plan.explanation[:1_000],
+            "alternatives_calculated": len(alternatives),
+            "note": "La carte interactive affiche les chiffres de Bank. "
+            "Tu peux aider la personne à réfléchir sans lui imposer la décision. "
+            "Les cibles -20 % et -40 % sont hypothétiques, sans offre commerciale vérifiée. "
+            "Si elle change le prix librement, recalcule via cet outil sur un nouveau message.",
+        },
+        ensure_ascii=False,
+        default=str,
+    )
+
+
+def _tool_decision_board(ctx: _ToolContext) -> str:
+    """Le même moteur Bank pilote trois composants synchronisés dans le navigateur."""
+    if ctx.decision_board is not None or ctx.scenario is not None:
+        return json.dumps({"error": "Un simulateur ou tableau lié par réponse."}, ensure_ascii=False)
+    result = _tool_scenario(ctx)
+    if ctx.scenario is None:
+        return result
+    ctx.decision_board = blocks.decision_board_block({**ctx.scenario, "title": "Mon plan budgétaire interactif"})
+    ctx.scenario = None
+    return json.dumps(
+        {
+            "done": True,
+            "view": "sondage, courbe et checklist liés",
+            "source": "Projection réelle de Bank",
+            "note": "Les trois niveaux (0, 25 et 50 pour cent) sont des hypothèses, pas des économies réalisées.",
+        },
+        ensure_ascii=False,
+    )
 
 
 def _tool_search(ctx: _ToolContext, args: dict[str, Any]) -> str:
@@ -1041,6 +1306,14 @@ def _execute_tool(ctx: _ToolContext, name: str, raw_args: str) -> str:
         return _tool_chart(ctx, args)
     if name == "draw_diagram":
         return _tool_diagram(ctx, args)
+    if name == "ask_interactive":
+        return _tool_interactive(ctx, args)
+    if name == "show_budget_simulator":
+        return _tool_scenario(ctx)
+    if name == "show_decision_board":
+        return _tool_decision_board(ctx)
+    if name == "show_purchase_coach":
+        return _tool_purchase_coach(ctx, args)
     if name == "web_search":
         return _tool_search(ctx, args)
     if name == "read_page":
@@ -1098,9 +1371,9 @@ def ask(
     catalogue = chat_actions.build(db, today, sources=srcs)
     search_on = websearch.provider(db) is not None and consents.granted(db, "web_search")
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": persona_prompt(name, memory_on)},
+        {"role": "system", "content": persona_prompt(name, memory_on, web=not channel)},
         {"role": "system", "content": f"<dossier>\n{_dossier(db, today, effective)}\n</dossier>"},
-        {"role": "system", "content": interactive_prompt(srcs, catalogue, search_on)},
+        {"role": "system", "content": interactive_prompt(srcs, catalogue, search_on, web=not channel)},
     ]
     if channel:
         messages.append({"role": "system", "content": channel_prompt(channel)})
@@ -1116,6 +1389,8 @@ def ask(
         TOOL_CHART,
         TOOL_DIAGRAM,
     ]
+    if not channel:
+        tools.extend([TOOL_INTERACTIVE, TOOL_SCENARIO, TOOL_BOARD, TOOL_PURCHASE_COACH])
     if memory_on:
         tools = [TOOL_MEMORY, TOOL_RECALL, *tools]
     if search_on:
@@ -1205,11 +1480,15 @@ def ask(
     }
 
 
-def interactive_prompt(srcs: list[coverage_domain.Source], catalogue: blocks.Catalogue, search_on: bool) -> str:
+def interactive_prompt(
+    srcs: list[coverage_domain.Source], catalogue: blocks.Catalogue, search_on: bool, *, web: bool = True
+) -> str:
     """Ce que Bank sait ou pas, les boutons proposables, les graphiques disponibles : des données pour le modèle."""
     lines = ["<couverture>", *coverage_domain.prompt_lines(srcs), "</couverture>", "", "<catalogue>"]
     lines += catalogue.prompt_lines()
     lines += ["</catalogue>", "", "<graphiques>", *chat_charts.prompt_lines(), "</graphiques>", ""]
+    if web:
+        lines.append("Utilise ask_interactive pour un sondage, une checklist ou un formulaire quand il faut un choix.")
     lines.append(
         "Recherche web : disponible (web_search, read_page)."
         if search_on

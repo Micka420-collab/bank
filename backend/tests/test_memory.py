@@ -320,6 +320,10 @@ def test_without_consent_nothing_is_learned_and_the_conversation_vanishes(app, w
         "propose_actions",
         "show_chart",
         "draw_diagram",
+        "ask_interactive",
+        "show_budget_simulator",
+        "show_decision_board",
+        "show_purchase_coach",
     ]  # ni mémoire ni recherche dans le passé sans ton accord
     assert "Tu es Bank" in first["messages"][0]["content"] and "Mémoire :" not in first["messages"][0]["content"]
     assert [m["role"] for m in first["messages"]] == ["system", "system", "system", "user"]
@@ -357,6 +361,10 @@ def test_live_memory_writes_are_visible_and_the_snapshot_stays_frozen(app, world
         "propose_actions",
         "show_chart",
         "draw_diagram",
+        "ask_interactive",
+        "show_budget_simulator",
+        "show_decision_board",
+        "show_purchase_coach",
     ]
     tool_msg = FakeLlm.calls[1]["messages"][-1]
     assert tool_msg["role"] == "tool" and json.loads(tool_msg["content"])["success"] is True
@@ -440,6 +448,10 @@ def test_a_model_without_tools_is_retried_and_remembered(app, world: TestClient)
             "propose_actions",
             "show_chart",
             "draw_diagram",
+            "ask_interactive",
+            "show_budget_simulator",
+            "show_decision_board",
+            "show_purchase_coach",
         ]
         and FakeLlm.calls[1]["tools"] == []
     )
@@ -568,6 +580,10 @@ def test_aggregates_privacy_turns_memory_off(world: TestClient) -> None:
         "propose_actions",
         "show_chart",
         "draw_diagram",
+        "ask_interactive",
+        "show_budget_simulator",
+        "show_decision_board",
+        "show_purchase_coach",
     ]
     assert not any("vélo" in m["content"] for m in FakeLlm.calls[-1]["messages"])
     assert world.get("/api/assistant").json()["memory"] == {"consent": True, "asked": True, "available": False}
@@ -602,6 +618,10 @@ def test_revoking_consent_stops_memory_mid_conversation(world: TestClient) -> No
         "propose_actions",
         "show_chart",
         "draw_diagram",
+        "ask_interactive",
+        "show_budget_simulator",
+        "show_decision_board",
+        "show_purchase_coach",
     ]
     assert not any("vélo" in m["content"] for m in FakeLlm.calls[-1]["messages"] if m["role"] == "system")
 

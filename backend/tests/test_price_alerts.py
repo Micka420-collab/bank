@@ -355,6 +355,7 @@ def test_refresh_to_channel_end_to_end(auth_client: TestClient, app, db) -> None
     adapter = adapter_for()
     _link(db)
     set_setting(db, "channel_quiet_hours", [0, 0])  # le test ne dépend pas de l'heure qu'il est
+    set_setting(db, "channel_weekly", False)  # ni du jour : l'horloge suit l'heure réelle, le dimanche soir a son bilan
     consents.set_consent(db, crypto_service.CONSENT, True, actor="micka")
     db.commit()
     net = MovingNet()

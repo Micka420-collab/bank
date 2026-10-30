@@ -5,7 +5,7 @@ import { api, useApi, type Category, type PurchasePlan } from "../api";
 import { money, parseEuros, shortDate } from "../format";
 import { useAsyncAction } from "./ui";
 
-const ANSWER_LABEL: Record<PurchasePlan["answer"], string> = {
+export const ANSWER_LABEL: Record<PurchasePlan["answer"], string> = {
   oui: "Oui",
   oui_mais: "Oui, mais",
   attendre: "Pas tout de suite",

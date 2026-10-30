@@ -12,6 +12,7 @@ type Props = {
   lowestDate: string;
   lowestCents: number;
   daysInMonth: number;
+  scenarioProjection?: Point[]; // second tracé : hypothèse locale, jamais la prévision officielle
   bare?: boolean; // sans cadre : la carte qui l'héberge fournit le sien
 };
 
@@ -33,11 +34,11 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
   return [ref, width];
 }
 
-export function MonthChart({ history, projection, events, lowestDate, lowestCents, daysInMonth, bare = false }: Props) {
+export function MonthChart({ history, projection, events, lowestDate, lowestCents, daysInMonth, scenarioProjection, bare = false }: Props) {
   const [wrapRef, W] = useWidth<HTMLElement>();
   const H = Math.round(Math.min(280, Math.max(200, W * 0.34)));
   const geo = useMemo(() => {
-    const all = [...history, ...projection];
+    const all = [...history, ...projection, ...(scenarioProjection ?? [])];
     const values = all.map((p) => p.balance_cents);
     const min = Math.min(0, ...values);
     const max = Math.max(0, ...values);
@@ -48,10 +49,13 @@ export function MonthChart({ history, projection, events, lowestDate, lowestCent
     const y = (cents: number) => PAD.t + (1 - (cents - lo) / (hi - lo)) * (H - PAD.t - PAD.b);
     const path = (pts: Point[]) => pts.map((p, i) => `${i ? "L" : "M"}${x(p.date).toFixed(1)},${y(p.balance_cents).toFixed(1)}`).join("");
     return { x, y, path, zeroY: y(0) };
-  }, [history, projection, daysInMonth, W, H]);
+  }, [history, projection, scenarioProjection, daysInMonth, W, H]);
 
   if (projection.length === 0) return null;
   const today = projection[0]!;
+  const scenarioLow = scenarioProjection?.length
+    ? scenarioProjection.reduce((acc, p) => (p.balance_cents < acc.balance_cents ? p : acc))
+    : null;
   const pastPath = geo.path([...history, today]);
   const futurePath = geo.path(projection);
   const all = [...history, ...projection];
@@ -73,6 +77,7 @@ export function MonthChart({ history, projection, events, lowestDate, lowestCent
         <desc id="chart-desc">
           Solde le plus bas prévu : {money(lowestCents)} le {shortDate(lowestDate)}. Solde aujourd'hui :{" "}
           {money(today.balance_cents)}.
+          {scenarioLow && ` Scénario testé (courbe en pointillés) : point bas ${money(scenarioLow.balance_cents)} le ${shortDate(scenarioLow.date)}.`}
         </desc>
         <defs>
           <clipPath id="below-zero">
@@ -98,6 +103,7 @@ export function MonthChart({ history, projection, events, lowestDate, lowestCent
         </text>
         {history.length > 0 && <path d={pastPath} className="past" />}
         <path d={futurePath} className="future" />
+        {scenarioProjection && scenarioProjection.length > 0 && <path d={geo.path(scenarioProjection)} className="scenario-line" />}
         {events.map((e, i) => (
           <circle
             key={`${e.date}-${i}`}
@@ -128,7 +134,8 @@ export function MonthChart({ history, projection, events, lowestDate, lowestCent
       </svg>
       <figcaption className="legend">
         <span>solde réel</span>
-        <span className="l-future">projection</span>
+        <span className="l-future">projection actuelle</span>
+        {scenarioProjection && scenarioProjection.length > 0 && <span className="l-scenario">scénario testé</span>}
         <span className="l-zero">zéro</span>
       </figcaption>
     </figure>

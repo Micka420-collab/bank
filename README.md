@@ -5,6 +5,7 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
 
 - **Comptes** : import CSV/OFX de n'importe quelle banque française, ou synchronisation DSP2 (Enable Banking).
 - **Budget** : reste à dépenser par jour contraint par la trésorerie (pas de « 216 €/j » qui suppose le salaire déjà arrivé), courbe du mois avec point bas et date de découvert, enveloppes, suggestions.
+- **Et si… ?** : depuis la courbe du mois, teste une facture imprévue à une date précise ou une baisse des dépenses quotidiennes ; comparaison immédiate de deux trajectoires, de leur point bas, du passage sous ta réserve de sécurité et du risque de découvert (hors enveloppes par catégorie : le verdict d'un achat précis reste « Je peux m'acheter… ? »). **Simulation locale sans modifier tes comptes**. Voir [l'expérience V2](docs/EXPERIENCE_V2.md) pour les fonctions livrées et celles à construire.
 - **Aides de l'État** : reconnaissance des versements CAF, France Travail, CPAM, MSA, impôts ; alertes de retard ou de changement ; simulation de tes droits par OpenFisca (le moteur officiel) et détection du non-recours.
 - **Tes déclarations** : l'actualisation France Travail, la déclaration trimestrielle CAF ou MSA, le renouvellement
   de la Complémentaire santé solidaire, la déclaration de revenus — proposées d'après tes versements, rappelées à
@@ -53,6 +54,10 @@ Cockpit financier personnel, auto-hébergé sur nimbus. Il répond chaque matin 
 - **Connecteurs** : banques en un clic (DSP2), compteur **Linky** (consommation réelle, facture annuelle estimée,
   rattrapage probable, pics), documents de l'**État** (avis d'impôt, attestations CAF et France Travail lus pour
   leurs chiffres — identifiants jetés), et les agents IA.
+- **Chat interactif** : l'assistant dessine des schémas, propose des sondages et des formulaires à cocher ou remplir dans
+  la conversation, un simulateur de budget, et un coach d'achat dont le verdict vient du moteur de Bank (trois prix
+  comparés). Tu peux annoter une étape d'un schéma et lui demander de la modifier ; aucune réponse n'est envoyée sans
+  ton clic. Voir [Chat interactif](docs/CHAT_INTERACTIF.md).
 - **Bank prend des initiatives** : une fiche à la fois sur la page du jour — « ton loyer, c'est bien 650 € ? »,
   « NETFLIX, 13,49 € chaque mois, c'est voulu ? », « septembre : il t'est resté 540 €, on en met 260 de côté
   chaque mois ? », « ton salaire est arrivé : c'est le moment du virement », « ton accès n'a pas de double

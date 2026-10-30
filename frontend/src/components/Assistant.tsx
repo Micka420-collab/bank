@@ -372,7 +372,7 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
           {configured && turns.length === 0 && opening && (
             <div className="assistant-turn is-assistant assistant-opening">
               <p>{opening.text}</p>
-              <ChatBlocks blocks={opening.blocks} handlers={handlers} />
+              <ChatBlocks blocks={opening.blocks} handlers={handlers} disabled={busy} />
             </div>
           )}
           {configured && turns.length === 0 && opening === null && (
@@ -401,7 +401,7 @@ export function Assistant({ open, onClose }: { open: boolean; onClose: () => voi
                     <span className="spinner" aria-hidden="true" /> {name} {t.status ?? "écrit"}…
                   </p>
                 )}
-                {t.role === "assistant" && t.blocks && t.blocks.length > 0 && <ChatBlocks blocks={t.blocks} handlers={handlers} />}
+                {t.role === "assistant" && t.blocks && t.blocks.length > 0 && <ChatBlocks blocks={t.blocks} handlers={handlers} disabled={busy} />}
                 {t.role === "assistant" && t.notices && t.notices.length > 0 && (
                   <ul className="memory-notes" aria-label={`Ce que ${name} vient de retenir`}>
                     {t.notices.map((n, k) => (

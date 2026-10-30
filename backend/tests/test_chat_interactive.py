@@ -362,3 +362,43 @@ def test_messaging_fallback_turns_blocks_into_text() -> None:
         "[1] CAF — https://www.caf.fr/x",
     ]
     assert assistant_service.interactive_prompt([], chatblocks.Catalogue(), False).startswith("<couverture>")
+
+
+def test_purchase_coach_card_comes_from_bank_and_survives_a_reload(app, world: TestClient) -> None:  # type: ignore[no-untyped-def]
+    """Le coach d'achat est un bloc de la réponse : calculé par Bank (trois prix), rendu par l'API, conservé tel quel
+    quand la conversation est relue ; dans une messagerie, l'outil n'existe pas."""
+    configure(world)
+    FakeLlm.script = [
+        tool_call("show_purchase_coach", json.dumps({"amount_eur": 249.9, "label": "Casque"})),
+        answer("Voici ce que dit ton budget."),
+    ]
+    r = world.post("/api/assistant/ask", json={"question": "Je peux m'acheter un casque à 249,90 € ?"})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["tools"] == ["show_purchase_coach"]
+    coach = next(blk for blk in out["blocks"] if blk["type"] == "purchase_coach")
+    assert coach["amount_cents"] == 24_990 and coach["label"] == "Casque"
+    assert coach["answer"] in {"oui", "oui_mais", "attendre", "plus_tard", "hors_de_portee"}
+    assert [a["discount_percent"] for a in coach["alternatives"]] == [20, 40]
+    assert [a["amount_cents"] for a in coach["alternatives"]] == [19_992, 14_994]
+    assert coach["source"].startswith("Bank") and coach["before"]["lowest_date"]
+    # Les boutons (questions suivantes) ne sont pas tronqués par le bloc supplémentaire.
+    assert [blk["type"] for blk in out["blocks"]][-1] == "actions"
+    tool_msg = next(m for m in FakeLlm.calls[1]["messages"] if m.get("role") == "tool")
+    assert json.loads(tool_msg["content"])["alternatives_calculated"] == 2
+    # Relecture : le bloc est conservé à l'identique.
+    conv_id = world.get("/api/assistant/conversations").json()[0]["id"]
+    conv = world.get(f"/api/assistant/conversations/{conv_id}").json()
+    again = next(blk for m in conv["messages"] for blk in m.get("blocks") or [] if blk["type"] == "purchase_coach")
+    assert again == coach
+    # Depuis une messagerie, ni l'outil ni ses consignes.
+    with app.state.sessionmaker() as db:
+        from datetime import date
+
+        from app.services import assistant as svc
+
+        FakeLlm.script = [answer("ok")]
+        svc.ask(db, actor="micka", today=date(2026, 10, 21), question="coucou", channel="telegram", make_client=FakeLlm)
+        assert "show_purchase_coach" not in FakeLlm.calls[-1]["tools"]
+        system = "\n".join(m["content"] for m in FakeLlm.calls[-1]["messages"] if m["role"] == "system")
+        assert "show_purchase_coach" not in system and "ask_interactive" not in system
